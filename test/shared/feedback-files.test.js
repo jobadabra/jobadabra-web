@@ -190,3 +190,9 @@ test('the admin page offers the three text viewers', async () => {
   for (const label of ["'Logs'", "'Screen data'", 'Profile snapshot']) assert.ok(page.includes(label), label);
   assert.match(page, /kind=' \+ kind/);
 });
+
+test('the platform field keeps the OS version and architecture (a Windows tester\'s build is what a bug starts from)', async () => {
+  const e = env();
+  await send(e, {...good, platform: 'win32 10.0.19045 x64'}, telegramOk([]));
+  assert.equal(row(e).platform, 'win32 10.0.19045 x64');
+});

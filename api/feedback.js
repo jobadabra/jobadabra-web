@@ -7,6 +7,7 @@ import {escTags} from '../shared/html.js';
 import {TEXT_FILES} from '../shared/feedback.js';
 
 const PER_INSTALL_PER_DAY = 10;
+// Why (2 Nov 2026, owner: "the app version, the OS platform, the installation id"): the platform field carries the OS version and architecture too ("win32 10.0.19045 x64"), so 40 characters, not 20.
 // Why (2 Nov 2026, Gitar on #334): the endpoint is open and the install id is the client's own, so a caller changing it per request could fill R2 and the owner's chat with photos.
 // The words are always kept; files (and so the photo) stop for the day past this many feedbacks that carried one.
 export const FILES_PER_DAY = 100;
@@ -83,7 +84,7 @@ export async function feedback(request, env, fetcher = fetch, now = new Date()) 
     skipped.push(...(shot ? ['screenshot'] : []), ...Object.keys(kept));
     shot = null; for (const kind of Object.keys(kept)) delete kept[kind];
   }
-  const row = {at: now.toISOString(), day, install, version: clip(body.version, 30) || '?', platform: clip(body.platform, 20) || '?',
+  const row = {at: now.toISOString(), day, install, version: clip(body.version, 30) || '?', platform: clip(body.platform, 40) || '?',
     text, contact: clip(body.contact, 200).trim(), ref, screen: clip(body.screen, 60).trim(), shot: shot?.type || '', logs: kept.logs ? 1 : 0, page: kept.page ? 1 : 0, profile: kept.profile ? 1 : 0};
   await env.STATS.prepare('INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, screen, shot, logs, page, profile) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(row.at, row.day, row.install, row.version, row.platform, row.text, row.contact, row.ref, row.screen, row.shot, row.logs, row.page, row.profile).run();
