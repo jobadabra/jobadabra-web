@@ -4,17 +4,19 @@ import {LAB_REPO, PUBLIC_REPO, WEB_REPO, githubUrl} from '../shared/repos.js';
 const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields)});
 
 export const seeds = {
-  feedback: async ({env}) => {   // /admin/growth/feedback (2 Nov 2026): one with a screenshot and logs, one text-only, one the bot refused (the red counter); the screenshot is a real app shot from the public tree
+  feedback: async ({env}) => {   // /admin/growth/feedback (2 Nov 2026): one with a screenshot, logs, screen data and a profile snapshot, one text-only, one the bot refused (the red counter); the screenshot is a real app shot from the public tree
     const fs = await import('node:fs'), kept = new Map(), shot = fs.readFileSync('desktop/docs/ui/actions.jpg');
     env.FEEDBACK_FILES = {put: async (key, value) => { kept.set(key, value); }, get: async key => (kept.has(key) ? {body: kept.get(key)} : null)};
     const logs = ['2026-11-02 09:12:03 info  app v0.5.71 win32 10.0.19045', '2026-11-02 09:12:41 warn  setup  AI engine: not ready (no key)', '2026-11-02 09:12:42 error setup  Notion connect failed: 401', 'Authorization: <secret>'].join('\n');
+    const pageData = JSON.stringify({screen: 'What we learned', questions: [{id: 'q-summary', wording: 'Summary', field: 'summary', value: 'Summary', verdict: 'saved'}]}, null, 1);
     const rows = [['a1b2c3d4e5f60718', 'win32', 'Settings', 'Setup stops at the AI step and nothing says why.', 'sent', 'jpg', 1, 5], ['0f0e0d0c0b0a0908', 'darwin', '', 'The kit is great, setup took 20 min.', 'sent', '', 0, 30], ['1122334455667788', 'win32', 'Actions', 'Find jobs does nothing after the update.', 'failed: 400 Bad Request: chat not found', '', 0, 50]];
     for (const [ref, platform, screen, text, notified, shotType, hasLogs, minutes] of rows) {
       const at = new Date(Date.now() - minutes * 60000).toISOString();
       if (shotType) kept.set(`feedback/${ref}/screen.jpg`, shot);
       if (hasLogs) kept.set(`feedback/${ref}/logs.txt`, logs);
-      await env.STATS.prepare('INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, screen, shot, logs, notified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(at, at.slice(0, 10), `install-${ref.slice(0, 8)}`, '0.5.71', platform, text, hasLogs ? 'ana@example.com' : '', ref, screen, shotType, hasLogs, notified).run();
+      if (hasLogs) { kept.set(`feedback/${ref}/page.json`, pageData); kept.set(`feedback/${ref}/profile.json`, '{\n "details": {"role": "Product designer", "city": "Porto"}\n}'); }
+      await env.STATS.prepare('INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, screen, shot, logs, page, profile, notified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(at, at.slice(0, 10), `install-${ref.slice(0, 8)}`, '0.5.71', platform, text, hasLogs ? 'ana@example.com' : '', ref, screen, shotType, hasLogs, hasLogs, hasLogs, notified).run();
     }
   },
   website: async ({env}) => {   // made-up visitors and downloaders for /admin/growth/website (1 Nov 2026): 30 days, busiest 5 days ago, a quiet day after it; person ids are made up
