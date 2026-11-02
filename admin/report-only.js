@@ -33,7 +33,7 @@ export function model(summary, healing, now = new Date()) {
 
 const STYLE = `${CHIP_STYLE}${BAND_STYLE}${NIGHTLY_STYLE}.band{margin-bottom:12px}
 .group{margin:22px 0 8px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8d949c}.group .muted{text-transform:none;letter-spacing:0;font-weight:400}
-.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}.rjob{padding:12px 16px;min-width:0}.rjob .nbars{max-width:100%}.rjob:target{outline:2px solid #f5b54a}
+.rjob:target{outline:2px solid #f5b54a}
 .rjob .src{margin-top:6px;font-size:12px}`;
 
 const jobHtml = job => `<section class="card rjob" id="r-${esc(job.id)}">${trendHtml(job)}${job.files?.length ? `<div class="muted src">from ${job.files.map(file => `<code>${esc(file)}</code>`).join(' · ')}</div>` : ''}</section>`;

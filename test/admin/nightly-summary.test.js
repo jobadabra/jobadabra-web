@@ -4,7 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {page} from '../../admin/schedules.js';
 import {resolve} from '../../admin/testing-overview-data.js';
-import {trendHtml, trendsHtml} from '../../admin/nightly-summary-html.js';
+import {detailHtml, summaryLine, toggleHtml, trendHtml, NIGHTLY_STYLE} from '../../admin/nightly-summary-html.js';
 import {NIGHTS, lastDays, loadNightlySummary, nightlySummary, summaryFor} from '../../admin/nightly-summary.js';
 
 const now = new Date('2026-11-02T10:00:00Z');
@@ -129,24 +129,32 @@ test('one renderer: a rate has its bar line and a verdict chip, a wall clock a n
   assert.match(clock, /<b>30 min<\/b>/);
   assert.doesNotMatch(clock, /nchip/, 'no bar exists for a wall clock, so no verdict chip');
   assert.match(trendHtml(job(summary, 'wander')), /<span class="nchip off">◷ no data<\/span>/);
-  assert.equal(trendsHtml([]), '');
-  assert.match(trendHtml(job(nightlySummary({snapshot: {suiteNights: [row(1, D(0), 'wander', false)]}}, now), 'wander'), {compact: true}), /class="nt compact".*✕ off/s);
+  assert.match(trendHtml(job(nightlySummary({snapshot: {suiteNights: [row(1, D(0), 'wander', false)]}}, now), 'wander')), /✕ off/);
 });
 
-test('Testing → Scheduled: the new column has its header and one cell in every row, with the summary only on the workflows that have one', () => {
+test('Testing → Scheduled: the column has its header and one cell in every row, one line and a toggle only on the workflows that have a summary, the detail on its own full-width row', () => {
   const snapshot = {at: now.toISOString(), repos: [], jobs: [
     {repo: 'GarryOne/jobadabra', file: 'e2e.yml', name: 'CI · E2E', about: '', crons: ['0 2 * * *'], recent: []},
     {repo: 'GarryOne/jobadabra', file: 'mutation.yml', name: 'CI · Mutation', about: '', crons: ['0 3 * * 1'], recent: []}]};
   const summary = nightlySummary({snapshot: {quality: [night(30, D(0), 9, 8)]}}, now);
   const html = page(snapshot, {only: 'testing', now, summary});
   const header = html.match(/<tr><th>Job<\/th>.*?<\/tr>/s)[0], rows = [...html.matchAll(/<tr class="[^"]*"?><td><b><a/g)].length;
-  assert.match(header, /<th>Last night · 14 nights<\/th>/);
+  assert.match(header, /<th>Last night<\/th>/);
   const cells = row => (row.match(/<td[ >]/g) || []).length, bodies = [...html.matchAll(/<tr class=""><td>.*?<\/tr>/gs)].map(match => match[0]);
   assert.equal(bodies.length, 2, `${rows} rows`);
   for (const body of bodies) assert.equal(cells(body), (header.match(/<th/g) || []).length, 'a td for every th');
-  assert.match(bodies[0], /Quality AI/);
-  assert.doesNotMatch(bodies[1], /class="nt/, 'a workflow with no summary shows a dash');
-  assert.match(page(snapshot, {only: 'testing', now}), /Last night · 14 nights/, 'a page with no summary still draws the column, empty');
+  assert.match(bodies[0], /class="nline"/);
+  assert.match(bodies[0], /Quality AI no data|◷ \d+ no data/);
+  assert.doesNotMatch(bodies[0], /class="nt"|class="nbars/, 'the 14-night blocks are not in the row itself (owner, 2 Nov 2026: too crowded)');
+  assert.doesNotMatch(bodies[1], /nline|ntoggle/, 'a workflow with no summary shows a dash and no toggle');
+  const detail = html.match(/<tr class="ndetail" id="(nd-e2e-yml)" hidden><td colspan="(\d+)">(.*?)<\/td><\/tr>/s);
+  assert.ok(detail, 'the e2e row has a hidden detail row under it');
+  assert.equal(detail[2], String((header.match(/<th/g) || []).length), 'it spans every column');
+  assert.match(bodies[0], /aria-controls="nd-e2e-yml" aria-expanded="false"|aria-expanded="false" aria-controls="nd-e2e-yml"/);
+  assert.match(detail[3], /class="nt"/);
+  assert.match(detail[3], /href="\/admin\/testing\/report-only">All measurements → Report only/);
+  assert.equal((html.match(/class="ndetail"/g) || []).length, 1, 'no detail row for a workflow without a summary');
+  assert.match(page(snapshot, {only: 'testing', now}), /<th>Last night<\/th>/, 'a page with no summary still draws the column, empty');
 });
 
 test('Testing → Overview: the cards of e2e, interactions, wander and quality-ai carry their trends, every other card none', () => {
@@ -166,4 +174,23 @@ test('rows older than the 14 nights shown never make a job throw: each says ther
   for (const item of summary.jobs) assert.deepEqual([item.value, item.status, item.series.length], ['–', 'none', 0], item.id);
   assert.match(job(summary, 'quality-ai').sub, /last 14 nights/);
   assert.match(job(summary, 'agent-coding').sub, /last 14 days/);
+});
+
+test('the row keeps one line: what is off or missing by name (a count from 3), the ok ones counted, a wall clock as "night 10.5 min"; nothing for no jobs', () => {
+  const summary = nightlySummary({snapshot: {suiteNights: [row(1, D(0), 'interactions', true), row(2, D(0), 'wander', true), row(3, D(0), 'notion-real', true)], days: [{day: D(0), kind: 'nightly', runs: 2, wallMin: 21}]}}, now);
+  const line = summaryLine(summaryFor(summary, 'e2e.yml'));
+  assert.match(line, /◷ Quality AI no data/);
+  assert.match(line, /✓ 3 green/);
+  assert.match(line, /night <b>10\.5 min<\/b>/);
+  assert.doesNotMatch(line, /class="nbars/);
+  const red = nightlySummary({snapshot: {suiteNights: [row(1, D(0), 'wander', false)]}}, now);
+  assert.match(summaryLine(summaryFor(red, 'e2e.yml')), /✕ Wander off/);
+  assert.match(summaryLine(summaryFor(nightlySummary({}, now), 'e2e.yml')), /◷ 5 no data/, 'three or more with nothing are one count');
+  assert.equal(summaryLine([]), ''); assert.equal(summaryLine(null), ''); assert.equal(detailHtml([], 8, 'x', '/r'), ''); assert.equal(toggleHtml([], 'x'), '');
+});
+
+test('two cards a row on a desktop, one on a phone, in the one stylesheet both pages use (owner, 2 Nov 2026: "2 columns per row, not 3")', () => {
+  assert.match(NIGHTLY_STYLE, /\.rgrid,\.ngrid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(NIGHTLY_STYLE, /@media \(max-width:640px\)\{\.rgrid,\.ngrid\{grid-template-columns:minmax\(0,1fr\)\}/);
+  assert.doesNotMatch(NIGHTLY_STYLE, /auto-fill/);
 });
