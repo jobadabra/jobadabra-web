@@ -269,6 +269,7 @@ async function route(request, env, ctx) {
   if (pathname === '/email-settings') return mailSettings.settings(request, env);   // the signed e-mail settings page (api/mail-settings.js)
   if (pathname === '/unsubscribe') return mailUnsub.unsubscribe(request, env);   // one-click unsubscribe from a mail list (api/mail-unsub.js)
   if (pathname === '/confirm') return accountEmail.confirm(request, env);   // confirm an e-mail address (api/account-email.js)
+  if (pathname === '/api/account/email/resend') return accountEmail.resend(request, env);   // the confirm link again (api/account-email.js)
   if (pathname === '/api/account/email') return accountEmail.address(request, env);   // the person's address and marketing opt-in (api/account-email.js)
   if (pathname === '/api/notify/email') return accountEmail.notify(request, env);   // a Telegram-style message by e-mail (api/account-email.js)
   if (pathname === '/api/trial/status') return trialStatus(request, env);   // the free trial, one answer for the app and Always on (shared/trial.js)

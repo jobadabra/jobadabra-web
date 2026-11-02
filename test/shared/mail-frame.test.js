@@ -27,6 +27,7 @@ const SAMPLES = {
   'account-code': {code: '482913'},
   'digest': {matches, total: 3},
   'welcome': {confirmUrl: 'https://www.jobadabra.top/confirm?a=0123456789abcdef&t=abc'},
+  'confirm-resend': {confirmUrl: 'https://www.jobadabra.top/confirm?a=0123456789abcdef&t=abc'},
   'trial-left': {left: 4},
   'trial-ending': {days: 2, pricingUrl: 'https://www.jobadabra.top/pricing'},
   'always-on-paused': {reason: 'trial-over', pricingUrl: 'https://www.jobadabra.top/pricing', pro: false},
