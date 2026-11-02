@@ -11,7 +11,7 @@ import unittest
 # This repo's own files: SITE_REPO_DIR (tools/site-run.sh), else .private (CI lays this repo there), else the checkout this file sits in (test/python/ -> two levels up).
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = pathlib.Path(os.environ['SITE_REPO_DIR']) if os.environ.get('SITE_REPO_DIR') else (
-    HERE.parent / '.private' if (HERE.parent / '.private' / '.github').is_dir() else HERE.parent.parent)
+    HERE.parent / '.private' if (HERE.parent / '.private' / '.github').is_dir() else HERE.parent.parent)   # joined tree: tests/ sits beside .private; own checkout: test/python/ is two levels below the root
 FOLDERS = ['.github', 'ops', 'admin']
 SUFFIXES = {'.yml', '.yaml', '.js', '.mjs', '.sql', '.json', '.sh', '.py'}
 
@@ -33,7 +33,7 @@ def lines_with_old_owner():
     for path in scanned():
         name = str(path.relative_to(ROOT))
         for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
-            if 'GarryOne/' in line:
+            if 'garryone' in line.lower():   # the bare `owner: GarryOne` of an App-token step too, not only `GarryOne/repo`
                 found.setdefault(name, []).append(number)
     return found
 
@@ -47,6 +47,12 @@ class OrgOwner(unittest.TestCase):
     def test_nothing_names_the_old_owner(self):
         left = {name: lines for name, lines in lines_with_old_owner().items() if name not in ALLOWED}
         self.assertEqual(left, {}, 'import the repo names from shared/repos.js (code) or use vars.OWNER_OF_JOBADABRA || github.repository_owner (workflow); never write the owner')
+
+    def test_the_workflows_that_read_the_public_repo_take_its_owner_from_the_variable(self):
+        # Why (2 Nov 2026): the code fallback (shared/repos.js) is tested by test/jobs/daily-digest-repo.test.js; this pins the CI side, where the job really gets REPO from.
+        for name in ('changelog-publish', 'daily-digest', 'e2e-intel', 'integration-intel', 'ops-overview'):
+            text = (ROOT / '.github' / 'workflows' / f'{name}.yml').read_text(encoding='utf-8')
+            self.assertIn('REPO: ${{ vars.OWNER_OF_JOBADABRA || github.repository_owner }}/jobadabra', text, name)
 
     def test_every_allowed_entry_is_still_used(self):
         used = lines_with_old_owner()
