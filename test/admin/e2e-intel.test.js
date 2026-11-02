@@ -71,7 +71,7 @@ test('the snapshot holds the last 30 days per day and per suite, and the page re
   assert.equal(JSON.parse(stored.body).schema, snapshot.schema);
 });
 
-test('every run kind is kept with its runner minutes and PR; a red keeps its kind, failure line, fix and whether a PR caught a bug; breaks group one run\'s same-cause reds', async () => {
+test('every run kind is kept with its runner minutes and PR; a red keeps its kind, failure line, fix and whether it caught a bug (a product cause); breaks group one run\'s same-cause reds', async () => {
   const e = env();
   const line = 'tar: D\\:\\a\\_temp/free-ai-tree: Cannot open';
   await put(e, {rules: 3, runs: [run(1, 'failure', {kind: 'nightly'}), run(2, 'failure', {kind: 'pr', queueMin: 8.5, runMin: 2.2, pr: 2123}), run(3, 'success', {kind: 'after-merge'})],
@@ -81,7 +81,7 @@ test('every run kind is kept with its runner minutes and PR; a red keeps its kin
   assert.equal(snapshot.schema, 2);
   assert.deepEqual(snapshot.days.map(d => [d.kind, d.runs, d.reds, d.queueMin, d.runMin, d.prs]).sort(), [['after-merge', 1, 0, 0, 0, 0], ['nightly', 1, 1, 0, 0, 0], ['pr', 1, 1, 8.5, 2.2, 1]]);
   assert.deepEqual(snapshot.breaks[0], {day: '2026-10-17', kind: 'nightly', runId: 1, cause: 'ci', line, n: 2}, 'one relay break on two suites is one break');
-  assert.deepEqual(snapshot.caught, [{day: '2026-10-17', runId: 2, suite: 'wander', line: '✗ [wander] error-shown', pr: 2123}]);
+  assert.deepEqual(snapshot.caught, [{day: '2026-10-17', kind: 'pr', runId: 2, suite: 'wander', line: '✗ [wander] error-shown', pr: 2123}]);
   assert.equal(e.STATS.db.prepare("SELECT fix FROM e2e_fails WHERE suite = 'quality'").get().fix, 'f1');
 });
 
@@ -162,4 +162,28 @@ test('beta runs\' suite counts are validated, kept in the snapshot, replaced on 
   const known = await (await call(e, {headers: {Authorization: 'Bearer pub'}})).json();
   assert.deepEqual(known.betaRuns.sort(), [1, 5], 'the collector is told which beta runs the site already has');
   assert.deepEqual((await buildSnapshot(e.STATS, new Date('2026-12-05T12:00:00Z'))).betaRuns, [], 'thirty days later the rows are gone');
+});
+
+// 2 Nov 2026 (owner: "has this caught bug been counted?"): apply-1of3 stored as runner (#2986's window answer); #2988 names the run id and says product.
+test('a red a fix names by run id is rewritten once to that fix, though it was settled; the same word again changes nothing; GET lists the stored fixes', async () => {
+  const e = env();
+  await put(e, {rules: 3, runs: [run(41412195017, 'failure', {kind: 'scheduled'})], fails: [fail(41412195017, 'apply-1of3', 'mac', 'runner', {kind: 'scheduled', fix: '0f360260'})]});
+  await put(e, {rules: 3, runs: [run(41412195017, 'failure', {kind: 'scheduled'})], fails: [fail(41412195017, 'apply-1of3', 'mac', 'test', {kind: 'scheduled', fix: 'zzz'})]});
+  const stored = () => e.STATS.db.prepare('SELECT cause, fix, caught FROM e2e_fails').get();
+  assert.deepEqual({...stored()}, {cause: 'runner', fix: '0f360260', caught: 0}, 'a settled red at the same rules is not rewritten by a window answer');
+  await put(e, {rules: 3, runs: [], fails: [fail(41412195017, 'apply-1of3', 'mac', 'product', {kind: 'scheduled', fix: '9d511a1c', caught: 1, named: 1})]});
+  assert.deepEqual({...stored()}, {cause: 'product', fix: '9d511a1c', caught: 1}, 'a named fix rewrites it');
+  await put(e, {rules: 3, runs: [], fails: [fail(41412195017, 'apply-1of3', 'mac', 'runner', {kind: 'scheduled', fix: '0f360260'})]});
+  assert.equal(stored().cause, 'product', 'and a later window answer does not undo it');
+  const body = await (await call(e, {method: 'GET', headers: {Authorization: 'Bearer pub'}}, '/e2e/data?v=3')).json();
+  assert.deepEqual(body.fixed, [[41412195017, '9d511a1c']]);
+});
+
+test('"caught" is every red whose cause is the product, on any run kind, with the kind it was caught in; the stored flag does not decide', async () => {
+  const e = env();
+  await put(e, {rules: 3, runs: [run(1, 'failure', {kind: 'scheduled'}), run(2, 'failure', {kind: 'pr', pr: 2123}), run(3, 'failure', {kind: 'nightly'}), run(4, 'failure', {kind: 'beta'})],
+    fails: [fail(1, 'apply', 'mac', 'product', {kind: 'scheduled', line: '✗ a'}), fail(2, 'wander', 'mac', 'product', {kind: 'pr', line: '✗ b', caught: 1}),
+      fail(3, 'jobs', 'mac', 'product', {kind: 'nightly', line: '✗ c'}), fail(4, 'jobs', 'mac', 'flake', {kind: 'beta', line: '✗ d', caught: 1})]});
+  const snapshot = await buildSnapshot(e.STATS, now);
+  assert.deepEqual(snapshot.caught.map(row => [row.runId, row.kind, row.pr ?? null]).sort((a, b) => a[0] - b[0]), [[1, 'scheduled', null], [2, 'pr', 2123], [3, 'nightly', null]]);
 });

@@ -88,6 +88,9 @@ const byHand = last => (['green', 'red'].includes(last.state) ? {...last, state:
 const num = value => (Number(value) || 0).toLocaleString('en-US');
 const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many}`;
 
+// Where a red was caught, in the owner's words (admin/e2e-intel.js KINDS).
+const WHERE = {pr: 'before merge', 'after-merge': 'after merge', scheduled: 'scheduled', nightly: 'night', beta: 'beta', soak: 'RC soak', canary: 'stable canary', harness: 'harness tests'};
+
 /** "Bugs caught" for a card: {text, window} from stored data, or {why} when no data holds it. */
 function bugsOf(data, bugs) {
   if (bugs.none) return {why: bugs.none};
@@ -106,7 +109,11 @@ function bugsOf(data, bugs) {
     if (!data.e2e) return {why: 'the e2e snapshot has not arrived yet'};
     const from = new Date(data.now.getTime() - 29 * DAY).toISOString().slice(0, 10);
     // One run per red: the stored rows are one per failing suite, platform and line (admin/e2e-intel.js caught), so a run red on Mac and Linux would count twice (Gitar, #255).
-    return {text: plural(new Set((data.e2e.caught || []).filter(row => row.day >= from).map(row => row.runId)).size, 'red that caught a bug', 'reds that caught a bug'), window: '30 days'};
+    // Why (2 Nov 2026, owner: "has this caught bug been counted?"): every run kind, the same rows as the E2E scorecard (isCatch); PR runs alone missed what main, the night and the beta caught once PRs stopped running e2e (1 Nov).
+    const reds = new Map((data.e2e.caught || []).filter(row => row.day >= from).map(row => [row.runId, row.kind]));
+    const where = [...reds.values()].reduce((counts, kind) => counts.set(kind, (counts.get(kind) || 0) + 1), new Map());
+    const detail = [...where].map(([kind, n]) => [WHERE[kind] || kind || 'unknown', n]).sort((a, b) => a[0].localeCompare(b[0])).map(([name, n]) => `${name} ${n}`).join(' · ');
+    return {text: plural(reds.size, 'red that caught a bug', 'reds that caught a bug'), window: '30 days', ...(detail ? {detail} : {})};
   }
   if (bugs.mutation) return data.healing?.quality?.mutation?.note ? {text: data.healing.quality.mutation.note} : {why: 'no planted-bug run is stored yet'};
   if (bugs.recall) {
