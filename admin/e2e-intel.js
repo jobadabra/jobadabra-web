@@ -78,7 +78,7 @@ export async function readSnapshot(db) {
 //   lanes?: {suites: {name: {lane, input, since, why, returns?}}}, suiteNights?: [{runId, day, kind, suite, platform, green, rates?}], mainBands?: {suite: {metric: {lower, upper}}}, greyJobs?: [{runId, day, kind: pr|main|beta|nightly, suite, reason}] (public tools/grey_records.py, one row per run and suite),
 //   betaRuns?: [{runId, createdAt, sha, conclusion, green, red, grey, released, redSuites}] (admin/e2e-beta.js: one beta run's suite jobs green / red / not run + whether it released),
 //   work?: [{day, kind, commits}], workFiles?: [{week, file, commits}], escapes?: [{week, sha, suites, none, journey}]} (public-main commits).
-// GET ?snapshot=1: the stored snapshot (the page's one row). GET ?v=N: {have: runs stored at rules N or newer, pending: runs with a red still "open" or "unknown", fixed: [[runId, fix]] stored} (CI reads the rest, and the pending ones again).
+// GET ?snapshot=1: the stored snapshot (the page's one row). GET ?v=N: {have: runs stored at rules N or newer, pending: runs with a red still "open" or "unknown", reds: [[runId, suite, cause, fix, kind]] stored, pull-request runs left out} (CI reads the rest, and the pending ones again).
 export async function ingest(request, env, now = new Date()) {
   if (!authorized(request, env)) return new Response('Not found', {status: 404});
   if (request.method === 'GET' && new URL(request.url).searchParams.get('snapshot') === '1') {   // the weekly summary (jobs/e2e-weekly.mjs) reads the row the page draws: same numbers
@@ -87,16 +87,16 @@ export async function ingest(request, env, now = new Date()) {
   }
   if (request.method === 'GET') {
     const version = Number(new URL(request.url).searchParams.get('v')) || 0, since = dayOf(new Date(now.getTime() - 35 * DAY));
-    const [{results: have = []}, {results: pending = []}, {results: fixed = []}] = await Promise.all([
+    const [{results: have = []}, {results: pending = []}, {results: reds = []}] = await Promise.all([
       env.STATS.prepare('SELECT run_id FROM e2e_runs WHERE day >= ? AND rules >= ?').bind(since, version).all(),
       env.STATS.prepare(`SELECT DISTINCT run_id FROM e2e_fails WHERE day >= ? AND cause IN ('open', 'unknown')`).bind(since).all(),
-      env.STATS.prepare(`SELECT DISTINCT run_id, fix FROM e2e_fails WHERE day >= ? AND fix != ''`).bind(since).all()]);   // the collector reads a run again when a trailer names it and no stored red carries that fix
+      env.STATS.prepare(`SELECT run_id, suite, cause, fix, kind FROM e2e_fails WHERE day >= ? AND kind != 'pr' LIMIT 3000`).bind(since).all()]);   // Why (2 Nov 2026, Gitar on jobadabra#2995): the collector reads a run again only when a trailer names it and one of these reds would take that name; a fix id alone looped for runs that never take it
     const waiting = new Set(pending.map(row => row.run_id));
     const {results: nights = []} = await env.STATS.prepare('SELECT run_id FROM e2e_quality WHERE day >= ?').bind(since).all();
     const snapshot = await env.STATS.prepare('SELECT body FROM e2e_snapshot WHERE id = 1').first();
     const suiteNights = [...new Set((snapshot ? JSON.parse(snapshot.body).suiteNights || [] : []).map(row => row.runId))];
     const betaRuns = [...new Set((snapshot ? JSON.parse(snapshot.body).betaRuns || [] : []).map(row => row.runId))];
-    return json({suiteNights, betaRuns, have: have.map(row => row.run_id).filter(id => !waiting.has(id)), pending: [...waiting], fixed: fixed.map(row => [row.run_id, row.fix]), quality: nights.map(row => row.run_id)});
+    return json({suiteNights, betaRuns, have: have.map(row => row.run_id).filter(id => !waiting.has(id)), pending: [...waiting], reds: reds.map(row => [row.run_id, row.suite, row.cause, row.fix, row.kind]), quality: nights.map(row => row.run_id)});
   }
   if (request.method !== 'PUT') return new Response('Not found', {status: 404});
   const body = await request.text();

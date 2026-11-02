@@ -165,7 +165,7 @@ test('beta runs\' suite counts are validated, kept in the snapshot, replaced on 
 });
 
 // 2 Nov 2026 (owner: "has this caught bug been counted?"): apply-1of3 stored as runner (#2986's window answer); #2988 names the run id and says product.
-test('a red a fix names by run id is rewritten once to that fix, though it was settled; the same word again changes nothing; GET lists the stored fixes', async () => {
+test('a red a fix names by run id is rewritten once to that fix, though it was settled; the same word again changes nothing; GET lists the stored reds', async () => {
   const e = env();
   await put(e, {rules: 3, runs: [run(41412195017, 'failure', {kind: 'scheduled'})], fails: [fail(41412195017, 'apply-1of3', 'mac', 'runner', {kind: 'scheduled', fix: '0f360260'})]});
   await put(e, {rules: 3, runs: [run(41412195017, 'failure', {kind: 'scheduled'})], fails: [fail(41412195017, 'apply-1of3', 'mac', 'test', {kind: 'scheduled', fix: 'zzz'})]});
@@ -176,7 +176,9 @@ test('a red a fix names by run id is rewritten once to that fix, though it was s
   await put(e, {rules: 3, runs: [], fails: [fail(41412195017, 'apply-1of3', 'mac', 'runner', {kind: 'scheduled', fix: '0f360260'})]});
   assert.equal(stored().cause, 'product', 'and a later window answer does not undo it');
   const body = await (await call(e, {method: 'GET', headers: {Authorization: 'Bearer pub'}}, '/e2e/data?v=3')).json();
-  assert.deepEqual(body.fixed, [[41412195017, '9d511a1c']]);
+  assert.deepEqual(body.reds, [[41412195017, 'apply-1of3', 'product', '9d511a1c', 'scheduled']], 'each stored red with its cause and fix: the collector decides which a trailer would change');
+  await put(e, {rules: 3, runs: [run(7, 'failure', {kind: 'pr', pr: 5})], fails: [fail(7, 'apply', 'mac', 'test', {kind: 'pr'})]});
+  assert.equal((await (await call(e, {method: 'GET', headers: {Authorization: 'Bearer pub'}}, '/e2e/data?v=3')).json()).reds.length, 1, 'a pull-request red is left out: a main commit never names it');
 });
 
 test('"caught" is every red whose cause is the product, on any run kind, with the kind it was caught in; the stored flag does not decide', async () => {
