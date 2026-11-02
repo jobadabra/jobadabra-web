@@ -7,8 +7,9 @@ import {TRELLO_BOARD, TRELLO_CARD} from '../shared/gtm-trello.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {BAND_STYLE, verdictInner} from './verdict-band.js';
 import {QUIET_DAYS, STABLE_RUNS, WINDOW_DAYS, percentOf, shareTone, tier1Rows, tier2Rows, verdict} from './gtm-readiness-data.js';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
-const REPO = 'GarryOne/jobadabra';
+const REPO = PUBLIC_REPO;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const dayWords = day => `${Number(day.slice(8))} ${MONTHS[Number(day.slice(5, 7)) - 1]}`;
 const pct = percentOf;

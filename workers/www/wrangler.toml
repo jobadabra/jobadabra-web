@@ -107,7 +107,7 @@ LINKEDIN_CLIENT_ID = "77cda0c4oymws4"
 # INDEX_GATE: removed on 2 Oct 2026, so the token is enforced. During the rollout, INDEX_GATE = "soft" let installs without an index token keep
 # downloading (counted as index-open on /telemetry); set it back to "soft" only to re-open the list temporarily.
 # The central employer index (api/employers.js): GET /api/index for every app, PUT from the private central scout
-# (GarryOne/jobadabra-lab) with the Worker secret INDEX_PUBLISH_KEY (Keychain jobadabra.site.index_publish_key). Stored in WAITLIST as "index:employers".
+# (jobadabra/jobadabra-lab) with the Worker secret INDEX_PUBLISH_KEY (Keychain jobadabra.site.index_publish_key). Stored in WAITLIST as "index:employers".
 
 # Website stats (api/downloads.js): page views, Download clicks, the private /stats page. Tables: db/migrations/ (apply: npx wrangler@4 d1 migrations apply www-stats --remote).
 # Secrets: STATS_KEY (opens /stats; Keychain jobadabra.site.stats_key) and STATS_SALT (hashes visitors).

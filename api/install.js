@@ -3,7 +3,9 @@
 // "Open Anyway" (the app isn't notarized yet). Also updates an installed copy. Each run is counted as a Mac
 // download (button "terminal"); curl isn't a bot here.
 
-const RELEASE = 'https://github.com/GarryOne/jobadabra/releases/latest/download/';
+import {PUBLIC_REPO, githubUrl} from '../shared/repos.js';
+
+const RELEASE = `${githubUrl(PUBLIC_REPO)}/releases/latest/download/`;
 const ZIP = RELEASE + 'Jobadabra-mac-arm64.zip';
 
 // Where the person came from (the link they followed carried ?src=reddit-devops): a short slug, or nothing.

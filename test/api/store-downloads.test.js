@@ -34,7 +34,7 @@ test('the small .exe link still gives the GitHub installer', async () => {
   const e = env();
   const response = await worker.fetch(click('/download/windows-exe?from=download'), e, {});
   assert.equal(response.status, 302);
-  assert.match(response.headers.get('Location'), /^https:\/\/github\.com\/GarryOne\/jobadabra\/releases\/latest\/download\/.+-x64\.exe$/);
+  assert.match(response.headers.get('Location'), /^https:\/\/github\.com\/jobadabra\/jobadabra\/releases\/latest\/download\/.+-x64\.exe$/);
   assert.equal(e.STATS.db.prepare('SELECT platform FROM downloads').get().platform, 'windows-exe');
 });
 
@@ -72,7 +72,7 @@ test('every Windows download link on every page is the Store route or its .exe p
   assert.deepEqual(wrong, []);
 });
 
-const RELEASE = {assets: [{name: 'Jobadabra-0.8.60-x64.exe', browser_download_url: 'https://github.com/GarryOne/jobadabra/releases/download/desktop-v0.8.60/Jobadabra-0.8.60-x64.exe'}]};
+const RELEASE = {assets: [{name: 'Jobadabra-0.8.60-x64.exe', browser_download_url: 'https://github.com/jobadabra/jobadabra/releases/download/desktop-v0.8.60/Jobadabra-0.8.60-x64.exe'}]};
 
 test('both Windows choices resolve: the Store route to the Store, the .exe route to the newest stable release\'s installer', async () => {
   const e = {...env(), fetcher: async () => new Response(JSON.stringify(RELEASE), {headers: {'Content-Type': 'application/json'}})};

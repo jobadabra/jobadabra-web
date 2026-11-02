@@ -2,10 +2,11 @@
 // replays of every recorded case (admin/applying-replays.js), each case one mechanism on a small page with a stubbed AI answer, with its origin (captured from a real page or hand-cut),
 // search, filters, sorting and pages. A case never says a site works: a fix is "Confirmed offline" on the Fixed tab, from the row's recording.
 // admin/applying.js puts CASES_SCRIPT inside its page, where it uses that page's el, heads, dots, ago, pick, sortRows, caseMatches and runsScore. Guard: test/admin/applying-replays.test.js, test/admin/applying-fixed.test.js.
+import {PUBLIC_REPO, githubUrl} from '../shared/repos.js';
 export const CASES_SCRIPT = `  // The replays of CI on main after each merge (admin/applying-replays.js): every row says the build's sha and when it ran; a local run is never shown.
   const caseBox = el('div'), CASE_GET = [c => c.name.toLowerCase(), c => c.rung, c => c.origin || '', c => (c.ok ? 1 : 0), c => runsScore(c.history, run => run === 1), c => c.at, c => c.since.at];
   const CASE_COLS = ['c-case', 'c-rung', 'c-origin', 'c-result', 'c-runs', 'c-last', 'c-since'];   // widths: .fit th.c-* (the note keeps to 2 lines, the rest on hover: never a sideways scroll)
-  const COMMIT = 'https://github.com/GarryOne/jobadabra/commit/', shaLink = (sha, at) => el('span', {}, el('a', {className: 'hash', href: COMMIT + sha, textContent: sha.slice(0, 7)}), el('span', {className: 'stack', textContent: ago(at)}));
+  const COMMIT = '${githubUrl(PUBLIC_REPO)}/commit/', shaLink = (sha, at) => el('span', {}, el('a', {className: 'hash', href: COMMIT + sha, textContent: sha.slice(0, 7)}), el('span', {className: 'stack', textContent: ago(at)}));
   // Search, Result and Rung filters, sorting and 15 rows a page: the pool table's parts (owner, 12 Oct 2026: "just like other tables on the page").
   const CASE_PER = 15, caseChosen = {result: null, rung: null, origin: null, query: '', page: 0}, caseTable = el('div'), caseCount = el('span', {className: 'muted count'}), casePager = el('div', {className: 'pager'});
   const caseGroups = (get, label) => Object.entries(d.cases.reduce((out, c) => ((out[get(c)] = (out[get(c)] || 0) + 1), out), {})).sort(([a], [b]) => a.localeCompare(b)).map(([name, sites]) => ({name, sites, label: label(name)}));

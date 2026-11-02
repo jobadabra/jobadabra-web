@@ -15,8 +15,9 @@ import {loadJourneys} from '../desktop/e2e/lib/critical-journeys.mjs';
 import {kindOf, redJobs} from './e2e-intel-rows.mjs';
 import {readResults} from './integration-intel.mjs';
 import {BIG, expectedSeen, kindsRead, registryParts, runRows, runTests, snapshotOf, storedFrom, tally} from './gtm-readiness-rows.mjs';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
-const repo = process.env.REPO || process.env.GITHUB_REPOSITORY || 'GarryOne/jobadabra';
+const repo = process.env.REPO || process.env.GITHUB_REPOSITORY || PUBLIC_REPO;
 const base = process.env.GTM_INTEL_URL || 'https://www.jobpilotto.top/gtm/data';
 const E2E_WORKFLOWS = ['desktop.yml', 'e2e.yml', 'e2e-windows.yml'], INTEGRATION_WORKFLOW = 'integration.yml', MAIN_WORKFLOW = 'build.yml', KEEP_DAYS = 28, MAX_CALLS = 450;
 const execAsync = promisify(execFile);

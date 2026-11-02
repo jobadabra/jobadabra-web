@@ -16,8 +16,9 @@ import {CAUSES, DIFF_MAX, RULES_VERSION} from '../admin/e2e-causes.js';
 import {answerText, betaRunRow, betaRunsToRead, kindOf, rateJobs, redJobs, rowsOf, runsToRead, nightRunsToRead} from './e2e-intel-rows.mjs';
 import {WORK_IDS, parseLog, workRows, weekOf} from '../admin/e2e-work.js';
 import {cleanLanes} from '../admin/e2e-grey.js';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
-const repo = process.env.REPO || process.env.GITHUB_REPOSITORY || 'GarryOne/jobadabra';
+const repo = process.env.REPO || process.env.GITHUB_REPOSITORY || PUBLIC_REPO;
 const base = process.env.E2E_INTEL_URL || 'https://www.jobpilotto.top/e2e/data';
 const execAsync = promisify(execFile);
 const WORKFLOWS = ['desktop.yml', 'e2e.yml', 'e2e-windows.yml', 'harness-daily.yml'];
@@ -116,7 +117,7 @@ export function readWork(since, git = execFileSync) {
 
 /** Read the PUBLIC registry from main, even when this job runs on a private PR; an unreadable registry is omitted so the snapshot retains its last read. */
 export async function readLanes(read = ghAsync) {
-  const lanes = cleanLanes(await read('api', 'repos/GarryOne/jobadabra/contents/desktop/e2e/lanes.json?ref=main', '-H', 'Accept: application/vnd.github.raw+json'));
+  const lanes = cleanLanes(await read('api', `repos/${PUBLIC_REPO}/contents/desktop/e2e/lanes.json?ref=main`, '-H', 'Accept: application/vnd.github.raw+json'));
   if (!lanes) console.log('::warning::lane registry not read this hour');
   return lanes || undefined;
 }

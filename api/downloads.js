@@ -6,8 +6,9 @@
 import {OWN_HOSTS} from '../shared/hosts.js';
 import {net} from './attribution.js';
 import {device} from '../shared/device.js';
+import {PUBLIC_REPO, githubUrl} from '../shared/repos.js';
 
-const RELEASE = 'https://github.com/GarryOne/jobadabra/releases/latest/download/';
+const RELEASE = `${githubUrl(PUBLIC_REPO)}/releases/latest/download/`;
 // The fixed fallback: the alias every stable release uploads beside its versioned file (the latest stable, desktop-v0.8.60, has both).
 export const FILES = {mac: 'Jobadabra-mac-arm64.dmg', 'windows-exe': 'Jobadabra-windows-x64.exe'};
 // Store listings (owner, 26 Oct 2026: "Store first, .exe small"): a Microsoft Store install never shows SmartScreen or Edge's Keep/Delete, and the
@@ -62,7 +63,7 @@ export async function hit(request, env, now = new Date()) {
 const VERSIONED = {mac: [/^Jobadabra-\d[\w.-]*-arm64\.dmg$/],
   'windows-exe': [/^Jobadabra-\d[\w.-]*-x64\.exe$/]};
 export async function versioned(platform, env, fetcher = globalThis.fetch, cache = globalThis.caches?.default) {
-  const api = `https://api.github.com/repos/${env.GITHUB_REPO || 'GarryOne/jobadabra'}/releases/latest`;
+  const api = `https://api.github.com/repos/${env.GITHUB_REPO || PUBLIC_REPO}/releases/latest`;
   try {
     let response = cache && await cache.match(api);
     if (!response) {

@@ -14,8 +14,9 @@ import {LAYERS, MAX_RUNS} from '../admin/integration-intel.js';
 import {clockMovedFor} from './clock-moved-intel.mjs';
 import {coverageFor} from './coverage-intel.mjs';
 import {advance, beforePending, countsOf, inOrder, grepCounts, moveRow, parseResult, runRow, slowestOf} from './integration-intel-rows.mjs';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
-const repo = process.env.REPO || process.env.GITHUB_REPOSITORY || 'GarryOne/jobadabra';
+const repo = process.env.REPO || process.env.GITHUB_REPOSITORY || PUBLIC_REPO;
 const base = process.env.INTEGRATION_INTEL_URL || 'https://www.jobpilotto.top/integration/data';
 const WORKFLOW = 'integration.yml', MAIN_WORKFLOW = 'build.yml', KEEP_DAYS = 30, MAX_READ = 120;   // MAX_READ: runs read per pass (hourly); the newest first, the rest the next pass
 const execAsync = promisify(execFile);

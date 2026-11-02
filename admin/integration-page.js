@@ -12,6 +12,7 @@ import {CLOCK_CSS, clockMovedCard} from './clock-moved-card.js';
 import {COVERAGE_CSS, coverageCard} from './coverage-card.js';
 import {readStartProblem} from '../shared/intel-start.js';
 import {startLine} from './intel-start-line.js';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
 const DAY = 86400000;
 export const RANGES = {'7d': {name: 'Last 7 days', days: 7}, '30d': {name: 'Last 30 days', days: 30}};
@@ -108,7 +109,7 @@ function moveCard(snapshot) {
 const CSS = `.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}.tile b{display:block;font-size:28px;margin:4px 0}${CHIP_STYLE}${GREEN_CSS}.sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px}
 .filters{margin:8px 0 10px}h2{margin:0 0 8px}.scroll{overflow-x:auto}.verdict{font-size:17px;margin:0 0 10px}${BARS_CSS}${COVERAGE_CSS}${CLOCK_CSS}`;
 
-export function page(snapshot, {range = '7d', repo = 'GarryOne/jobadabra', now = new Date(), problem = null} = {}) {
+export function page(snapshot, {range = '7d', repo = PUBLIC_REPO, now = new Date(), problem = null} = {}) {
   range = rangeOf(range);
   const name = RANGES[range].name, filters = filterLinks(Object.entries(RANGES).map(([value, {name: text}]) => [value, text, `?range=${value}`]), range);
   const stats = layerStats(snapshot, range, now), {keys} = mainRuns(snapshot, range, now);

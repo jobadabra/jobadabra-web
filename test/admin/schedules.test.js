@@ -35,7 +35,7 @@ const env = () => ({STATS: d1(), STATS_KEY: 'k3y', STATS_SALT: 's', SELFHEAL_PUB
 const owner = {headers: {Cookie: 'jp_stats=k3y'}};
 const call = (e, path, init = {}) => worker.fetch(new Request(`https://www.jobpilotto.top${path}`, init), e, {});
 
-const run = (at, conclusion, mins = 3) => ({run_started_at: at, created_at: at, updated_at: new Date(Date.parse(at) + mins * 60000).toISOString(), status: conclusion ? 'completed' : 'in_progress', conclusion, html_url: 'https://github.com/GarryOne/x/actions/runs/1'});
+const run = (at, conclusion, mins = 3) => ({run_started_at: at, created_at: at, updated_at: new Date(Date.parse(at) + mins * 60000).toISOString(), status: conclusion ? 'completed' : 'in_progress', conclusion, html_url: 'https://github.com/jobadabra/x/actions/runs/1'});
 function fakeGh(repos) {
   return (path, raw) => {
     const [, repo, rest] = path.match(/^repos\/([^/]+\/[^/?]+)(?:\/(.*))?$/) || [];
@@ -52,7 +52,7 @@ const files = [
   {name: 'manual.yml', text: 'name: Manual\non:\n  workflow_dispatch:\njobs:\n  a:\n    runs-on: ubuntu-24.04\n', runs: []},
   {name: 'old.yml', state: 'disabled_manually', text: "name: Old\non:\n  schedule:\n    - cron: '0 5 * * *'\njobs:\n  a:\n    runs-on: ubuntu-24.04\n", runs: []}];
 const SCHEDULER = `  if (cron === '40 */3 * * *') return [{workflow: 'ops-overview.yml', inputs: {}}];\n`;
-const gh = fakeGh({'GarryOne/jobadabra': {private: false, files: [files[0]], code: {'app-core/src/scheduler.js': SCHEDULER}}, 'GarryOne/jobadabra-web': {private: true, files}});
+const gh = fakeGh({'jobadabra/jobadabra': {private: false, files: [files[0]], code: {'app-core/src/scheduler.js': SCHEDULER}}, 'jobadabra/jobadabra-web': {private: true, files}});
 gh.raw = true;
 const realGh = (path, raw) => (path.endsWith('app-core/src/scheduler.js') ? SCHEDULER : gh(path, raw));
 
@@ -98,16 +98,16 @@ test('areas, state and missed runs', () => {
 });
 
 test('the collector reads each repo, merges the Worker cron, weighs minutes, and survives a repo it cannot read', async () => {
-  const snapshot = await collect({gh: realGh, repos: ['GarryOne/jobadabra', 'GarryOne/jobadabra-web', 'GarryOne/gone'], now});
-  assert.deepEqual(snapshot.repos.map(repo => [repo.name, repo.ok, repo.private]), [['GarryOne/jobadabra', true, false], ['GarryOne/jobadabra-web', true, true], ['GarryOne/gone', false, true]]);
-  const pub = snapshot.jobs.find(job => job.repo === 'GarryOne/jobadabra'), site = snapshot.jobs.find(job => job.repo === 'GarryOne/jobadabra-web' && job.file === 'ops-overview.yml');
+  const snapshot = await collect({gh: realGh, repos: ['jobadabra/jobadabra', 'jobadabra/jobadabra-web', 'jobadabra/gone'], now});
+  assert.deepEqual(snapshot.repos.map(repo => [repo.name, repo.ok, repo.private]), [['jobadabra/jobadabra', true, false], ['jobadabra/jobadabra-web', true, true], ['jobadabra/gone', false, true]]);
+  const pub = snapshot.jobs.find(job => job.repo === 'jobadabra/jobadabra'), site = snapshot.jobs.find(job => job.repo === 'jobadabra/jobadabra-web' && job.file === 'ops-overview.yml');
   assert.deepEqual([pub.source, pub.crons, pub.billedMin, pub.weeklyMin], ['both', ['17 * * * *', '40 */3 * * *'], 0, 60], 'a public repo is free');
   assert.deepEqual([site.source, site.billedMin, site.recent.length, site.recent[0].conclusion, site.ai], ['github', 600, 14, 'failure', true], 'macOS in a private repo counts x10');
   assert.equal(snapshot.jobs.find(job => job.file === 'old.yml').disabled, true);
 });
 
 test('the ingest needs the key, cuts unknown fields and keeps one row; the page needs the owner login', async () => {
-  const e = env(), snapshot = await collect({gh: realGh, repos: ['GarryOne/jobadabra-web'], now});
+  const e = env(), snapshot = await collect({gh: realGh, repos: ['jobadabra/jobadabra-web'], now});
   const put = (body, key = 'pub') => call(e, '/ops/data?kind=schedules', {method: 'PUT', headers: {Authorization: `Bearer ${key}`}, body: JSON.stringify(body)});
   assert.equal((await put(snapshot, 'wrong')).status, 404);
   assert.equal((await put({jobs: 'x'})).status, 400);
@@ -126,7 +126,7 @@ test('the ingest needs the key, cuts unknown fields and keeps one row; the page 
 
 test('the page in each state: no data, grouped by area with counts, escaped text', async () => {
   assert.match(page(null, {now}), /No data yet/);
-  const snapshot = await collect({gh: realGh, repos: ['GarryOne/jobadabra-web'], now});
+  const snapshot = await collect({gh: realGh, repos: ['jobadabra/jobadabra-web'], now});
   snapshot.jobs[0].about = '<img src=x onerror=1>';
   const html = page(snapshot, {now});
   assert.ok(!html.includes('<img src=x'), 'job text is escaped');
@@ -150,9 +150,9 @@ test('the aggregate is its own top-level Schedules section, Testing has a Schedu
 
 test('Testing → Scheduled lists only the testing jobs and the aggregate filters by area, both from the one snapshot reader', async () => {
   const snapshot = {at: '2026-10-20T17:00:00Z', repos: [], jobs: [
-    {repo: 'GarryOne/jobadabra', file: 'e2e.yml', name: 'CI · E2E', about: '', crons: ['0 2 * * *'], recent: []},
-    {repo: 'GarryOne/jobadabra', file: 'product-brain.yml', name: 'Product brain', about: '', crons: ['0 6 * * *'], recent: []},
-    {repo: 'GarryOne/jobadabra-web', file: 'ops-overview.yml', name: 'CI · Ops overview', about: '', crons: ['17 * * * *'], recent: []}]};
+    {repo: 'jobadabra/jobadabra', file: 'e2e.yml', name: 'CI · E2E', about: '', crons: ['0 2 * * *'], recent: []},
+    {repo: 'jobadabra/jobadabra', file: 'product-brain.yml', name: 'Product brain', about: '', crons: ['0 6 * * *'], recent: []},
+    {repo: 'jobadabra/jobadabra-web', file: 'ops-overview.yml', name: 'CI · Ops overview', about: '', crons: ['17 * * * *'], recent: []}]};
   const only = page(snapshot, {only: 'testing', now});
   assert.ok(only.includes('CI · E2E') && !only.includes('Product brain') && !only.includes('CI · Ops overview'), 'the Testing tab holds testing jobs only');
   assert.ok(only.includes('<h1>⏰ Scheduled</h1>') && only.includes('Scheduled · Testing · Admin'));
@@ -169,15 +169,15 @@ test('Testing → Scheduled lists only the testing jobs and the aggregate filter
 });
 
 test('Billed min / week is a lower bound, with the repo named, when a private repo was not read (1 Nov 2026: a confident 0 while jobadabra-lab was unreadable)', () => {
-  const job = {repo: 'GarryOne/jobadabra-web', file: 'search-lab.yml', name: 'Search lab', about: '', crons: ['15 */6 * * *'], billedMin: 90, recent: []};
+  const job = {repo: 'jobadabra/jobadabra-web', file: 'search-lab.yml', name: 'Search lab', about: '', crons: ['15 */6 * * *'], billedMin: 90, recent: []};
   const tileOf = html => html.match(/<section class="card tile ([^"]*)"><span class="muted">Billed min \/ week<\/span><b>([^<]*)<\/b><span class="muted">([^<]*)<\/span>/).slice(1);
-  const read = [{name: 'GarryOne/jobadabra', private: false, ok: true}, {name: 'GarryOne/jobadabra-lab', private: true, ok: true}];
+  const read = [{name: 'jobadabra/jobadabra', private: false, ok: true}, {name: 'jobadabra/jobadabra-lab', private: true, ok: true}];
   assert.deepEqual(tileOf(page({at: '2026-10-20T17:00:00Z', repos: read, jobs: [job]}, {now})), ['', '90', 'Mac ×10, Windows ×2; public repos are free'], 'every repo read: the plain number');
   // Through clean(), as the ingest stores it: the collector sends an unread repo as {private: true, ok: false}.
-  const unread = clean({at: '2026-10-20T17:00:00Z', repos: [read[0], {name: 'GarryOne/jobadabra-lab', private: true, ok: false}], jobs: [job]});
+  const unread = clean({at: '2026-10-20T17:00:00Z', repos: [read[0], {name: 'jobadabra/jobadabra-lab', private: true, ok: false}], jobs: [job]});
   assert.deepEqual(tileOf(page(unread, {now})), ['warn', '≥ 90', 'jobadabra-lab not read: its minutes are missing']);
-  const two = clean({at: '2026-10-20T17:00:00Z', repos: [{name: 'GarryOne/a', private: true, ok: false}, {name: 'GarryOne/b', private: true, ok: false}], jobs: [job]});
+  const two = clean({at: '2026-10-20T17:00:00Z', repos: [{name: 'jobadabra/a', private: true, ok: false}, {name: 'jobadabra/b', private: true, ok: false}], jobs: [job]});
   assert.equal(tileOf(page(two, {now}))[2], 'a, b not read: their minutes are missing');
-  const publicUnread = {at: '2026-10-20T17:00:00Z', repos: [{name: 'GarryOne/jobadabra', private: false, ok: false}], jobs: [job]};
+  const publicUnread = {at: '2026-10-20T17:00:00Z', repos: [{name: 'jobadabra/jobadabra', private: false, ok: false}], jobs: [job]};
   assert.equal(tileOf(page(publicUnread, {now}))[1], '90', 'an unread public repo bills 0 anyway: the number stays');
 });

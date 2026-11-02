@@ -10,8 +10,9 @@ import {post} from '../admin/build-digest-telegram.js';
 import {aiLine, isRefusal, reportRefusal} from '../admin/ai-refusal.js';
 import {askBroker} from '../desktop/e2e/lib/broker-client.mjs';   // the public tree's client of workers/ai-broker
 import {pathToFileURL} from 'node:url';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
-const repo = process.env.REPO || process.env.GITHUB_REPOSITORY || 'GarryOne/jobadabra';
+const repo = process.env.REPO || process.env.GITHUB_REPOSITORY || PUBLIC_REPO;
 const base = process.env.DIGEST_URL || 'https://www.jobpilotto.top/digest/data';
 const gh = (...args) => JSON.parse(execFileSync('gh', args, {encoding: 'utf8', maxBuffer: 1 << 28}) || 'null');
 const arg = name => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : ''; };

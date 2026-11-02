@@ -12,8 +12,9 @@ import {lastOf} from './testing-overview-data.js';
 import {daysTo, historyOf, MAP_DAYS} from './testing-overview-history.js';
 import {cellHtml, dayHeads, MAP_STYLE} from './testing-overview-map.js';
 import {lastChip} from './testing-overview.js';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
-const REPO = 'GarryOne/jobadabra';
+const REPO = PUBLIC_REPO;
 /** What each Worker probe checks, in a few words (the row shows it small and muted); a probe added to shared/synthetic.js without a line here fails the guard test. The full sentence is OWN_DETAIL (the tooltip). */
 export const OWN_WHAT = {
   site: 'The website answers',

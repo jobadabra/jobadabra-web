@@ -8,6 +8,7 @@
 # Pieces: hero-onboarding (Set up), hero (Find), hero-fill (Apply), hero-track (Track); their steps are media/scenes.mjs. Demo data only, no AI,
 # a hidden window: nothing of the owner's app. Sets go to ~/.cache/jobadabra-media/hero-<time>. tools/media.sh (origin/main) keeps them fresh later.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/repos.sh"   # JOBADABRA_PUBLIC_REPO, JOBADABRA_WEB_REPO
 trap 'echo "hero: FAILED at line $LINENO (see the lines above)" >&2' ERR
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$here"
@@ -34,7 +35,7 @@ fi
 # the joined tree with this worktree's edits. The app recorded is public main (or HERO_PUBLIC_REF, e.g. a public PR branch that redesigns a screen the
 # hero shows): rebuilt when that commit moved (round 2: a stale overlay would have recorded the old setup step), then the hero's folders are synced.
 ref="${HERO_PUBLIC_REF:-main}"
-want="$(git ls-remote "${PUBLIC_REPO_URL:-https://github.com/GarryOne/jobadabra.git}" "refs/heads/$ref" 2>/dev/null | cut -c1-40 || true)"
+want="$(git ls-remote "${PUBLIC_REPO_URL:-https://github.com/$JOBADABRA_PUBLIC_REPO.git}" "refs/heads/$ref" 2>/dev/null | cut -c1-40 || true)"
 have="$(git -C .overlay rev-parse HEAD 2>/dev/null || true)"
 if [ -z "$have" ] || { [ -n "$want" ] && [ "$want" != "$have" ]; }; then
   echo "hero: recording the app at jobadabra/$ref ${want:0:7} (the overlay had ${have:-none}): rebuilding .overlay" >&2

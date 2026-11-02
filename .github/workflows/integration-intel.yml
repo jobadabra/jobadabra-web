@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 30
     env:
       GH_TOKEN: ${{ github.token }}
-      REPO: GarryOne/jobadabra   # the public repo's runs, artifacts and tags (read with this repo's token: public data)
+      REPO: ${{ vars.OWNER_OF_JOBADABRA || github.repository_owner }}/jobadabra   # Why (2 Nov 2026, owner: "Nothing was merged on 1 Nov"): the org by variable, never a literal; the PR search does not follow a rename. The public repo's runs, artifacts and tags (read with this repo's token: public data)
       SELFHEAL_PUBLISH_KEY: ${{ secrets.SELFHEAL_PUBLISH_KEY }}
     steps:
       - uses: actions/checkout@v5

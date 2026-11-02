@@ -59,7 +59,7 @@ test('a week with three catches and two escapes shows missed suites without reds
   assert.match(html, /Caught a bug<\/th><th class="num">Missed \(escaped\)<\/th>/);
   assert.match(html, /<code>settings<\/code><\/td><td class="num"><span class="muted">0<\/span><\/td><td class="num"><span class="chip bad">1<\/span>/);
   assert.match(html, /Missed, no suite plays it/);
-  assert.match(html, /https:\/\/github.com\/GarryOne\/jobadabra\/commit\/b{40}/);
+  assert.match(html, /https:\/\/github.com\/jobadabra\/jobadabra\/commit\/b{40}/);
   assert.match(html, /resume &lt;a draft&gt; &amp; continue/);
   assert.doesNotMatch(html, /<code>resume|<a draft>/);
   assert.doesNotMatch(html, /Red but caught nothing in this range: <code>settings/);

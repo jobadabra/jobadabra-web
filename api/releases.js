@@ -2,7 +2,9 @@
 // calls an hour per IP, and an office network shares one (9 Oct 2026: a friend's Windows app got "GitHub answered 403").
 // Two fixed reads only, made with the site's GITHUB_TOKEN and kept 5 minutes at the edge for every install; the answer is the
 // GitHub shape, trimmed to the fields the updater reads. Guard: test/api/releases.test.js.
-const REPO = 'GarryOne/jobadabra';
+import {PUBLIC_REPO} from '../shared/repos.js';
+
+const REPO = PUBLIC_REPO;
 const PATHS = {'/api/releases/latest': `repos/${REPO}/releases/latest`, '/api/releases': `repos/${REPO}/releases?per_page=30`};
 export const CACHE_SECONDS = 300;
 

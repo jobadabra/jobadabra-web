@@ -7,9 +7,10 @@ import {execFileSync} from 'node:child_process';
 import {writeFileSync} from 'node:fs';
 import {billedWeight, parseWorkerCrons, parseWorkflow, RUN_DOTS} from '../shared/schedules-model.js';
 import {pathToFileURL} from 'node:url';
+import {LAB_REPO, PUBLIC_REPO, WEB_REPO} from '../shared/repos.js';
 
-const REPOS = (process.env.SCHEDULES_REPOS || 'GarryOne/jobadabra,GarryOne/jobadabra-web,GarryOne/jobadabra-lab').split(',');
-const WORKER_REPO = 'GarryOne/jobadabra', WORKER_FILES = ['app-core/src/scheduler.js', 'worker/src/scheduler.js'];   // Why (1 Nov 2026, owner: jobadabra is desktop + extension only): the Worker's code moved to app-core/; the old path answers until the public move is on main
+const REPOS = (process.env.SCHEDULES_REPOS || [PUBLIC_REPO, WEB_REPO, LAB_REPO].join(',')).split(',');
+const WORKER_REPO = PUBLIC_REPO, WORKER_FILES = ['app-core/src/scheduler.js', 'worker/src/scheduler.js'];   // Why (1 Nov 2026, owner: jobadabra is desktop + extension only): the Worker's code moved to app-core/; the old path answers until the public move is on main
 const base = process.env.SCHEDULES_URL || 'https://www.jobpilotto.top/ops/data?kind=schedules';
 const WEEK = 7 * 86400000;
 

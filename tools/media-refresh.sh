@@ -4,6 +4,7 @@
 # on the branch media-refresh and opens or updates its PR for the owner. Guarded by tests/test_site_media_refresh.py.
 # Usage, from this repo's root: tools/media-refresh.sh <media set> <public tree> <public sha> [--no-push]
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/repos.sh"   # JOBADABRA_PUBLIC_REPO, JOBADABRA_WEB_REPO
 set_dir="$1"; tree="$2"; sha="$3"; push=yes
 [ "${4:-}" = --no-push ] && push=no
 dest=website/public/media
@@ -33,7 +34,7 @@ git -c user.name=product-media -c user.email=product-media@users.noreply.github.
 [ "$push" = yes ] || { echo "media-refresh: committed on media-refresh (no push)"; exit 0; }
 git push -q -f origin media-refresh
 where="recorded on this Mac by tools/media.sh"
-[ -z "${GITHUB_RUN_ID:-}" ] || where="recorded by run ${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-GarryOne/jobadabra-web}/actions/runs/$GITHUB_RUN_ID"
+[ -z "${GITHUB_RUN_ID:-}" ] || where="recorded by run ${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-$JOBADABRA_WEB_REPO}/actions/runs/$GITHUB_RUN_ID"
 detail="$(mktemp)"; trap 'rm -f "$detail"' EXIT
 printf 'Re-recorded from public %s (%s).\n\n- Refreshed: %s\n- Made but not on the site: %s\n- Look first: the changed files in this PR (videos play in the PR file view)\n' \
   "${sha:0:9}" "$where" "${updated[*]:-none}" "${extra[*]:-none}" > "$detail"
@@ -51,6 +52,6 @@ if [ -n "$(gh pr list --head media-refresh --state open --json number --jq '.[0]
   echo "media-refresh: the open refresh PR now holds this set"
 elif ! gh pr create --head media-refresh --base main --title "[media] Refresh the site's media (screens changed)" --body "$body"; then
   echo "media-refresh: GitHub refused the PR (is gh signed in on this Mac: gh auth status?)."
-  echo "media-refresh: the set is on branch media-refresh: ${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-GarryOne/jobadabra-web}/compare/main...media-refresh"
+  echo "media-refresh: the set is on branch media-refresh: ${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-$JOBADABRA_WEB_REPO}/compare/main...media-refresh"
   exit 1
 fi

@@ -68,7 +68,7 @@ class MediaRefreshTests(unittest.TestCase):
         self.repo = self.tmp / 'repo'
         (self.repo / 'website/public/media').mkdir(parents=True)
         (self.repo / 'tools').mkdir()
-        for name in ('media-refresh.sh', 'public-watch.sh', 'media-paths.txt'):
+        for name in ('media-refresh.sh', 'public-watch.sh', 'media-paths.txt', 'repos.sh'):
             shutil.copy(ROOT / 'tools' / name, self.repo / 'tools' / name)
         (self.repo / 'website/public/media/hero.mp4').write_text('old hero')
         (self.repo / 'website/public/media/still-jobs.webp').write_text('old still')
