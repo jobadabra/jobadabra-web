@@ -54,10 +54,11 @@ const chip = job => (job.state === 'off' ? '<span class="chip o">disabled</span>
   + (job.missed ? ' <span class="chip w">missed a run</span>' : '');
 const sourceNote = job => (job.source === 'worker' ? ' · started by the Worker cron' : job.source === 'both' ? ' · Worker cron + GitHub backup' : '');
 // Why (2 Nov 2026, owner: "move this to a separate page, or an expanded detailed row, on a full row. Now it's too crowded"): the cell keeps one line and a toggle; the 14-night blocks sit in a full-width row under it.
+// Why (#330, Gitar): the id has the repo too; two repos may schedule the same file name, and getElementById would open the first row's detail for both.
 const nightCell = (jobs, id) => (jobs.length ? `${summaryLine(jobs)}${toggleHtml(jobs, id)}` : '<span class="muted">–</span>');
 const COLUMNS = 8, REPORT_ONLY = '/admin/testing/report-only';
 function row(job, now, summary = null) {
-  const mine = summaryFor(summary, job.file), id = `nd-${job.file.replace(/[^a-z0-9]+/gi, '-')}`, last = job.recent.find(run => run.conclusion) || job.recent[0], url = `https://github.com/${esc(job.repo)}/actions/workflows/${esc(job.file)}`;
+  const mine = summaryFor(summary, job.file), id = `nd-${`${job.repo}-${job.file}`.replace(/[^a-z0-9]+/gi, '-')}`, last = job.recent.find(run => run.conclusion) || job.recent[0], url = `https://github.com/${esc(job.repo)}/actions/workflows/${esc(job.file)}`;
   return `<tr class="${job.state === 'red' ? 'red' : ''}"><td><b><a href="${url}">${esc(job.name || job.file)}</a></b><div class="muted small">${esc(job.about)}</div></td><td><span class="repo">${esc(job.repo.split('/').pop())}</span></td>
 <td>${job.schedule.map(esc).join('<br>')}<div class="muted small">${job.next ? `next ${esc(whenWords(job.next, now))}` : ''}${esc(sourceNote(job))}</div></td>
 <td>${chip(job)}<div class="muted small">${last ? `${esc(stamp(last.at, now))}${last.mins ? ` · ${esc(num(last.mins))} min` : ''}` : ''}</div></td><td>${dots(job)}</td><td>${nightCell(mine, id)}</td><td class="num">${num(job.billedMin)}</td>

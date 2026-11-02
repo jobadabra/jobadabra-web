@@ -147,10 +147,10 @@ test('Testing → Scheduled: the column has its header and one cell in every row
   assert.match(bodies[0], /Quality AI no data|◷ \d+ no data/);
   assert.doesNotMatch(bodies[0], /class="nt"|class="nbars/, 'the 14-night blocks are not in the row itself (owner, 2 Nov 2026: too crowded)');
   assert.doesNotMatch(bodies[1], /nline|ntoggle/, 'a workflow with no summary shows a dash and no toggle');
-  const detail = html.match(/<tr class="ndetail" id="(nd-e2e-yml)" hidden><td colspan="(\d+)">(.*?)<\/td><\/tr>/s);
+  const detail = html.match(/<tr class="ndetail" id="(nd-GarryOne-jobadabra-e2e-yml)" hidden><td colspan="(\d+)">(.*?)<\/td><\/tr>/s);
   assert.ok(detail, 'the e2e row has a hidden detail row under it');
   assert.equal(detail[2], String((header.match(/<th/g) || []).length), 'it spans every column');
-  assert.match(bodies[0], /aria-controls="nd-e2e-yml" aria-expanded="false"|aria-expanded="false" aria-controls="nd-e2e-yml"/);
+  assert.match(bodies[0], /aria-controls="nd-GarryOne-jobadabra-e2e-yml" aria-expanded="false"|aria-expanded="false" aria-controls="nd-GarryOne-jobadabra-e2e-yml"/);
   assert.match(detail[3], /class="nt"/);
   assert.match(detail[3], /href="\/admin\/testing\/report-only">All measurements → Report only/);
   assert.equal((html.match(/class="ndetail"/g) || []).length, 1, 'no detail row for a workflow without a summary');
@@ -193,4 +193,13 @@ test('two cards a row on a desktop, one on a phone, in the one stylesheet both p
   assert.match(NIGHTLY_STYLE, /\.rgrid,\.ngrid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(NIGHTLY_STYLE, /@media \(max-width:640px\)\{\.rgrid,\.ngrid\{grid-template-columns:minmax\(0,1fr\)\}/);
   assert.doesNotMatch(NIGHTLY_STYLE, /auto-fill/);
+});
+
+test('two repos that schedule the same file name get two different detail ids, so each Details button opens its own row (Gitar on #330)', () => {
+  const job = repo => ({repo, file: 'e2e.yml', name: 'CI · E2E', about: '', crons: ['0 2 * * *'], recent: []});
+  const html = page({at: now.toISOString(), repos: [], jobs: [job('GarryOne/jobadabra'), job('GarryOne/jobadabra-lab')]}, {only: 'testing', now, summary: nightlySummary({}, now)});
+  const ids = [...html.matchAll(/<tr class="ndetail" id="([^"]+)"/g)].map(match => match[1]);
+  assert.equal(ids.length, 2);
+  assert.equal(new Set(ids).size, 2, ids.join(' '));
+  assert.deepEqual([...html.matchAll(/aria-controls="([^"]+)"/g)].map(match => match[1]), ids);
 });
