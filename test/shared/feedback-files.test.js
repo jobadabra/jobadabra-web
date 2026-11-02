@@ -142,6 +142,7 @@ test('past the day\'s cap of feedbacks with files, the words still go and the fi
 
 test('a poll keeps the cards it already drew (an open Logs viewer must not snap shut) and scrolls to #ref only on the first load', async () => {
   const page = await (await view(new Request('https://x/feedback', {headers: {Authorization: 'Bearer owner'}}), env())).text();
-  assert.match(page, /cards\.has\(keyOf\(row\)\)/);
+  assert.match(page, /kept\.sig === sigOf\(row\)/);   // a kept card is rebuilt when its delivery verdict or files change
+  assert.match(page, /const mark = \(card, fresh\)/);   // NEW is set on a poll and cleared on the next
   assert.match(page, /firstLoad && location\.hash/);
 });

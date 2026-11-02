@@ -44,11 +44,10 @@ h1{margin:0;font-size:24px}a{color:var(--amber)}.muted{color:var(--muted)}.live{
 <script>
 const list = document.getElementById('list'), state = document.getElementById('state'), live = document.getElementById('live');
 let known = null;
-const make = (row, fresh) => {
+const make = row => {
   const card = document.createElement('div'), meta = document.createElement('div'), text = document.createElement('div');
-  card.className = 'card' + (fresh ? ' fresh' : ''); meta.className = 'meta'; text.className = 'text';
+  card.className = 'card'; meta.className = 'meta'; text.className = 'text';
   const parts = [String(row.at).slice(0, 16).replace('T', ' ') + ' UTC', row.version + ' · ' + row.platform, 'install ' + String(row.install).slice(0, 8)];
-  if (fresh) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = 'NEW'; meta.append(b); }
   for (const part of parts) { const s = document.createElement('span'); s.textContent = part; meta.append(s); }
   text.textContent = row.text;
   card.append(meta, text);
@@ -76,7 +75,13 @@ const make = (row, fresh) => {
   if (row.contact) { const reply = document.createElement('div'); reply.className = 'reply'; reply.textContent = '↩︎ ' + row.contact; card.append(reply); }
   return card;
 };
-const cards = new Map();   // one card per message, kept across polls: an open Logs viewer and a loaded screenshot stay as they are
+const cards = new Map();   // key -> {sig, card}: one card per message, kept across polls (an open Logs viewer and a loaded screenshot stay) and rebuilt only when what it shows changed (the delivery verdict is written after the row)
+const mark = (card, fresh) => {   // NEW lasts one poll: a decoration set on the kept card each time
+  card.classList.toggle('fresh', fresh);
+  const badge = card.querySelector('.badge');
+  if (!fresh) badge?.remove();
+  else if (!badge) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = 'NEW'; card.querySelector('.meta').prepend(b); }
+};
 async function refresh() {
   try {
     const response = await fetch('?json=1', {cache: 'no-store'});
@@ -84,8 +89,14 @@ async function refresh() {
     const {rows, undelivered} = await response.json();
     const alert = document.getElementById('alert'); alert.hidden = !undelivered; alert.textContent = '⚠ ' + undelivered + ' feedback message' + (undelivered === 1 ? '' : 's') + ' did not reach your Telegram.';
     const firstLoad = known === null, seen = new Set(known || []);
-    const keyOf = row => row.at + row.install;
-    list.replaceChildren(...(rows.length ? rows.map(row => { if (!cards.has(keyOf(row))) cards.set(keyOf(row), make(row, known && !seen.has(keyOf(row)))); return cards.get(keyOf(row)); }) : [Object.assign(document.createElement('p'), {className: 'muted', textContent: 'No feedback yet.'})]));
+    const keyOf = row => row.at + row.install, sigOf = row => [row.notified, row.shot, row.logs].join('|');
+    const cardOf = row => {
+      const key = keyOf(row), kept = cards.get(key);
+      if (kept && kept.sig === sigOf(row)) return kept.card;
+      const card = make(row); cards.set(key, {sig: sigOf(row), card});
+      return card;
+    };
+    list.replaceChildren(...(rows.length ? rows.map(row => { const card = cardOf(row); mark(card, !firstLoad && !seen.has(keyOf(row))); return card; }) : [Object.assign(document.createElement('p'), {className: 'muted', textContent: 'No feedback yet.'})]));
     known = rows.map(keyOf);
     if (firstLoad && location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
     state.textContent = 'live · ' + rows.length + ' message' + (rows.length === 1 ? '' : 's') + ' · updated ' + new Date().toLocaleTimeString();
