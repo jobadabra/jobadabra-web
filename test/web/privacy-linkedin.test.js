@@ -12,6 +12,7 @@ test('the privacy page has a LinkedIn profile import section: what is read, wher
   assert.match(section, /Member Data Portability API/);
   assert.match(section, /only when you press Import/);
   assert.match(section, /kept in your own store[^]*not on our servers/);
+  assert.match(section, /built-in Free AI, through our server to Cloudflare Workers AI[^]*We do not keep the text or the answer/);   // as the Google section says (Gitar, 2 Nov 2026): the text is not "only on your computer"
   assert.match(section, /never sell it[^]*train AI models/);
   assert.match(section, /delete it in the app[^]*withdraw your consent on LinkedIn/);
 });
