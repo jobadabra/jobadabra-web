@@ -375,7 +375,7 @@ export const seeds = {
   'integration-not-starting': async ({env}) => {   // /admin/testing/integrations when the Worker's last start of its collector was refused (1 Nov 2026): the integration data plus the red line
     await seeds.integration({env});
     const {recordStarts} = await import('../shared/intel-start.js');
-    await recordStarts(env.STATS, [{workflow: 'integration-intel.yml', error: 'E2E_INTEL_GITHUB_TOKEN is not set (the site GITHUB_TOKEN covers the public repo, not this one)'}]);
+    await recordStarts(env.STATS, [{workflow: 'integration-intel.yml', error: 'TIMERS_GITHUB_TOKEN is not set (the site GITHUB_TOKEN is not sent to the public repo in its place)'}]);
   },
   'e2e-grey': async ({env}) => {   // fixture-only Grey lifecycle: four lanes, seven quality nights (two red), and the stored grey ledger (suite × reason); direct snapshot works for before shots too
     const at = new Date(), dayAt = back => new Date(at.getTime() - back * 86400000).toISOString().slice(0, 10);

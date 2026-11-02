@@ -56,10 +56,12 @@ test('the owner\'s case end to end: the Worker tick with no token -> the page of
     const env = {STATS, STATS_KEY: 'k3y', STATS_SALT: 'salt', GITHUB_REPO: 'GarryOne/jobadabra', GITHUB_TOKEN: 'site-token', ASSETS: {fetch: () => new Response('asset')}};
     const run = async (minute, withEnv) => { const tasks = []; await worker.scheduled({cron: '*/5 * * * *', scheduledTime: tick(minute).getTime()}, withEnv, {waitUntil: task => tasks.push(task)}); await Promise.allSettled(tasks); };
     const show = async path => (await (await worker.fetch(new Request(`https://www.example.test${path}`, {headers: {Cookie: 'jp_stats=k3y'}}), env, {waitUntil() {}})).text());
-    for (const {workflow, minute} of INTEL_COLLECTORS) {
-      await run(minute, env);
-      assert.match(seen(await show(PAGES[workflow].path)), /collector not starting: E2E_INTEL_GITHUB_TOKEN is not set/, `${workflow}: no token`);
-      await run(minute, {...env, E2E_INTEL_GITHUB_TOKEN: 'own-token'});
+    for (const {workflow, minute, home} of INTEL_COLLECTORS) {
+      // Why (2 Nov 2026, owner: the collectors moved to the public repo, jobadabra#2989): a public collector is started with TIMERS_REPO + TIMERS_GITHUB_TOKEN, one here with E2E_INTEL_*; the line names the token that is missing.
+      const [tokenName, withToken] = home === 'public' ? ['TIMERS_GITHUB_TOKEN', {TIMERS_GITHUB_TOKEN: 'timers-token', TIMERS_REPO: 'jobadabra/jobadabra'}] : ['E2E_INTEL_GITHUB_TOKEN', {E2E_INTEL_GITHUB_TOKEN: 'own-token'}];
+      await run(minute, {...env, TIMERS_REPO: 'jobadabra/jobadabra'});
+      assert.match(seen(await show(PAGES[workflow].path)), new RegExp(`collector not starting: ${tokenName} is not set`), `${workflow}: no token`);
+      await run(minute, {...env, ...withToken});
       assert.doesNotMatch(seen(await show(PAGES[workflow].path)), /collector not starting/, `${workflow}: the token is set, the next tick clears the line`);
     }
     await run(35, env);
