@@ -49,7 +49,7 @@ LEARNING_CANARY = "off"
 # /admin/growth/ai-cost counts from this day (admin/jobcost.js): every product key was replaced on 8 Oct 2026 (~13:15 UTC), measuring starts that day.
 AI_COST_SINCE = "2026-10-08"
 GITHUB_REPO = "jobadabra/jobadabra"
-# The repo that holds the hourly collectors (shared/intel-start.js); with the token E2E_INTEL_GITHUB_TOKEN. Why (1 Nov 2026, owner: repos move to the jobadabra org): a var, not the code default, so the start does not lean on the old path's redirect.
+# The repo that holds the hourly collectors still here (schedules-snapshot.yml; shared/intel-start.js), with the token E2E_INTEL_GITHUB_TOKEN. e2e-intel.yml and integration-intel.yml moved to the public repo (2 Nov 2026, jobadabra#2989): the tick starts them in TIMERS_REPO with TIMERS_GITHUB_TOKEN. Why (1 Nov 2026, owner: repos move to the jobadabra org): a var, not the code default, so the start does not lean on the old path's redirect.
 E2E_INTEL_REPO = "jobadabra/jobadabra-web"
 # Why (2 Nov 2026, owner: "Timers to site Worker, delete bot"): www starts the old bot Worker's on-time workflows (shared/timers.js): the */5 trigger stands for the nightly hours, the ten-minute sweeps and the night passes, the 47 trigger for the three-a-day e2e. They go into TIMERS_REPO with the secret TIMERS_GITHUB_TOKEN (repo and token travel together); TIMERS off = dormant. The bot's crons were removed first (the account allows 5 triggers).
 TIMERS = "on"

@@ -8,29 +8,35 @@
 import {WEB_REPO} from './repos.js';
 
 /** Why (1 Nov 2026, owner "delegate" on the empty integrations page): ONE list, so a collector cannot be added to the workflows and forgotten here (integration-intel.yml was).
- *  minute: the 5-minute tick (UTC) that starts it; backup: the minute of the workflow's own GitHub `cron`, always after `minute`. The minutes differ so two starts never share a tick. */
+ *  minute: the 5-minute tick (UTC) that starts it; backup: the minute of the workflow's own GitHub `cron`, always after `minute`. The minutes differ so two starts never share a tick.
+ *  home: 'public' = the workflow lives in the public repo (TIMERS_REPO, token TIMERS_GITHUB_TOKEN), 'web' = in this repo (E2E_INTEL_REPO, token E2E_INTEL_GITHUB_TOKEN).
+ *  Why (2 Nov 2026, owner: the CI collectors move to the public repo, they read its CI): e2e-intel and integration-intel moved there (jobadabra#2989, tools/ci-intel); without this the tick kept starting the deleted copies. */
 export const INTEL_COLLECTORS = [
-  {workflow: 'e2e-intel.yml', minute: 40, backup: 41},
-  {workflow: 'integration-intel.yml', minute: 15, backup: 17},
+  {workflow: 'e2e-intel.yml', minute: 40, backup: 41, home: 'public'},
+  {workflow: 'integration-intel.yml', minute: 15, backup: 17, home: 'public'},
   // Why (1 Nov 2026, coordinator mac-07: /admin/testing/scheduled read "as of 15:02" at 18:41 while claiming "refreshed hourly"; GitHub ran it at 01:05, 07:29, 15:02): the Scheduled pages' own snapshot is a collector too, on the tick that was free.
-  {workflow: 'schedules-snapshot.yml', minute: 0, backup: 3},
+  {workflow: 'schedules-snapshot.yml', minute: 0, backup: 3, home: 'web'},
 ];
 
 /** The collectors whose hourly tick is `date` (a 5-minute tick: at most one). */
 export const dueCollectors = date => INTEL_COLLECTORS.filter(collector => collector.minute === date.getUTCMinutes());
 
 /**
- * Starts every collector due at `now` on main of the repo that holds the workflows (this one, private). `dispatch(env, inputs, workflow)` is the Worker's (workers/www/index.js).
- * The repo is E2E_INTEL_REPO (default jobadabra/jobadabra-web) and the token MUST be E2E_INTEL_GITHUB_TOKEN (a fine-grained token on this repo, Actions: write; one token for every collector):
+ * Starts every collector due at `now` on main of the repo that holds its workflow (its `home`: the public repo or this one). `dispatch(env, inputs, workflow)` is the Worker's (workers/www/index.js).
+ * A 'web' collector: the repo is E2E_INTEL_REPO (default jobadabra/jobadabra-web) and the token MUST be E2E_INTEL_GITHUB_TOKEN (a fine-grained token on this repo, Actions: write). A 'public' one: TIMERS_REPO and TIMERS_GITHUB_TOKEN (the bot timers' pair):
  * repo and token travel together, as in api/brain.js. Why (31 Oct 2026, Gitar on #240): the site's GITHUB_TOKEN is the public repo's (index.js dispatch), so falling back to it would answer 403/404
  * every hour, only as a log line, while the page quietly went back to GitHub's late schedule. Without the token the start is refused out loud (GitHub's own schedule stays the backup).
  * Resolves to one `{workflow, error?}` per due collector, never throws: one collector's refusal must not hide another's start. Off-tick it is [].
  */
 export async function startIntelCollectors(env, now, dispatch) {
-  return Promise.all(dueCollectors(now).map(async ({workflow}) => {
+  return Promise.all(dueCollectors(now).map(async ({workflow, home}) => {
     try {
-      if (!env.E2E_INTEL_GITHUB_TOKEN) throw new Error('E2E_INTEL_GITHUB_TOKEN is not set (the site GITHUB_TOKEN covers the public repo, not this one)');
-      await dispatch({...env, GITHUB_REPO: env.E2E_INTEL_REPO || WEB_REPO, GITHUB_TOKEN: env.E2E_INTEL_GITHUB_TOKEN}, undefined, workflow);
+      const target = home === 'public'
+        ? {repo: env.TIMERS_REPO, token: env.TIMERS_GITHUB_TOKEN, missing: 'TIMERS_GITHUB_TOKEN is not set (the site GITHUB_TOKEN is not sent to the public repo in its place)', noRepo: 'TIMERS_REPO is not set (the public repo as owner/name, a var in wrangler.toml)'}
+        : {repo: env.E2E_INTEL_REPO || WEB_REPO, token: env.E2E_INTEL_GITHUB_TOKEN, missing: 'E2E_INTEL_GITHUB_TOKEN is not set (the site GITHUB_TOKEN covers the public repo, not this one)'};
+      if (!target.token) throw new Error(target.missing);
+      if (!target.repo) throw new Error(target.noRepo);
+      await dispatch({...env, GITHUB_REPO: target.repo, GITHUB_TOKEN: target.token}, undefined, workflow);
       return {workflow};
     } catch (error) { return {workflow, error: error.message}; }
   }));

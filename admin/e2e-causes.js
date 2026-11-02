@@ -1,5 +1,5 @@
 // Why an e2e suite went red (owner, 27 Oct 2026: "What are the biggest root causes? Is the flakiness? Is real bugs? ... code changed without adjusting the e2e?").
-// ONE module shared by the collector (jobs/e2e-intel.mjs) and the page: the red's own failure line first (the runner's "✗ step: reason"), then what is a fact (a
+// ONE module shared by the collector (tools/ci-intel/jobs/e2e-intel.mjs) and the page: the red's own failure line first (the runner's "✗ step: reason"), then what is a fact (a
 // cancelled job, a CI step that failed before the suite, the AI key's credit, a green second try), then the fix's own words (an "E2E-cause:" trailer), and only then
 // an AI call with a fixed answer (CLAUDE.md "The AI decides"): no keyword list guesses drift, test bug or product bug. Rules 1-2 (18-24 Oct) read only the fix's
 // files and left 49% of reds "unknown" or "not fixed yet" and "test bug" at 0. Guard: test/admin/e2e-causes.test.js.
