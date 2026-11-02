@@ -5,6 +5,7 @@
 // Owns FIDELITY_SCRIPT, the client code admin/applying.js puts inside its page (it uses that page's el, heads, sortRows, ago). Guard: test/admin/applying-fidelity.test.js.
 import {equal} from '../shared/guard.js';
 import {dropSnapshot} from './applying-store.js';
+import {PUBLIC_REPO, githubUrl} from '../shared/repos.js';
 
 const KEEP = 200;
 const HASH = /^[0-9a-f]{7,40}$/;
@@ -132,7 +133,7 @@ export const FIDELITY_SCRIPT = `
       el('div', {}, el('h4', {textContent: 'Replay diagnostics'}), n ? line('By order: ' + (n.orderMatched ?? '–') + ' OK · ' + (n.orderWrong || 0) + ' wrong · ' + (n.echoed || 0) + ' echoed') : line('Network replay: not recorded yet'),
         n ? line('Network filled / left: ' + outcome(n)) : null, line('Snapshot filled / left: ' + outcome(r.snapshot)), n ? line('Not recorded: ' + (n.notRecorded ?? '—')) : null),
       el('div', {}, el('h4', {textContent: 'Upload & build'}), line('After upload: ' + (n?.afterUpload || '—')),
-        el('div', {}, el('a', {className: 'hash', href: 'https://github.com/GarryOne/jobadabra/commit/' + r.sha, textContent: r.sha.slice(0, 7)}), r.branch ? ' ' + r.branch : ''), line('Built ' + (r.at ? ago(r.at) : '—'))))); };
+        el('div', {}, el('a', {className: 'hash', href: '${githubUrl(PUBLIC_REPO)}/commit/' + r.sha, textContent: r.sha.slice(0, 7)}), r.branch ? ' ' + r.branch : ''), line('Built ' + (r.at ? ago(r.at) : '—'))))); };
   const fidRows = (r, redraw) => { const on = fidOpen.has(r.name), flip = () => { toggleOpen(fidOpen, r.name); redraw(); }, parts = fidParts(r.name);
     const main = el('tr', {className: 'site' + (on ? ' open' : ''), onclick: flip},
       el('td', {className: 'c-chev'}, el('button', {className: 'chev', type: 'button', 'aria-expanded': String(on), 'aria-label': (on ? 'Collapse ' : 'Expand ') + r.name, textContent: '›', onclick: event => { event.stopPropagation(); flip(); }})),

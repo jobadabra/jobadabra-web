@@ -5,8 +5,9 @@ import {execFileSync} from 'node:child_process';
 import {zurichHour} from '../admin/build-digest.js';
 import {shouldTell, previousConclusion, tellOwner} from '../admin/ai-refusal.js';
 import {pathToFileURL} from 'node:url';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
-const repo = process.env.REPO || process.env.GITHUB_REPOSITORY || 'GarryOne/jobadabra';
+const repo = process.env.REPO || process.env.GITHUB_REPOSITORY || PUBLIC_REPO;
 const base = process.env.CHANGELOG_URL || 'https://www.jobpilotto.top/changelog/data';
 const STABLE = /^desktop-v(\d+\.\d+\.\d+)$/;
 const order = version => version.split('.').map(Number);

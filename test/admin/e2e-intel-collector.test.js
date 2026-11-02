@@ -102,7 +102,7 @@ test('the hourly registry reader pins the public repo to main; a failed read is 
   const lanes = {suites: {quality: {lane: 'tolerant', input: 'ai', since: '2026-10-29', why: 'Unkeyed question'}}};
   const calls = [];
   assert.deepEqual(await readLanes(async (...args) => { calls.push(args); return lanes; }), lanes);
-  assert.deepEqual(calls, [['api', 'repos/GarryOne/jobadabra/contents/desktop/e2e/lanes.json?ref=main', '-H', 'Accept: application/vnd.github.raw+json']]);
+  assert.deepEqual(calls, [['api', 'repos/jobadabra/jobadabra/contents/desktop/e2e/lanes.json?ref=main', '-H', 'Accept: application/vnd.github.raw+json']]);
   assert.equal(await readLanes(async () => null), undefined);
 });
 

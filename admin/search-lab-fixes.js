@@ -3,8 +3,9 @@
 // Counts, seconds and build ids only. A compare link (last good build ... first bad build) shows which commits to read. Guard: test/admin/search-lab-fixes.test.js.
 import {esc} from '../shared/html.js';
 import {reasons} from './search-lab-judge.js';
+import {PUBLIC_REPO, githubUrl} from '../shared/repos.js';
 
-const REPO = 'https://github.com/GarryOne/jobadabra';
+const REPO = githubUrl(PUBLIC_REPO);
 const KIND = {failed: ['FAILED', 'bad', 3], worse: ['Worse', 'bad', 2], stale: ['Tape stale', 'wait', 1]};
 const short = build => (build || '–').slice(0, 7);
 const when = iso => (iso ? `${iso.slice(5, 10)} ${iso.slice(11, 16)} UTC` : '–');

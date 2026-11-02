@@ -19,6 +19,7 @@ import {weekOf} from './e2e-work.js';
 import {GREEN_CSS, greenCard} from './e2e-green.js';
 import {BETA_CSS, betaCard} from './e2e-beta.js';
 import {PR_JOB_BUDGET_SECONDS, PR_SPLIT_SECONDS, speedSummary, speedTime} from './e2e-speed.js';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
 const DAY = 86400000;
 export const RANGES = {'7d': {name: 'Last 7 days', days: 7}, '30d': {name: 'Last 30 days', days: 30}};
@@ -95,7 +96,7 @@ const promptTile = prompt => {
     : prompt.status === 'carried' ? `nothing asked, ${prompt.right} of ${prompt.total} right as last asked` : `${prompt.noise} model noise · ${prompt.newWrong} new wrong · ${prompt.unconfirmed} unconfirmed · ${prompt.calls} calls`;
   return `<section class="card tile"><span class="muted">Prompt cases (newest night)</span><b>${esc(words.text)}</b>${prompt && ['asked', 'first'].includes(prompt.status) ? `<div>${chip(prompt.flipped ? `${prompt.flipped} got worse` : 'none got worse', prompt.flipped ? 'bad' : 'good')}</div>` : ''}<span class="muted">${esc(detail)}</span></section>`;
 };
-export function qualityCard(nights = [], repo = 'GarryOne/jobadabra') {
+export function qualityCard(nights = [], repo = PUBLIC_REPO) {
   if (!nights.length) return '<section class="card"><h2>How steady the AI is · quality suite</h2><p class="muted">No live quality night yet: the night\'s fresh quality run scores the golden jobs twice.</p></section>';
   const rate = rateOf(nights), tone = ok => (ok ? 'good' : 'bad');
   return `<section class="card"><h2>How steady the AI is · last ${rate.pairs} score pairs (${rate.nights} ${rate.nights === 1 ? 'night' : 'nights'})</h2>
@@ -136,7 +137,7 @@ ${speed.slowPr.length ? `<ul>${speed.slowPr.map(row => `<li><code>${esc(row.suit
     : `<p class="muted">${speed.prRead ? `PR suites over ${PR_SPLIT_SECONDS / 60} min: none.` : 'Not enough PR runs for a median yet.'}</p>`}</section>`;
 }
 
-export function page(snapshot, {range = '7d', kind = 'all', repo = 'GarryOne/jobadabra', now = new Date(), problem = null} = {}) {
+export function page(snapshot, {range = '7d', kind = 'all', repo = PUBLIC_REPO, now = new Date(), problem = null} = {}) {
   range = rangeOf(range); kind = kindFilter(kind);
   const filters = filterLinks(Object.entries(RANGES).map(([value, {name}]) => [value, name, `?range=${value}${kind === 'all' ? '' : `&kind=${kind}`}`]), range)
     + filterLinks(Object.entries(KIND_NAMES).map(([value, text]) => [value, text, `?range=${range}${value === 'all' ? '' : `&kind=${value}`}`]), kind);

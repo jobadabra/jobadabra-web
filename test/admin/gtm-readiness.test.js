@@ -86,7 +86,7 @@ test('the page draws one cell per day of the same 14 days: green, red, amber for
   const html = page(contradiction, {now});
   const strip = html.match(/<span class="strip"[^>]*>([\s\S]*?)<\/span>/)[1];
   assert.equal((strip.match(/<(a|i) /g) || []).length, 14, '14 cells, one a day');
-  assert.match(strip, /class="r" href="https:\/\/github.com\/GarryOne\/jobadabra\/actions\/runs\/900" title="30 Oct · 1 run · 1 red"/, 'the red day links to its red run');
+  assert.match(strip, /class="r" href="https:\/\/github.com\/jobadabra\/jobadabra\/actions\/runs\/900" title="30 Oct · 1 run · 1 red"/, 'the red day links to its red run');
   assert.match(strip, /title="31 Oct · 10 runs · all green"/);
   assert.match(strip, /<i class="e" title="[^"]*no run"/);
   assert.match(html, /Last 14 days/);

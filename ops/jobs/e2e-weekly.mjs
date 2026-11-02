@@ -8,9 +8,10 @@ import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {issueBody, issueTitle, telegramText, weekly} from '../admin/e2e-weekly.js';
 import {tellOwner} from '../admin/ai-refusal.js';
+import {WEB_REPO} from '../shared/repos.js';
 
 const base = process.env.E2E_INTEL_URL || 'https://www.jobpilotto.top/e2e/data', key = process.env.SELFHEAL_PUBLISH_KEY;
-const repo = process.env.ISSUE_REPO || process.env.GITHUB_REPOSITORY || 'GarryOne/jobadabra-web', LABEL = 'e2e-weekly';
+const repo = process.env.ISSUE_REPO || process.env.GITHUB_REPOSITORY || WEB_REPO, LABEL = 'e2e-weekly';
 const gh = (...args) => execFileSync('gh', args, {encoding: 'utf8'}).trim();
 
 /** Creates this week's issue, or rewrites it when the job runs again the same day; returns its URL. */

@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
-      REPO: GarryOne/jobadabra   # the public repo's PRs, runs and tags (read with this repo's token: public data)
+      REPO: ${{ vars.OWNER_OF_JOBADABRA || github.repository_owner }}/jobadabra   # Why (2 Nov 2026, owner: "Nothing was merged on 1 Nov"): the org by variable, never a literal; the PR search does not follow a rename. The public repo's PRs, runs and tags (read with this repo's token: public data)
       SELFHEAL_PUBLISH_KEY: ${{ secrets.SELFHEAL_PUBLISH_KEY }}
       BUILDLOG_TELEGRAM_TOKEN: ${{ secrets.BUILDLOG_TELEGRAM_TOKEN }}   # the Build Log bot (its own bot and chat); missing: the digest is stored, the post is skipped with a line
       BUILDLOG_TELEGRAM_CHAT: ${{ secrets.BUILDLOG_TELEGRAM_CHAT }}

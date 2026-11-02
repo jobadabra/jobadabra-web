@@ -131,7 +131,7 @@ jobs:
           REPLAYS_PUBLISH_KEY: ${{ secrets.REPLAYS_PUBLISH_KEY }}
         run: node jobs/persona-search/draw-upload.mjs "$RUNNER_TEMP/draw-out" --build "$PUBLIC_SHA" --branch main --answer "$RUNNER_TEMP/verdict.json"
       # The search robot's alarm (jobs/persona-search/draw-alarm.mjs): 0 relevant jobs, a crash, or a floor from the draws' own numbers files or updates one issue per
-      # field × place × path in the app repo (GarryOne/jobadabra, "[auto-search] ..."); a passing draw closes it. The CI GitHub App's token, Issues only.
+      # field × place × path in the app repo (the public jobadabra repo, "[auto-search] ..."); a passing draw closes it. The CI GitHub App's token, Issues only.
       - name: The app repo's token for the alarm
         id: alarm_token
         if: always() && github.ref == 'refs/heads/main'

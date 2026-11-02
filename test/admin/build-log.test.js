@@ -57,7 +57,7 @@ test('the page is the owner\'s: 404 without the key, days newest first with thei
   assert.match(html, /Draft 1/);
   assert.match(html, /Final/);
   assert.match(html, /🧭 Apply flow/);
-  assert.match(html, /<a href="https:\/\/github.com\/GarryOne\/jobadabra\/pull\/957">#957<\/a>/);
+  assert.match(html, /<a href="https:\/\/github.com\/jobadabra\/jobadabra\/pull\/957">#957<\/a>/);
   assert.match(html, /4 PRs, #900-#905/);
   assert.match(await (await call(e, '/admin/agents/build-log?day=2026-10-15', {headers: {Cookie: 'jp_stats=k3y'}})).text(), /^(?![\s\S]*16 Oct<\/b>)/);
   assert.ok(!page([{day: '2026-10-16', groups: JSON.stringify([{emoji: '<b>', title: '<script>x</script>', bullets: []}]), open_line: '<i>', numbers: '[]', drafts: 1, usd: 0, updated_at: '2026-10-16T10:00:00Z', final_at: null}]).includes('<script>x'));

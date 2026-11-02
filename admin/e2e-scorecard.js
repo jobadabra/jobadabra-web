@@ -6,6 +6,7 @@ import {CHIP_STYLE, chip} from './chip.js';
 import {groupOf} from './e2e-causes.js';
 import {barRows, legend} from './day-bars.js';
 import {PLUMBING_TARGET, WORK_KINDS, weekOf} from './e2e-work.js';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const dayWords = day => `${Number(day.slice(8))} ${MONTHS[Number(day.slice(5, 7)) - 1]}`;
@@ -32,7 +33,7 @@ export function scoreRows(fails, escapes = []) {
 }
 
 /** Window scorecard plus current UTC week totals. Escapes are public-main commits, independent of the run-kind filter; gaps link the owner's journey words. */
-export function scorecardCard(w, name, {now = new Date(), repo = 'GarryOne/jobadabra'} = {}) {
+export function scorecardCard(w, name, {now = new Date(), repo = PUBLIC_REPO} = {}) {
   const escapes = w.escapes || [], rows = scoreRows(w.fails, escapes), cell = (n, tone) => `<td class="num">${n ? chip(String(n), tone) : '<span class="muted">0</span>'}</td>`;
   const body = rows.map(row => `<tr><td><code>${esc(row.suite)}</code></td>${cell(row.caught, 'good')}${cell(row.missed, 'bad')}${cell(row.noise, 'warn')}${cell(row.ours, 'bad')}${cell(row.unnamed, 'off')}<td class="num">${hours(row.min)}</td></tr>`).join('');
   const none = rows.filter(row => !row.caught && row.noise + row.ours + row.unnamed > 0).map(row => row.suite);

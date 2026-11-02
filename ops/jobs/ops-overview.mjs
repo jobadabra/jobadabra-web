@@ -7,8 +7,9 @@ import {execFileSync} from 'node:child_process';
 import {writeFileSync} from 'node:fs';
 import {RULES_VERSION, prRow} from '../admin/ops-categories.js';
 import {pathToFileURL} from 'node:url';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
-const repo = process.env.REPO || process.env.GITHUB_REPOSITORY || 'GarryOne/jobadabra';
+const repo = process.env.REPO || process.env.GITHUB_REPOSITORY || PUBLIC_REPO;
 const base = process.env.OPS_URL || 'https://www.jobpilotto.top/ops/data';
 const gh = (...args) => JSON.parse(execFileSync('gh', args, {encoding: 'utf8', maxBuffer: 1 << 28}) || 'null');
 

@@ -5,6 +5,7 @@
 import {esc} from '../shared/html.js';
 import {CAUSES, GROUPS, groupOf} from './e2e-causes.js';
 import {CHIP_STYLE, chip} from './chip.js';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
 const num = value => (Number(value) || 0).toLocaleString('en-US', {maximumFractionDigits: 0});
 const pct = (part, whole) => (whole ? `${Math.round((part / whole) * 100)}%` : '–');
@@ -44,7 +45,7 @@ export function summary(w) {
 
 const bar = (parts, total) => `<div class="stack">${parts.filter(part => part.n).map(part => `<span style="width:${(part.n / total) * 100}%;background:${part.color}" title="${esc(part.label)} ${part.n}">${part.n / total >= 0.08 ? `${esc(part.label)} ${num(part.n)}` : ''}</span>`).join('')}</div>`;
 
-export function top(w, {repo = 'GarryOne/jobadabra'} = {}) {
+export function top(w, {repo = PUBLIC_REPO} = {}) {
   const s = summary(w);
   if (!s.reds) return '';
   const groups = GROUPS.filter(group => group.id !== 'none' || s.byGroup.none);

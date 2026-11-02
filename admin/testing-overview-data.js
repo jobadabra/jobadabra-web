@@ -13,8 +13,9 @@ import {METHODS, PLANNED, RINGS} from './testing-overview-methods.js';
 import {nightlySummary, summaryForCard} from './nightly-summary.js';
 import {historyOf, MAP_DAYS} from './testing-overview-history.js';
 import {readCard as readProbes, readDays as readProbeDays} from '../shared/synthetic.js';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
-const DAY = 86400000, DEFAULT_REPO = 'GarryOne/jobadabra';
+const DAY = 86400000, DEFAULT_REPO = PUBLIC_REPO;
 const REPORT_PAGE = '/admin/testing/report-only';   // the Report only tab (owner, 2 Nov 2026): the proof cards keep a one-line link to it, not the nightly charts
 const SCHEDULED_PAGE = '/admin/testing/scheduled';   // the Testing → Scheduled tab (session ac): each cadence links to it once it is in the menu
 const DONE = {success: 'green', failure: 'red', timed_out: 'red'};
