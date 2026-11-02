@@ -63,6 +63,13 @@ jobs:
         run: |
           npx --yes wrangler@4 r2 bucket info lab-fills >/dev/null 2>&1 || npx --yes wrangler@4 r2 bucket create lab-fills \
             || { echo "::warning::R2 bucket lab-fills not created (the token needs R2 Edit). Create: cd workers/www && npx wrangler@4 r2 bucket create lab-fills"; exit 1; }
+      - name: "R2 bucket of the feedback screenshots and logs (workers/www/wrangler.toml FEEDBACK_FILES)"
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        continue-on-error: true   # already there = fine; a token without R2 rights must not block the deploy, the warning says what to run
+        working-directory: workers/www
+        run: |
+          npx --yes wrangler@4 r2 bucket info feedback-files >/dev/null 2>&1 || npx --yes wrangler@4 r2 bucket create feedback-files \
+            || { echo "::warning::R2 bucket feedback-files not created (the token needs R2 Edit). Create: cd workers/www && npx wrangler@4 r2 bucket create feedback-files"; exit 1; }
       - name: Deploy to Cloudflare
         if: env.CLOUDFLARE_API_TOKEN != ''
         working-directory: workers/www

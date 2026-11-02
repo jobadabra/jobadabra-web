@@ -9,7 +9,7 @@ import {recentFeedback} from '../../shared/feedback.js';
 
 function d1() {
   const db = new DatabaseSync(':memory:');
-  db.exec(readFileSync(new URL('../../db/migrations/0003_feedback.sql', import.meta.url), 'utf8'));
+  for (const file of ['0003_feedback.sql', '0124_feedback_files.sql']) db.exec(readFileSync(new URL(`../../db/migrations/${file}`, import.meta.url), 'utf8'));
   const statement = (sql, args = []) => ({bind: (...values) => statement(sql, values), run: async () => db.prepare(sql).run(...args),
     all: async () => ({results: db.prepare(sql).all(...args)}), first: async () => db.prepare(sql).get(...args)});
   return {db, prepare: sql => statement(sql)};

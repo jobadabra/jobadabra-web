@@ -75,7 +75,8 @@ import {playbook} from '../../api/playbook.js';
 import {install} from '../../api/install.js';
 import {signals} from '../../api/signals.js';
 import {feedback} from '../../api/feedback.js';
-import {view as feedbackView} from '../../admin/feedback.js';
+import {view as feedbackView, file as feedbackFile} from '../../admin/feedback.js';
+import {purgeFiles as purgeFeedbackFiles} from '../../shared/feedback.js';
 import {reportForm} from '../../shared/report-form.js';
 import {view as reportsView} from '../../admin/report-view.js';
 import * as recipeLibrary from '../../api/recipes.js';
@@ -262,6 +263,7 @@ async function route(request, env, ctx) {
   if (pathname === '/api/contributions') return pool.aggregate(request, env);
   if (pathname === '/api/signals') return signals(request, env);
   if (pathname === '/api/feedback') return feedback(request, env);
+  if (pathname === '/admin/growth/feedback/file') return feedbackFile(request, env);   // a feedback's screenshot or logs, the owner only (admin/feedback.js)
   if (pathname === '/api/report-form' || pathname.startsWith('/api/report-form/')) return reportForm(request, env, pathname);   // "Report this form": an encrypted recording from an install (shared/report-form.js)
   if (pathname === '/api/attribution') return attribution(request, env);   // a downloaded app's first start: its channel
   if (pathname === '/api/ai/caps') return freeAiCaps(request, env);   // where this install stands with our AI: credit, or the Free line it is past (shared/free-ai-caps.js)
@@ -322,6 +324,7 @@ export default {
       return;
     }
     ctx.waitUntil(sentryAlert.purge(env).catch(error => console.error(`sentry alert purge: ${error.message}`)));
+    ctx.waitUntil(purgeFeedbackFiles(env).catch(error => console.error(`feedback files purge: ${error.message}`)));   // screenshots and logs older than 90 days (shared/feedback.js)
     ctx.waitUntil(synthetic.purge(env).catch(error => console.error(`synthetic purge: ${error.message}`)));
     // The day's totals first (kept for good), then the 90-day purge of raw rows.
     ctx.waitUntil(pool.rollup(env).catch(error => console.error(`pool rollup: ${error.message}`)).then(() => pool.purge(env)).catch(error => console.error(`pool purge: ${error.message}`)));

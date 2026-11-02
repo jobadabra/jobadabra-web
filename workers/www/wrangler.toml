@@ -121,6 +121,12 @@ bucket_name = "form-reports"
 binding = "LAB_FILLS"
 bucket_name = "lab-fills"
 
+# Feedback from the app: the window screenshot and the redacted logs (api/feedback.js, docs/superpowers/specs/2026-11-02-feedback-screenshot-logs-design.md). Private, read only through /admin
+# (admin/feedback.js); the daily cron deletes objects older than 90 days (shared/feedback.js purgeFiles). The deploy (site.yml) creates the bucket when missing.
+[[r2_buckets]]
+binding = "FEEDBACK_FILES"
+bucket_name = "feedback-files"
+
 # Hosted Always on (api/hosted-state.js, hosted-tick.js): the person's encrypted state, and the Queue the cron tick fills; the runner Worker (hosted-runner/) consumes it and starts the container.
 # Secret: HOSTED_KEK (Worker secret; the key of every account's state is derived from it). Created 16 Oct 2026: bucket hosted-state, queue hosted-runs.
 [[r2_buckets]]
