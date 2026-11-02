@@ -15,7 +15,7 @@ export async function view(request, env, now = new Date()) {
   return new Response(PAGE, {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'}});
 }
 
-// GET /admin/growth/feedback/file?ref=<16 hex>&kind=screen|logs: one kept file, for the owner only (the same login as the page). Served as an inert type, never cached.
+// GET /admin/growth/feedback/file?ref=<16 hex>&kind=screen|logs|page|profile: one kept file, for the owner only (the same login as the page). Served as an inert type, never cached.
 export async function file(request, env) {
   if (!await viewer(request, env) || !env.STATS || !env.FEEDBACK_FILES) return new Response('Not found', {status: 404});
   const url = new URL(request.url), kept = await fileOf(env.STATS, url.searchParams.get('ref'), url.searchParams.get('kind')).catch(() => null);
@@ -61,14 +61,15 @@ const make = row => {
     const link = document.createElement('a'), img = document.createElement('img'), href = '/admin/growth/feedback/file?ref=' + encodeURIComponent(row.ref) + '&kind=screen';
     link.href = href; link.target = '_blank'; link.rel = 'noopener'; img.className = 'shot'; img.alt = 'Screenshot of the app window'; img.loading = 'lazy'; img.src = href; link.append(img); card.append(link);
   }
-  if (row.ref && row.logs) {
+  for (const [kind, flag, label] of [['logs', row.logs, 'Logs'], ['page', row.page, 'Screen data'], ['profile', row.profile, 'Profile snapshot (the person turned it on)']]) {
+    if (!(row.ref && flag)) continue;
     const files = document.createElement('details'), summary = document.createElement('summary'), pre = document.createElement('pre');
-    files.className = 'files'; summary.textContent = 'Logs'; pre.className = 'logs'; files.append(summary, pre);
+    files.className = 'files'; summary.textContent = label; pre.className = 'logs'; files.append(summary, pre);
     files.addEventListener('toggle', async () => {
       if (!files.open || pre.dataset.loaded) return;
       pre.textContent = 'Loading…';
-      try { const r = await fetch('/admin/growth/feedback/file?ref=' + encodeURIComponent(row.ref) + '&kind=logs', {cache: 'no-store'}); pre.textContent = r.ok ? await r.text() : 'Gone (kept 90 days).'; pre.dataset.loaded = '1'; }
-      catch (error) { pre.textContent = 'Could not load the logs.'; }
+      try { const r = await fetch('/admin/growth/feedback/file?ref=' + encodeURIComponent(row.ref) + '&kind=' + kind, {cache: 'no-store'}); pre.textContent = r.ok ? await r.text() : 'Gone (kept 90 days).'; pre.dataset.loaded = '1'; }
+      catch (error) { pre.textContent = 'Could not load this.'; }
     });
     card.append(files);
   }
@@ -89,7 +90,7 @@ async function refresh() {
     const {rows, undelivered} = await response.json();
     const alert = document.getElementById('alert'); alert.hidden = !undelivered; alert.textContent = '⚠ ' + undelivered + ' feedback message' + (undelivered === 1 ? '' : 's') + ' did not reach your Telegram.';
     const firstLoad = known === null, seen = new Set(known || []);
-    const keyOf = row => row.at + row.install, sigOf = row => [row.notified, row.shot, row.logs].join('|');
+    const keyOf = row => row.at + row.install, sigOf = row => [row.notified, row.shot, row.logs, row.page, row.profile].join('|');
     const cardOf = row => {
       const key = keyOf(row), kept = cards.get(key);
       if (kept && kept.sig === sigOf(row)) return kept.card;
