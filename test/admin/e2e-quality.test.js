@@ -7,7 +7,7 @@ import {test} from 'node:test';
 import worker from '../../workers/www/index.js';
 import {BARS, cleanNight, cleanPrompt, nightOf, promptCasesOf, rateOf} from '../../admin/e2e-quality.js';
 import {qualityCard} from '../../admin/e2e-page.js';
-import {liveNights, nightFromJobs} from '../../jobs/e2e-intel.mjs';
+import {liveNights, nightFromJobs} from '../../tools/ci-intel/jobs/e2e-intel.mjs';
 
 // Lines as a GitHub job log prints them (a timestamp first). Main 27 Oct 2026, run 40433806296: 3002 85 -> 75, 3005 65 -> 56.
 const LOG = ['2026-10-27T01:56:14.1Z   scores: 3001=95 3002=85 3003=75 3004=35 3005=65 3006=35 3007=dropped 3008=85 3009=58 3010=85 3011=dropped',

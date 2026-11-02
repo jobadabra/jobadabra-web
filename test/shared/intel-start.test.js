@@ -8,7 +8,9 @@ import {INTEL_COLLECTORS, dueCollectors, startIntelCollectors} from '../../share
 
 const tick = (hour, minute) => new Date(Date.UTC(2026, 9, 31, hour, minute));
 const workflowDir = new URL('../../.github/workflows/', import.meta.url);
-const ENV = {GITHUB_REPO: 'GarryOne/jobadabra', GITHUB_TOKEN: 'site-token', E2E_INTEL_GITHUB_TOKEN: 'own-token'};
+const ENV = {GITHUB_REPO: 'GarryOne/jobadabra', GITHUB_TOKEN: 'site-token', E2E_INTEL_GITHUB_TOKEN: 'own-token', E2E_INTEL_REPO: 'jobadabra/jobadabra-web', TIMERS_REPO: 'jobadabra/jobadabra', TIMERS_GITHUB_TOKEN: 'timers-token'};
+// Why (2 Nov 2026, owner: the CI collectors moved to the public repo, jobadabra#2989): a collector is started where its workflow lives; the pair (repo, token) travels together.
+const WHERE = {public: {repo: 'jobadabra/jobadabra', token: 'timers-token'}, web: {repo: 'jobadabra/jobadabra-web', token: 'own-token'}};
 
 test('of the twelve 5-minute ticks in an hour, each collector starts on exactly one, every hour of the day, and no two share a tick', () => {
   for (const {workflow, minute} of INTEL_COLLECTORS) {
@@ -20,27 +22,29 @@ test('of the twelve 5-minute ticks in an hour, each collector starts on exactly 
   assert.equal(new Set(INTEL_COLLECTORS.map(item => item.minute)).size, INTEL_COLLECTORS.length, 'two collectors on one tick');
 });
 
-test('on its tick each collector is dispatched on THIS repo with the dedicated token and no inputs; off every tick nothing starts', async () => {
+test('on its tick each collector is dispatched on the repo that holds its workflow with that repo\'s token and no inputs; off every tick nothing starts', async () => {
   const calls = [], dispatch = async (env, inputs, workflow) => { calls.push({repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, inputs, workflow}); };
   assert.deepEqual(await startIntelCollectors(ENV, tick(9, 35), dispatch), [], 'off the ticks');
   assert.deepEqual(calls, []);
-  for (const {workflow, minute} of INTEL_COLLECTORS) {
+  for (const {workflow, minute, home} of INTEL_COLLECTORS) {
     calls.length = 0;
     assert.deepEqual(await startIntelCollectors(ENV, tick(9, minute), dispatch), [{workflow}]);
-    assert.deepEqual(calls, [{repo: 'jobadabra/jobadabra-web', token: 'own-token', inputs: undefined, workflow}], `${workflow}: the public GITHUB_REPO and the site token are not used; no inputs (the workflow declares none)`);
-    await startIntelCollectors({...ENV, E2E_INTEL_REPO: 'Owner/other'}, tick(10, minute), dispatch);
+    assert.deepEqual(calls, [{repo: WHERE[home].repo, token: WHERE[home].token, inputs: undefined, workflow}], `${workflow}: the public GITHUB_REPO and the site token are not used; no inputs (the workflow declares none)`);
+    await startIntelCollectors({...ENV, E2E_INTEL_REPO: 'Owner/other', TIMERS_REPO: 'Owner/other'}, tick(10, minute), dispatch);
     assert.equal(calls[1].repo, 'Owner/other', 'a dedicated repo var wins');
     assert.deepEqual(await startIntelCollectors(ENV, tick(11, minute), async () => { throw new Error('GitHub dispatch failed: 403'); }), [{workflow, error: 'GitHub dispatch failed: 403'}], 'a refused start is reported, never swallowed');
   }
 });
 
-test('without E2E_INTEL_GITHUB_TOKEN the tick refuses out loud and never sends the site token to the private repo (Gitar, #240)', async () => {
+test('without its own token the tick refuses out loud and never sends the site token to either repo (Gitar, #240): E2E_INTEL_GITHUB_TOKEN here, TIMERS_GITHUB_TOKEN for the public repo', async () => {
   const calls = [];
-  for (const {workflow, minute} of INTEL_COLLECTORS) {
-    const [result] = await startIntelCollectors({GITHUB_REPO: 'GarryOne/jobadabra', GITHUB_TOKEN: 'site-token'}, tick(9, minute), async (...args) => { calls.push(args); });
+  for (const {workflow, minute, home} of INTEL_COLLECTORS) {
+    const [result] = await startIntelCollectors({GITHUB_REPO: 'GarryOne/jobadabra', GITHUB_TOKEN: 'site-token', TIMERS_REPO: 'jobadabra/jobadabra'}, tick(9, minute), async (...args) => { calls.push(args); });
     assert.equal(result.workflow, workflow);
-    assert.match(result.error, /E2E_INTEL_GITHUB_TOKEN is not set/);
+    assert.match(result.error, home === 'public' ? /TIMERS_GITHUB_TOKEN is not set/ : /E2E_INTEL_GITHUB_TOKEN is not set/);
   }
+  const [noRepo] = await startIntelCollectors({TIMERS_GITHUB_TOKEN: 'timers-token'}, tick(9, INTEL_COLLECTORS.find(item => item.home === 'public').minute), async (...args) => { calls.push(args); });
+  assert.match(noRepo.error, /TIMERS_REPO is not set/, 'a public start without its repo var is refused, never sent to a guessed repo');
   assert.deepEqual(calls, []);
   assert.deepEqual(await startIntelCollectors({}, tick(9, 35), async () => { calls.push(1); }), [], 'off the tick a missing token is not an error');
 });
@@ -54,10 +58,10 @@ test('the Worker\'s */5 trigger really sends GitHub the request each collector n
     const starts = () => requests.filter(request => request.url.includes('/actions/workflows/'));
     await run(35, ENV);
     assert.deepEqual(starts(), [], ':35 starts nothing');
-    for (const {workflow, minute} of INTEL_COLLECTORS) {
+    for (const {workflow, minute, home} of INTEL_COLLECTORS) {
       requests.length = 0;
       await run(minute, ENV);
-      assert.deepEqual(starts().map(r => [r.url, r.method, r.auth, JSON.parse(r.body)]), [[`https://api.github.com/repos/jobadabra/jobadabra-web/actions/workflows/${workflow}/dispatches`, 'POST', 'Bearer own-token', {ref: 'main'}]], `${workflow} at :${minute}`);
+      assert.deepEqual(starts().map(r => [r.url, r.method, r.auth, JSON.parse(r.body)]), [[`https://api.github.com/repos/${WHERE[home].repo}/actions/workflows/${workflow}/dispatches`, 'POST', `Bearer ${WHERE[home].token}`, {ref: 'main'}]], `${workflow} at :${minute}`);
       globalThis.fetch = async () => new Response(null, {status: 403});
       await run(minute, ENV);
       assert.ok(errors.some(line => line.includes(`${workflow.replace('.yml', '')} start failed: GitHub dispatch failed: 403`)), `${workflow}: a refusal is logged, the other 5-minute work still ran`);
@@ -91,4 +95,11 @@ test('every *-intel.yml workflow with an hourly cron that publishes to the site 
 test('www sets E2E_INTEL_REPO to the repo that holds the collectors, so the start does not lean on the old path\'s redirect', () => {
   const toml = readFileSync(new URL('../../workers/www/wrangler.toml', import.meta.url), 'utf8');
   assert.match(toml, /^E2E_INTEL_REPO = "jobadabra\/jobadabra-web"$/m);
+});
+
+test('www names the public repo for the collectors that moved there (TIMERS_REPO), and no collector in the list lives only in a deleted web workflow', () => {
+  const toml = readFileSync(new URL('../../workers/www/wrangler.toml', import.meta.url), 'utf8');
+  assert.match(toml, /^TIMERS_REPO = "jobadabra\/jobadabra"$/m);
+  assert.deepEqual(INTEL_COLLECTORS.filter(item => item.home === 'public').map(item => item.workflow).sort(), ['e2e-intel.yml', 'integration-intel.yml']);
+  for (const {workflow, home} of INTEL_COLLECTORS.filter(item => item.home === 'web')) readFileSync(new URL(workflow, workflowDir), 'utf8');   // throws when a 'web' collector's file is gone
 });

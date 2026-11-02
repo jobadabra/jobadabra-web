@@ -362,9 +362,9 @@ export const seeds = {
     const body = {runs, flaky, slowest, counts: {extension: {tests: 64, files: 9}, app: {tests: 118, files: 16}, store: {tests: 41, files: 6}}, move: {days, e2eSteps: days[13].e2eSteps, lanes: 28}};
     // The coverage card (a8, 1 Nov 2026): the REAL nightly report.json from $COVERAGE_REAL_DIR (the artifact `coverage-report`) when set, else no card data, so the page shows its empty state.
     const real = process.env.COVERAGE_REAL_DIR && `${process.env.COVERAGE_REAL_DIR}/report.json`;
-    if (real && (await import('node:fs')).existsSync(real)) body.coverage = (await import('../jobs/coverage-intel.mjs')).mergeCoverage(null, JSON.parse((await import('node:fs')).readFileSync(real, 'utf8')), {runId: 41337418754, sha: ''});
+    if (real && (await import('node:fs')).existsSync(real)) body.coverage = (await import('../tools/ci-intel/jobs/coverage-intel.mjs')).mergeCoverage(null, JSON.parse((await import('node:fs')).readFileSync(real, 'utf8')), {runId: 41337418754, sha: ''});
     // The time-bomb card (a8, 2 Nov 2026): made-up clock-moved reports of the shape tools/clock-moved.mjs writes (no real file names of the owner's); python has no report that night.
-    const {mergeClockMoved} = await import('../jobs/clock-moved-intel.mjs');
+    const {mergeClockMoved} = await import('../tools/ci-intel/jobs/clock-moved-intel.mjs');
     const bomb = (area, file, days, why) => ({area, file, days, why});
     body.clockMoved = [13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].reduce((kept, back) => mergeClockMoved(kept, {
       desktop: {judged: 412, redToday: 1, bombs: back > 3 ? [] : [bomb('desktop', 'test/example-expiry.test.js', 3, 'AssertionError: the offer still shows after the date')], unstable: [], seconds: 310},

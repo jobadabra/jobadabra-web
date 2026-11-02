@@ -1,10 +1,10 @@
-// The GTM readiness collector's pure part (jobs/gtm-readiness-rows.mjs): the registry -> journeys, a run's steps.json -> Tier 1 rows (cut names matched by prefix, a cut-off only against an earlier green run),
+// The GTM readiness collector's pure part (tools/ci-intel/jobs/gtm-readiness-rows.mjs): the registry -> journeys, a run's steps.json -> Tier 1 rows (cut names matched by prefix, a cut-off only against an earlier green run),
 // integration results -> Tier 2 tallies, the merge. Numbers are a hand count on a fixed fixture; the last test reads the real registry.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {loadJourneys} from '../../desktop/e2e/lib/critical-journeys.mjs';
 import {cleanSnapshot} from '../../admin/gtm-intel.js';
-import {expectedSeen, registryParts, runRows, runTests, sameStep, snapshotOf, storedFrom, tally} from '../../jobs/gtm-readiness-rows.mjs';
+import {expectedSeen, registryParts, runRows, runTests, sameStep, snapshotOf, storedFrom, tally} from '../../tools/ci-intel/jobs/gtm-readiness-rows.mjs';
 
 const LONG = 'Profile Experience: an edited summary is saved with the Profile save bar, and is still there after a restart of the app, with the other cards untouched';
 const registry = {journeys: [{id: 'J1', name: 'Setup', tier: 1, steps: [{suite: 'wizard', step: 'a key is saved'}, {suite: 'wizard', step: 'a CV is read'}, {suite: 'wizard', step: LONG}]},

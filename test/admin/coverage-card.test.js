@@ -6,7 +6,7 @@ import {cleanCoverage, KEEP_HISTORY} from '../../admin/coverage-intel.js';
 import {coverageCard, trend} from '../../admin/coverage-card.js';
 import {cleanSnapshot} from '../../admin/integration-intel.js';
 import {page} from '../../admin/integration-page.js';
-import {coverageFor, mergeCoverage, newestReport} from '../../jobs/coverage-intel.mjs';
+import {coverageFor, mergeCoverage, newestReport} from '../../tools/ci-intel/jobs/coverage-intel.mjs';
 
 const now = new Date('2026-11-02T12:00:00Z');
 const measured = (covered, total) => ({state: 'measured', covered, total, pct: Math.round((1000 * covered) / total) / 10});

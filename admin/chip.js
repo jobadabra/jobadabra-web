@@ -1,14 +1,8 @@
-// One chip for every value cell on the admin pages (owner, 27 Oct 2026: "this column values/cells should be displayed as chips"): a kind, a state, a result.
-// chip(html, tone): html is already escaped by the caller; tone is good (green), warn (amber), bad (red), off or muted (grey), pro/credit (a promo code's kind),
-// or none (a plain outline). A page that uses it puts CHIP_STYLE in its own <style> (not in withNav: pages like build-log and schedules keep their own .chip).
+// One chip for every value cell on the admin pages (owner, 27 Oct 2026: "this column values/cells should be displayed as chips"): the helper and its style are one copy in the public repo.
+// Why (2 Nov 2026, owner: the CI collectors move to the public repo, jobadabra#2989): the e2e weekly summary and the pages draw the same chips (tools/ci-intel/lib/chip.mjs); only the page list below is the site's.
+// chip(html, tone): html is already escaped by the caller; a page that uses it puts CHIP_STYLE in its own <style> (not in withNav: pages like build-log and schedules keep their own .chip).
 // Guard: test/shared/admin-chips.test.js (every page in CHIP_PAGES draws its value cells with it).
-const TONES = {good: 'good', warn: 'warn', bad: 'bad', off: 'off', muted: 'off', pro: 'pro', credit: 'credit'};
-
-export const chip = (html, tone = '') => `<span class="chip${TONES[tone] ? ` ${TONES[tone]}` : ''}">${html}</span>`;
-
-export const CHIP_STYLE = '.chip{display:inline-block;border:1px solid #2a2f37;border-radius:999px;padding:1px 9px;font-size:12px;line-height:18px;white-space:nowrap;vertical-align:middle}'
-  + '.chip.good,.chip.credit{border-color:#1f5a45;color:#3fb68b;background:#11261e}.chip.warn,.chip.pro{border-color:#4a3c1c;color:#f5b54a;background:#2a2312}'
-  + '.chip.bad{border-color:#5a2326;color:#e5484d;background:#2a1213}.chip.off{color:#8d949c}';
+export {CHIP_STYLE, chip} from '../tools/ci-intel/lib/chip.mjs';
 
 // The pages that draw value cells with chip(), or show a chip page's section (installsimpact: scouting's served table): the guard test checks each one.
 export const CHIP_PAGES = ['promo-codes', 'access', 'e2e-page', 'e2e-green', 'e2e-beta', 'e2e-top', 'e2e-scorecard', 'integration-page', 'coverage-card', 'clock-moved-card', 'gtm-readiness', 'report-only', 'telemetry', 'selfheal', 'scoutingadmin', 'benchmark-search-page', 'installsimpact', 'intel-start-line', 'testing-overview', 'testing-overview-map', 'synthetic-monitoring', 'verdict-band'];

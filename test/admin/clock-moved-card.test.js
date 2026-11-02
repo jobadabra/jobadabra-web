@@ -8,7 +8,7 @@ import {cleanClockMoved, KEEP_HISTORY} from '../../admin/clock-moved-intel.js';
 import {bombTrend, clockMovedCard} from '../../admin/clock-moved-card.js';
 import {cleanSnapshot} from '../../admin/integration-intel.js';
 import {page} from '../../admin/integration-page.js';
-import {clockMovedFor, mergeClockMoved, newestRun, readReports} from '../../jobs/clock-moved-intel.mjs';
+import {clockMovedFor, mergeClockMoved, newestRun, readReports} from '../../tools/ci-intel/jobs/clock-moved-intel.mjs';
 
 const now = new Date('2026-11-02T12:00:00Z');
 // The shape of tools/clock-moved.mjs's report.json (public repo): {judged, redToday, bombs: [{area, file, days, why}], unstable, seconds}.

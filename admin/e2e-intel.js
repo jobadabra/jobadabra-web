@@ -1,5 +1,5 @@
 // Where our e2e reds come from (owner, 18 Oct 2026; every run kind and a cause for every red, 27 Oct 2026). CI (e2e-intel.yml, hourly) sends every finished e2e run and its
-// red suites (PUT /e2e/data, Bearer SELFHEAL_PUBLISH_KEY); causes are decided by jobs/e2e-intel.mjs (admin/e2e-causes.js). A red whose cause is still "open" or "unknown" is read
+// red suites (PUT /e2e/data, Bearer SELFHEAL_PUBLISH_KEY); causes are decided by tools/ci-intel/jobs/e2e-intel.mjs (admin/e2e-causes.js). A red whose cause is still "open" or "unknown" is read
 // again and rewritten when its fix lands. The site keeps one row per run and per red suite, and ONE snapshot row (e2e_snapshot) with the last 30 days; the page reads that row only
 // (D1 free plan). Stored per red: the failing step's own line (test words, no personal data), never a log. Guard: test/admin/e2e-intel.test.js.
 import {equal} from '../shared/guard.js';

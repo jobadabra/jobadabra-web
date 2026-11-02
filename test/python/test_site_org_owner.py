@@ -56,8 +56,8 @@ class OrgOwner(unittest.TestCase):
         self.assertEqual(left, {}, 'import the repo names from shared/repos.js (code) or use vars.OWNER_OF_JOBADABRA || github.repository_owner (workflow); never write the owner')
 
     def test_the_workflows_that_read_the_public_repo_take_its_owner_from_the_variable(self):
-        # Why (2 Nov 2026): the code fallback (shared/repos.js) is tested by test/jobs/daily-digest-repo.test.js; this pins the CI side, where the job really gets REPO from.
-        for name in ('changelog-publish', 'daily-digest', 'e2e-intel', 'integration-intel', 'ops-overview'):
+        # Why (2 Nov 2026): e2e-intel, integration-intel and ops-overview moved to the public repo (jobadabra#2989), which takes its own repo from github.repository. The code fallback (shared/repos.js) is tested by test/jobs/daily-digest-repo.test.js; this pins the CI side, where the job really gets REPO from.
+        for name in ('changelog-publish', 'daily-digest'):
             text = (ROOT / '.github' / 'workflows' / f'{name}.yml').read_text(encoding='utf-8')
             self.assertIn('REPO: ${{ vars.OWNER_OF_JOBADABRA || github.repository_owner }}/jobadabra', text, name)
 
