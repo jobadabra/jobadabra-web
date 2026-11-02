@@ -3,7 +3,7 @@
 // Pure: draws the snapshot rows admin/e2e-intel.js keeps. Guard: test/admin/e2e-scorecard.test.js.
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
-import {groupOf} from './e2e-causes.js';
+import {groupOf, isCatch} from './e2e-causes.js';
 import {barRows, legend} from './day-bars.js';
 import {PLUMBING_TARGET, WORK_KINDS, weekOf} from './e2e-work.js';
 import {PUBLIC_REPO} from '../shared/repos.js';
@@ -23,7 +23,7 @@ export function scoreRows(fails, escapes = []) {
   for (const fail of fails) {
     const suite = baseSuite(fail.suite), row = rowOf(suite);
     const group = groupOf(fail.cause), n = Number(fail.n) || 0;
-    if (group === 'app') row.caught += n; else if (group === 'tests') row.noise += n; else if (group === 'ours') row.ours += n; else row.unnamed += n;
+    if (isCatch(fail.cause)) row.caught += n; else if (group === 'tests') row.noise += n; else if (group === 'ours') row.ours += n; else row.unnamed += n;
     row.min += Number(fail.min) || 0; rows.set(suite, row);
   }
   for (const escape of escapes) for (const suite of new Set(escape.suites.map(baseSuite))) {

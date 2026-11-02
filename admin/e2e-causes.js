@@ -24,6 +24,9 @@ export const groupOf = id => CAUSES.find(cause => cause.id === id)?.group || 'no
 // Rows stored by rules 1-2 (before 27 Oct 2026), drawn under today's ids until the collector rewrites them.
 export const LEGACY = {credit: 'ai', infra: 'runner'};
 export const causeId = id => LEGACY[id] || (CAUSE_IDS.includes(id) ? id : 'unknown');
+/** A red "caught a bug" when its cause is the product: one definition for the Testing card and the E2E scorecard, on every run kind (2 Nov 2026; before: pull-request runs only). */
+export const CATCH_CAUSE = 'product';
+export const isCatch = cause => cause === CATCH_CAUSE;
 export const RULES_VERSION = 3;   // 3: every run kind, the failure line, trailers and the AI (27 Oct 2026)
 
 // The causes the AI may give for a red that no fact names (the rest are facts the code reads).

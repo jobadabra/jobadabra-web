@@ -61,14 +61,16 @@ test('the top answers "why red?" in seconds: who caused it, top causes with test
     fails: [{day: '2026-10-26', kind: 'nightly', suite: 'apply', platform: 'windows', cause: 'ci', n: 32, min: 64}, {day: '2026-10-26', kind: 'pr', suite: 'settings', platform: 'mac', cause: 'picker', n: 10, min: 20},
       {day: '2026-10-26', kind: 'pr', suite: 'wander', platform: 'mac', cause: 'product', n: 2, min: 8}, {day: '2026-10-24', kind: 'beta', suite: 'quality', platform: 'mac', cause: 'product', n: 6, min: 30}],
     breaks: [{day: '2026-10-26', kind: 'nightly', runId: 40261885119, cause: 'ci', line, n: 32}, {day: '2026-10-26', kind: 'pr', runId: 5, cause: 'picker', line: '✗ steps picked', n: 1}],
-    caught: [{day: '2026-10-26', runId: 6, suite: 'wander', line: '✗ [wander] error-shown', pr: 2123}, {day: '2026-10-26', runId: 7, suite: 'wander', line: '✗ x', pr: 2150}], latest: []};
+    caught: [{day: '2026-10-26', kind: 'pr', runId: 6, suite: 'wander', line: '✗ [wander] error-shown', pr: 2123}, {day: '2026-10-26', kind: 'pr', runId: 7, suite: 'wander', line: '✗ x', pr: 2150},
+      {day: '2026-10-26', kind: 'nightly', runId: 8, suite: 'apply', line: '✗ a night catch'}], latest: []};
   const at = new Date('2026-10-27T12:00:00Z'), html = page(snap, {range: '7d', now: at});
   assert.match(html, /50 red suites from 2 breaks:<\/b> Our CI and AI 84% · the tests 0% · the app 16%/);
   assert.match(html, /<b><span class="sw"[^>]*><\/span>Test drift<\/b>/, 'test drift is named even at 0');
   assert.match(html, /<code>apply<\/code><\/td><td class="num">32<\/td><td><span class="chip">CI setup broke 32/);
   assert.match(html, /free-ai-tree/);
   assert.ok(!html.includes('✗ steps picked</td>'), 'a break of one suite is not listed among the biggest');
-  assert.match(html, /300 runner-minutes per caught bug:<\/b> 20 PR e2e runs, 300 min waiting for a runner \+ 300 min running; caught 2 bugs/);
+  assert.match(html, /300 runner-minutes per caught bug:<\/b> 20 PR e2e runs, 300 min waiting for a runner \+ 300 min running; caught 2 bugs/, 'the PR card counts PR catches only; a night\'s catch is the Testing page\'s');
+  assert.ok(!html.includes('a night catch'));
   assert.match(html, /pull\/2123/);
   assert.match(html, /2026-10-24 · PR e2e starts/);
   assert.match(html, /2026-10-26<\/td><td class="num">0% <span class="muted">\(0\/1\)<\/span><\/td><td class="num">90%/);

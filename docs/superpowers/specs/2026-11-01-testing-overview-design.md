@@ -15,7 +15,7 @@ Owner, 1 Nov 2026: "show us all different methods of testing and finding bugs we
 | Last run (Quality AI) | `e2e_snapshot.quality` (newest night) | nightly |
 | Bugs caught, PR checks | newest `pr_check_months` card, `realCatches` of the check named like the workflow (30 days) | monthly scorecard |
 | Bugs caught, UI Finder detectors | newest `selfheal_snapshots` row, `periods.last7.byDetector` (real = fixed + queued; 7 days: the finest window stored) | every 3 hours |
-| Bugs caught, E2E | `e2e_snapshot.caught` (PR reds that caught a bug, 30 days) | hourly |
+| Bugs caught, E2E | `e2e_snapshot.caught`: reds whose cause is `product`, on every run kind (before merge, after merge, scheduled, night, beta…), 30 days, one per run, with where it was caught. The same rule as the E2E scorecard (`isCatch`). Owner, 2 Nov 2026: PR-only counting missed what main, the night and the beta caught once PRs stopped running e2e. A fix names the reds it closes with run ids in its `E2E-cause:` trailer (wins over the window up to the next green) | hourly |
 | Planted bugs | `selfheal_snapshots` `quality.mutation` and `recall` | weekly / nightly |
 | Sentry | the Sentry page's own `issues()` (5-minute cache) | live |
 

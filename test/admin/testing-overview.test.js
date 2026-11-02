@@ -19,7 +19,8 @@ const data = (extra = {}) => ({repo, now,
   e2e: {latest: [{runId: 21, day: '2026-11-01', kind: 'pr', conclusion: 'failure'}, {runId: 20, day: '2026-11-01', kind: 'after-merge', conclusion: 'success'}, {runId: 19, day: '2026-10-31', kind: 'nightly', conclusion: 'failure'}],
     suiteNights: [{runId: 19, day: '2026-10-31', kind: 'nightly', suite: 'wander', platform: 'mac', green: true}, {runId: 19, day: '2026-10-31', kind: 'nightly', suite: 'interactions', platform: 'mac', green: false},
       {runId: 18, day: '2026-10-30', kind: 'nightly', suite: 'interactions', platform: 'mac', green: true}],
-    caught: [{day: '2026-10-30', runId: 5, suite: 'jobs'}, {day: '2026-10-30', runId: 5, suite: 'apply'}, {day: '2026-09-01', runId: 1}]},
+    caught: [{day: '2026-10-30', kind: 'scheduled', runId: 5, suite: 'jobs'}, {day: '2026-10-30', kind: 'scheduled', runId: 5, suite: 'apply'}, {day: '2026-10-29', kind: 'after-merge', runId: 6, suite: 'apply'},
+      {day: '2026-10-28', kind: 'pr', runId: 7, suite: 'jobs'}, {day: '2026-10-27', kind: 'beta', runId: 8, suite: 'quality'}, {day: '2026-09-01', kind: 'nightly', runId: 1}]},
   integration: {runs: [{runId: 31, layer: 'app', platform: 'linux', day: '2026-11-01', on: 'main', conclusion: 'success', tests: 10, failed: 0, ms: 5}, {runId: 30, layer: 'store', platform: 'linux', day: '2026-10-31', on: 'main', conclusion: 'failure', tests: 10, failed: 1, ms: 5}]},
   healing: {day: '2026-11-01', periods: {last7: {byDetector: [{detector: 'AI screenshot review', fixed: 2, queued: 1}, {detector: 'AI code review', fixed: 0, queued: 0}]}}, quality: {mutation: {rate: 100, note: '12 of 12 planted code bugs caught'}}, recall: {planted: 13, caught: 11, missed: ['page-overflow']}},
   card: {month: '2026-11', days: 30, checks: [{name: 'CI · Integration tests', realCatches: 4}, {name: 'CI · Smoke (the app starts)', realCatches: 1}]},
@@ -68,7 +69,8 @@ test('bugs caught come from stored rows, with their window, or say why not', () 
   assert.deepEqual(cardOf(model, 'smoke').bugs, {text: '1 real catch', window: '30 days'});
   assert.deepEqual(cardOf(model, 'review').bugs, {text: '3 real bugs', window: '7 days'});
   assert.deepEqual(cardOf(model, 'code-review').bugs, {text: '0 real bugs', window: '7 days'});
-  assert.deepEqual(cardOf(model, 'e2e').bugs, {text: '1 red that caught a bug', window: '30 days'}, 'one run red in two suites is one red');
+  // 2 Nov 2026 (owner: "has this caught bug been counted?"): the count was PR runs only; main, the night and the beta do the catching since 1 Nov.
+  assert.deepEqual(cardOf(model, 'e2e').bugs, {text: '4 reds that caught a bug', window: '30 days', detail: 'after merge 1 · before merge 1 · beta 1 · scheduled 1'}, 'every run kind, where each was caught; one run red in two suites is one red; a red older than 30 days is out');
   assert.equal(cardOf(model, 'mutation').bugs.text, '12 of 12 planted code bugs caught');
   assert.equal(cardOf(model, 'recall').bugs.text, '11 of 13 planted UI bugs caught');
   assert.deepEqual(cardOf(model, 'sentry').bugs, {text: '2 unresolved issues · 5 users hit', window: '14 days'});
