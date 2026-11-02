@@ -6,11 +6,11 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {feedback, FILES_PER_DAY, MAX_LOGS_BYTES, MAX_SHOT_BYTES} from '../../api/feedback.js';
 import {file, view} from '../../admin/feedback.js';
-import {purgeFiles, undelivered} from '../../shared/feedback.js';
+import {purgeFiles, undelivered, TEXT_FILES} from '../../shared/feedback.js';
 
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const name of ['0003_feedback.sql', '0124_feedback_files.sql']) db.exec(readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'));
+  for (const name of ['0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql']) db.exec(readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'));
   const statement = (sql, args = []) => ({bind: (...values) => statement(sql, values), run: async () => db.prepare(sql).run(...args),
     all: async () => ({results: db.prepare(sql).all(...args)}), first: async () => db.prepare(sql).get(...args)});
   return {db, prepare: sql => statement(sql)};
@@ -145,4 +145,48 @@ test('a poll keeps the cards it already drew (an open Logs viewer must not snap 
   assert.match(page, /kept\.sig === sigOf\(row\)/);   // a kept card is rebuilt when its delivery verdict or files change
   assert.match(page, /const mark = \(card, fresh\)/);   // NEW is set on a poll and cleared on the next
   assert.match(page, /firstLoad && location\.hash/);
+});
+
+const PAGE = JSON.stringify({screen: 'What we learned', questions: [{id: 'q1', wording: 'Summary', field: 'summary', value: 'Summary', verdict: 'saved'}]}, null, 1);
+
+test('the screen data and the profile snapshot are kept beside the logs, served by kind, flagged on the row and linked in the message', async () => {
+  const e = env(), calls = [];
+  const answer = await (await send(e, {...good, page: PAGE, profile: '{"details":{"city":"Porto"}}'}, telegramOk(calls))).json();
+  assert.deepEqual(answer, {ok: true});
+  const saved = row(e);
+  assert.deepEqual([saved.logs, saved.page, saved.profile], [1, 1, 1]);
+  assert.deepEqual([...e.FEEDBACK_FILES.kept.keys()].sort(), ['logs.txt', 'page.json', 'profile.json', 'screen.png'].map(name => `feedback/${saved.ref}/${name}`));
+  assert.match(JSON.parse(calls[0].body).text, /Screenshot · Logs · Screen data · Profile on \/admin/);
+  const open = kind => file(new Request(`https://x/admin/growth/feedback/file?ref=${saved.ref}&kind=${kind}`, {headers: {Authorization: 'Bearer owner'}}), e);
+  for (const kind of ['page', 'profile']) {
+    const served = await open(kind);
+    assert.equal(served.status, 200); assert.equal(served.headers.get('Content-Type'), 'application/json; charset=utf-8'); assert.equal(served.headers.get('Cache-Control'), 'no-store');
+  }
+  assert.equal(await (await open('page')).text(), PAGE);
+  const data = await (await view(new Request('https://x/feedback?json=1', {headers: {Authorization: 'Bearer owner'}}), e)).json();
+  assert.deepEqual([data.rows[0].page, data.rows[0].profile], [1, 1]);
+});
+
+test('screen data or a profile over its cap, or not text, is skipped and said; the words and the rest stay', async () => {
+  const e = env();
+  const answer = await (await send(e, {...good, page: 'x'.repeat(TEXT_FILES.page.max + 1), profile: {not: 'text'}}, telegramOk([]))).json();
+  assert.deepEqual(answer.skipped.sort(), ['page', 'profile']);
+  const saved = row(e);
+  assert.deepEqual([saved.logs, saved.page, saved.profile, saved.shot], [1, 0, 0, 'png']);
+  assert.equal(saved.text, good.text);
+});
+
+test('90 days on, the screen data and the profile snapshot are deleted and their flags cleared', async () => {
+  const e = env();
+  await send(e, {...good, page: PAGE, profile: '{}'}, telegramOk([]), new Date('2026-07-01T10:00:00Z'));
+  const {ref} = row(e);
+  for (const o of e.FEEDBACK_FILES.kept.values()) o.uploaded = new Date('2026-07-01T10:00:00Z');
+  assert.equal(await purgeFiles(e, new Date('2026-11-02T10:00:00Z')), 4);
+  assert.deepEqual({...e.STATS.db.prepare('SELECT shot, logs, page, profile FROM feedback WHERE ref = ?').get(ref)}, {shot: '', logs: 0, page: 0, profile: 0});
+});
+
+test('the admin page offers the three text viewers', async () => {
+  const page = await (await view(new Request('https://x/feedback', {headers: {Authorization: 'Bearer owner'}}), env())).text();
+  for (const label of ["'Logs'", "'Screen data'", 'Profile snapshot']) assert.ok(page.includes(label), label);
+  assert.match(page, /kind=' \+ kind/);
 });
