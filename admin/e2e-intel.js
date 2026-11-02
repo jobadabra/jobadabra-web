@@ -81,7 +81,7 @@ export async function readSnapshot(db) {
 // GET ?snapshot=1: the stored snapshot (the page's one row). GET ?v=N: {have: runs stored at rules N or newer, pending: runs with a red still "open" or "unknown", reds: [[runId, suite, cause, fix, kind]] stored, pull-request runs left out} (CI reads the rest, and the pending ones again).
 export async function ingest(request, env, now = new Date()) {
   if (!authorized(request, env)) return new Response('Not found', {status: 404});
-  if (request.method === 'GET' && new URL(request.url).searchParams.get('snapshot') === '1') {   // the weekly summary (jobs/e2e-weekly.mjs) reads the row the page draws: same numbers
+  if (request.method === 'GET' && new URL(request.url).searchParams.get('snapshot') === '1') {   // the weekly summary (tools/ci-intel/jobs/e2e-weekly.mjs) reads the row the page draws: same numbers
     const row = await env.STATS.prepare('SELECT body FROM e2e_snapshot WHERE id = 1').first();
     return row ? new Response(row.body, {headers: {'Content-Type': 'application/json'}}) : json({error: 'no snapshot yet'}, 404);
   }
