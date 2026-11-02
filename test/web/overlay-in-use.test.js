@@ -14,7 +14,7 @@ const read = rel => fs.readFileSync(new URL(rel, root), 'utf8');
 function scratch() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-in-use-')), pub = path.join(dir, 'public');
   fs.mkdirSync(path.join(dir, 'site', 'tools'), {recursive: true});
-  for (const file of ['overlay.sh', 'overlay-busy.sh', 'site-run.sh', 'compat-app-core.sh', 'lay-private.sh', 'layout-map.txt']) {
+  for (const file of ['overlay.sh', 'overlay-busy.sh', 'site-run.sh', 'compat-app-core.sh', 'lay-private.sh', 'layout-map.txt', 'repos.sh']) {
     fs.copyFileSync(new URL(`tools/${file}`, root), path.join(dir, 'site', 'tools', file));
     fs.chmodSync(path.join(dir, 'site', 'tools', file), 0o755);
   }
