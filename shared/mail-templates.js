@@ -31,6 +31,14 @@ export const TEMPLATES = {
     button: ({confirmUrl}) => (confirmUrl ? {label: 'Confirm your email', url: confirmUrl} : null),
     text: () => "New job matches, reminders and answers from Jobadabra will come to this address. Confirm it to get every mail at once; until then we send at most one a day.\n\nDidn't ask for this? Ignore this email.",
     html: () => `<p>New job matches, reminders and answers from Jobadabra will come to this address. Confirm it to get every mail at once; until then we send at most one a day.</p>${muted("Didn't ask for this? Ignore this email.")}`},
+  // The confirm link again, when the person presses Resend in the app (api/account-email.js resend; owner, 2 Nov 2026: "Keep it, make it painless"). Essential: it must reach an address whose mail
+  // the 14-day stop holds back (that stop is lifted by this very confirmation). Data: {confirmUrl}.
+  'confirm-resend': {list: 'service', essential: true,
+    subject: () => 'Confirm your email for Jobadabra',
+    title: () => 'Confirm your email',
+    button: ({confirmUrl}) => (confirmUrl ? {label: 'Confirm your email', url: confirmUrl} : null),
+    text: () => "You asked for the confirm link again. Press it and your Jobadabra mails reach you.\n\nDidn't ask for this? Ignore this email; nothing changes.",
+    html: () => `<p>You asked for the confirm link again. Press it and your Jobadabra mails reach you.</p>${muted("Didn't ask for this? Ignore this email; nothing changes.")}`},
   // Account mail: the code that proves an address (Pro device codes, sign-in). Data: {code}.
   'account-code': {list: 'service', essential: true,
     subject: () => 'Your Jobadabra code',

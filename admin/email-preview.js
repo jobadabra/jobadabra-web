@@ -10,6 +10,7 @@ const jobs = [{title: 'Dialysis Nurse', company: 'Demo Klinik', place: 'Zurich',
 export const SAMPLES = {
   'message': {subject: 'Your application to Demo Klinik was sent', html: '<p>We sent your application for <b>Dialysis Nurse</b>.</p>', text: 'We sent your application for Dialysis Nurse.', buttons: [{text: 'Open in Jobadabra', url: SITE}], confirmUrl: `${SITE}/confirm?example`},
   'welcome': {confirmUrl: `${SITE}/confirm?example`},
+  'confirm-resend': {confirmUrl: `${SITE}/confirm?example`},
   'account-code': {code: '482913'},
   'digest': {matches: jobs, total: 12, openUrl: SITE},
   'trial-left': {left: 5},

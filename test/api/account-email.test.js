@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
-import {address, confirm, notify} from '../../api/account-email.js';
+import {address, confirm, notify, resend} from '../../api/account-email.js';
 import {sendDigests} from '../../api/mail-held.js';
 import {fromTelegram} from '../../api/mail-html.js';
-import {confirmLink} from '../../shared/mail.js';
+import {addrOf, confirmLink} from '../../shared/mail.js';
+import {switchOff} from '../../api/mail-unsub.js';
 import {tokenFor} from '../../shared/guard.js';
 import {createAccount} from '../../shared/pro.js';
 
@@ -175,4 +176,49 @@ test('an account that never answered shows product news ON in the app (opt-out),
   assert.equal((await call(address, e, 'install-aaaa', 'GET')).marketing, true);
   await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: true});
   assert.equal(e.STATS.db.prepare("SELECT COUNT(*) n FROM mail_off WHERE list = 'marketing'").get().n, 0);
+});
+
+// Owner, 2 Nov 2026 ("Keep it, make it painless"): the welcome goes once per address ever, so a lost mail needs a Resend, rate-limited.
+test('Resend sends the confirm link again: 1 an hour, 3 a day; a confirmed address, no address and a bad key get nothing', async () => {
+  const {e, sent} = setup();
+  const at = iso => async install => (await resend(new Request('https://x/api/account/email/resend', {method: 'POST', headers: {'x-api-key': await keyOf(install)}}), e, new Date(iso)));
+  assert.equal((await (await at('2026-10-16T10:00:00Z')('install-aaaa')).json()).error, 'no_address', 'no address yet');
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});   // the welcome, 10:00
+  assert.equal(sent.length, 1);
+  const first = await (await at('2026-10-16T10:05:00Z')('install-aaaa')).json();
+  assert.equal(first.ok, true, 'positive control: the first Resend goes');
+  assert.equal(sent.length, 2);
+  assert.ok(sent[1].html.includes('/confirm?a=') && /again/.test(sent[1].text), 'with the confirm link');
+  assert.deepEqual(await (await at('2026-10-16T10:30:00Z')('install-aaaa')).json(), {ok: false, error: 'wait'}, 'a second call within the hour is refused');
+  assert.equal(sent.length, 2, 'and sends nothing');
+  assert.equal((await (await at('2026-10-16T11:10:00Z')('install-aaaa')).json()).ok, true, 'an hour later: the 2nd');
+  assert.equal((await (await at('2026-10-16T12:20:00Z')('install-aaaa')).json()).ok, true, 'the 3rd');
+  assert.equal((await (await at('2026-10-16T13:30:00Z')('install-aaaa')).json()).error, 'wait', 'a 4th the same day: refused');
+  assert.equal((await (await at('2026-10-17T11:00:00Z')('install-aaaa')).json()).ok, true, 'the next day: allowed again');
+  const bad = await resend(new Request('https://x/api/account/email/resend', {method: 'POST', headers: {'x-api-key': 'JPF1.install-aaaa.nope'}}), e, new Date('2026-10-17T10:00:00Z'));
+  assert.equal(bad.status, 401, 'a wrong key gets nothing');
+  await confirm(new Request(await confirmLink(e, 'me@example.com'), {method: 'POST'}), e);
+  assert.equal((await (await at('2026-10-19T10:00:00Z')('install-aaaa')).json()).error, 'confirmed', 'confirmed: nothing to resend');
+});
+
+test('Resend reaches an address whose mail the 14-day stop holds back, and says so when mail is switched off', async () => {
+  const {e, sent} = setup();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});   // the welcome, 16 Oct
+  const late = await notify(new Request('https://x/api', {method: 'POST', headers: {'x-api-key': await keyOf('install-aaaa')}, body: JSON.stringify({subject: 's', html: card})}), e, new Date('2026-10-31T10:00:00Z'));
+  assert.equal((await late.json()).reason, 'unconfirmed_stopped', 'day 15: stopped');
+  const press = async iso => (await resend(new Request('https://x/api/account/email/resend', {method: 'POST', headers: {'x-api-key': await keyOf('install-aaaa')}}), e, new Date(iso))).json();
+  assert.equal((await press('2026-10-31T10:05:00Z')).ok, true);
+  assert.equal(sent.at(-1).subject, 'Confirm your email for Jobadabra');
+  e.MAIL = 'off';
+  assert.equal((await press('2026-11-01T10:00:00Z')).error, 'off', 'mail off: the app is told, not promised');
+});
+
+test('Resend never mails an address whose owner stopped our mail; only the 14-day stop is lifted (Gitar on #333)', async () => {
+  const {e, sent} = setup();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});   // the welcome
+  await switchOff(e, await addrOf('me@example.com'), 'service', 'unsubscribe', new Date('2026-10-16T10:01:00Z'));   // the owner pressed the stop link
+  const before = sent.length;
+  const press = async () => (await resend(new Request('https://x/api/account/email/resend', {method: 'POST', headers: {'x-api-key': await keyOf('install-aaaa')}}), e, new Date('2026-10-16T12:00:00Z'))).json();
+  assert.deepEqual(await press(), {ok: false, error: 'stopped'});
+  assert.equal(sent.length, before, 'nothing is mailed to a person who said stop');
 });

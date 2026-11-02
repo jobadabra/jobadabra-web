@@ -1,6 +1,6 @@
 // The address a person gives Jobadabra (onboarding, Settings → Notifications) and the mail the app or a run sends to it. The install proves itself with its AI key
 // (x-api-key: JPF1.<install>.<token>). PUT/GET /api/account/email makes or reads the trial account; POST /api/notify/email mails a Telegram-style message to it;
-// /confirm confirms the address. An address another account already holds is refused here (joining it takes a code sent to that address, the device sign-in). Guard: test/api/account-email.test.js.
+// POST /api/account/email/resend sends the confirm link again; /confirm confirms the address. An address another account already holds is refused here (joining it takes a code sent to that address, the device sign-in). Guard: test/api/account-email.test.js.
 import {authorize, digestOf, equal, tokenFor} from '../shared/guard.js';
 import {addrOf, confirmLink, send, validAddress, clean} from '../shared/mail.js';
 import {fromTelegram} from './mail-html.js';
@@ -71,6 +71,29 @@ async function welcome(env, email, now) {
   if (!env.STATS) return;
   const before = await env.STATS.prepare("SELECT 1 AS y FROM mail_log WHERE addr = ? AND template = 'welcome' AND status = 'sent'").bind(await addrOf(email)).first();
   if (!before) await send(env, 'welcome', email, {confirmUrl: await confirmLink(env, email)}, {now});
+}
+
+// POST /api/account/email/resend: the confirm link again, to the address this account holds and has not confirmed (the welcome mail goes once per address ever, so a lost mail had no way back).
+// At most 1 an hour and 3 a day per address -> {ok:false, error:'wait'}; 'confirmed' / 'stopped' (the person stopped our mail) / 'no_address' / 'off' (mail switched off) / 'not_sent' say why nothing went. Guard: test/api/account-email.test.js.
+export const RESEND_PER_HOUR = 1, RESEND_PER_DAY = 3;
+export async function resend(request, env, now = new Date()) {
+  const install = await who(request, env);
+  if (!install || !env.STATS) return json(401, {ok: false, error: 'unauthorized'});
+  if (request.method !== 'POST') return json(405, {ok: false});
+  const account = await accountOf(env, install);
+  if (!account?.email) return json(200, {ok: false, error: 'no_address'});
+  if (account.email_confirmed_at) return json(200, {ok: false, error: 'confirmed'});
+  const addr = await addrOf(account.email);
+  // Why (#333, Gitar, 2 Nov 2026): a Resend lifts only the 14-day "unconfirmed" stop. An address that said stop itself (the unsubscribe link or Email settings: service_mail_off_at, or a service row
+  // with another reason) must never get a "confirm" mail again: anyone can type someone else's address, and an essential mail carries no stop link.
+  const stopped = await env.STATS.prepare("SELECT 1 AS y FROM mail_off WHERE addr = ? AND list = 'service' AND reason != 'unconfirmed'").bind(addr).first();
+  if (account.service_mail_off_at || stopped) return json(200, {ok: false, error: 'stopped'});
+  const since = ms => new Date(now.getTime() - ms).toISOString();
+  const made = async ms => (await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE addr = ? AND template = 'confirm-resend' AND status = 'sent' AND at >= ?").bind(addr, since(ms)).first()).n;
+  if (await made(3600 * 1000) >= RESEND_PER_HOUR || await made(24 * 3600 * 1000) >= RESEND_PER_DAY) return json(200, {ok: false, error: 'wait'});
+  const sent = await send(env, 'confirm-resend', account.email, {confirmUrl: await confirmLink(env, account.email)}, {now});
+  if (sent.ok) return json(200, {ok: true});
+  return json(200, {ok: false, error: sent.reason === 'off' ? 'off' : sent.reason === 'rate' ? 'wait' : 'not_sent'});
 }
 
 // POST /api/notify/email {subject, html, buttons?: [{text, url}], kind?: 'activity'}: 'activity' is held for the digest, anything else goes at once; `html` is the Telegram HTML the engine built (tgcard.py); only a safe subset reaches the mail (mail-html.js).
