@@ -7,7 +7,8 @@ import {test} from 'node:test';
 import {address, confirm, notify, resend} from '../../api/account-email.js';
 import {sendDigests} from '../../api/mail-held.js';
 import {fromTelegram} from '../../api/mail-html.js';
-import {confirmLink} from '../../shared/mail.js';
+import {addrOf, confirmLink} from '../../shared/mail.js';
+import {switchOff} from '../../api/mail-unsub.js';
 import {tokenFor} from '../../shared/guard.js';
 import {createAccount} from '../../shared/pro.js';
 
@@ -210,4 +211,14 @@ test('Resend reaches an address whose mail the 14-day stop holds back, and says 
   assert.equal(sent.at(-1).subject, 'Confirm your email for Jobadabra');
   e.MAIL = 'off';
   assert.equal((await press('2026-11-01T10:00:00Z')).error, 'off', 'mail off: the app is told, not promised');
+});
+
+test('Resend never mails an address whose owner stopped our mail; only the 14-day stop is lifted (Gitar on #333)', async () => {
+  const {e, sent} = setup();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});   // the welcome
+  await switchOff(e, await addrOf('me@example.com'), 'service', 'unsubscribe', new Date('2026-10-16T10:01:00Z'));   // the owner pressed the stop link
+  const before = sent.length;
+  const press = async () => (await resend(new Request('https://x/api/account/email/resend', {method: 'POST', headers: {'x-api-key': await keyOf('install-aaaa')}}), e, new Date('2026-10-16T12:00:00Z'))).json();
+  assert.deepEqual(await press(), {ok: false, error: 'stopped'});
+  assert.equal(sent.length, before, 'nothing is mailed to a person who said stop');
 });

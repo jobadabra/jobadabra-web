@@ -74,7 +74,7 @@ async function welcome(env, email, now) {
 }
 
 // POST /api/account/email/resend: the confirm link again, to the address this account holds and has not confirmed (the welcome mail goes once per address ever, so a lost mail had no way back).
-// At most 1 an hour and 3 a day per address -> {ok:false, error:'wait'}; 'confirmed' / 'no_address' / 'off' (mail switched off) / 'not_sent' say why nothing went. Guard: test/api/account-email.test.js.
+// At most 1 an hour and 3 a day per address -> {ok:false, error:'wait'}; 'confirmed' / 'stopped' (the person stopped our mail) / 'no_address' / 'off' (mail switched off) / 'not_sent' say why nothing went. Guard: test/api/account-email.test.js.
 export const RESEND_PER_HOUR = 1, RESEND_PER_DAY = 3;
 export async function resend(request, env, now = new Date()) {
   const install = await who(request, env);
@@ -84,6 +84,10 @@ export async function resend(request, env, now = new Date()) {
   if (!account?.email) return json(200, {ok: false, error: 'no_address'});
   if (account.email_confirmed_at) return json(200, {ok: false, error: 'confirmed'});
   const addr = await addrOf(account.email);
+  // Why (#333, Gitar, 2 Nov 2026): a Resend lifts only the 14-day "unconfirmed" stop. An address that said stop itself (the unsubscribe link or Email settings: service_mail_off_at, or a service row
+  // with another reason) must never get a "confirm" mail again: anyone can type someone else's address, and an essential mail carries no stop link.
+  const stopped = await env.STATS.prepare("SELECT 1 AS y FROM mail_off WHERE addr = ? AND list = 'service' AND reason != 'unconfirmed'").bind(addr).first();
+  if (account.service_mail_off_at || stopped) return json(200, {ok: false, error: 'stopped'});
   const since = ms => new Date(now.getTime() - ms).toISOString();
   const made = async ms => (await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE addr = ? AND template = 'confirm-resend' AND status = 'sent' AND at >= ?").bind(addr, since(ms)).first()).n;
   if (await made(3600 * 1000) >= RESEND_PER_HOUR || await made(24 * 3600 * 1000) >= RESEND_PER_DAY) return json(200, {ok: false, error: 'wait'});
