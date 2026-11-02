@@ -6,6 +6,9 @@
 import {escTags} from '../shared/html.js';
 
 const PER_INSTALL_PER_DAY = 10;
+// Why (2 Nov 2026, Gitar on #334): the endpoint is open and the install id is the client's own, so a caller changing it per request could fill R2 and the owner's chat with photos.
+// The words are always kept; files (and so the photo) stop for the day past this many feedbacks that carried one.
+export const FILES_PER_DAY = 100;
 export const MAX_SHOT_BYTES = 2 * 1024 * 1024, MAX_LOGS_BYTES = 200 * 1024;
 const SHOT = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/;
 const clip = (value, max) => String(value ?? '').replace(/\s+$/g, '').slice(0, max);
@@ -62,6 +65,8 @@ export async function feedback(request, env, fetcher = fetch, now = new Date()) 
   if (n >= PER_INSTALL_PER_DAY) return Response.json({ok: false, error: 'limit reached for today'}, {status: 429});
   const ref = hex(), skipped = [];
   let shot = null, logs = '';
+  const withFiles = body.screenshot || body.logs ? (await env.STATS.prepare("SELECT COUNT(*) AS n FROM feedback WHERE day = ? AND (shot != '' OR logs = 1)").bind(day).first())?.n || 0 : 0;
+  if (withFiles >= FILES_PER_DAY) { body.screenshot = ''; body.logs = ''; skipped.push('screenshot', 'logs'); }
   if (body.screenshot) { shot = decodeShot(body.screenshot); if (!shot) skipped.push('screenshot'); }
   if (typeof body.logs === 'string' && body.logs) { if (new TextEncoder().encode(body.logs).length <= MAX_LOGS_BYTES) logs = body.logs; else skipped.push('logs'); }
   if ((shot || logs) && !env.FEEDBACK_FILES) { if (shot) skipped.push('screenshot'); if (logs) skipped.push('logs'); shot = null; logs = ''; }

@@ -76,16 +76,18 @@ const make = (row, fresh) => {
   if (row.contact) { const reply = document.createElement('div'); reply.className = 'reply'; reply.textContent = '↩︎ ' + row.contact; card.append(reply); }
   return card;
 };
+const cards = new Map();   // one card per message, kept across polls: an open Logs viewer and a loaded screenshot stay as they are
 async function refresh() {
   try {
     const response = await fetch('?json=1', {cache: 'no-store'});
     if (!response.ok) throw new Error(response.status);
     const {rows, undelivered} = await response.json();
     const alert = document.getElementById('alert'); alert.hidden = !undelivered; alert.textContent = '⚠ ' + undelivered + ' feedback message' + (undelivered === 1 ? '' : 's') + ' did not reach your Telegram.';
-    const seen = new Set(known || []);
-    list.replaceChildren(...(rows.length ? rows.map(row => make(row, known && !seen.has(row.at + row.install))) : [Object.assign(document.createElement('p'), {className: 'muted', textContent: 'No feedback yet.'})]));
-    known = rows.map(row => row.at + row.install);
-    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+    const firstLoad = known === null, seen = new Set(known || []);
+    const keyOf = row => row.at + row.install;
+    list.replaceChildren(...(rows.length ? rows.map(row => { if (!cards.has(keyOf(row))) cards.set(keyOf(row), make(row, known && !seen.has(keyOf(row)))); return cards.get(keyOf(row)); }) : [Object.assign(document.createElement('p'), {className: 'muted', textContent: 'No feedback yet.'})]));
+    known = rows.map(keyOf);
+    if (firstLoad && location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
     state.textContent = 'live · ' + rows.length + ' message' + (rows.length === 1 ? '' : 's') + ' · updated ' + new Date().toLocaleTimeString();
     live.classList.add('on');
   } catch (error) { state.textContent = 'offline, retrying…'; live.classList.remove('on'); }

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
-import {feedback, MAX_LOGS_BYTES, MAX_SHOT_BYTES} from '../../api/feedback.js';
+import {feedback, FILES_PER_DAY, MAX_LOGS_BYTES, MAX_SHOT_BYTES} from '../../api/feedback.js';
 import {file, view} from '../../admin/feedback.js';
 import {purgeFiles, undelivered} from '../../shared/feedback.js';
 
@@ -128,4 +128,20 @@ test('90 days on, the files leave R2 and the row stops pointing at them', async 
   assert.deepEqual([...e.FEEDBACK_FILES.kept.keys()].every(key => key.includes(fresh)), true);
   assert.deepEqual({...e.STATS.db.prepare('SELECT shot, logs FROM feedback WHERE ref = ?').get(old)}, {shot: '', logs: 0});
   assert.equal(e.STATS.db.prepare('SELECT shot FROM feedback WHERE ref = ?').get(fresh).shot, 'png');
+});
+
+test('past the day\'s cap of feedbacks with files, the words still go and the files (and the photo) stop', async () => {
+  const e = env(), calls = [];
+  for (let i = 0; i < FILES_PER_DAY; i++) e.STATS.db.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact, shot, logs) VALUES ('2026-11-02T08:00:00Z', ?, ?, '1', 'x', 't', '', 'png', 1)").run('2026-11-02', `install-${i}-padding`);
+  const answer = await (await send(e, {...good, install: 'install-new-zzzz'}, telegramOk(calls), new Date('2026-11-02T10:00:00Z'))).json();
+  assert.deepEqual(answer.skipped.sort(), ['logs', 'screenshot']);
+  assert.equal(e.FEEDBACK_FILES.kept.size, 0);
+  assert.deepEqual(calls.map(c => c.method), ['sendMessage']);
+  assert.equal(row(e).text, good.text);
+});
+
+test('a poll keeps the cards it already drew (an open Logs viewer must not snap shut) and scrolls to #ref only on the first load', async () => {
+  const page = await (await view(new Request('https://x/feedback', {headers: {Authorization: 'Bearer owner'}}), env())).text();
+  assert.match(page, /cards\.has\(keyOf\(row\)\)/);
+  assert.match(page, /firstLoad && location\.hash/);
 });
