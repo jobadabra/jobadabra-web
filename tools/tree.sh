@@ -3,12 +3,13 @@
 # This repo is checked out at .private/ (actions/checkout with path: .private). Usage: .private/tools/tree.sh [--full] [--ref <branch-or-sha>]
 # Sets PUBLIC_SHA (the public commit under test) for later steps. The public repo is public: no token needed.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/repos.sh"   # JOBADABRA_PUBLIC_REPO, JOBADABRA_WEB_REPO
 depth="--depth 1"; ref="main"
 while [ $# -gt 0 ]; do case "$1" in --full) depth="--tags";; --ref) ref="${2:-main}"; shift;; *) echo "tree.sh: unknown $1" >&2; exit 2;; esac; shift; done
 [ -n "$ref" ] || ref="main"
 cd "${GITHUB_WORKSPACE:-.}"
 git init -q .
-git remote add origin "${PUBLIC_REPO_URL:-https://github.com/GarryOne/jobadabra.git}"
+git remote add origin "${PUBLIC_REPO_URL:-https://github.com/$JOBADABRA_PUBLIC_REPO.git}"
 # shellcheck disable=SC2086
 if ! git fetch -q $depth origin "$ref"; then
   # 26 Oct 2026: a draw pinned to "944a661" died here on "couldn't find remote ref"; GitHub fetches a commit only by its full sha.

@@ -28,7 +28,7 @@ test('a Download click is counted and redirected to the GitHub release file', as
   const e = env();
   const response = await worker.fetch(request('/download/mac?from=hero&page=/&src=linkedin.com'), e, {});
   assert.equal(response.status, 302);
-  assert.equal(response.headers.get('Location'), 'https://github.com/GarryOne/jobadabra/releases/latest/download/Jobadabra-mac-arm64.dmg');
+  assert.equal(response.headers.get('Location'), 'https://github.com/jobadabra/jobadabra/releases/latest/download/Jobadabra-mac-arm64.dmg');
   const [row] = e.STATS.db.prepare('SELECT * FROM downloads').all();
   assert.equal(row.platform, 'mac');
   assert.equal(row.button, 'hero');

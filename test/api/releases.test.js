@@ -22,7 +22,7 @@ test('the latest release is read once with the site token and served from the ca
     assert.equal(body.author, undefined);
   }
   assert.equal(calls.length, 1, 'one GitHub call for every install in the cache window, whatever the query');
-  assert.deepEqual(calls[0], {url: 'https://api.github.com/repos/GarryOne/jobadabra/releases/latest', auth: 'Bearer t'});
+  assert.deepEqual(calls[0], {url: 'https://api.github.com/repos/jobadabra/jobadabra/releases/latest', auth: 'Bearer t'});
 });
 
 test('the release list keeps prerelease and draft, which the beta and test channels decide on', async () => {

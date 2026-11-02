@@ -7,7 +7,7 @@ import {test} from 'node:test';
 const ROOT = new URL('../../', import.meta.url).pathname;
 const OWN = ['web/public'];   // the site's own page folders only
 const pages = dir => readdirSync(join(ROOT, dir), {recursive: true}).filter(f => String(f).endsWith('.html')).map(f => join(dir, String(f)));
-const GITHUB_CONTACT = /github\.com\/GarryOne\/[\w-]+\/(issues|security\/policy)|open an issue/i;
+const GITHUB_CONTACT = /github\.com\/(GarryOne|jobadabra)\/[\w-]+\/(issues|security\/policy)|open an issue/i;
 
 test('no public page points people at GitHub issues or its security page', () => {
   const hits = OWN.flatMap(pages).filter(file => GITHUB_CONTACT.test(readFileSync(join(ROOT, file), 'utf8')));

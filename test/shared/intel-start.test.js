@@ -27,7 +27,7 @@ test('on its tick each collector is dispatched on THIS repo with the dedicated t
   for (const {workflow, minute} of INTEL_COLLECTORS) {
     calls.length = 0;
     assert.deepEqual(await startIntelCollectors(ENV, tick(9, minute), dispatch), [{workflow}]);
-    assert.deepEqual(calls, [{repo: 'GarryOne/jobadabra-web', token: 'own-token', inputs: undefined, workflow}], `${workflow}: the public GITHUB_REPO and the site token are not used; no inputs (the workflow declares none)`);
+    assert.deepEqual(calls, [{repo: 'jobadabra/jobadabra-web', token: 'own-token', inputs: undefined, workflow}], `${workflow}: the public GITHUB_REPO and the site token are not used; no inputs (the workflow declares none)`);
     await startIntelCollectors({...ENV, E2E_INTEL_REPO: 'Owner/other'}, tick(10, minute), dispatch);
     assert.equal(calls[1].repo, 'Owner/other', 'a dedicated repo var wins');
     assert.deepEqual(await startIntelCollectors(ENV, tick(11, minute), async () => { throw new Error('GitHub dispatch failed: 403'); }), [{workflow, error: 'GitHub dispatch failed: 403'}], 'a refused start is reported, never swallowed');
@@ -57,7 +57,7 @@ test('the Worker\'s */5 trigger really sends GitHub the request each collector n
     for (const {workflow, minute} of INTEL_COLLECTORS) {
       requests.length = 0;
       await run(minute, ENV);
-      assert.deepEqual(starts().map(r => [r.url, r.method, r.auth, JSON.parse(r.body)]), [[`https://api.github.com/repos/GarryOne/jobadabra-web/actions/workflows/${workflow}/dispatches`, 'POST', 'Bearer own-token', {ref: 'main'}]], `${workflow} at :${minute}`);
+      assert.deepEqual(starts().map(r => [r.url, r.method, r.auth, JSON.parse(r.body)]), [[`https://api.github.com/repos/jobadabra/jobadabra-web/actions/workflows/${workflow}/dispatches`, 'POST', 'Bearer own-token', {ref: 'main'}]], `${workflow} at :${minute}`);
       globalThis.fetch = async () => new Response(null, {status: 403});
       await run(minute, ENV);
       assert.ok(errors.some(line => line.includes(`${workflow.replace('.yml', '')} start failed: GitHub dispatch failed: 403`)), `${workflow}: a refusal is logged, the other 5-minute work still ran`);

@@ -1,5 +1,6 @@
 // Demo data for tools/page-shot.mjs: made-up rows only (codes, labels, people), never a real secret or the live site's data. Each seed gets {env, call}: call(path, init) goes through the real Worker as the owner.
 import {ACTIONS} from '../shared/aicost.js';
+import {LAB_REPO, PUBLIC_REPO, WEB_REPO, githubUrl} from '../shared/repos.js';
 const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields)});
 
 export const seeds = {
@@ -58,9 +59,9 @@ export const seeds = {
       layers: {pr: Object.fromEntries(checks.map(([name, mins, fails], c) => [name, {runs: 60 + i, fails: fails + i % 3, secs: (60 + i) * mins * 60, catches: {product: c < 2 ? 3 : 0, test: c === 1 ? 2 : 0, ci: 1, form: c === 3 ? 4 : 1, flaky: c === 2 ? 3 : 0, nofix: 1}}])), main: {}, night: {}}}))});
   },
   'schedules': async ({env}) => {   // made-up scheduled jobs in every area (1 Nov 2026, Testing → Scheduled and the Schedules section): real workflow names, invented runs
-    const now = Date.now(), run = (hoursAgo, conclusion) => ({at: new Date(now - hoursAgo * 3600000).toISOString(), conclusion, mins: 4, url: 'https://github.com/GarryOne/jobadabra/actions/runs/1'});
+    const now = Date.now(), run = (hoursAgo, conclusion) => ({at: new Date(now - hoursAgo * 3600000).toISOString(), conclusion, mins: 4, url: githubUrl(PUBLIC_REPO) + '/actions/runs/1'});
     const job = (repo, file, name, about, crons, conclusions, extra = {}) => ({repo, file, name, about, crons, source: 'github', manual: true, disabled: false, ai: false, weeklyMin: 60, billedMin: 0, recent: conclusions.map((conclusion, i) => run(i * 24 + 3, conclusion)), ...extra});
-    const ok = Array(10).fill('success'), pub = 'GarryOne/jobadabra', web = 'GarryOne/jobadabra-web';
+    const ok = Array(10).fill('success'), pub = PUBLIC_REPO, web = WEB_REPO;
     const jobs = [job(pub, 'e2e.yml', 'CI · E2E', 'Journeys on main, nightly burn-in', ['47 21,23,1 * * *'], ['failure', ...ok], {source: 'worker', billedMin: 0}), job(pub, 'desktop.yml', 'CI · Desktop beta', 'One lane per platform', ['0 4 * * *'], ok, {source: 'both'}),
       job(pub, 'mutation.yml', 'CI · Mutation', 'Does the Finder catch serious bugs?', ['30 3 * * 1'], ok), job(pub, 'harness-daily.yml', 'CI · Harness daily', 'Every harness test once a day', ['10 5 * * *'], ['failure', 'failure', ...ok]),
       job(pub, 'page-cases.yml', 'CI · Page cases', 'Replays all recorded cases', ['20 2 * * *'], ok), job(pub, 'windows-smoke.yml', 'CI · Windows smoke', 'The installer starts', ['40 6 * * *'], ok), job(pub, 'code-review.yml', 'CI · Code review', 'Review of open PRs', ['0 */4 * * *'], ok, {ai: true}),
@@ -69,7 +70,7 @@ export const seeds = {
       job(pub, 'central-scout.yml', 'Central scout', 'Employer feeds, daily', ['0 3 * * *'], ok), job(web, 'random-draw.yml', 'Random draw', 'Random searches across Europe', ['0 */8 * * *'], ok), job(web, 'daily-digest.yml', 'Daily digest', 'The morning Telegram digest', ['30 6 * * *'], ok, {ai: true}),
       job(web, 'ops-overview.yml', 'CI · Ops overview', 'Merged PRs by category', ['17 * * * *'], ok, {billedMin: 40}), job(pub, 'release-guard.yml', 'Release guard', 'Only desktop-v* may be Latest', ['5 * * * *'], ok),
       job(web, 'schedules-snapshot.yml', 'Schedules snapshot', 'This page\'s feed', ['12 * * * *'], ok), job(pub, 'schedule-watchdog.yml', 'Schedule watchdog', 'Did the Worker start runs on time?', ['50 * * * *'], ok)];
-    await env.STATS.prepare('INSERT INTO schedules_snapshot (id, at, body) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET at = excluded.at, body = excluded.body').bind(new Date(now).toISOString(), JSON.stringify({schema: 1, at: new Date(now).toISOString(), repos: [{name: pub, private: false, ok: true}, {name: web, private: true, ok: true}, {name: 'GarryOne/jobadabra-lab', private: true, ok: false}], jobs})).run();
+    await env.STATS.prepare('INSERT INTO schedules_snapshot (id, at, body) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET at = excluded.at, body = excluded.body').bind(new Date(now).toISOString(), JSON.stringify({schema: 1, at: new Date(now).toISOString(), repos: [{name: pub, private: false, ok: true}, {name: web, private: true, ok: true}, {name: LAB_REPO, private: true, ok: false}], jobs})).run();
   },
   'schedules-not-starting': async context => {   // the Scheduled page when the Worker's last start of schedules-snapshot.yml was refused (1 Nov 2026, #263): the red "collector not starting" line
     await seeds.schedules(context);
@@ -93,9 +94,9 @@ export const seeds = {
     const {readFileSync, existsSync} = await import('node:fs');
     const now = new Date(), day = back => new Date(now.getTime() - back * 86400000).toISOString().slice(0, 10), put = (table, body, at = now.toISOString()) => env.STATS.prepare(`INSERT INTO ${table} (id, at, body) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET at = excluded.at, body = excluded.body`).bind(at, JSON.stringify(body)).run();
     const dir = process.env.TESTING_OVERVIEW_REAL_DIR, real = dir && existsSync(`${dir}/schedules.json`) ? JSON.parse(readFileSync(`${dir}/schedules.json`, 'utf8')) : null;
-    const demoRun = (conclusion, hours, n) => ({at: new Date(now.getTime() - hours * 3600000).toISOString(), conclusion, mins: 4, url: `https://github.com/GarryOne/jobadabra/actions/runs/${n}`});
-    const demoJob = (file, name, crons, recent) => ({repo: 'GarryOne/jobadabra', file, name, about: '', crons, source: 'github', manual: true, disabled: false, ai: false, weeklyMin: 0, billedMin: 0, recent});
-    await put('schedules_snapshot', clean(real || {at: now.toISOString(), repos: [{name: 'GarryOne/jobadabra', private: false, ok: true}], jobs: [demoJob('e2e.yml', 'CI · End-to-end on Mac + Linux', ['47 21,23,1 * * *'], [demoRun('success', 14, 1)]),
+    const demoRun = (conclusion, hours, n) => ({at: new Date(now.getTime() - hours * 3600000).toISOString(), conclusion, mins: 4, url: `${githubUrl(PUBLIC_REPO)}/actions/runs/${n}`});
+    const demoJob = (file, name, crons, recent) => ({repo: PUBLIC_REPO, file, name, about: '', crons, source: 'github', manual: true, disabled: false, ai: false, weeklyMin: 0, billedMin: 0, recent});
+    await put('schedules_snapshot', clean(real || {at: now.toISOString(), repos: [{name: PUBLIC_REPO, private: false, ok: true}], jobs: [demoJob('e2e.yml', 'CI · End-to-end on Mac + Linux', ['47 21,23,1 * * *'], [demoRun('success', 14, 1)]),
       demoJob('desktop.yml', 'Release · Build, test, beta', ['17 5 * * *'], [demoRun('success', 9, 2)]), demoJob('integration.yml', 'CI · Integration tests', [], [demoRun('success', 3, 3)]), demoJob('smoke.yml', 'CI · Smoke (the app starts)', [], [demoRun('failure', 5, 4)]),
       demoJob('site-replays.yml', 'CI · Replay check', [], [demoRun('failure', 121, 41100)]), demoJob('record-sites.yml', 'CI · Record sites', ['0 7 * * *'], [demoRun('success', 11, 41350)]),   // the pool card (2 Nov 2026): a by-hand replay run, 5 days old and red, beside the daily recording, green
       demoJob('mutation.yml', 'CI · Planted code bugs', ['0 1 * * 0'], [demoRun('success', 80, 5)]), demoJob('fresh-install-smoke.yml', 'CI · Fresh-install smoke (daily, report only)', ['23 3 * * *'], [demoRun('success', 9, 41349028793)]), demoJob('upgrade-data.yml', 'CI · Upgrade + data test (weekly, report only)', ['41 4 * * 1', '41 5 1 * *'], [demoRun('success', 6, 41344619739)]), demoJob('code-review.yml', 'CI · AI code review', ['10 */8 * * *'], [demoRun('success', 4, 6)])]}));
@@ -128,8 +129,8 @@ export const seeds = {
     await seeds['synthetic-card']({env});
     const snapshot = JSON.parse((await env.STATS.prepare('SELECT body FROM schedules_snapshot WHERE id = 1').first()).body), now = Date.now();
     const {prevOf} = await import('../shared/schedules-model.js');   // runs sit on the job's own schedule (newest = its last due time), so no row reads "late"
-    const runs = (cron, every, bad = []) => Array.from({length: 14}, (_, i) => ({at: new Date(prevOf([cron], new Date(now)).getTime() + 120000 - i * every * 3600000).toISOString(), conclusion: bad.includes(i) ? 'failure' : 'success', mins: 2, url: `https://github.com/GarryOne/jobadabra/actions/runs/${7000 + i}`}));
-    const job = (file, name, crons, recent) => ({repo: 'GarryOne/jobadabra', file, name, about: '', crons, source: 'github', manual: false, disabled: false, ai: false, weeklyMin: 0, billedMin: 0, recent});
+    const runs = (cron, every, bad = []) => Array.from({length: 14}, (_, i) => ({at: new Date(prevOf([cron], new Date(now)).getTime() + 120000 - i * every * 3600000).toISOString(), conclusion: bad.includes(i) ? 'failure' : 'success', mins: 2, url: `${githubUrl(PUBLIC_REPO)}/actions/runs/${7000 + i}`}));
+    const job = (file, name, crons, recent) => ({repo: PUBLIC_REPO, file, name, about: '', crons, source: 'github', manual: false, disabled: false, ai: false, weeklyMin: 0, billedMin: 0, recent});
     snapshot.jobs.push(job('release-guard.yml', 'Release · Guard Latest', ['23 * * * *'], runs('23 * * * *', 1)), job('schedule-watchdog.yml', 'CI · Schedule watchdog', ['23 * * * *'], runs('23 * * * *', 1)),
       job('fresh-install-smoke.yml', 'CI · Fresh-install smoke (daily, report only)', ['23 3 * * *'], runs('23 3 * * *', 24, [])), job('stable-canary.yml', 'CI · Stable canary', ['23 6 * * *'], runs('23 6 * * *', 24, [5])), job('watch-live.yml', 'CI · Daily watch list', ['0 5 * * *'], runs('0 5 * * *', 24, [0, 1])));
     await env.STATS.prepare('INSERT INTO schedules_snapshot (id, at, body) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET at = excluded.at, body = excluded.body').bind(new Date(now).toISOString(), JSON.stringify(snapshot)).run();
@@ -145,12 +146,12 @@ export const seeds = {
     const scheduled = (await read('schedules_snapshot')).jobs;
     await seeds['testing-overview']({env});
     const overview = await read('schedules_snapshot'), have = new Set(overview.jobs.map(job => job.file));
-    const run = (hours, conclusion) => ({at: new Date(now.getTime() - hours * 3600000).toISOString(), conclusion, mins: 6, url: 'https://github.com/GarryOne/jobadabra/actions/runs/7'});
+    const run = (hours, conclusion) => ({at: new Date(now.getTime() - hours * 3600000).toISOString(), conclusion, mins: 6, url: githubUrl(PUBLIC_REPO) + '/actions/runs/7'});
     const extra = (repo, file, name, about, crons, conclusions) => ({repo, file, name, about, crons, source: 'github', manual: true, disabled: false, ai: false, weeklyMin: 30, billedMin: 0, recent: conclusions.map((c, i) => run(i * 24 + 4, c))});
     const ok = Array(10).fill('success');
     await put('schedules_snapshot', {...overview, jobs: [...overview.jobs, ...scheduled.filter(job => !have.has(job.file)),
-      extra('GarryOne/jobadabra', 'prompt-cases-night.yml', 'CI · Prompt cases (nightly, report only)', 'Last night\'s right/wrong of the live prompt cases', ['30 21 * * *'], ok),
-      extra('GarryOne/jobadabra', 'agent-coding-stats.yml', 'CI · Agent coding stats', 'Fix PRs per area, CI minutes per push', ['41 4 * * *'], ok)]});
+      extra(PUBLIC_REPO, 'prompt-cases-night.yml', 'CI · Prompt cases (nightly, report only)', 'Last night\'s right/wrong of the live prompt cases', ['30 21 * * *'], ok),
+      extra(PUBLIC_REPO, 'agent-coding-stats.yml', 'CI · Agent coding stats', 'Fix PRs per area, CI minutes per push', ['41 4 * * *'], ok)]});
     const snapshot = await read('e2e_snapshot');
     const agree = [8, 9, 8, 8, 7, 9, 8, 6, 7, 8, 9, 8, 9, 8], replay = back => ({status: back % 5 === 3 ? 'carried' : 'asked', total: 63, right: back === 2 ? 58 : 60 + (back % 3 === 0 ? 1 : 0), flipped: back === 2 ? 2 : 0, noise: back % 4, newWrong: 0, unconfirmed: 0, calls: back % 5 === 3 ? 0 : 66});
     const quality = Array.from({length: 14}, (_, back) => ({runId: 9500 - back, day: day(back), pairs: 9, within8: agree[back], over20: back === 7 ? 1 : 0, factsExact: 63, factsTotal: 63, judged: 18, invented: back % 6 === 0 ? 1 : 0, promptCases: replay(back)}));

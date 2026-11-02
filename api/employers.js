@@ -1,6 +1,6 @@
 // The central employer index: GET /api/index is what every app and Always-on run downloads, with an install token (POST /api/install-token
 // {install, purpose: 'index'}) and at most INDEX_PER_INSTALL_PER_DAY times a day; GET /api/index?summary=1 is public and holds only the counts;
-// PUT /api/index (Bearer INDEX_PUBLISH_KEY) is the private central scout (repo GarryOne/jobadabra-lab) publishing it.
+// PUT /api/index (Bearer INDEX_PUBLISH_KEY) is the private central scout (repo jobadabra/jobadabra-lab) publishing it.
 // Product data only: feeds, quality, last verified. Nothing about any user. Stored as one KV value (binding WAITLIST).
 import {REGIONS, ROLES} from '../shared/pool-labels.js';
 import {sourceRanking} from './source-ranking.js';
