@@ -90,7 +90,7 @@ export async function ingest(request, env, now = new Date()) {
     const [{results: have = []}, {results: pending = []}, {results: reds = []}] = await Promise.all([
       env.STATS.prepare('SELECT run_id FROM e2e_runs WHERE day >= ? AND rules >= ?').bind(since, version).all(),
       env.STATS.prepare(`SELECT DISTINCT run_id FROM e2e_fails WHERE day >= ? AND cause IN ('open', 'unknown')`).bind(since).all(),
-      env.STATS.prepare(`SELECT run_id, suite, cause, fix, kind FROM e2e_fails WHERE day >= ? AND kind != 'pr' LIMIT 3000`).bind(since).all()]);   // Why (2 Nov 2026, Gitar on jobadabra#2995): the collector reads a run again only when a trailer names it and one of these reds would take that name; a fix id alone looped for runs that never take it
+      env.STATS.prepare(`SELECT run_id, suite, cause, fix, kind FROM e2e_fails WHERE day >= ? AND kind != 'pr' ORDER BY day DESC, run_id DESC LIMIT 3000`).bind(since).all()]);   // Why (2 Nov 2026, Gitar on jobadabra#2995): the collector reads a run again only when a trailer names it and one of these reds would take that name; a fix id alone looped for runs that never take it
     const waiting = new Set(pending.map(row => row.run_id));
     const {results: nights = []} = await env.STATS.prepare('SELECT run_id FROM e2e_quality WHERE day >= ?').bind(since).all();
     const snapshot = await env.STATS.prepare('SELECT body FROM e2e_snapshot WHERE id = 1').first();
