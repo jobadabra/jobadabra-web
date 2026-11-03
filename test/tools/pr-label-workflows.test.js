@@ -57,7 +57,8 @@ test('every relative import of a checked-out script is in that workflow\'s spars
     for (const file of listed) {
       const path = new URL(`../../${file}`, import.meta.url);
       if (!existsSync(path)) continue;   // CI lays the public repo's tree under this one (joined tree); a bare checkout has no copy, the static case below still holds
-      for (const [, target] of readFileSync(path, 'utf8').matchAll(/from\s+'\.\/([^']+)'/g)) {
+      // An import (`from './x'`) or a sibling file the script runs (`new URL('./x', import.meta.url)`, 3 Nov 2026: gh_retry.py): both must be fetched.
+      for (const [, target] of readFileSync(path, 'utf8').matchAll(/(?:from\s+|new URL\()'\.\/([^']+)'/g)) {
         assert.ok(listed.includes(`tools/${target}`), `${name}: ${file} imports ./${target}, which the sparse checkout does not fetch`);
       }
     }

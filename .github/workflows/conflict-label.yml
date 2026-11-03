@@ -34,9 +34,11 @@ jobs:
           ref: main
           # Why (2 Nov 2026, owner: "red"): conflict-label.mjs imports ./gitar-label.mjs, so both are fetched; one missing was ERR_MODULE_NOT_FOUND on every web PR.
           # No comment inside the block below: a YAML block scalar has none, it would become part of the pattern (Gitar on web#307).
+          # Why (3 Nov 2026, jobadabra #3091): the scripts run gh through tools/gh_retry.py (one retry on a GitHub 5xx), so it is fetched too; missing it was a red "conflict" check on every web PR.
           sparse-checkout: |
             tools/conflict-label.mjs
             tools/gitar-label.mjs
+            tools/gh_retry.py
           sparse-checkout-cone-mode: false   # a file pattern, not a directory (cone mode would read the path as a folder; Gitar on web#258)
       - name: Label the open PRs that conflict
         env:
