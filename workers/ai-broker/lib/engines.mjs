@@ -45,14 +45,14 @@ function behind(chain, demoted, env) {
 const dayKey = day => `answered:${day}`, statKey = day => `stats:${day}`;
 
 /**
- * Counts what happened to one engine in this UTC day (kept in storage so an eviction does not reset it): outcome `ok` (answered), `ranOut` (its allowance was used up) or `failed`; `ms` is the answering time.
+ * Counts what happened to one engine in this UTC day (kept in storage so an eviction does not reset it): outcome `ok` (answered), `ranOut` (its allowance was used up), `busy` (all its slots were taken for too long, the call went on to the next engine; 3 Nov 2026) or `failed`; `ms` is the answering time.
  * Why (1 Nov 2026, owner: "report if one is doing worse than the other"): /health and the admin AI cost page compare engines by these counts; quality itself is each job's own check, grouped by the `engine` in the reply.
  */
 export async function recordOutcome(storage, day, engine, outcome, ms = 0) {
   await storage.transaction(async tx => {
     const stats = await tx.get(statKey(day)) || {};
     const row = stats[engine] ||= {ok: 0, ranOut: 0, failed: 0, ms: 0};
-    row[outcome] += 1;
+    row[outcome] = (row[outcome] || 0) + 1;   // `busy` is newer than the stored rows
     if (outcome === 'ok') row.ms += Math.round(ms);
     await tx.put(statKey(day), stats);
     if (outcome === 'ok') { const counts = await tx.get(dayKey(day)) || {}; counts[engine] = (counts[engine] || 0) + 1; await tx.put(dayKey(day), counts); }
@@ -66,7 +66,7 @@ export async function engineHealth(storage, env, day, now = Date.now()) {
   const state = name => name !== 'claude' ? undefined : !configured('claude', env) ? 'not-configured' : (claude.invalidUntil || 0) > now ? 'token-invalid' : (claude.limitUntil || 0) > now ? 'ran-out' : 'ready';
   return {engine: first, chain: chain.map(name => {
     const row = stats[name] || {ok: 0, ranOut: 0, failed: 0, ms: 0};
-    return {name, configured: configured(name, env), ...(state(name) ? {state: state(name)} : {}), answeredToday: counts[name] || 0, ranOutToday: row.ranOut, failedToday: row.failed, avgMs: row.ok ? Math.round(row.ms / row.ok) : null,
+    return {name, configured: configured(name, env), ...(state(name) ? {state: state(name)} : {}), answeredToday: counts[name] || 0, ranOutToday: row.ranOut, busyToday: row.busy || 0, failedToday: row.failed, avgMs: row.ok ? Math.round(row.ms / row.ok) : null,
       ...(name === 'claude' && claude.limits ? {limits: claude.limits} : {}), ...(name === 'claude' && claude.lastError ? {lastError: {at: new Date(claude.lastError.at).toISOString(), text: claude.lastError.text}} : {}), ...((adapt.demoted?.[name] || 0) > now ? {demotedUntil: new Date(adapt.demoted[name]).toISOString()} : {})};
   }), ...(warning ? {warning} : {})};
 }
