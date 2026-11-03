@@ -6,7 +6,7 @@ import worker from '../../workers/www/index.js';
 import {apexRedirect, pageRedirect, PAGE_PATHS} from '../../shared/hosts.js';
 
 const ask = (host, path, init) => new Request(`https://${host}${path}`, init);
-const API_PATHS = ['/api/index', '/api/notion/start?session=x', '/report/fill-failure', '/telemetry', '/admin', '/privacy', '/'];
+const API_PATHS = ['/api/index', '/api/notion/start?state=x', '/report/fill-failure', '/telemetry', '/admin', '/privacy', '/'];
 
 test('the old host is never redirected, on any path: installed apps call it', () => {
   for (const path of API_PATHS) assert.equal(apexRedirect(ask('www.jobpilotto.workers.dev', path)), null, path);

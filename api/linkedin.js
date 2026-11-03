@@ -1,41 +1,35 @@
 // "Connect with LinkedIn" for the desktop app (Sign In with LinkedIn using OpenID Connect: name, email, LinkedIn id; nothing else, LinkedIn gives
-// positions and skills only to registered companies). Same shape as api/notion.js: the app never holds the secret. It opens /api/linkedin/start
-// with a random session id; LinkedIn sends the user back to /api/linkedin/callback; this Worker trades the one-time code for a token, reads
-// the member's OpenID profile ONCE, drops the token, and keeps only that profile in KV for 10 minutes under a hash of the session id; the app
-// collects it once with POST /api/linkedin/token (deleted on read). Configuration: LINKEDIN_CLIENT_ID (var) and LINKEDIN_CLIENT_SECRET
-// (secret), see wrangler.toml. Guarded by test/api/linkedin.test.js.
+// positions and skills only to registered companies). The app never holds the secret. It opens /api/linkedin/start with a random `state` it made; LinkedIn sends the user back to
+// /api/linkedin/callback; this Worker trades the one-time code for a token, reads the member's OpenID profile ONCE, drops the token, and passes only that profile ON, in that same
+// request, to the app on the consenting browser's own machine (shared/oauth-handoff.js). It keeps NOTHING: no store, no endpoint to poll. Configuration: LINKEDIN_CLIENT_ID (var)
+// and LINKEDIN_CLIENT_SECRET (secret), see wrangler.toml. Guarded by test/api/linkedin.test.js.
 import {cardPage} from '../shared/card-page.js';
-const TTL = 600;
-const SESSION = /^[A-Za-z0-9_-]{32,128}$/;
+import {STATE, legacyPoll, legacyStart, toApp} from '../shared/oauth-handoff.js';
 export const CALLBACK = '/api/linkedin/callback';
 const SCOPE = 'openid profile email';
 
-const json = (status, body) => new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json', 'Cache-Control': 'no-store'}});
-async function sha256(text) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
-}
 const page = (title, text, ok) => cardPage({title, body: `<p>${text}</p>`, tone: ok ? 'ok' : 'bad', status: ok ? 200 : 400});   // the site's one card (shared/card-page.js)
-const configured = env => env.LINKEDIN_CLIENT_ID && env.LINKEDIN_CLIENT_SECRET && env.WAITLIST;
+const configured = env => env.LINKEDIN_CLIENT_ID && env.LINKEDIN_CLIENT_SECRET;
 
-// GET /api/linkedin/start?session=… -> LinkedIn's consent page.
+// GET /api/linkedin/start?state=… -> LinkedIn's consent page. An installed app's old ?session=… is told to update.
 export function start(request, env) {
   const url = new URL(request.url);
-  const session = url.searchParams.get('session') || '';
+  const state = url.searchParams.get('state') || '';
+  if (!state && url.searchParams.get('session')) return legacyStart();
   if (!configured(env)) return page('Not available yet', 'Connect with LinkedIn isn\'t set up on this server yet.', false);
-  if (!SESSION.test(session)) return page('Something went wrong', 'Start again from the Jobadabra app.', false);
+  if (!STATE.test(state)) return page('Something went wrong', 'Start again from the Jobadabra app.', false);
   const authorize = new URL('https://www.linkedin.com/oauth/v2/authorization');
   authorize.search = new URLSearchParams({response_type: 'code', client_id: env.LINKEDIN_CLIENT_ID, redirect_uri: url.origin + CALLBACK,
-    state: session, scope: SCOPE}).toString();
+    state, scope: SCOPE}).toString();
   return Response.redirect(authorize.toString(), 302);
 }
 
-// GET /api/linkedin/callback?code=…&state=… (from LinkedIn) -> the member's OpenID profile, kept for the app to collect. The token is not kept.
+// GET /api/linkedin/callback?code=…&state=… (from LinkedIn) -> the member's OpenID profile, passed on to the app on this browser's machine. The token is not kept.
 export async function callback(request, env, fetcher = fetch) {
   const url = new URL(request.url);
-  const session = url.searchParams.get('state') || '';
+  const state = url.searchParams.get('state') || '';
   if (url.searchParams.get('error')) return page('Not connected', 'You cancelled on LinkedIn\'s page. Go back to Jobadabra and try again.', false);
-  if (!configured(env) || !SESSION.test(session) || !url.searchParams.get('code')) return page('Something went wrong', 'Start again from the Jobadabra app.', false);
+  if (!configured(env) || !STATE.test(state) || !url.searchParams.get('code')) return page('Something went wrong', 'Start again from the Jobadabra app.', false);
   const tokenResponse = await fetcher('https://www.linkedin.com/oauth/v2/accessToken', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: new URLSearchParams({grant_type: 'authorization_code', code: url.searchParams.get('code'), redirect_uri: url.origin + CALLBACK,
       client_id: env.LINKEDIN_CLIENT_ID, client_secret: env.LINKEDIN_CLIENT_SECRET}).toString()});
@@ -44,22 +38,9 @@ export async function callback(request, env, fetcher = fetch) {
   const infoResponse = await fetcher('https://api.linkedin.com/v2/userinfo', {headers: {Authorization: `Bearer ${token.access_token}`}});
   const info = await infoResponse.json().catch(() => ({}));
   if (!infoResponse.ok || !info.sub) return page('Not connected', 'LinkedIn did not share your profile. Try again from the app.', false);
-  const keep = {sub: String(info.sub), name: info.name || '', given_name: info.given_name || '', family_name: info.family_name || '',
-    email: info.email_verified === false ? '' : info.email || '', locale: typeof info.locale === 'string' ? info.locale : (info.locale?.language || '')};
-  await env.WAITLIST.put(`linkedin:${await sha256(session)}`, JSON.stringify(keep), {expirationTtl: TTL});
-  return page('Connected to LinkedIn ✓', `${keep.name ? `${keep.name} is connected. ` : ''}Go back to Jobadabra: it takes it from here. You can close this tab.`, true);
+  return toApp('linkedin-signin', state, {sub: String(info.sub), name: info.name || '', given_name: info.given_name || '', family_name: info.family_name || '',
+    email: info.email_verified === false ? '' : info.email || '', locale: typeof info.locale === 'string' ? info.locale : (info.locale?.language || '')});
 }
 
-// POST /api/linkedin/token {session} -> {ok, pending} until the user has approved, then the profile (once).
-export async function collect(request, env) {
-  if (request.method !== 'POST') return json(405, {ok: false, error: 'Use POST'});
-  let body = {};
-  try { body = await request.json(); } catch {}
-  if (!SESSION.test(String(body.session || ''))) return json(400, {ok: false, error: 'Bad session'});
-  if (!configured(env)) return json(503, {ok: false, error: 'Connect with LinkedIn is not set up on this server'});
-  const key = `linkedin:${await sha256(body.session)}`;
-  const kept = await env.WAITLIST.get(key);
-  if (!kept) return json(200, {ok: false, pending: true});
-  await env.WAITLIST.delete(key);
-  return json(200, {ok: true, ...JSON.parse(kept)});
-}
+// POST /api/linkedin/token: the old poll of installed apps. Nothing is held any more, so it says to update.
+export const collect = legacyPoll;
