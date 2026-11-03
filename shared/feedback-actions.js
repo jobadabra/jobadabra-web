@@ -2,20 +2,21 @@
 // is refused (409). Every change is written with its log line; nothing else in the site updates `feedback.state` or `feedback.impact`. Guarded by test/shared/feedback-actions.test.js.
 // Why (3 Nov 2026, owner: "offer some actions buttons for each feedback"): the list only grew; the owner needs to clear it, rate it and, later, answer the reporter.
 
-import {deferColumns, fixedColumns, tellReporter} from './feedback-reply.js';
+import {deferColumns, fixedColumns, releasedColumns, tellOnce} from './feedback-reply.js';
 
-export const STATES = ['new', 'dismissed', 'false_positive', 'deferred', 'ai_running', 'ai_pr', 'fixed'];
+export const STATES = ['new', 'dismissed', 'false_positive', 'deferred', 'ai_running', 'ai_pr', 'fixed', 'released'];
 export const IMPACTS = ['high', 'medium', 'low'];
 export const OPEN_STATES = ['new', 'ai_running', 'ai_pr'];   // the header's "open"
 
 // action -> {from: states it may start in, to: the state it ends in (none = the state stays), note: 'required' | 'optional' | null}. Later PRs add fixed, defer and the AI actions here and nowhere else.
 export const ACTIONS = {
   fixed: {from: ['new', 'deferred', 'ai_pr'], to: 'fixed', form: fixedColumns},   // the owner's words and links: shared/feedback-reply.js
+  released: {from: ['fixed'], to: 'released', form: releasedColumns},   // the fix shipped: the owner's "Mark as released" (a release call does the same for the cards it finds)
   defer: {from: ['new'], to: 'deferred', form: deferColumns},
   dismiss: {from: ['new'], to: 'dismissed'},
   false_positive: {from: ['new'], to: 'false_positive', note: 'required'},
-  reopen: {from: ['dismissed', 'false_positive', 'deferred', 'fixed'], to: 'new'},
-  delete: {from: ['new', 'dismissed', 'false_positive', 'deferred', 'ai_pr', 'fixed']},   // not while a run is going (ai_running)
+  reopen: {from: ['dismissed', 'false_positive', 'deferred', 'fixed', 'released'], to: 'new'},
+  delete: {from: ['new', 'dismissed', 'false_positive', 'deferred', 'ai_pr', 'fixed', 'released']},   // not while a run is going (ai_running)
   impact: {from: STATES},
 };
 
@@ -72,15 +73,15 @@ export async function act(env, input, who, now = new Date()) {
   }
   const note = clip(input.note, 300);
   if (spec.note === 'required' && !note) return refused(400, 'Say why in a few words.');
-  const form = spec.form ? spec.form(input) : {columns: {}};   // Fixed and Defer carry the owner's words and links; a bad one is refused before anything changes
+  const form = spec.form ? spec.form(input, row) : {columns: {}};   // Fixed, Defer and Released carry the owner's words, links and version; a bad one is refused before anything changes
   if (form.error) return refused(400, form.error);
   const columns = {...form.columns};
   if (action === 'defer' && IMPACTS.includes(input.impact) && !row.impact) columns.impact = input.impact;   // the Defer form rates it in the same step
   if (action === 'reopen') columns.told = ['pending', 'telling'].includes(row.told) ? '' : row.told;   // a fix that waited for a release (or was being told) stops; what was already told stays
   const keys = Object.keys(columns), sets = keys.map(key => `, ${key} = ?`).join('');
-  const detail = `${row.state} -> ${spec.to}${note ? `: ${note}` : ''}${form.tell ? ` (tell: ${form.tell})` : ''}`;
+  const detail = `${row.state} -> ${spec.to}${note || form.detail ? `: ${note || form.detail}` : ''}${form.tell ? ` (tell: ${form.tell})` : ''}`;
   if (!await commit(env.STATS.prepare(`UPDATE feedback SET state = ?, state_at = ?, state_note = ?${sets} WHERE ref = ? AND state = ?`).bind(spec.to, at, spec.note ? note : '', ...keys.map(key => columns[key]), ref, row.state), detail)) return raced;
-  const told = form.tell === 'now' ? await tellReporter(env, ref, now) : undefined;   // after the change is saved: a failing mail never undoes it
+  const told = form.tell === 'now' ? await tellOnce(env, ref, now, 'owner (told)') : undefined;   // after the change is saved: a failing mail never undoes it
   return {ok: true, state: spec.to, impact: columns.impact ?? row.impact, ...(told !== undefined ? {told} : {})};
 }
 

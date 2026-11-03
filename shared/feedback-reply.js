@@ -13,11 +13,13 @@ const PUBLIC_PR = new RegExp(`^${githubUrl(PUBLIC_REPO).replace(/[.]/g, '\\.')}/
 /** The PR number a card's link names when it can be matched by a release (a pull request of the public repo), else 0. */
 export const releasePr = url => Number(String(url || '').match(PUBLIC_PR)?.[1]) || 0;
 const WHEN = ['now', 'release', 'never'];
-// Why (3/7 code review, 3 Nov 2026): one rule says when the app may show a reply, used by the list and by closing: the card is Fixed or Deferred, it was told, and the person has not closed this telling.
-const VISIBLE = "state IN ('fixed', 'deferred') AND told LIKE 'app%' AND seen_at = '' AND ref != ''";
+const FIXED_STATES = ['fixed', 'released'];   // both read as "fixed" to the reporter: Released only adds that the build shipped
+export const TOLD_ERROR = 'app, error: not confirmed';
+// Why (3/7 code review, 3 Nov 2026): one rule says when the app may show a reply, used by the list and by closing: the card is Fixed, Released or Deferred, it was told, and the person has not closed this telling.
+const VISIBLE = "state IN ('fixed', 'released', 'deferred') AND told LIKE 'app%' AND seen_at = '' AND ref != ''";
 
 /** What the reporter reads: the owner's own words, else the default sentence for the state. */
-export const replyText = row => clip(row.tell_message, 300) || (row.state === 'fixed' ? defaultFixed(row.fixed_in) : DEFAULT_DEFER);
+export const replyText = row => clip(row.tell_message, 300) || (FIXED_STATES.includes(row.state) ? defaultFixed(row.fixed_in) : DEFAULT_DEFER);
 /** The reporter's own words, cut for the reply ("You wrote on 28 Oct: …"): never more than 80 characters. */
 export const excerptOf = text => { const one = clip(text, 400); return one.length > 80 ? `${one.slice(0, 79).trimEnd()}…` : one; };
 
@@ -35,6 +37,17 @@ export function fixedColumns(input) {
   return {tell, columns: {fixed_in: fixedIn, pr_url: pr, tell_mode: tell, tell_message: clip(input.message, 300), tell_mail: input.mail ? 1 : 0, told: tell === 'release' ? 'pending' : ''}};
 }
 
+/**
+ * The columns "Mark as released" sets, or {error}: the version it shipped in (required) and, for a card still waiting for a release, the claim that lets the reporter be told now
+ * (`told = 'telling'`, the same claim a release call makes). A card already told keeps what it was told. `row` = the card as read first.
+ */
+export function releasedColumns(input, row) {
+  const version = typeof input.version === 'string' ? clip(input.version, 400) : '';
+  if (!version || !VERSION.test(version)) return {error: 'Type the version it shipped in: letters, digits, dots and dashes only.'};
+  const waits = row.told === 'pending';
+  return {tell: waits ? 'now' : undefined, detail: version, columns: {fixed_in: version, told: waits ? 'telling' : row.told}};
+}
+
 /** The columns the Acknowledge + defer form sets, or {error}. `tell`: false = do not tell (default true). */
 export function deferColumns(input) {
   const linear = clip(input.linear_url, 400);
@@ -49,10 +62,10 @@ export function deferColumns(input) {
  */
 export async function tellReporter(env, ref, now = new Date(), who = 'owner (told)') {
   const row = await env.STATS.prepare('SELECT at, text, contact, state, fixed_in, tell_message, tell_mail FROM feedback WHERE ref = ?').bind(ref).first();
-  if (!row || !['fixed', 'deferred'].includes(row.state)) return '';
+  if (!row || ![...FIXED_STATES, 'deferred'].includes(row.state)) return '';
   let told = 'app';
   if (row.tell_mail && validAddress(row.contact)) {
-    const sent = await send(env, 'feedback-update', row.contact, {kind: row.state === 'fixed' ? 'fixed' : 'deferred', on: String(row.at).slice(0, 10), excerpt: excerptOf(row.text), message: replyText(row)}, {now});
+    const sent = await send(env, 'feedback-update', row.contact, {kind: FIXED_STATES.includes(row.state) ? 'fixed' : 'deferred', on: String(row.at).slice(0, 10), excerpt: excerptOf(row.text), message: replyText(row)}, {now});
     told = sent.ok ? 'app+mail' : `app, mail refused: ${sent.reason}`;
   } else if (row.tell_mail) told = 'app, mail refused: not an address';
   await env.STATS.batch([
@@ -62,10 +75,21 @@ export async function tellReporter(env, ref, now = new Date(), who = 'owner (tol
   return told;
 }
 
+/**
+ * tellReporter that never throws, for a card already claimed (`told = 'telling'`, or blank for "now"): a store error after the mail left is written on the card and is never put back to
+ * waiting, which would mail twice. -> the told value, or TOLD_ERROR.
+ */
+export async function tellOnce(env, ref, now, who) {
+  try { return await tellReporter(env, ref, now, who); } catch {
+    await env.STATS.prepare("UPDATE feedback SET told = ?, told_at = ? WHERE ref = ? AND told IN ('telling', '')").bind(TOLD_ERROR, now.toISOString(), ref).run().catch(() => {});
+    return TOLD_ERROR;
+  }
+}
+
 /** The replies the app has not shown yet for this install, newest first, at most 5: {ref, on, excerpt, kind, fixedIn, message}. */
 export async function repliesFor(db, install) {
   const rows = (await db.prepare(`SELECT ref, at, text, state, fixed_in, tell_message FROM feedback WHERE install = ? AND ${VISIBLE} ORDER BY told_at DESC LIMIT 5`).bind(install).all()).results || [];
-  return rows.map(row => ({ref: row.ref, on: String(row.at).slice(0, 10), excerpt: excerptOf(row.text), kind: row.state === 'fixed' ? 'fixed' : 'deferred', fixedIn: row.fixed_in, message: replyText(row)}));
+  return rows.map(row => ({ref: row.ref, on: String(row.at).slice(0, 10), excerpt: excerptOf(row.text), kind: FIXED_STATES.includes(row.state) ? 'fixed' : 'deferred', fixedIn: row.fixed_in, message: replyText(row)}));
 }
 
 /** The person closed a reply in the app. -> true when a row changed. */

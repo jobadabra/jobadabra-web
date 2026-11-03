@@ -29,7 +29,7 @@ function add(e, state = 'new', text = 'Setup stops at step 2 (invented)') {
   return ref;
 }
 const stateOf = (e, ref) => e.STATS.db.prepare('SELECT state, state_note, impact FROM feedback WHERE ref = ?').get(ref);
-const BODY = {fixed: {when: 'never'}, defer: {tell: false}, dismiss: {}, false_positive: {note: 'works as designed'}, reopen: {}, delete: {}, impact: {impact: 'high'}};
+const BODY = {fixed: {when: 'never'}, released: {version: '0.9.12'}, defer: {tell: false}, dismiss: {}, false_positive: {note: 'works as designed'}, reopen: {}, delete: {}, impact: {impact: 'high'}};
 
 test('every state x action pair does what the table says: allowed ones end in the table\'s state, the others are refused with 409 and change nothing', async () => {
   for (const state of STATES) for (const action of Object.keys(ACTIONS)) {
@@ -49,6 +49,8 @@ test('every state x action pair does what the table says: allowed ones end in th
 test('the menu offers exactly the actions the table allows for the state', () => {
   assert.deepEqual(actionsFor('new'), ['fixed', 'defer', 'dismiss', 'false_positive', 'delete']);
   assert.deepEqual(actionsFor('deferred'), ['fixed', 'reopen', 'delete']);
+  assert.deepEqual(actionsFor('fixed'), ['released', 'reopen', 'delete']);
+  assert.deepEqual(actionsFor('released'), ['reopen', 'delete']);
   assert.deepEqual(actionsFor('dismissed'), ['reopen', 'delete']);
   assert.deepEqual(actionsFor('ai_running'), []);
 });
