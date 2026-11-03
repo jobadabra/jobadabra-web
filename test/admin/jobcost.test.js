@@ -23,7 +23,8 @@ test('totals cover 30 days per job, per day and against the billed days', () => 
 });
 
 test('the page names jobs, shows the groups and says when there is no billing report', () => {
-  const html = page(rows.slice(0, 3), []);
+  // Why (3 Nov 2026): the rows are dated 3-4 Oct and page() defaulted to the real clock, so on 3 Nov they fell out of the 30-day window and the test went red for every PR; the clock is pinned.
+  const html = page(rows.slice(0, 3), [], [], '', now);
   assert.match(html, /Central scout/);
   assert.match(html, /Discovery/);
   assert.match(html, /no billing report yet/);
