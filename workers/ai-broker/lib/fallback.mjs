@@ -66,7 +66,7 @@ async function notify(storage, env, day, engine, fetcher, refusal = null) {
   });
   if (send) await fetcher(`https://api.telegram.org/bot${env.BRAIN_BOT_TOKEN}/sendMessage`, {method: 'POST', signal: AbortSignal.timeout(5000),
     headers: {'content-type': 'application/json'}, body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID,
-      text: refusal ? `CI fallback: Claude refused (${refusal}). Trying Free AI. /admin/ai/costs` : `CI fallback: ${engine === 'claude' ? 'Claude' : 'Free AI'} daily cap $${usd(caps(env)[engine])} reached (${day} UTC). ${engine === 'claude' ? 'Trying Free AI.' : 'Further judgments go grey.'} /admin/growth/ai-cost`})}).catch(() => {});
+      text: refusal ? `CI fallback: Claude refused (${refusal}). Trying Free AI. /admin/ai/costs` : `CI fallback: ${engine === 'claude' ? 'Claude' : 'Free AI'} daily cap $${usd(caps(env)[engine])} reached (${day} UTC). ${engine === 'claude' ? 'Trying Free AI.' : 'Further judgments go grey.'} /admin/ai/costs`})}).catch(() => {});
 }
 
 function messageBody(body, maxTokens) {
