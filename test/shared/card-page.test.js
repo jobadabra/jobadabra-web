@@ -12,7 +12,7 @@ test('no api/ file builds its own HTML page: every one goes through shared/card-
   const own = readdirSync(API).filter(f => f.endsWith('.js') && /<!doctype html/i.test(readFileSync(new URL(f, API), 'utf8')));
   assert.deepEqual(own, [], 'build the page with cardPage() from shared/card-page.js');
   const users = readdirSync(API).filter(f => f.endsWith('.js') && readFileSync(new URL(f, API), 'utf8').includes('cardPage('));
-  assert.ok(['linkedin.js', 'mail-unsub.js', 'notion.js'].every(f => users.includes(f)), `positive control: ${users}`);
+  assert.ok(['linkedin.js', 'linkedin-import.js', 'mail-unsub.js', 'notion.js'].every(f => users.includes(f)), `positive control: ${users}`);
 });
 
 test('the card has the logo, the title, light and dark, and no outside loads', async () => {
