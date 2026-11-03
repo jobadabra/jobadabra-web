@@ -33,7 +33,7 @@ button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid
 .form{margin-top:10px;display:grid;gap:8px;font-size:13px;border-top:1px solid var(--line);padding-top:10px}.form label{display:grid;gap:3px;color:var(--muted);font-size:12px}.form .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .form input[type=text],.form select{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 9px;width:100%}.form .check{display:flex;gap:6px;align-items:center;color:var(--text);font-size:13px}
 .form button{font:inherit;font-size:13px;font-weight:600;color:var(--text);background:transparent;border:1px solid var(--line);border-radius:8px;padding:5px 12px;cursor:pointer}.form .go{border-color:var(--amber);color:var(--amber)}
-a.chip{text-decoration:none}.told{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chip.warn{color:var(--amber);border-color:var(--amber)}
+a.chip{text-decoration:none}.told{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.told .chip{white-space:normal;border-radius:14px}   /* a long verdict ("mail refused: …") wraps inside the card instead of being cut at 390px */.chip.warn{color:var(--amber);border-color:var(--amber)}
 .toast[hidden]{display:none}.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 14px;font-size:13px;display:flex;gap:12px;align-items:center;z-index:9;box-shadow:0 8px 24px #000a}
 .toast button{font:inherit;font-size:13px;font-weight:600;color:var(--amber);background:transparent;border:0;cursor:pointer}.toast.bad{border-color:var(--red)}
 </style></head><body><main>
@@ -147,6 +147,8 @@ const toldChips = row => {
   if (row.fixed_in) box.append(el('span', 'chip', 'in ' + row.fixed_in));
   for (const [url, label] of [[row.pr_url, 'PR ↗'], [row.linear_url, 'Linear ↗']]) if (url) { const a = el('a', 'chip', label); a.href = url; a.target = '_blank'; a.rel = 'noopener'; box.append(a); }
   if (row.told === 'pending') box.append(el('span', 'chip deferred', '⏳ waiting for a release to tell the reporter'));
+  else if (row.told === 'telling') box.append(el('span', 'chip deferred', '⏳ telling the reporter…'));   // a release call is mid-way; a card that stays so was cut off
+  else if (/^app, error/.test(row.told)) box.append(el('span', 'chip warn', '⚠ told in the app; whether the e-mail went was not saved'));
   else if (/^app, mail refused/.test(row.told)) box.append(el('span', 'chip warn', '⚠ told in the app; ' + row.told.slice(5)));
   else if (row.told) box.append(el('span', 'chip fixed', row.told === 'app+mail' ? '✉ told in the app and by e-mail' : '✉ told in the app'));
   if (row.seen_at) box.append(el('span', 'chip', '👁 seen by the reporter'));

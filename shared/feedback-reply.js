@@ -7,6 +7,10 @@ export const DEFAULT_DEFER = 'Thank you: we saw this and parked it for later. If
 export const defaultFixed = fixedIn => (fixedIn ? `Thank you: this is fixed in ${fixedIn}.` : 'Thank you: this is fixed and will arrive in the next update.');
 const clip = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const PR = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|commit)\/\w+$/, LINEAR = /^https:\/\/linear\.app\/[\w./-]+$/, VERSION = /^[\w.+ -]{0,40}$/, PR_MAX = 200;
+// Why (5/7 code review, 3 Nov 2026): a release's PR list is the public repo's, so only a pull request of that repo can be matched by number. Another repo's PR with the same number, or a commit, must not.
+const PUBLIC_PR = /^https:\/\/github\.com\/(?:jobadabra|GarryOne)\/jobadabra\/pull\/(\d+)$/;
+/** The PR number a card's link names when it can be matched by a release (a pull request of the public repo), else 0. */
+export const releasePr = url => Number(String(url || '').match(PUBLIC_PR)?.[1]) || 0;
 const WHEN = ['now', 'release', 'never'];
 // Why (3/7 code review, 3 Nov 2026): one rule says when the app may show a reply, used by the list and by closing: the card is Fixed or Deferred, it was told, and the person has not closed this telling.
 const VISIBLE = "state IN ('fixed', 'deferred') AND told LIKE 'app%' AND seen_at = '' AND ref != ''";
@@ -25,6 +29,8 @@ export function fixedColumns(input) {
   if (!VERSION.test(fixedIn)) return {error: 'The version has letters, digits, dots and dashes only.'};
   if (pr && (pr.length > PR_MAX || !PR.test(pr))) return {error: 'The link is a GitHub pull request or commit, like https://github.com/jobadabra/jobadabra/pull/123.'};
   const tell = WHEN.includes(input.when) ? input.when : (fixedIn ? 'now' : 'release');
+  // Why (5/7 review): a release finds a fix by a public-repo PR number or by the version typed; any other link would wait for ever.
+  if (tell === 'release' && pr && !releasePr(pr) && !fixedIn) return {error: "A release can't find this link: use a pull request of the public repo, type the version, or leave the link out."};
   return {tell, columns: {fixed_in: fixedIn, pr_url: pr, tell_mode: tell, tell_message: clip(input.message, 300), tell_mail: input.mail ? 1 : 0, told: tell === 'release' ? 'pending' : ''}};
 }
 
@@ -40,7 +46,7 @@ export function deferColumns(input) {
  * Makes the reply visible to the app and sends the e-mail when the owner ticked it and the contact is an address. -> the `told` value written.
  * The mail goes through send(): it refuses (never throws) an unsubscribed or bounced address, mail switched off or the 6-a-day limit; that refusal is written on the card, the app reply still shows.
  */
-export async function tellReporter(env, ref, now = new Date()) {
+export async function tellReporter(env, ref, now = new Date(), who = 'owner (told)') {
   const row = await env.STATS.prepare('SELECT at, text, contact, state, fixed_in, tell_message, tell_mail FROM feedback WHERE ref = ?').bind(ref).first();
   if (!row || !['fixed', 'deferred'].includes(row.state)) return '';
   let told = 'app';
@@ -50,7 +56,7 @@ export async function tellReporter(env, ref, now = new Date()) {
   } else if (row.tell_mail) told = 'app, mail refused: not an address';
   await env.STATS.batch([
     env.STATS.prepare('UPDATE feedback SET told = ?, told_at = ?, seen_at = \'\' WHERE ref = ?').bind(told, now.toISOString(), ref),
-    env.STATS.prepare('INSERT INTO feedback_log (at, ref, who, action, detail) VALUES (?, ?, ?, ?, ?)').bind(now.toISOString(), ref, 'owner (told)', 'tell', told.slice(0, 200)),
+    env.STATS.prepare('INSERT INTO feedback_log (at, ref, who, action, detail) VALUES (?, ?, ?, ?, ?)').bind(now.toISOString(), ref, who, 'tell', told.slice(0, 200)),
   ]);
   return told;
 }

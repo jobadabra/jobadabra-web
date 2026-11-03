@@ -30,6 +30,8 @@ export const seeds = {
     // PR 3/7: a fixed one (told in the app and by e-mail, seen), one fixed and waiting for a release, one deferred with its Linear link
     for (const [ref, text, state, hours, cols] of [['cccc000011112222', 'Setup stops at Connect LinkedIn and the button does nothing.', 'fixed', 80, {fixed_in: '0.9.12', pr_url: 'https://github.com/jobadabra/jobadabra/pull/3012', told: 'app+mail', seen_at: 'x'}],
       ['dddd000011112222', 'The tracker loses my column order after an update.', 'fixed', 90, {pr_url: 'https://github.com/jobadabra/jobadabra/pull/3020', told: 'pending', tell_mode: 'release'}],
+      ['ffff000011112222', 'The CV import drops my last job.', 'fixed', 70, {fixed_in: '0.9.13 (beta)', pr_url: 'https://github.com/jobadabra/jobadabra/pull/3031', told: 'app, error: not confirmed'}],
+      ['9999000011112222', 'Reminders fire an hour late after the clocks change.', 'fixed', 60, {fixed_in: '0.9.13 (beta)', pr_url: 'https://github.com/jobadabra/jobadabra/pull/3033', told: 'telling'}],
       ['eeee000011112222', 'Would be nice to export the tracker as CSV.', 'deferred', 100, {linear_url: 'https://linear.app/jobadabra/issue/JOB-142', told: 'app, mail refused: unsubscribed', impact: 'low'}]]) {
       const at = new Date(Date.now() - hours * 3600000).toISOString();
       await env.STATS.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, notified, state, state_at, fixed_in, pr_url, linear_url, told, tell_mode, seen_at, impact) VALUES (?, ?, ?, '0.5.70', 'darwin', ?, 'ana@example.com', ?, 'sent', ?, ?, ?, ?, ?, ?, ?, ?, ?)")
