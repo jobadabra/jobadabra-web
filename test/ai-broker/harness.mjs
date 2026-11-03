@@ -12,7 +12,7 @@ const runtime = 'data:text/javascript;base64,' + Buffer.from(`
 const source = readFileSync(workerUrl, 'utf8')
   .replaceAll("'@cloudflare/containers'", JSON.stringify(runtime))
   .replace(/from '(\.{1,2}\/[^']+)'/g, (_, ref) => `from '${new URL(ref, workerUrl).href}'`);
-export const {CodexBroker} = await import('data:text/javascript;base64,' + Buffer.from(source + `\n//# sourceURL=${workerUrl.href}`).toString('base64'));
+export const {CodexBroker, default: entry} = await import('data:text/javascript;base64,' + Buffer.from(source + `\n//# sourceURL=${workerUrl.href}`).toString('base64'));
 export const day = Date.parse('2026-10-30T23:59:59Z');
 export const body = {prompt: 'offline test', tier: 'small'};
 export const success = () => new Response(JSON.stringify({reply: 'ok', tokens: {input: 2, output: 3}, ms: 1}));
