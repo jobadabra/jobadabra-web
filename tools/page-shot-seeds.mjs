@@ -22,6 +22,11 @@ export const seeds = {
     // 3 Nov 2026 (feedback actions): the first one rated high, the second medium; a dismissed one and a false positive with its reason, older, so the filters have something to show
     await env.STATS.prepare("UPDATE feedback SET impact = 'high' WHERE ref = 'a1b2c3d4e5f60718'").run();
     await env.STATS.prepare("UPDATE feedback SET impact = 'medium' WHERE ref = '0f0e0d0c0b0a0908'").run();
+    // PR 2/7: the AI's suggestions: one the owner already agreed with, one still waiting for his decision, one where the AI was unavailable
+    await env.STATS.prepare("UPDATE feedback SET impact_ai = 'high', impact_why = 'blocks setup for this person' WHERE ref = 'a1b2c3d4e5f60718'").run();
+    await env.STATS.prepare("UPDATE feedback SET impact_ai = 'low', impact_why = 'praise with a timing remark' WHERE ref = '0f0e0d0c0b0a0908'").run();
+    await env.STATS.prepare("UPDATE feedback SET impact_ai = 'medium', impact_why = 'real problem, a workaround exists' WHERE ref = '1122334455667788'").run();
+    await env.STATS.prepare("UPDATE feedback SET impact_why = 'AI unavailable: 4006: daily free allocation used', impact_tries = 1 WHERE ref = 'aaaa000011112222'").run();
     for (const [ref, text, state, note, hours] of [['aaaa000011112222', 'asdf test test', 'dismissed', '', 30], ['bbbb000011112222', 'Why does the app not open my own browser profile?', 'false_positive', 'Works as designed: it uses its own profile', 52]]) {
       const at = new Date(Date.now() - hours * 3600000).toISOString();
       await env.STATS.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, notified, state, state_at, state_note) VALUES (?, ?, ?, '0.5.70', 'darwin', ?, '', ?, 'sent', ?, ?, ?)")
