@@ -6,7 +6,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {feedback} from '../../api/feedback.js';
 import {act} from '../../shared/feedback-actions.js';
-import {AI_PER_DAY, MAX_TRIES, SYSTEM, messageOf, parseSuggestion, retryImpact, suggestImpact} from '../../shared/feedback-impact.js';
+import {AI_PER_DAY, MAX_TRIES, SYSTEM, kindOfFailure, messageOf, parseSuggestion, retryImpact, suggestImpact} from '../../shared/feedback-impact.js';
 
 const CASES = JSON.parse(readFileSync(new URL('../fixtures/feedback-impact-cases.json', import.meta.url), 'utf8')).cases;
 
@@ -108,9 +108,13 @@ test('the owner\'s rating is the final one and its log line says what the AI had
 
 test('past the day\'s cap of tried rows no more calls are made (the shared free neurons are kept), and a retry racing the first attempt counts once', async () => {
   const asked = [], e = env({AI: replay(asked)});
-  for (let i = 0; i < AI_PER_DAY; i++) e.STATS.db.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, impact_tries) VALUES ('2026-11-03T08:00:00Z', '2026-11-03', 'i', '1', 'x', 't', '', ?, 1)").run(`ffff${String(i).padStart(12, '0')}`);
-  assert.equal(await suggestImpact(e, add(e), new Date('2026-11-03T10:00:00Z')), 'skipped');
+  // Counted by when the call was made, not by the day the feedback arrived: these rows are from older days but were asked today.
+  for (let i = 0; i < AI_PER_DAY; i++) e.STATS.db.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, impact_tries, impact_at) VALUES ('2026-10-30T08:00:00Z', '2026-10-30', 'i', '1', 'x', 't', '', ?, 1, '2026-11-03T08:00:00.000Z')").run(`ffff${String(i).padStart(12, '0')}`);
+  const held = add(e);
+  assert.equal(await suggestImpact(e, held, new Date('2026-11-03T10:00:00Z')), 'skipped');
   assert.equal(asked.length, 0);
+  assert.deepEqual(rowOf(e, held), {impact: '', impact_ai: '', impact_why: 'AI unavailable: daily cap reached, it tries again tomorrow', impact_tries: 0});   // told on the card, no try used
+  assert.equal(await suggestImpact(e, held, new Date('2026-11-04T10:00:00Z')), 'suggested', 'the next day it is asked again');
   const slow = env({AI: replay()}), ref = add(slow);
   const [a, b] = await Promise.all([suggestImpact(slow, ref), suggestImpact(slow, ref)]);
   assert.equal(rowOf(slow, ref).impact_tries, 1, `${a}/${b}: one attempt counted once`);
@@ -122,4 +126,27 @@ test('the daily retry also covers a deferred or fixed message still without a su
   e.STATS.db.prepare("UPDATE feedback SET state = 'dismissed' WHERE ref = ?").run(dismissed);
   assert.equal(await retryImpact(e, now), 1);
   assert.equal(rowOf(e, deferred).impact_ai, 'high'); assert.equal(rowOf(e, dismissed).impact_ai, '');
+});
+
+test('when the AI refuses every row of the daily retry, the cause is named, the owner is told once a day, and the run throws; a mixed run does not', async () => {
+  assert.equal(kindOfFailure('4006: you have used up your daily free allocation'), 'limit');
+  assert.equal(kindOfFailure('429 too many requests'), 'rate');
+  assert.equal(kindOfFailure('boom'), 'other');
+  const kv = new Map(), told = [];
+  const fetcher = async (url, init) => { told.push(JSON.parse(init.body).text); return new Response('{}'); };
+  const refused = reason => env({AI: {run: async () => { throw new Error(reason); }}, BRAIN_BOT_TOKEN: 'secret-token', BRAIN_CHAT_ID: '42', WAITLIST: {get: async key => kv.get(key) ?? null, put: async (key, value) => { kv.set(key, value); }}});
+  const now = new Date('2026-11-04T05:30:00Z');
+  for (const reason of ['4006: daily free allocation used', '429 slow down']) {
+    kv.clear(); told.length = 0;
+    const e = refused(reason); add(e); add(e, CASES[1].text);
+    await assert.rejects(retryImpact(e, now, 20, fetcher), new RegExp(`AI skipped \\((limit|rate)\\) for all 2 rows: ${reason.slice(0, 8)}`));
+    assert.equal(told.length, 1); assert.match(told[0], /AI skipped \((limit|rate)\).*2 feedback messages.*rate them by hand/);
+    assert.doesNotMatch(told[0], /secret-token/);
+    e.STATS.db.prepare('UPDATE feedback SET impact_tries = 0').run();
+    await assert.rejects(retryImpact(e, now, 20, fetcher));
+    assert.equal(told.length, 1, 'the same cause is told once a day');
+  }
+  const mixed = env({AI: {run: async (m, input) => { if (input.messages[1].content.includes(CASES[1].text)) throw new Error('boom'); return {response: JSON.stringify(CASES[0].answer)}; }}});
+  add(mixed); add(mixed, CASES[1].text);
+  assert.equal(await retryImpact(mixed, now, 20, fetcher), 1, 'one answered: no outage, no throw');
 });

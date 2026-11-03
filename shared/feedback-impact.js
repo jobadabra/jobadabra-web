@@ -33,17 +33,24 @@ export function parseSuggestion(raw) {
 /** The user message the model rates: the words, the version and the screen, nothing that names the person. */
 export const messageOf = row => `Version ${row.version}${row.screen ? `, screen "${row.screen}"` : ''}.\n<message>\n${String(row.text).slice(0, 2000).replace(/<\/?message>/gi, '')}\n</message>`;
 
+/** What went wrong, in a word the owner can act on: 'limit' (the free allocation or a quota), 'rate' (429), else 'other'. */
+export const kindOfFailure = why => (/4006|allocation|quota|limit|capacity/i.test(why) ? 'limit' : /429|rate/i.test(why) ? 'rate' : 'other');
+
 /**
- * Asks the AI about one feedback and writes the answer on its row. -> 'suggested' | 'failed' | 'skipped' (already done, out of tries, or no AI binding).
- * Never throws: the caller is the endpoint's background work and the daily job.
+ * Asks the AI about one feedback and writes the answer on its row. -> {result: 'suggested' | 'failed' | 'skipped', why?}; 'skipped' = already done, out of tries or no AI binding.
+ * Never throws: the caller is the endpoint's background work and the daily job. Every try is stamped (`impact_at`) so the daily cap counts calls by when they were made;
+ * a row held back by the cap says so on its card without using a try.
  */
-export async function suggestImpact(env, ref, now = new Date()) {
+export async function attemptImpact(env, ref, now = new Date()) {
   try {
-    if (!env.STATS || !env.AI) return 'skipped';
+    if (!env.STATS || !env.AI) return {result: 'skipped'};
     const row = await env.STATS.prepare('SELECT text, version, screen, impact_ai, impact_tries FROM feedback WHERE ref = ?').bind(ref).first();
-    if (!row || row.impact_ai || row.impact_tries >= MAX_TRIES) return 'skipped';
-    const today = now.toISOString().slice(0, 10);
-    if ((await env.STATS.prepare('SELECT COUNT(*) AS n FROM feedback WHERE day = ? AND impact_tries > 0').bind(today).first())?.n >= AI_PER_DAY) return 'skipped';
+    if (!row || row.impact_ai || row.impact_tries >= MAX_TRIES) return {result: 'skipped'};
+    const dayStart = `${now.toISOString().slice(0, 10)}T00:00:00.000Z`;
+    if ((await env.STATS.prepare('SELECT COUNT(*) AS n FROM feedback WHERE impact_at >= ?').bind(dayStart).first())?.n >= AI_PER_DAY) {
+      await env.STATS.prepare('UPDATE feedback SET impact_why = ? WHERE ref = ? AND impact_ai = \'\'').bind('AI unavailable: daily cap reached, it tries again tomorrow', ref).run();
+      return {result: 'skipped', why: 'daily cap'};
+    }
     const model = modelFor('feedback_impact', env);
     let answer = null, why = '';
     try {
@@ -55,19 +62,47 @@ export async function suggestImpact(env, ref, now = new Date()) {
       record(env, 'feedback-impact', 'other', model, usage, costUsd(model, usage), now).catch(() => {});   // the cost page shows it under "other"; never part of the verdict
     } catch (error) { why = String(error?.message || 'the call failed').slice(0, 100); }
     // Compare-and-set on the tries read above: a retry racing the first attempt counts once and the later writer changes nothing.
-    await env.STATS.prepare('UPDATE feedback SET impact_ai = ?, impact_why = ?, impact_tries = impact_tries + 1 WHERE ref = ? AND impact_ai = \'\' AND impact_tries = ?')
-      .bind(answer?.impact || '', answer ? answer.why : `AI unavailable: ${why}`, ref, row.impact_tries).run();
+    await env.STATS.prepare('UPDATE feedback SET impact_ai = ?, impact_why = ?, impact_tries = impact_tries + 1, impact_at = ? WHERE ref = ? AND impact_ai = \'\' AND impact_tries = ?')
+      .bind(answer?.impact || '', answer ? answer.why : `AI unavailable: ${why}`, now.toISOString(), ref, row.impact_tries).run();
     if (!answer) console.log('feedback impact not suggested', why);
-    return answer ? 'suggested' : 'failed';
-  } catch (error) { console.log('feedback impact', error.message); return 'failed'; }
+    return answer ? {result: 'suggested'} : {result: 'failed', why};
+  } catch (error) { console.log('feedback impact', error.message); return {result: 'failed', why: String(error.message).slice(0, 100)}; }
 }
 
-/** The daily retry: new feedback from the last 7 days that still has no suggestion and fewer than 3 tries, oldest first, at most `limit`. -> how many were suggested */
-export async function retryImpact(env, now = new Date(), limit = 20) {
+/** attemptImpact's verdict word only. */
+export const suggestImpact = async (env, ref, now = new Date()) => (await attemptImpact(env, ref, now)).result;
+
+// One Telegram message to the owner (the Brain bot the feedback itself uses), at most once per UTC day per cause so an outage is one message, not one a run. -> true when sent
+async function tellOutage(env, text, kind, now, fetcher = fetch) {
+  if (!(env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID)) return false;
+  const key = `fbimpact:outage:${now.toISOString().slice(0, 10)}:${kind}`;
+  if (env.WAITLIST && await env.WAITLIST.get(key).catch(() => null)) return false;
+  try {
+    const response = await fetcher(`https://api.telegram.org/bot${env.BRAIN_BOT_TOKEN}/sendMessage`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text, disable_web_page_preview: true})});
+    if (!response.ok) return false;
+  } catch { return false; }
+  await env.WAITLIST?.put(key, '1', {expirationTtl: 2 * 86400}).catch(() => {});
+  return true;
+}
+
+/**
+ * The daily retry: new feedback from the last 7 days that still has no suggestion and fewer than 3 tries, oldest first, at most `limit`. -> how many were suggested.
+ * Why (3 Nov 2026, the site rule "an AI job must never fail silently", Gitar on #339): when the AI refused EVERY row of a run, the cause is named, the owner is told on Telegram once a day per cause,
+ * and the run throws so the cron is logged as failed; the fallback that needs no AI is the owner's own rating (the card says "AI unavailable: <cause>").
+ */
+export async function retryImpact(env, now = new Date(), limit = 20, fetcher = fetch) {
   if (!env.STATS || !env.AI) return 0;
   const from = new Date(now.getTime() - RETRY_DAYS * 86400000).toISOString().slice(0, 10);
   const rows = (await env.STATS.prepare("SELECT ref FROM feedback WHERE day >= ? AND ref != '' AND impact_ai = '' AND impact_tries < ? AND impact = '' AND state NOT IN ('dismissed', 'false_positive') ORDER BY at LIMIT ?").bind(from, MAX_TRIES, limit).all()).results || [];
-  let done = 0;
-  for (const {ref} of rows) if (await suggestImpact(env, ref, now) === 'suggested') done++;
+  let done = 0, failed = 0, last = '';
+  for (const {ref} of rows) {
+    const {result, why} = await attemptImpact(env, ref, now);
+    if (result === 'suggested') done++; else if (result === 'failed') { failed++; last = why || last; }
+  }
+  if (failed && !done) {
+    const kind = kindOfFailure(last);
+    await tellOutage(env, `⚠️ AI skipped (${kind}): the AI could not suggest an impact for ${failed} feedback message${failed === 1 ? '' : 's'}. Last answer: ${last}. You can still rate them by hand on /admin/growth/feedback.`, kind, now, fetcher);
+    throw new Error(`feedback impact: AI skipped (${kind}) for all ${failed} rows: ${last}`);
+  }
   return done;
 }
