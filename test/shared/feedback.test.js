@@ -39,9 +39,20 @@ test('a feedback without the app version, the platform or the install id is refu
     }
   }
   assert.equal((await send(e, {...good, install: undefined})).status, 400);
+  for (const odd of [{}, ['0.5.70'], 123, true]) for (const field of ['version', 'platform']) assert.equal((await send(e, {...good, [field]: odd})).status, 400, `${field}=${JSON.stringify(odd)}`);
   assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM feedback').get().n, 0, 'nothing stored');
   assert.equal((await send(e, {...good, contact: ''})).status, 200);
   assert.equal((await send(e, {...good, contact: undefined})).status, 200);
+});
+
+test('a refused feedback costs nothing: before the daily limit, no Telegram message, no file stored', async () => {
+  const e = env(), sent = [];
+  for (let i = 0; i < 10; i++) assert.equal((await send(e, good)).status, 200);
+  sent.length = 0;
+  const answer = await send(e, {...good, platform: '', screenshot: 'data:image/jpeg;base64,/9j/4AAQ'}, sent);
+  assert.equal(answer.status, 400, 'not 429: the check comes before the limit');
+  assert.equal(sent.length, 0);
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM feedback').get().n, 10);
 });
 
 test('empty text or a bad install id is refused; 10 a day per install', async () => {

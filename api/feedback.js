@@ -65,8 +65,8 @@ export async function feedback(request, env, fetcher = fetch, now = new Date(), 
   const install = clip(body.install, 64);
   if (!text || !/^[\w-]{8,64}$/.test(install)) return Response.json({ok: false, error: 'give a message'}, {status: 400});
   // Why (owner, 3 Nov 2026: "this should be mandatory for every feedback sent"): every row says which build and which system it came from, so a bug can be reproduced and an answer can be matched
-  // to the build that fixes it. An app older than 3 Nov 2026 (#3021) sends no platform and is told to update; the e-mail stays optional.
-  const version = clip(body.version, 30).trim(), platform = clip(body.platform, 40).trim();
+  // to the build that fixes it. Text only (a number or an object is not a version); the e-mail stays optional. Every app build sends both, so this refuses only a caller that is not the app.
+  const version = typeof body.version === 'string' ? clip(body.version, 30).trim() : '', platform = typeof body.platform === 'string' ? clip(body.platform, 40).trim() : '';
   if (!version || !platform) return Response.json({ok: false, error: 'give the app version and platform: update the app and try again'}, {status: 400});
   const day = now.toISOString().slice(0, 10);
   const {n} = await env.STATS.prepare('SELECT COUNT(*) AS n FROM feedback WHERE day = ? AND install = ?').bind(day, install).first() || {n: 0};
