@@ -102,28 +102,33 @@ test('weekly resets preserve daily reservations; token completions never count c
   assert.equal(callsToday(m, 'drift', driftDay), 1);
 });
 
-test('every lane may use the week up to 100%: refused at 100, allowed at 99.9', () => {
+// Owner, 3 Nov 2026 ("Busy = next engine + PR reserve"): scheduled, bench and drift stop at 70% of the Codex week so PR checks keep 30%; PR checks go to 100% as before.
+const CAP = {pr: 100, scheduled: 70, bench: 70, drift: 70};
+
+test('PR checks may use the week up to 100%; scheduled, bench and drift stop at 70% (the 30% PR reserve): refused at the cap, allowed just below', () => {
   for (const lane of ['pr', 'scheduled', 'bench', 'drift']) {
-    const fresh = newMeter(2000000000);
-    const below = record(newMeter(2000000000), lane, 99.9 * TOKENS_PER_PERCENT, 1);
-    const full = record(newMeter(2000000000), lane, 100 * TOKENS_PER_PERCENT, 1);
+    const cap = CAP[lane], fresh = newMeter(2000000000);
+    const below = record(newMeter(2000000000), lane, (cap - 0.1) * TOKENS_PER_PERCENT, 1);
+    const full = record(newMeter(2000000000), lane, cap * TOKENS_PER_PERCENT, 1);
     assert.deepEqual(allow(lane, below, null), {ok: true}, `${lane}: own share below cap`);
-    assert.deepEqual(allow(lane, full, null), {ok: false, why: `budget:own-share 100.0% of 100% (${lane})`});
-    assert.deepEqual(allow(lane, fresh, 99.9), {ok: true}, `${lane}: week below cap`);
-    assert.deepEqual(allow(lane, fresh, 100), {ok: false, why: `budget:week 100% of 100% (${lane})`});
-    assert.deepEqual(allow(lane, below, 99.9), {ok: true}, `${lane}: both below cap`);
+    assert.deepEqual(allow(lane, full, null), {ok: false, why: `budget:own-share ${cap.toFixed(1)}% of ${cap}% (${lane})`});
+    assert.deepEqual(allow(lane, fresh, cap - 0.1), {ok: true}, `${lane}: week below cap`);
+    assert.deepEqual(allow(lane, fresh, cap), {ok: false, why: `budget:week ${cap}% of ${cap}% (${lane})`});
+    assert.deepEqual(allow(lane, below, cap - 0.1), {ok: true}, `${lane}: both below cap`);
     assert.deepEqual(allow(lane, fresh, null), {ok: true}, `${lane}: no week reading yet`);
   }
+  assert.equal(allow('pr', newMeter(2000000000), 71).ok, true, 'a PR check at 71% of the week still runs');
+  assert.deepEqual(allow('scheduled', newMeter(2000000000), 71), {ok: false, why: 'budget:week 71% of 70% (scheduled)'}, 'scheduled work at 71% is passed on');
 });
 
 // Owner's goal, 30 Oct 2026 (a hand beta, green): /health read whole week 32%, broker tokens 43,241,035; the seed ratio called that 60.06% and refused every scheduled call.
-test('own share never exceeds the whole-week reading: a 100.1% seed estimate is allowed at 99.9% whole-week use and refused at 100%', () => {
-  const m = record(newMeter(2000000000), 'scheduled', 100.1 * TOKENS_PER_PERCENT, 1);
-  assert.equal(ownSharePct(m), 100.1, 'by the seed alone the broker reads over 100%');
+test('own share never exceeds the whole-week reading: a seed estimate over the cap is allowed while the whole week is below the cap, and refused once the week reaches it', () => {
   for (const lane of ['pr', 'scheduled', 'bench', 'drift']) {
-    assert.deepEqual(allow(lane, m, 99.9), {ok: true}, lane);
-    assert.deepEqual(allow(lane, m, 100), {ok: false, why: `budget:own-share 100.0% of 100% (${lane})`});
-    assert.deepEqual(allow(lane, m, null), {ok: false, why: `budget:own-share 100.1% of 100% (${lane})`}, 'no whole-week reading yet: the seed estimate stands');
+    const cap = CAP[lane], m = record(newMeter(2000000000), lane, (cap + 0.1) * TOKENS_PER_PERCENT, 1);
+    assert.equal(ownSharePct(m), cap + 0.1, 'by the seed alone the broker reads over the cap');
+    assert.deepEqual(allow(lane, m, cap - 0.1), {ok: true}, lane);
+    assert.deepEqual(allow(lane, m, cap), {ok: false, why: `budget:own-share ${cap.toFixed(1)}% of ${cap}% (${lane})`});
+    assert.deepEqual(allow(lane, m, null), {ok: false, why: `budget:own-share ${(cap + 0.1).toFixed(1)}% of ${cap}% (${lane})`}, 'no whole-week reading yet: the seed estimate stands');
   }
 });
 

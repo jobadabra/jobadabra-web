@@ -19,6 +19,14 @@ const validUsage = usage => usage && ['input_tokens', 'output_tokens'].every(k =
 /** Whether a paid/capped engine (ledger key `claude` = the Anthropic API, or `free-ai`) is configured; no allowance is invented for Free AI. */
 export const apiConfigured = (engine, env) => engine === 'claude' ? Boolean(env.ANTHROPIC_API_KEY) : Boolean(env.AI && freeCap(env));
 
+/** Whether a paid/capped engine is configured and today's spend plus holds are still under its cap (`claude` = the Anthropic API, `free-ai`). Reads only; the step itself reserves. */
+export async function underCap(storage, env, engine) {
+  const cap = caps(env)[engine];
+  if (!cap || !apiConfigured(engine, env)) return false;
+  const state = await storage.get(`fallback:${dayOf()}`) || fresh();
+  return state.spent[engine] + state.held[engine] < cap;
+}
+
 /** Whether an exhausted Codex call has a configured fallback. */
 export const fallbackEnabled = env => apiConfigured('claude', env) || apiConfigured('free-ai', env);
 

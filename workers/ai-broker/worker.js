@@ -8,6 +8,7 @@ import {laneOf} from './lib/lanes.mjs';
 import {allow, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
 import {refuseReply} from './lib/guard.mjs';
 import {slots} from './lib/queue.mjs';
+import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
 import {modelOf, validEffort, weightOf, EFFORTS} from './lib/tiers.mjs';
 import {exhausted, fallbackToday, newNote, apiPrecheck, apiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
 import {chainOf, configured, recordOutcome, engineHealth, CHOICES} from './lib/engines.mjs';
@@ -39,6 +40,7 @@ export class CodexBroker extends Container {
   static outboundByHost = Object.fromEntries(HOSTS.map(h => [h, pass]));
   gate = slots(PARALLEL);
   claudeGate = slots(CLAUDE_PARALLEL);   // Why (1 Nov 2026): one Claude CLI call peaks near 210 MB (measured) and the container has 1 GiB, so at most 3 at once, and each also holds one of the 4 shared slots
+  busyMs = BUSY_MS;   // how long a call that may pass on waits for a Claude slot (lib/busy.mjs); a test shortens it
   limits = null;   // the last whole-week reading from Codex: {usedPercent, resetsAt}
 
   // Start (and every restart after a sleep): put the stored login back into CODEX_HOME.
@@ -127,24 +129,35 @@ export class CodexBroker extends Container {
     });
     if (!verdict.ok && !verdict.ranOut) return json(429, {why: verdict.why});   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
     const note = newNote(), ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note}, day = new Date(Date.now()).toISOString().slice(0, 10), skipped = [];
-    const skip = async (engine, why, counted = true, detail = '') => { skipped.push({engine, why, ...(detail ? {detail} : {})}); if (why === 'failed') await recordPerf(this.ctx.storage, env, engine, false); return counted ? recordOutcome(this.ctx.storage, day, engine, why === 'ran-out' ? 'ranOut' : 'failed') : null; };
+    let busyPassed = false, held = null;   // busyPassed: Claude's slots were full for too long and the call went on; held: the last refusal of an engine it went on to
+    const skip = async (engine, why, counted = true, detail = '') => { skipped.push({engine, why, ...(detail ? {detail} : {})}); if (why === 'busy') busyPassed = true; if (why === 'failed') await recordPerf(this.ctx.storage, env, engine, false); return counted ? recordOutcome(this.ctx.storage, day, engine, {'ran-out': 'ranOut', busy: 'busy'}[why] ?? 'failed') : null; };
+    const send = async (engine, reply, started) => {
+      await recordOutcome(this.ctx.storage, day, engine, reply.ok ? 'ok' : 'failed', Date.now() - started);
+      if (reply.ok || reply.status === 502) await recordPerf(this.ctx.storage, env, engine, reply.ok);   // a real answer or a broken run; a refusal, a lost login or a 4xx says nothing about the engine
+      // Why (1 Nov 2026, owner: CI jobs "need to be aware" which model answers, models behave differently): a reply names its engine and model, and `fellBack` lists the engines that were tried first and did not answer, with the reason.
+      const fell = skipped.filter(entry => !(entry.engine === engine && entry.why === 'busy'));   // Claude answering after its busy turn did answer: fellBack lists only engines that did not
+      return reply.ok && fell.length ? json(200, {...(await reply.json()), fellBack: fell}) : reply;
+    };
+    const waitMs = chain.includes('claude') && configured('claude', env) && await mayPassOn({chain, body, env, storage: this.ctx.storage, verdict}) ? this.busyMs : undefined;   // undefined = wait for a Claude slot as long as it takes
     for (const engine of chain) {
       const started = Date.now();
       let reply = null;
       if (engine === 'codex') { reply = await this.codexStep(lane, body, model, verdict, later.length > 0, chain[0] === 'codex'); if (!reply) await skip(engine, 'ran-out'); }
-      else if (engine === 'claude') reply = await this.claudeStep(lane, body, skip);
+      else if (engine === 'claude') reply = await this.claudeStep(lane, body, skip, waitMs);
       else if (engine === 'claude-api' || engine === 'free-ai') {
         reply = (!body.search && apiPrecheck(body)) || await apiStep(engine === 'claude-api' ? 'claude' : 'free-ai', ctx);
         if (!reply && !body.search && configured(engine, env)) await skip(engine, 'unavailable');
       }
       if (!reply) continue;
       // Why (1 Nov 2026, Gitar on #289): an engine that sits BEFORE Codex and answers badly (refused, truncated, invalid JSON) must not end the chain while Codex has not run; after Codex a refusal stays the last-resort answer it always was. A 400 (empty prompt) is nobody's answer to retry.
-      if (!reply.ok && reply.status !== 400 && chain.indexOf(engine) < chain.indexOf('codex')) { await skip(engine, 'bad-answer'); continue; }
-      await recordOutcome(this.ctx.storage, day, engine, reply.ok ? 'ok' : 'failed', Date.now() - started);
-      if (reply.ok || reply.status === 502) await recordPerf(this.ctx.storage, env, engine, reply.ok);   // a real answer or a broken run; a refusal, a lost login or a 4xx says nothing about the engine
-      // Why (1 Nov 2026, owner: CI jobs "need to be aware" which model answers, models behave differently): a reply names its engine and model, and `fellBack` lists the engines that were tried first and did not answer, with the reason.
-      if (reply.ok && skipped.length) return json(200, {...(await reply.json()), fellBack: skipped});
-      return reply;
+      // Why (3 Nov 2026): the same once Claude was busy and the call went on: Free AI's refusal (an image it cannot take, invalid JSON) is not the end while Claude, which would have answered, has not run; it is kept (held) and returned only if Claude cannot answer either.
+      if (!reply.ok && reply.status !== 400 && (chain.indexOf(engine) < chain.indexOf('codex') || busyPassed)) { if (busyPassed) held = reply; await skip(engine, 'bad-answer'); continue; }
+      return send(engine, reply, started);
+    }
+    if (busyPassed) {   // Claude's turn again, now at the back of the line and with no deadline: no engine behind it answered, and waiting for it beats an error
+      const started = Date.now(), reply = await this.claudeStep(lane, body, skip);
+      if (reply) return send('claude', reply, started);
+      if (held) return held;
     }
     if (body.only === true) {
       if (chain[0] === 'free-ai' || chain[0] === 'claude-api') return apiFinish(env, note);   // Why (Gitar on #296): their own reasons stay: fallback:search-unsupported, fallback:unavailable, the 429 day cap
@@ -190,14 +203,19 @@ export class CodexBroker extends Container {
 
   // The Claude subscription's step: a Response when it answered (or refused a token-shaped reply), null when it is not configured, backing off, out of allowance (waits for the reset the CLI reports) or failed.
   // Why (1 Nov 2026): only measured signals say "ran out" (the CLI's own rate_limit_event or a limit message); an unknown failure is a plain failure and the chain moves on. An invalid token is shown in /health and sent to Telegram once a day.
-  async claudeStep(lane, body, skip) {
+  // `waitMs` (set only for a call that may pass on, lib/busy.mjs): how long to wait for a free slot; past it the step is skipped as `busy` and nothing was sent to the container. Undefined = wait as long as it takes.
+  async claudeStep(lane, body, skip, waitMs) {
     const env = this.brokerEnv, storage = this.ctx.storage;
     if (!env.CLAUDE_CODE_OAUTH_TOKEN) return null;   // no token = not configured (search is Claude's too since 2 Nov 2026: the WebSearch tool)
     const now = Date.now(), state = (await storage.get('claude:state')) || {};
     if ((state.invalidUntil || 0) > now) { skip('claude', 'token-invalid', false); return null; }
     if ((state.limitUntil || 0) > now) { skip('claude', 'ran-out', false); return null; }
     const model = CLAUDE_MODELS[body.tier ?? 'mid'];
-    const priority = lane === 'drift' ? 'scheduled' : lane, releaseClaude = await this.claudeGate.acquire(priority), release = await this.gate.acquire(priority);
+    const priority = lane === 'drift' ? 'scheduled' : lane, waitStarted = Date.now();
+    const releaseClaude = await this.claudeGate.acquire(priority, waitMs);
+    if (!releaseClaude) { await skip('claude', 'busy'); return null; }
+    const release = await this.gate.acquire(priority, waitMs === undefined ? undefined : Math.max(0, waitMs - (Date.now() - waitStarted)));   // the 4 shared slots count against the same deadline
+    if (!release) { releaseClaude(); await skip('claude', 'busy'); return null; }
     try {
       const reply = await this.containerFetch('http://c/claude', {method: 'POST', body: JSON.stringify({prompt: body.prompt, schema: body.schema, images: body.images, model, ...(body.search === true ? {search: true} : {})})});
       let answer;
