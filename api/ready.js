@@ -72,7 +72,7 @@ async function clear(env, install, id, jobs, now) {
   return changed.meta?.changes || 0;
 }
 
-// What the nightly run cost, on the owner's /admin/growth/ai-cost beside the other scheduled jobs (job id 'ready-fill').
+// What the nightly run cost, on the owner's /admin/ai/costs beside the other scheduled jobs (job id 'ready-fill').
 export async function reportNight(env, row, now) {
   const usd = row.cost_micro / 1e6, calls = (await env.STATS.prepare('SELECT COUNT(*) AS n FROM ready_jobs WHERE batch = ?').bind(row.id).first()).n;
   await env.STATS.prepare(`INSERT INTO ai_cost_runs (job, run_id, day, at, usd, calls, repo, provider) VALUES ('ready-fill', ?, ?, ?, ?, ?, '', 'anthropic')

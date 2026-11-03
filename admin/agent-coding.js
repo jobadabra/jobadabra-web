@@ -44,7 +44,19 @@ export function cleanSdlc(card) {
   }
   return {layers, phases: tally(card.phases, PHASES), bugs: count(card.bugs)};
 }
-const CLEAN = {gate: cleanGate, ci: cleanCi, sdlc: cleanSdlc};
+// One day of the CI Agents upload (tools/ci-agents-stats.mjs, 3 Nov 2026; shown on /admin/ai/agents and /admin/ai/steps): per agent and AI step its fixed words, state, last runs and 30-day counts, every one clamped; an unknown word becomes the quiet default.
+export function cleanAgents(card) {
+  if (!card || typeof card !== 'object' || !Array.isArray(card.agents)) return null;
+  const pick = (value, list, fallback) => (list.includes(value) ? value : fallback), counts = (source, keys) => Object.fromEntries(keys.map(key => [key, count(source?.[key])]));
+  const agents = card.agents.slice(0, 30).map(item => ({id: label(item?.id), name: label(item?.name), issuesOnly: item?.issuesOnly === true, starts: label(item?.starts), acts: label(item?.acts),
+    engine: pick(item?.engine, ['broker', 'api-key', 'free', 'workers-ai'], 'broker'), today: pick(item?.today, ['loop', 'one-shot'], 'one-shot'), state: pick(item?.state, ['on', 'idle', 'off'], 'idle'),
+    runs: /^[grsc.]{0,8}$/.test(item?.runs) ? item.runs : '', lastRun: DAY.test(item?.lastRun) ? item.lastRun : '',
+    ...(item?.prs ? {prs: counts(item.prs, ['opened', 'merged', 'closed', 'open'])} : {}), ...(item?.issues ? {issues: counts(item.issues, ['opened', 'closed'])} : {})})).filter(item => item.id && item.name);
+  const steps = (Array.isArray(card.steps) ? card.steps : []).slice(0, 60).map(item => ({name: label(item?.name), file: label(item?.file), repo: pick(item?.repo, ['jobadabra', 'jobadabra-web', 'jobadabra-lab'], 'jobadabra'),
+    engine: pick(item?.engine, ['broker', 'api-key', 'free', 'workers-ai'], 'broker'), ...(item?.product === true ? {product: true} : {}), ...(item?.state ? {state: pick(item.state, ['on', 'idle', 'off'], 'idle'), runs: /^[grsc.]{0,8}$/.test(item.runs) ? item.runs : '', lastRun: DAY.test(item.lastRun) ? item.lastRun : ''} : {})})).filter(item => item.name && item.file);
+  return agents.length ? {agents, steps} : null;
+}
+const CLEAN = {gate: cleanGate, ci: cleanCi, sdlc: cleanSdlc, agents: cleanAgents};
 const DAY = /^\d{4}-\d\d-\d\d$/;
 
 export async function ingest(request, env, now = new Date()) {

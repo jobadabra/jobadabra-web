@@ -62,7 +62,7 @@ function row(job, now, summary = null) {
   return `<tr class="${job.state === 'red' ? 'red' : ''}"><td><b><a href="${url}">${esc(job.name || job.file)}</a></b><div class="muted small">${esc(job.about)}</div></td><td><span class="repo">${esc(job.repo.split('/').pop())}</span></td>
 <td>${job.schedule.map(esc).join('<br>')}<div class="muted small">${job.next ? `next ${esc(whenWords(job.next, now))}` : ''}${esc(sourceNote(job))}</div></td>
 <td>${chip(job)}<div class="muted small">${last ? `${esc(stamp(last.at, now))}${last.mins ? ` · ${esc(num(last.mins))} min` : ''}` : ''}</div></td><td>${dots(job)}</td><td>${nightCell(mine, id)}</td><td class="num">${num(job.billedMin)}</td>
-<td>${job.ai ? '<a href="/admin/growth/ai-cost">ai-cost →</a>' : '<span class="muted">no AI</span>'}</td></tr>${detailHtml(mine, COLUMNS, id, REPORT_ONLY)}`;
+<td>${job.ai ? '<a href="/admin/ai/costs">ai-cost →</a>' : '<span class="muted">no AI</span>'}</td></tr>${detailHtml(mine, COLUMNS, id, REPORT_ONLY)}`;
 }
 const STATES = [['all', 'All'], ['red', 'Red'], ['green', 'Green'], ['off', 'Disabled']];
 const CSS = `.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}.tile b{display:block;font-size:30px;margin:4px 0;font-variant-numeric:tabular-nums}.tile.bad b{color:#e5484d}.tile.warn b{color:#e0a43a}

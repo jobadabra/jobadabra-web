@@ -29,7 +29,7 @@ const num = (value, fallback) => (Number(value) > 0 ? Number(value) : fallback);
 export const monthStopUsd = env => num(env.FREE_AI_MONTH_STOP_USD, LIMITS.monthStopUsd);
 export const trialUsd = env => num(env.FREE_AI_TRIAL_USD, LIMITS.trialUsd);
 export const allowanceOf = env => (env.FREE_AI_NEURONS === 'off' ? Infinity : num(env.FREE_AI_NEURONS, FREE_NEURONS_PER_DAY));
-// Every line in force: wrangler.toml's vars over the defaults above. The route enforces these and /admin/growth/ai-cost shows them (26 Oct 2026:
+// Every line in force: wrangler.toml's vars over the defaults above. The route enforces these and /admin/ai/costs shows them (26 Oct 2026:
 // the page compared an install's day against the $0.30 default while $0.50 was enforced, and showed 140%).
 export const limitsOf = (env = {}) => ({...LIMITS, trialUsd: trialUsd(env), monthStopUsd: monthStopUsd(env), perMinute: num(env.FREE_AI_INSTALL_MINUTE_CALLS, LIMITS.perMinute),
   installDayUsd: num(env.FREE_AI_INSTALL_DAY_USD, LIMITS.installDayUsd), installMonthUsd: num(env.FREE_AI_INSTALL_MONTH_USD, LIMITS.installMonthUsd),
@@ -136,7 +136,7 @@ async function alertOnce(env, kv, day, before, after, fetcher) {
   if (before >= line || after < line || !env.BRAIN_BOT_TOKEN || !env.BRAIN_CHAT_ID || await kv.get(`freeai:alerted:${day}`)) return;
   await kv.put(`freeai:alerted:${day}`, '1', {expirationTtl: 2 * 86400});
   await fetcher(`https://api.telegram.org/bot${env.BRAIN_BOT_TOKEN}/sendMessage`, {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text: `⚠️ <b>Free AI</b> spend today passed $${line / 1e6} (stops at $${num(env.FREE_AI_STOP_USD, LIMITS.stopUsd)}). /admin/growth/ai-cost has the steps.`, parse_mode: 'HTML'})}).catch(() => {});
+    body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text: `⚠️ <b>Free AI</b> spend today passed $${line / 1e6} (stops at $${num(env.FREE_AI_STOP_USD, LIMITS.stopUsd)}). /admin/ai/costs has the steps.`, parse_mode: 'HTML'})}).catch(() => {});
 }
 
 // One Telegram line the month the global spend first crosses the month alert line ($40 of the $60 stop).
@@ -145,7 +145,7 @@ async function monthAlert(env, kv, month, before, after, fetcher) {
   if (before >= line || after < line || !env.BRAIN_BOT_TOKEN || !env.BRAIN_CHAT_ID || await kv.get(`freeai:monalerted:${month}`)) return;
   await kv.put(`freeai:monalerted:${month}`, '1', {expirationTtl: 40 * 86400});
   await fetcher(`https://api.telegram.org/bot${env.BRAIN_BOT_TOKEN}/sendMessage`, {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text: `⚠️ <b>Free AI</b> spend this month passed $${line / 1e6} (stops at $${num(env.FREE_AI_MONTH_STOP_USD, LIMITS.monthStopUsd)}). /admin/growth/ai-cost has the installs.`, parse_mode: 'HTML'})}).catch(() => {});
+    body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text: `⚠️ <b>Free AI</b> spend this month passed $${line / 1e6} (stops at $${num(env.FREE_AI_MONTH_STOP_USD, LIMITS.monthStopUsd)}). /admin/ai/costs has the installs.`, parse_mode: 'HTML'})}).catch(() => {});
 }
 
 const isJson = text => { try { JSON.parse(text); return true; } catch { return false; } };
@@ -156,5 +156,5 @@ async function neuronAlert(env, kv, day, after, allowance, fetcher) {
   if (!Number.isFinite(allowance) || after < line || !env.BRAIN_BOT_TOKEN || !env.BRAIN_CHAT_ID || await kv.get(`freeai:neualert:${day}`)) return;
   await kv.put(`freeai:neualert:${day}`, '1', {expirationTtl: 2 * 86400});
   await fetcher(`https://api.telegram.org/bot${env.BRAIN_BOT_TOKEN}/sendMessage`, {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text: `⚠️ <b>Free AI</b> used 80% of today's free allowance (${Math.round(line)} of ${allowance} neurons). It stops at 100% until 00:00 UTC. /admin/growth/ai-cost has the day.`, parse_mode: 'HTML'})}).catch(() => {});
+    body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text: `⚠️ <b>Free AI</b> used 80% of today's free allowance (${Math.round(line)} of ${allowance} neurons). It stops at 100% until 00:00 UTC. /admin/ai/costs has the day.`, parse_mode: 'HTML'})}).catch(() => {});
 }

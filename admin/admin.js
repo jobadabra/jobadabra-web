@@ -8,7 +8,7 @@ import {findButton, PALETTE_SCRIPT, PALETTE_STYLE} from './palette.js';
 
 // Every page lives at /admin/{group}/{page} (owner, 27 Oct 2026: "normalize all the page urls"): the group's slug, then the menu name's; /admin itself is the home.
 // slug (when set) = the page's part when its menu name would spell it differently (E-mail → email). old = the page's earlier addresses, redirected (test/admin/admin-urls.test.js fails a page off the pattern, or an old address that no longer answers).
-export const GROUPS = [['Overview', '🧭'], ['Growth', '📈'], ['Form filling', '📝'], ['Job search', '🔎'], ['Testing', '🧪'], ['Agent Coding', '🤖', 'agents'], ['Schedules', '⏰'], ['Feedback', '💬']];
+export const GROUPS = [['Overview', '🧭'], ['Growth', '📈'], ['Form filling', '📝'], ['Job search', '🔎'], ['Testing', '🧪'], ['Agent Coding', '🤖', 'agents'], ['AI', '🧠'], ['Schedules', '⏰'], ['Feedback', '💬']];
 // A group's URL part: its name's, unless the entry says otherwise (owner, 1 Nov 2026: Agents became "Agent Coding" but its addresses stay /admin/agents/…, so no link breaks).
 export const groupSlug = ([name, , slug]) => slug || slugOf(name);
 export const slugOf = name => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -24,7 +24,6 @@ export const PAGES = [
   {path: '/admin/growth/monetization', group: 'Growth', question: 'Do free users turn into Pro buyers, and does the money cover the AI?', old: ['/admin/monetization'], name: 'Monetization', icon: '💰'},
   {path: '/admin/growth/insights', group: 'Growth', question: 'Does the app make good decisions for users?', old: ['/admin/intelligence/insights', '/admin/insights', '/intel'], name: 'Insights', icon: '🧠'},
   {path: '/admin/growth/brain', group: 'Growth', question: 'What did the product brain recommend, and what did we decide?', old: ['/admin/intelligence/brain', '/admin/brain'], slug: 'brain', name: 'Product Brain', icon: '🧠'},
-  {path: '/admin/growth/ai-cost', group: 'Growth', question: 'What does the AI cost us, and for which jobs?', old: ['/admin/intelligence/ai-cost', '/admin/ai-cost', '/ai-cost'], name: 'AI cost', icon: '💸'},
   {path: '/admin/form-filling/overview', group: 'Form filling', question: 'How is form filling doing: real users, our recorded sites, the benchmark and the learning loop?', old: ['/admin/form-overview'], name: 'Overview', icon: '🧭', overview: true},
   {path: '/admin/form-filling/real-users', group: 'Form filling', question: 'How well do real users\' forms get filled, and what still trips the filler?', title: 'Real Form Filling', old: ['/admin/real-form-filling', '/smart-form-filling'], name: 'Real users', icon: '📝'},
   {path: '/admin/form-filling/lab', group: 'Form filling', question: 'Is applying reliable on our recorded sites: do the sites we fixed stay fixed, and did a real site change?', title: 'Lab Form Filling', old: ['/admin/lab-form-filling', '/admin/applying'], name: 'Lab', icon: '🛡️'},
@@ -38,6 +37,10 @@ export const PAGES = [
   {path: '/admin/agents/overview', group: 'Agent Coding', question: 'How is engineering doing: build, self-healing, errors and AI cost at a glance, and where the time goes?', old: ['/admin/operations/overview', '/admin/operations'], name: 'Overview', icon: '⏱️', overview: true},
   {path: '/admin/agents/agent-coding', group: 'Agent Coding', question: 'How does our agent code, ship and verify, and where does it go in circles?', old: ['/admin/operations/agent-coding'], name: 'Agent coding', icon: '🧭'},
   {path: '/admin/agents/build-log', group: 'Agent Coding', question: 'What did we build each day, in plain words?', old: ['/admin/operations/build-log'], name: 'Build log', icon: '🗓️'},
+  {path: '/admin/ai/agents', group: 'AI', question: 'Which AI jobs on the CI act by themselves, and are they running and green?', name: 'Agents', icon: '🤖'},
+  {path: '/admin/ai/steps', group: 'AI', question: 'Which CI jobs use AI to answer a question, on which engine, and did they run?', slug: 'steps', name: 'AI steps', icon: '⚙️'},
+  {path: '/admin/ai/engines', group: 'AI', question: 'Which AI engine answers the CI today, and is any used up?', name: 'Engines', icon: '🔌'},
+  {path: '/admin/ai/costs', group: 'AI', question: 'What does the AI cost us, and for which jobs?', old: ['/admin/growth/ai-cost', '/admin/intelligence/ai-cost', '/admin/ai-cost', '/ai-cost'], name: 'Costs', icon: '💸'},
   {path: '/admin/testing/overview', group: 'Testing', question: 'Which ways do we look for bugs, and did each one run green last time?', name: 'Overview', icon: '🧭'},   // its own page (admin/testing-overview.js), not section-overview's tiles: no `overview` flag, so Testing's pages need no headline loaders
   {path: '/admin/testing/synthetic-monitoring', group: 'Testing', question: 'Is the live app and everything it depends on still working right now, even when nobody changes any code?', name: 'Synthetics', slug: 'synthetic-monitoring', icon: '📡'},
   {path: '/admin/testing/e2e', group: 'Testing', question: 'Where does our e2e fixing time go: which suites go red, and why?', old: ['/admin/operations/e2e'], name: 'E2E', icon: '🧪'},

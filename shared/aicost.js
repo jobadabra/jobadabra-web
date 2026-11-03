@@ -3,7 +3,7 @@
 import {digestOf} from './guard.js';
 
 export const ACTIONS = ['enrich', 'score', 'kit', 'prep', 'insight', 'mail', 'inbox', 'review', 'interview', 'interview_patterns', 'opportunity', 'added', 'import', 'scout', 'decide', 'tailor', 'cover_letter', 'answer', 'answer_review', 'web_search',
-  // The engine's other AI steps (26 Oct 2026: they had no name here, so 517 calls and $0.22 showed as one 'other' row on /admin/growth/ai-cost).
+  // The engine's other AI steps (26 Oct 2026: they had no name here, so 517 calls and $0.22 showed as one 'other' row on /admin/ai/costs).
   'places', 'title_triage', 'place_triage', 'place_vague', 'place_reading', 'visit_reader', 'visit_reader_second', 'visit_relevant', 'visit_filters', 'visit_unblock', 'visit_unblock_second',
   'role_ideas', 'role_counts', 'job_page_pick', 'field_redraft', 'few_jobs', 'board_queries'];
 const day = date => date.toISOString().slice(0, 10);
