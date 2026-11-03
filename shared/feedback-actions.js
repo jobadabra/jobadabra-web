@@ -2,7 +2,7 @@
 // is refused (409). Every change is written with its log line; nothing else in the site updates `feedback.state` or `feedback.impact`. Guarded by test/shared/feedback-actions.test.js.
 // Why (3 Nov 2026, owner: "offer some actions buttons for each feedback"): the list only grew; the owner needs to clear it, rate it and, later, answer the reporter.
 
-import {aiClosedColumns, aiColumns, aiEndColumns, aiGate, aiMergedColumns, aiPrColumns} from './feedback-ai.js';
+import {aiClosedColumns, aiColumns, aiEndColumns, aiGate, aiGuard, aiMergedColumns, aiPrColumns} from './feedback-ai.js';
 import {deferColumns, fixedColumns, releasedColumns, tellOnce} from './feedback-reply.js';
 
 export const STATES = ['new', 'dismissed', 'false_positive', 'deferred', 'ai_running', 'ai_pr', 'fixed', 'released'];
@@ -95,12 +95,13 @@ export async function act(env, input, who, now = new Date(), opts = {}) {
   const keys = Object.keys(columns), sets = keys.map(key => `, ${key} = ?`).join('');
   const detail = `${row.state} -> ${spec.to}${note || form.detail ? `: ${note || form.detail}` : ''}${form.tell ? ` (tell: ${form.tell})` : ''}`;
   // Why (5b code review, 3 Nov 2026): "Mark as released" decides whether to tell from the `told` it read, so the write also checks it: a card reopened and re-fixed with "never tell" in between is not told.
-  const guard = action === 'released' ? ' AND told = ?' : '', guardArgs = action === 'released' ? [row.told] : [];
+  const caps = action === 'ai' ? aiGuard(now) : null;   // the caps are part of the write itself, so two clicks at once cannot both pass
+  const guard = action === 'released' ? ' AND told = ?' : caps ? caps.sql : '', guardArgs = action === 'released' ? [row.told] : caps ? caps.args : [];
   if (!await commit(env.STATS.prepare(`UPDATE feedback SET state = ?, state_at = ?, state_note = ?${sets} WHERE ref = ? AND state = ?${guard}`).bind(spec.to, at, form.stateNote ?? (spec.note ? note : ''), ...keys.map(key => columns[key]), ref, row.state, ...guardArgs), detail)) return raced;
   if (action === 'ai') {   // the card is ai_running and logged; now the run. A start that fails sends the card straight back to new with the reason (never a card stuck "running").
     try { await opts.start(ref); } catch (error) {
       await act(env, {ref, action: 'ai_failed', why: `could not start the run: ${String(error.message || error).slice(0, 120)}`}, 'system', now, {trusted: true});
-      return refused(502, 'Could not start the AI run. The card is back to new; nothing was spent.');
+      return refused(502, 'Could not start the AI run. The card is back to new; no AI was used (the click still counts toward today\'s 3).');
     }
   }
   const told = form.tell === 'now' ? await tellOnce(env, ref, now, 'owner (told)') : undefined;   // after the change is saved: a failing mail never undoes it

@@ -36,7 +36,8 @@ export const aiEndColumns = failed => input => {
 };
 
 /** The AI's PR was merged: the card is Fixed, waiting for the release that carries it (the owner can press "Mark as released" with a version to tell the reporter now). */
-export const aiMergedColumns = () => ({columns: {told: 'pending', tell_mode: 'release', tell_mail: 0, ai_run: '', ai_run_url: ''}, detail: 'merged'});
+// Why (7/7 review, 3 Nov 2026): a card deferred first keeps the owner's deferral text in tell_message; the release would send it as the Fixed reply, so it is cleared with the rest of the tell settings.
+export const aiMergedColumns = () => ({columns: {told: 'pending', tell_mode: 'release', tell_mail: 0, tell_message: '', seen_at: '', ai_run: '', ai_run_url: ''}, detail: 'merged'});
 
 /** The PR was closed without a merge: back to new. */
 export const aiClosedColumns = () => ({columns: {pr_url: '', ai_run: '', ai_run_url: ''}, stateNote: '🤖 its PR was closed without merging', detail: 'closed'});
@@ -53,6 +54,15 @@ export async function aiGate(db, now = new Date()) {
   const today = await db.prepare("SELECT COUNT(*) AS n FROM feedback_log WHERE action = 'ai' AND at >= ?").bind(since).first();
   if ((today?.n || 0) >= DAILY_RUNS) return {ok: false, status: 429, error: `That is ${DAILY_RUNS} AI runs today: the limit. Try again tomorrow.`};
   return {ok: true};
+}
+
+/**
+ * The two caps again, as the tail of the `ai` UPDATE's WHERE (Why, 7/7 review, 3 Nov 2026: aiGate reads, the UPDATE only compared this one card's state, so two quick clicks on two cards both passed).
+ * The UPDATE and its log line are one batch, so a second click's count sees the first's line. -> {sql, args}
+ */
+export function aiGuard(now = new Date()) {
+  return {sql: " AND NOT EXISTS (SELECT 1 FROM feedback WHERE state = 'ai_running') AND (SELECT COUNT(*) FROM feedback_log WHERE action = 'ai' AND at >= ?) < ?",
+    args: [`${now.toISOString().slice(0, 10)}T00:00:00.000Z`, DAILY_RUNS]};
 }
 
 /** Sends every `ai_running` card that has not answered in STALE_MS back to new, with the reason and a log line (who: system). -> how many. */

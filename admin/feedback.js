@@ -3,7 +3,7 @@
 import {viewer, isOwner, remember} from '../shared/auth.js';
 import {feedbackList, undelivered, fileOf} from '../shared/feedback.js';
 import {act, actionsFor, historyOf} from '../shared/feedback-actions.js';
-import {startRun} from '../shared/feedback-ai.js';
+import {expireStale, startRun} from '../shared/feedback-ai.js';
 import {validAddress} from '../shared/mail.js';
 import {PAGE} from './feedback-page.js';
 
@@ -21,6 +21,8 @@ export async function view(request, env, now = new Date()) {
   }
   if (url.searchParams.has('json')) {
     const owner = await isOwner(request, env);
+    // Why (7/7 review, 3 Nov 2026): a run that never answered was only sent back to new when someone clicked Send to AI again; the page polls, so it now clears itself within the minute.
+    await expireStale(env.STATS, now).catch(() => 0);
     const rows = (await feedbackList(env.STATS, 90, now).catch(() => [])).map(row => ({...row, actions: owner ? actionsFor(row.state) : [], mailable: validAddress(row.contact)}));
     return Response.json({rows, canAct: owner, undelivered: await undelivered(env.STATS, 90, now).catch(() => 0), now: now.toISOString()}, {headers: {'Cache-Control': 'no-store'}});
   }

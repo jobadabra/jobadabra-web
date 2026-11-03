@@ -264,7 +264,7 @@ function paint() {
   if (sortBy === 'impact') shown = shown.slice().sort((a, b) => RANK[eff(a)] - RANK[eff(b)] || (a.at < b.at ? 1 : -1));
   const keyOf = row => row.ref || row.at + row.install, seen = new Set(known || []), first = known === null;
   list.replaceChildren(...(shown.length ? shown.map(row => {
-    const sig = [row.notified, row.shot, row.logs, row.page, row.profile, row.state, row.state_note, row.impact, row.impact_ai, row.impact_why, row.actions.join(), row.fixed_in, row.pr_url, row.linear_url, row.told, row.seen_at, canAct].join('|'), kept = cards.get(keyOf(row));
+    const sig = [row.notified, row.shot, row.logs, row.page, row.profile, row.state, row.state_note, row.impact, row.impact_ai, row.impact_why, row.actions.join(), row.fixed_in, row.pr_url, row.ai_run_url, row.linear_url, row.told, row.seen_at, canAct].join('|'), kept = cards.get(keyOf(row));
     let card = kept && kept.sig === sig ? kept.card : null;
     if (!card) { card = make(row); cards.set(keyOf(row), {sig, card}); }
     mark(card, !first && !seen.has(keyOf(row))); return card;

@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {brief, status} from '../../admin/feedback-ai.js';
-import {actRoute} from '../../admin/feedback.js';
+import {actRoute, view} from '../../admin/feedback.js';
 import {NOW, REPO, add, env, log, prUrl, row, signer} from '../shared/feedback-kit.js';
 
 const kit = await signer(), deps = {jwks: kit.jwks};
@@ -129,4 +129,13 @@ test('the owner\'s click starts feedback-ai.yml for that ref with the timers\' t
   const noToken = env({TIMERS_GITHUB_TOKEN: ''}), second = add(noToken);
   assert.equal((await post(noToken, {ref: second, action: 'ai'})).status, 503);
   assert.equal(row(noToken, second).state, 'new');
+});
+
+test('the page\'s own poll sends a run that never answered back to new, so a dead run cannot leave a card stuck', async () => {
+  const e = env(), ref = add(e, {state: 'ai_running', state_at: '2026-11-03T09:00:00.000Z'});
+  const answer = await view(new Request('https://x/admin/feedback/inbox?json=1', {headers: {Authorization: 'Bearer owner-key'}}), e, NOW);
+  const {rows} = await answer.json();
+  assert.equal(rows.find(r => r.ref === ref).state, 'new', 'the list already shows it as new');
+  assert.equal(row(e, ref).state_note, '🤖 failed: the run did not answer in an hour');
+  assert.deepEqual(log(e, ref).map(l => l.who), ['system']);
 });

@@ -83,7 +83,7 @@ test('when the run cannot be started the card goes straight back to new with the
   const e = env(), ref = add(e);
   const done = await click(e, ref, {}, {start: async () => { throw new Error('GitHub 404: workflow not found'); }});
   assert.equal(done.status, 502);
-  assert.match(done.error, /nothing was spent/);
+  assert.match(done.error, /no AI was used/);
   assert.deepEqual([row(e, ref).state, row(e, ref).state_note], ['new', '🤖 failed: could not start the run: GitHub 404: workflow not found']);
   assert.deepEqual(log(e, ref).map(l => l.action), ['ai', 'ai_failed']);
 });
@@ -132,4 +132,23 @@ test('the brief carries the words, version, platform, screen and only the ticked
   for (const secret of ['ana@example.com', 'install-aaaa-bbbb', 'PNG']) assert.ok(!text.includes(secret), `the brief must not carry ${secret}`);
   assert.deepEqual([body.text, body.version, body.platform, body.screen], ['Setup stops at step 2 (invented)', '0.9.1', 'darwin', 'Setup']);
   assert.equal(await briefOf(e, '0000000000000fff'), null);
+});
+
+test('two clicks that both read an empty gate cannot both start: the caps are part of the write (one at a time, 3 a day)', async () => {
+  const stale = e => ({...e.STATS, prepare: sql => (/COUNT\(\*\) AS n FROM feedback/.test(sql) ? {bind: () => ({first: async () => ({n: 0})}), first: async () => ({n: 0})} : e.STATS.prepare(sql))});
+  const e = env(), a = add(e), b = add(e), e2 = {...e, STATS: stale(e)};
+  assert.equal((await click(e2, a)).ok, true);
+  assert.equal((await click(e2, b)).status, 409, 'a second run while one goes, though the gate read said none');
+  assert.equal(row(e, b).state, 'new');
+  const f = env(), refs = [add(f), add(f), add(f), add(f)], f2 = {...f, STATS: stale(f)};
+  for (const ref of refs.slice(0, 3)) { assert.equal((await click(f2, ref)).ok, true); await act(f, {ref, action: 'ai_none', verdict: 'none', why: 'x'}, 'ai (run 1)', NOW, {trusted: true}); }
+  assert.equal((await click(f2, refs[3])).status, 409, 'the 4th of the day, though the gate read said 0 so far');
+  assert.equal(row(f, refs[3]).state, 'new');
+});
+
+test('a merged AI fix of a card that was deferred first does not reuse the deferral text as its Fixed reply', async () => {
+  const e = env(), ref = add(e, {state: 'ai_pr', pr_url: prUrl(3100), tell_message: 'parked for later', told: 'app', seen_at: '2026-11-03T10:00:00.000Z'});
+  assert.equal((await act(e, {ref, action: 'ai_merged'}, 'ai (PR 3100)', NOW, {trusted: true})).state, 'fixed');
+  const after = row(e, ref);
+  assert.deepEqual([after.tell_message, after.told, after.seen_at], ['', 'pending', '']);
 });
