@@ -28,6 +28,7 @@ const SAMPLES = {
   'digest': {matches, total: 3},
   'welcome': {confirmUrl: 'https://www.jobadabra.top/confirm?a=0123456789abcdef&t=abc'},
   'confirm-resend': {confirmUrl: 'https://www.jobadabra.top/confirm?a=0123456789abcdef&t=abc'},
+  'feedback-update': {kind: 'fixed', on: '2026-10-28', excerpt: 'Setup stops at Connect LinkedIn…', message: 'Thank you: this is fixed in 0.9.12.'},
   'trial-left': {left: 4},
   'trial-ending': {days: 2, pricingUrl: 'https://www.jobadabra.top/pricing'},
   'always-on-paused': {reason: 'trial-over', pricingUrl: 'https://www.jobadabra.top/pricing', pro: false},
