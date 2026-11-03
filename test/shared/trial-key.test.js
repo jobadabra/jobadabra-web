@@ -1,7 +1,6 @@
 // The repo key (JPT1.<handle>.<mac>) is what Always-on repos on GitHub hold: it proves WHICH install asks, carries no install id, and spends nothing.
-// Guard: security + money — a purpose-'ai' key (JPF1) copied into a user's repo can spend that install's Free AI budget, and /api/install-token mints an 'ai' token for any bare install id,
-// so the repo key must neither open an AI route nor reveal the install id. Only the trial status and the notify mail accept it.
-// Run: tools/site-run.sh node --test test/shared/trial-key.test.js
+// Guard: security + money — a purpose-'ai' key (JPF1) copied into a user's repo can spend that install's Free AI budget, so the repo key must neither open an AI route nor reveal the install id.
+// Only the trial status and the notify mail accept it.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
