@@ -6,7 +6,8 @@ const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/
 export const seeds = {
   feedback: async ({env}) => {   // /admin/growth/feedback (2 Nov 2026): one with a screenshot, logs, screen data and a profile snapshot, one text-only, one the bot refused (the red counter); the screenshot is a real app shot from the public tree
     const fs = await import('node:fs'), kept = new Map(), shot = fs.readFileSync('desktop/docs/ui/actions.jpg');
-    env.FEEDBACK_FILES = {put: async (key, value) => { kept.set(key, value); }, get: async key => (kept.has(key) ? {body: kept.get(key)} : null)};
+    env.FEEDBACK_FILES = {put: async (key, value) => { kept.set(key, value); }, get: async key => (kept.has(key) ? {body: kept.get(key)} : null),
+      list: async ({prefix}) => ({objects: [...kept.keys()].filter(key => key.startsWith(prefix)).map(key => ({key})), truncated: false}), delete: async keys => { for (const key of [].concat(keys)) kept.delete(key); }};
     const logs = ['2026-11-02 09:12:03 info  app v0.5.71 win32 10.0.19045', '2026-11-02 09:12:41 warn  setup  AI engine: not ready (no key)', '2026-11-02 09:12:42 error setup  Notion connect failed: 401', 'Authorization: <secret>'].join('\n');
     const pageData = JSON.stringify({screen: 'What we learned', questions: [{id: 'q-summary', wording: 'Summary', field: 'summary', value: 'Summary', verdict: 'saved'}]}, null, 1);
     const rows = [['a1b2c3d4e5f60718', 'win32', 'Settings', 'Setup stops at the AI step and nothing says why.', 'sent', 'jpg', 1, 5], ['0f0e0d0c0b0a0908', 'darwin', '', 'The kit is great, setup took 20 min.', 'sent', '', 0, 30], ['1122334455667788', 'win32', 'Actions', 'Find jobs does nothing after the update.', 'failed: 400 Bad Request: chat not found', '', 0, 50]];
@@ -17,6 +18,14 @@ export const seeds = {
       if (hasLogs) { kept.set(`feedback/${ref}/page.json`, pageData); kept.set(`feedback/${ref}/profile.json`, '{\n "details": {"role": "Product designer", "city": "Porto"}\n}'); }
       await env.STATS.prepare('INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, screen, shot, logs, page, profile, notified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(at, at.slice(0, 10), `install-${ref.slice(0, 8)}`, '0.5.71', platform, text, hasLogs ? 'ana@example.com' : '', ref, screen, shotType, hasLogs, hasLogs, hasLogs, notified).run();
+    }
+    // 3 Nov 2026 (feedback actions): the first one rated high, the second medium; a dismissed one and a false positive with its reason, older, so the filters have something to show
+    await env.STATS.prepare("UPDATE feedback SET impact = 'high' WHERE ref = 'a1b2c3d4e5f60718'").run();
+    await env.STATS.prepare("UPDATE feedback SET impact = 'medium' WHERE ref = '0f0e0d0c0b0a0908'").run();
+    for (const [ref, text, state, note, hours] of [['aaaa000011112222', 'asdf test test', 'dismissed', '', 30], ['bbbb000011112222', 'Why does the app not open my own browser profile?', 'false_positive', 'Works as designed: it uses its own profile', 52]]) {
+      const at = new Date(Date.now() - hours * 3600000).toISOString();
+      await env.STATS.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, notified, state, state_at, state_note) VALUES (?, ?, ?, '0.5.70', 'darwin', ?, '', ?, 'sent', ?, ?, ?)")
+        .bind(at, at.slice(0, 10), `install-${ref.slice(0, 8)}`, text, ref, state, at, note).run();
     }
   },
   website: async ({env}) => {   // made-up visitors and downloaders for /admin/growth/website (1 Nov 2026): 30 days, busiest 5 days ago, a quiet day after it; person ids are made up

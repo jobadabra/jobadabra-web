@@ -1,18 +1,41 @@
-// The owner's /admin/growth/feedback page: live, newest on top. Same key or cookie as /admin. Guarded by test/shared/feedback.test.js.
-import {viewer, remember} from '../shared/auth.js';
+// The owner's /admin/growth/feedback page: live, newest on top, with the actions on each message. Same key or cookie as /admin. The HTML is admin/feedback-page.js; the states are shared/feedback-actions.js.
+// Guarded by test/shared/feedback.test.js, feedback-files.test.js and test/admin/feedback-actions.test.js.
+import {viewer, isOwner, remember} from '../shared/auth.js';
 import {feedbackList, undelivered, fileOf} from '../shared/feedback.js';
+import {act, actionsFor, historyOf} from '../shared/feedback-actions.js';
+import {PAGE} from './feedback-page.js';
 
-// GET /feedback: the owner's live page (same key or cookie as /stats). It polls /feedback?json=1 every 10 s and puts
+// GET /feedback: the owner's live page (same key or cookie as /stats). It polls /feedback?json=1 every 60 s and puts
 // new messages on top, marked, so feedback can be read as it arrives. Everything is escaped on the page (textContent).
+// `canAct` is true only for the owner (guests read the list and see no buttons); `actions` per row is what the state table allows.
 export async function view(request, env, now = new Date()) {
   if (!await viewer(request, env) || !env.STATS) return new Response('Not found', {status: 404});
   const url = new URL(request.url);
   if (url.searchParams.has('key')) return remember(url, env, request);
+  if (url.searchParams.has('history')) {   // the owner's log of one feedback: who did what, when
+    if (!await isOwner(request, env)) return new Response('Not found', {status: 404});
+    const lines = await historyOf(env.STATS, url.searchParams.get('history')).catch(() => []);
+    return Response.json({lines: lines.map(line => `${String(line.at).slice(0, 16).replace('T', ' ')} UTC · ${line.who} · ${line.action}${line.detail ? ` · ${line.detail}` : ''}`)}, {headers: {'Cache-Control': 'no-store'}});
+  }
   if (url.searchParams.has('json')) {
-    const rows = await feedbackList(env.STATS, 90, now).catch(() => []);
-    return Response.json({rows, undelivered: await undelivered(env.STATS, 90, now).catch(() => 0), now: now.toISOString()}, {headers: {'Cache-Control': 'no-store'}});
+    const owner = await isOwner(request, env);
+    const rows = (await feedbackList(env.STATS, 90, now).catch(() => [])).map(row => ({...row, actions: owner ? actionsFor(row.state) : []}));
+    return Response.json({rows, canAct: owner, undelivered: await undelivered(env.STATS, 90, now).catch(() => 0), now: now.toISOString()}, {headers: {'Cache-Control': 'no-store'}});
   }
   return new Response(PAGE, {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'}});
+}
+
+// POST /admin/growth/feedback/act {ref, action, note?, impact?}: one action on one feedback, the owner only (guests and everyone else get a 404, as the page's other routes).
+// Why (3 Nov 2026): the cookie is SameSite=Strict and the body must be JSON, so a form on another site cannot send it. Every change is logged with who made it (shared/feedback-actions.js).
+export async function actRoute(request, env, now = new Date()) {
+  if (request.method !== 'POST' || !env.STATS || !await isOwner(request, env)) return new Response('Not found', {status: 404});
+  if (!(request.headers.get('Content-Type') || '').startsWith('application/json')) return Response.json({ok: false, error: 'Send JSON.'}, {status: 415});
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== 'object') return Response.json({ok: false, error: 'Send JSON.'}, {status: 400});
+  const byKey = request.headers.has('Authorization') || new URL(request.url).searchParams.has('key'), who = byKey ? 'owner (key)' : 'owner (session)';
+  const result = await act(env, body, who, now);
+  const {status = 200, ...answer} = result;
+  return Response.json(answer, {status, headers: {'Cache-Control': 'no-store'}});
 }
 
 // GET /admin/growth/feedback/file?ref=<16 hex>&kind=screen|logs|page|profile: one kept file, for the owner only (the same login as the page). Served as an inert type, never cached.
@@ -23,88 +46,3 @@ export async function file(request, env) {
   if (!object) return new Response('Not found', {status: 404, headers: {'Cache-Control': 'no-store'}});
   return new Response(object.body, {headers: {'Content-Type': kept.type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"}});
 }
-
-const PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex"><title>Feedback · Admin</title><link rel="icon" href="/favicon-32.png">
-<style>
-:root{--bg:#0b0d10;--card:#14181d;--line:#262c33;--text:#f4efe3;--muted:#8d949c;--amber:#f5b54a;--green:#5ec47a}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,sans-serif}
-main{max-width:820px;margin:0 auto;padding:24px 16px 48px}header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:16px}
-h1{margin:0;font-size:24px}a{color:var(--amber)}.muted{color:var(--muted)}.live{font-size:13px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-right:6px}
-.live.on .dot{background:var(--green);animation:pulse 2s infinite}@keyframes pulse{50%{opacity:.35}}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
-.card.fresh{border-color:var(--amber)}.meta{font-size:12px;color:var(--muted);margin-bottom:6px;display:flex;gap:10px;flex-wrap:wrap}
-.warn{color:var(--amber);font-weight:700}.shot{display:block;max-width:240px;max-height:160px;border:1px solid var(--line);border-radius:8px;margin-top:10px}
-.files{margin-top:10px;font-size:13px}.logs{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.4 ui-monospace,monospace;max-height:420px;overflow:auto;background:#0b0d10;border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:6px}
-.text{white-space:pre-wrap;overflow-wrap:anywhere}.reply{margin-top:8px;font-size:13px}.badge{color:var(--amber);font-weight:700}
-</style></head><body><main>
-<header><h1>💬 Feedback</h1><span class="muted"><span class="live" id="live"><span class="dot"></span><span id="state">connecting…</span></span></span></header>
-<p class="warn" id="alert" hidden></p>
-<div id="list"><p class="muted">Loading…</p></div>
-<script>
-const list = document.getElementById('list'), state = document.getElementById('state'), live = document.getElementById('live');
-let known = null;
-const make = row => {
-  const card = document.createElement('div'), meta = document.createElement('div'), text = document.createElement('div');
-  card.className = 'card'; meta.className = 'meta'; text.className = 'text';
-  const parts = [String(row.at).slice(0, 16).replace('T', ' ') + ' UTC', row.version + ' · ' + row.platform, 'install ' + String(row.install).slice(0, 8)];
-  for (const part of parts) { const s = document.createElement('span'); s.textContent = part; meta.append(s); }
-  text.textContent = row.text;
-  card.append(meta, text);
-  card.id = row.ref || '';
-  if (row.notified === 'sent') { /* delivered: nothing to say */ } else if (row.notified) {
-    const flag = document.createElement('div'); flag.className = 'warn reply';
-    flag.textContent = row.notified === 'off' ? '⚠ Telegram is not set up: you were not told about this one.' : '⚠ Not delivered to Telegram (' + row.notified.replace(/^failed: /, '') + ')';
-    card.append(flag);
-  }
-  if (row.ref && row.shot) {
-    const link = document.createElement('a'), img = document.createElement('img'), href = '/admin/growth/feedback/file?ref=' + encodeURIComponent(row.ref) + '&kind=screen';
-    link.href = href; link.target = '_blank'; link.rel = 'noopener'; img.className = 'shot'; img.alt = 'Screenshot of the app window'; img.loading = 'lazy'; img.src = href; link.append(img); card.append(link);
-  }
-  for (const [kind, flag, label] of [['logs', row.logs, 'Logs'], ['page', row.page, 'Screen data'], ['profile', row.profile, 'Profile snapshot (the person turned it on)']]) {
-    if (!(row.ref && flag)) continue;
-    const files = document.createElement('details'), summary = document.createElement('summary'), pre = document.createElement('pre');
-    files.className = 'files'; summary.textContent = label; pre.className = 'logs'; files.append(summary, pre);
-    files.addEventListener('toggle', async () => {
-      if (!files.open || pre.dataset.loaded) return;
-      pre.textContent = 'Loading…';
-      try { const r = await fetch('/admin/growth/feedback/file?ref=' + encodeURIComponent(row.ref) + '&kind=' + kind, {cache: 'no-store'}); pre.textContent = r.ok ? await r.text() : 'Gone (kept 90 days).'; pre.dataset.loaded = '1'; }
-      catch (error) { pre.textContent = 'Could not load this.'; }
-    });
-    card.append(files);
-  }
-  if (row.contact) { const reply = document.createElement('div'); reply.className = 'reply'; reply.textContent = '↩︎ ' + row.contact; card.append(reply); }
-  return card;
-};
-const cards = new Map();   // key -> {sig, card}: one card per message, kept across polls (an open Logs viewer and a loaded screenshot stay) and rebuilt only when what it shows changed (the delivery verdict is written after the row)
-const mark = (card, fresh) => {   // NEW lasts one poll: a decoration set on the kept card each time
-  card.classList.toggle('fresh', fresh);
-  const badge = card.querySelector('.badge');
-  if (!fresh) badge?.remove();
-  else if (!badge) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = 'NEW'; card.querySelector('.meta').prepend(b); }
-};
-async function refresh() {
-  try {
-    const response = await fetch('?json=1', {cache: 'no-store'});
-    if (!response.ok) throw new Error(response.status);
-    const {rows, undelivered} = await response.json();
-    const alert = document.getElementById('alert'); alert.hidden = !undelivered; alert.textContent = '⚠ ' + undelivered + ' feedback message' + (undelivered === 1 ? '' : 's') + ' did not reach your Telegram.';
-    const firstLoad = known === null, seen = new Set(known || []);
-    const keyOf = row => row.at + row.install, sigOf = row => [row.notified, row.shot, row.logs, row.page, row.profile].join('|');
-    const cardOf = row => {
-      const key = keyOf(row), kept = cards.get(key);
-      if (kept && kept.sig === sigOf(row)) return kept.card;
-      const card = make(row); cards.set(key, {sig: sigOf(row), card});
-      return card;
-    };
-    list.replaceChildren(...(rows.length ? rows.map(row => { const card = cardOf(row); mark(card, !firstLoad && !seen.has(keyOf(row))); return card; }) : [Object.assign(document.createElement('p'), {className: 'muted', textContent: 'No feedback yet.'})]));
-    known = rows.map(keyOf);
-    if (firstLoad && location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
-    state.textContent = 'live · ' + rows.length + ' message' + (rows.length === 1 ? '' : 's') + ' · updated ' + new Date().toLocaleTimeString();
-    live.classList.add('on');
-  } catch (error) { state.textContent = 'offline, retrying…'; live.classList.remove('on'); }
-}
-// Every 60 s while the tab is visible, and once when it becomes visible again (a timer that ignored a hidden tab kept reading D1 all night: 11 Oct 2026, test/poll-timers.test.js).
-refresh(); setInterval(() => { if (!document.hidden) refresh(); }, 60000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
-</script></main></body></html>`;

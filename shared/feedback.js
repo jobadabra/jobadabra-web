@@ -13,21 +13,21 @@ export const TEXT_FILES = {
 // The owner's list on /telemetry (key only): newest first, with the contact when one was given.
 export async function feedbackList(db, days = 30, now = new Date()) {
   const from = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
-  return ((await db.prepare('SELECT at, version, platform, install, text, contact, ref, screen, shot, logs, page, profile, notified FROM feedback WHERE day >= ? ORDER BY at DESC LIMIT 200')
+  return ((await db.prepare('SELECT at, version, platform, install, text, contact, ref, screen, shot, logs, page, profile, notified, state, state_at, state_note, impact FROM feedback WHERE day >= ? ORDER BY at DESC LIMIT 200')
     .bind(from).all()).results || []);
 }
 
-// The last feedback, for the product brain's signals (api/signals.js): newest first.
+// The last feedback, for the product brain's signals (api/signals.js): newest first, without what the owner dismissed or marked a false positive (3 Nov 2026: noise is not a signal).
 export async function recentFeedback(db, days = 30, now = new Date()) {
   const from = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
-  return ((await db.prepare('SELECT at, version, text, contact != \'\' AS canReply FROM feedback WHERE day >= ? ORDER BY at DESC LIMIT 30')
+  return ((await db.prepare('SELECT at, version, text, contact != \'\' AS canReply FROM feedback WHERE day >= ? AND state NOT IN (\'dismissed\', \'false_positive\') ORDER BY at DESC LIMIT 30')
     .bind(from).all()).results || []);
 }
 
-// How many of the last `days` days' feedback did not reach the owner's Telegram (a refused send, or no bot secrets): the counter on /admin. Old rows ('') are not counted.
+// How many of the last `days` days' still-open feedback did not reach the owner's Telegram (a refused send, or no bot secrets): the counter on /admin. Old rows ('') are not counted.
 export async function undelivered(db, days = 30, now = new Date()) {
   const from = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
-  const row = await db.prepare("SELECT COUNT(*) AS n FROM feedback WHERE day >= ? AND (notified LIKE 'failed%' OR notified = 'off')").bind(from).first();
+  const row = await db.prepare("SELECT COUNT(*) AS n FROM feedback WHERE day >= ? AND state IN ('new', 'ai_running', 'ai_pr') AND (notified LIKE 'failed%' OR notified = 'off')").bind(from).first();
   return row?.n || 0;
 }
 
