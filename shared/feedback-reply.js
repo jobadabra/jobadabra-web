@@ -2,13 +2,14 @@
 // and the one e-mail through the sender we already have (shared/mail.js, template `feedback-update`, service list). Nothing is sent that the owner did not write or accept.
 // Guarded by test/shared/feedback-reply.test.js.
 import {send, validAddress} from './mail.js';
+import {PUBLIC_REPO, githubUrl} from './repos.js';
 
 export const DEFAULT_DEFER = 'Thank you: we saw this and parked it for later. If we pick it up we will tell you.';
 export const defaultFixed = fixedIn => (fixedIn ? `Thank you: this is fixed in ${fixedIn}.` : 'Thank you: this is fixed and will arrive in the next update.');
 const clip = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const PR = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|commit)\/\w+$/, LINEAR = /^https:\/\/linear\.app\/[\w./-]+$/, VERSION = /^[\w.+ -]{0,40}$/, PR_MAX = 200;
 // Why (5/7 code review, 3 Nov 2026): a release's PR list is the public repo's, so only a pull request of that repo can be matched by number. Another repo's PR with the same number, or a commit, must not.
-const PUBLIC_PR = /^https:\/\/github\.com\/(?:jobadabra|GarryOne)\/jobadabra\/pull\/(\d+)$/;
+const PUBLIC_PR = new RegExp(`^${githubUrl(PUBLIC_REPO).replace(/[.]/g, '\\.')}/pull/(\\d+)$`);   // the owner's name comes from shared/repos.js, never typed here (guard: test/python/test_site_org_owner.py)
 /** The PR number a card's link names when it can be matched by a release (a pull request of the public repo), else 0. */
 export const releasePr = url => Number(String(url || '').match(PUBLIC_PR)?.[1]) || 0;
 const WHEN = ['now', 'release', 'never'];
