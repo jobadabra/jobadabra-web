@@ -8,7 +8,7 @@ import {findButton, PALETTE_SCRIPT, PALETTE_STYLE} from './palette.js';
 
 // Every page lives at /admin/{group}/{page} (owner, 27 Oct 2026: "normalize all the page urls"): the group's slug, then the menu name's; /admin itself is the home.
 // slug (when set) = the page's part when its menu name would spell it differently (E-mail → email). old = the page's earlier addresses, redirected (test/admin/admin-urls.test.js fails a page off the pattern, or an old address that no longer answers).
-export const GROUPS = [['Overview', '🧭'], ['Growth', '📈'], ['Form filling', '📝'], ['Job search', '🔎'], ['Testing', '🧪'], ['Agent Coding', '🤖', 'agents'], ['Schedules', '⏰']];
+export const GROUPS = [['Overview', '🧭'], ['Growth', '📈'], ['Form filling', '📝'], ['Job search', '🔎'], ['Testing', '🧪'], ['Agent Coding', '🤖', 'agents'], ['Schedules', '⏰'], ['Feedback', '💬']];
 // A group's URL part: its name's, unless the entry says otherwise (owner, 1 Nov 2026: Agents became "Agent Coding" but its addresses stay /admin/agents/…, so no link breaks).
 export const groupSlug = ([name, , slug]) => slug || slugOf(name);
 export const slugOf = name => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -22,7 +22,6 @@ export const PAGES = [
   {path: '/admin/growth/email', group: 'Growth', question: 'Who signed up with an e-mail, who can still get our mail, what did it do, and what is waiting to go out?', old: ['/admin/email', '/admin/signups'], slug: 'email', name: 'E-mail', icon: '✉️'},
   {path: '/admin/growth/promo-codes', group: 'Growth', question: 'Which promo codes exist, who used them, and when do they end?', old: ['/admin/promo-codes'], name: 'Promo codes', icon: '🎟️'},
   {path: '/admin/growth/monetization', group: 'Growth', question: 'Do free users turn into Pro buyers, and does the money cover the AI?', old: ['/admin/monetization'], name: 'Monetization', icon: '💰'},
-  {path: '/admin/growth/feedback', group: 'Growth', question: 'What are users telling us?', old: ['/admin/feedback', '/feedback'], name: 'Feedback', icon: '💬'},
   {path: '/admin/growth/insights', group: 'Growth', question: 'Does the app make good decisions for users?', old: ['/admin/intelligence/insights', '/admin/insights', '/intel'], name: 'Insights', icon: '🧠'},
   {path: '/admin/growth/brain', group: 'Growth', question: 'What did the product brain recommend, and what did we decide?', old: ['/admin/intelligence/brain', '/admin/brain'], slug: 'brain', name: 'Product Brain', icon: '🧠'},
   {path: '/admin/growth/ai-cost', group: 'Growth', question: 'What does the AI cost us, and for which jobs?', old: ['/admin/intelligence/ai-cost', '/admin/ai-cost', '/ai-cost'], name: 'AI cost', icon: '💸'},
@@ -51,6 +50,7 @@ export const PAGES = [
   {path: '/admin/testing/scheduled', group: 'Testing', question: 'Are the scheduled jobs that test and heal our code running on time and green?', name: 'Scheduled', icon: '⏰'},
   {path: '/admin/schedules/all-jobs', group: 'Schedules', question: 'Are all our scheduled jobs running on time and green, in every area?', old: ['/admin/agents/schedules', '/admin/operations/schedules'], name: 'All jobs', icon: '⏰'},
   {path: '/admin/agents/access', group: 'Agent Coding', question: 'Who can open these admin pages?', old: ['/admin/access', '/admin/operations/access'], name: 'Access', icon: '🔐', superadmin: true},
+  {path: '/admin/feedback/inbox', group: 'Feedback', question: 'What are users telling us?', old: ['/admin/growth/feedback', '/feedback'], slug: 'inbox', name: 'Feedback', icon: '💬'},
 ];
 // Old addresses of a page (one or more), a group's own address (its first page), and the sub-routes that moved with their page (the digest downloads,
 // the Lab's videos): the ONLY place the old paths may still be written (test/web/form-pages.test.js).

@@ -42,7 +42,7 @@ async function telegram(fetcher, env, method, body) {
 async function tell(env, fetcher, row, shot) {
   if (!(env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID)) return 'off';
   const have = [row.shot && 'Screenshot', row.logs && 'Logs', row.page && 'Screen data', row.profile && 'Profile'].filter(Boolean);
-  const link = have.length ? `\n\n📎 <a href="https://www.jobadabra.top/admin/growth/feedback#${row.ref}">${have.join(' · ')} on /admin</a>` : '';
+  const link = have.length ? `\n\n📎 <a href="https://www.jobadabra.top/admin/feedback/inbox#${row.ref}">${have.join(' · ')} on /admin</a>` : '';
   const message = `💬 <b>Feedback</b> · v${escTags(row.version)} · ${escTags(row.platform)}${row.screen ? ` · ${escTags(row.screen)}` : ''} · install ${escTags(row.install.slice(0, 8))}\n\n${escTags(row.text)}` +
     (row.contact ? `\n\n↩︎ ${escTags(row.contact)}` : '') + link;
   const first = await telegram(fetcher, env, 'sendMessage', {chat_id: env.BRAIN_CHAT_ID, text: message, parse_mode: 'HTML', disable_web_page_preview: true});

@@ -114,9 +114,9 @@ test('the route answers only the owner, only POST with JSON; a guest or a strang
 
 test('the page data carries the actions only for the owner', async () => {
   const e = env(); add(e);
-  const owner = await (await view(new Request('https://x/admin/growth/feedback?json=1', {headers: {Authorization: 'Bearer owner-key'}}), e, new Date('2026-11-03T12:00:00Z'))).json();
+  const owner = await (await view(new Request('https://x/admin/feedback/inbox?json=1', {headers: {Authorization: 'Bearer owner-key'}}), e, new Date('2026-11-03T12:00:00Z'))).json();
   assert.equal(owner.canAct, true); assert.deepEqual(owner.rows[0].actions, ['fixed', 'defer', 'dismiss', 'false_positive', 'delete']);
-  assert.equal((await view(new Request('https://x/admin/growth/feedback?history=0000000000000001'), e)).status, 404);
+  assert.equal((await view(new Request('https://x/admin/feedback/inbox?history=0000000000000001'), e)).status, 404);
 });
 
 test('every POST route of the feedback page checks the owner first (a new one without isOwner fails here)', () => {

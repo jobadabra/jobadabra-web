@@ -4,7 +4,7 @@ import {LAB_REPO, PUBLIC_REPO, WEB_REPO, githubUrl} from '../shared/repos.js';
 const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields)});
 
 export const seeds = {
-  feedback: async ({env}) => {   // /admin/growth/feedback (2 Nov 2026): one with a screenshot, logs, screen data and a profile snapshot, one text-only, one the bot refused (the red counter); the screenshot is a real app shot from the public tree
+  feedback: async ({env}) => {   // /admin/feedback/inbox (2 Nov 2026): one with a screenshot, logs, screen data and a profile snapshot, one text-only, one the bot refused (the red counter); the screenshot is a real app shot from the public tree
     const fs = await import('node:fs'), kept = new Map(), shot = fs.readFileSync('desktop/docs/ui/actions.jpg');
     env.FEEDBACK_FILES = {put: async (key, value) => { kept.set(key, value); }, get: async key => (kept.has(key) ? {body: kept.get(key)} : null),
       list: async ({prefix}) => ({objects: [...kept.keys()].filter(key => key.startsWith(prefix)).map(key => ({key})), truncated: false}), delete: async keys => { for (const key of [].concat(keys)) kept.delete(key); }};

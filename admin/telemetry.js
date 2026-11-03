@@ -103,8 +103,8 @@ ${(data.guard?.seen || []).map(row => `<tr><td>${valueChip(esc(row.kind))}</td><
   || '<tr><td colspan="3" class="muted">Nothing odd. 🎉</td></tr>'}</table>
 ${(data.guard?.revoked || []).length ? `<small class="muted">Revoked: ${(data.guard.revoked).map(row => `<code>${esc(row.who)}</code> (${esc(row.reason)})`).join(' · ')}</small>` : ''}</section>
 <section class="card" style="margin-top:12px"><h2>💬 Feedback${chip(data, 'feedback')}</h2><p style="margin:6px 0 0">${(data.feedback || []).length
-  ? `${(data.feedback || []).length} message${(data.feedback || []).length === 1 ? '' : 's'} in the last ${data.days < 30 ? 30 : data.days} days · <a href="/admin/growth/feedback">Open Feedback →</a>`
-  : '<span class="muted">No feedback yet.</span> <a href="/admin/growth/feedback">Feedback →</a>'}</p></section>
+  ? `${(data.feedback || []).length} message${(data.feedback || []).length === 1 ? '' : 's'} in the last ${data.days < 30 ? 30 : data.days} days · <a href="/admin/feedback/inbox">Open Feedback →</a>`
+  : '<span class="muted">No feedback yet.</span> <a href="/admin/feedback/inbox">Feedback →</a>'}</p></section>
 <p class="muted">Since ${esc(data.from)} (UTC). Scrubbed on each Mac before sending; no answers, CV, emails, names or keys. Kept ${KEEP_DAYS} days.</p>
 </main></body></html>`;
 }
