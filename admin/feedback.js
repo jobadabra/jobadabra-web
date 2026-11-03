@@ -3,6 +3,7 @@
 import {viewer, isOwner, remember} from '../shared/auth.js';
 import {feedbackList, undelivered, fileOf} from '../shared/feedback.js';
 import {act, actionsFor, historyOf} from '../shared/feedback-actions.js';
+import {startRun} from '../shared/feedback-ai.js';
 import {validAddress} from '../shared/mail.js';
 import {PAGE} from './feedback-page.js';
 
@@ -28,13 +29,15 @@ export async function view(request, env, now = new Date()) {
 
 // POST /admin/growth/feedback/act {ref, action, note?, impact?}: one action on one feedback, the owner only (guests and everyone else get a 404, as the page's other routes).
 // Why (3 Nov 2026): the cookie is SameSite=Strict and the body must be JSON, so a form on another site cannot send it. Every change is logged with who made it (shared/feedback-actions.js).
-export async function actRoute(request, env, now = new Date()) {
+export async function actRoute(request, env, now = new Date(), deps = {}) {
   if (request.method !== 'POST' || !env.STATS || !await isOwner(request, env)) return new Response('Not found', {status: 404});
   if (!(request.headers.get('Content-Type') || '').startsWith('application/json')) return Response.json({ok: false, error: 'Send JSON.'}, {status: 415});
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== 'object') return Response.json({ok: false, error: 'Send JSON.'}, {status: 400});
   const byKey = request.headers.has('Authorization') || new URL(request.url).searchParams.has('key'), who = byKey ? 'owner (key)' : 'owner (session)';
-  const result = await act(env, body, who, now);
+  // Send to AI starts a run in the public repo with the timers' token; without the token or the dispatch the action says it is not set up (shared/feedback-actions.js).
+  const start = deps.dispatch && env.TIMERS_GITHUB_TOKEN && env.TIMERS_REPO ? ref => startRun(env, ref, deps.dispatch) : undefined;
+  const result = await act(env, body, who, now, {start});
   const {status = 200, ...answer} = result;
   return Response.json(answer, {status, headers: {'Cache-Control': 'no-store'}});
 }

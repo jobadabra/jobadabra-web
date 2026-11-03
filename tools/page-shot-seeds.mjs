@@ -43,6 +43,15 @@ export const seeds = {
       await env.STATS.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, notified, state, state_at, state_note) VALUES (?, ?, ?, '0.5.70', 'darwin', ?, '', ?, 'sent', ?, ?, ?)")
         .bind(at, at.slice(0, 10), `install-${ref.slice(0, 8)}`, text, ref, state, at, note).run();
     }
+    // 3 Nov 2026 (Send to AI, 7/7; invented rows): one run going (with its GitHub run link), one with its draft PR open, one back to new with the AI's verdict and reason
+    for (const [ref, text, state, hours, cols] of [
+      ['5151000011112222', 'The Track page crashes when I filter by a company with an accent.', 'ai_running', 0.2, {ai_run: '9001', ai_run_url: 'https://github.com/jobadabra/jobadabra/actions/runs/9001'}],
+      ['5252000011112222', 'Dark mode: the salary field text is unreadable.', 'ai_pr', 2, {pr_url: 'https://github.com/jobadabra/jobadabra/pull/3100', ai_run_url: ''}],
+      ['5353000011112222', 'The Apply button does nothing on one job board.', 'new', 3, {state_note: '🤖 not-reproducible: the button works on the recorded page of that board; it needs the browser version and the board name'}]]) {
+      const at = new Date(Date.now() - hours * 3600000).toISOString();
+      await env.STATS.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, notified, state, state_at, ai_run, ai_run_url, pr_url, state_note) VALUES (?, ?, ?, '0.5.70', 'darwin', ?, '', ?, 'sent', ?, ?, ?, ?, ?, ?)")
+        .bind(at, at.slice(0, 10), `install-${ref.slice(0, 8)}`, text, ref, state, at, cols.ai_run || '', cols.ai_run_url || '', cols.pr_url || '', cols.state_note || '').run();
+    }
   },
   website: async ({env}) => {   // made-up visitors and downloaders for /admin/growth/website (1 Nov 2026): 30 days, busiest 5 days ago, a quiet day after it; person ids are made up
     const week = [[8, 6], [6, 9], [8, 6], [17, 1], [5, 2], [7, 4], [8, 3]], rows = [];

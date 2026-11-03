@@ -2,6 +2,7 @@
 // is refused (409). Every change is written with its log line; nothing else in the site updates `feedback.state` or `feedback.impact`. Guarded by test/shared/feedback-actions.test.js.
 // Why (3 Nov 2026, owner: "offer some actions buttons for each feedback"): the list only grew; the owner needs to clear it, rate it and, later, answer the reporter.
 
+import {aiClosedColumns, aiColumns, aiEndColumns, aiGate, aiMergedColumns, aiPrColumns} from './feedback-ai.js';
 import {deferColumns, fixedColumns, releasedColumns, tellOnce} from './feedback-reply.js';
 
 export const STATES = ['new', 'dismissed', 'false_positive', 'deferred', 'ai_running', 'ai_pr', 'fixed', 'released'];
@@ -13,15 +14,22 @@ export const ACTIONS = {
   fixed: {from: ['new', 'deferred', 'ai_pr'], to: 'fixed', form: fixedColumns},   // the owner's words and links: shared/feedback-reply.js
   released: {from: ['fixed'], to: 'released', form: releasedColumns},   // the fix shipped: the owner's "Mark as released" (a release call does the same for the cards it finds)
   defer: {from: ['new'], to: 'deferred', form: deferColumns},
+  ai: {from: ['new', 'deferred'], to: 'ai_running', form: aiColumns},   // "Send to AI": one CI run, a draft PR (shared/feedback-ai.js)
+  // The run's own steps, never in the owner's menu and never through the owner's route: admin/feedback-ai.js calls them after checking GitHub's run token (`internal`).
+  ai_pr: {from: ['ai_running'], to: 'ai_pr', form: aiPrColumns, internal: true},
+  ai_none: {from: ['ai_running'], to: 'new', form: aiEndColumns(false), internal: true},
+  ai_failed: {from: ['ai_running'], to: 'new', form: aiEndColumns(true), internal: true},
+  ai_merged: {from: ['ai_pr'], to: 'fixed', form: aiMergedColumns, internal: true},
+  ai_closed: {from: ['ai_pr'], to: 'new', form: aiClosedColumns, internal: true},
   dismiss: {from: ['new'], to: 'dismissed'},
   false_positive: {from: ['new'], to: 'false_positive', note: 'required'},
-  reopen: {from: ['dismissed', 'false_positive', 'deferred', 'fixed', 'released'], to: 'new'},
+  reopen: {from: ['dismissed', 'false_positive', 'deferred', 'fixed', 'released', 'ai_pr'], to: 'new'},
   delete: {from: ['new', 'dismissed', 'false_positive', 'deferred', 'ai_pr', 'fixed', 'released']},   // not while a run is going (ai_running)
   impact: {from: STATES},
 };
 
 /** The actions the card's menu offers for a state (the same table the server enforces). */
-export const actionsFor = state => Object.keys(ACTIONS).filter(name => name !== 'impact' && ACTIONS[name].from.includes(state));
+export const actionsFor = state => Object.keys(ACTIONS).filter(name => name !== 'impact' && !ACTIONS[name].internal && ACTIONS[name].from.includes(state));
 
 const refused = (status, error) => ({ok: false, status, error});
 const clip = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -41,13 +49,14 @@ async function deleteFiles(bucket, ref) {
 }
 
 /**
- * Applies one action by the owner. `input` = {ref, action, note?, impact?}; `who` is the log's 'owner (session)' | 'owner (key)'.
+ * Applies one action by the owner. `input` = {ref, action, note?, impact?}; `who` is the log's 'owner (session)' | 'owner (key)'. `opts`: {trusted: the caller proved it is the AI run (admin/feedback-ai.js), the only
+ * way to apply an `internal` action; start: (ref) => Promise, starts the CI run for `ai` (absent = Send to AI is not set up)}.
  * -> {ok: true, state, impact} | {ok: false, status, error}. The state change is a compare-and-set on the state read first (two clicks cannot both win) and is batched with its log line, which is written only when a row changed.
  * A delete removes the R2 files first (a failure there leaves the row, so it can be tried again), then the row; its log line keeps the ref and no text. `input.from` (optional) is the state the caller expects: any other state is a 409.
  */
-export async function act(env, input, who, now = new Date()) {
+export async function act(env, input, who, now = new Date(), opts = {}) {
   const {ref, action} = input || {}, spec = Object.hasOwn(ACTIONS, action) ? ACTIONS[action] : null;
-  if (!spec) return refused(400, 'Unknown action.');
+  if (!spec || (spec.internal && !opts.trusted)) return refused(400, 'Unknown action.');
   if (!/^[0-9a-f]{16}$/.test(String(ref))) return refused(400, 'Unknown feedback.');
   const row = await env.STATS.prepare('SELECT state, impact, impact_ai, told FROM feedback WHERE ref = ?').bind(ref).first();
   if (!row) return refused(404, 'This feedback is gone.');
@@ -59,6 +68,11 @@ export async function act(env, input, who, now = new Date()) {
     return (done[0]?.meta?.changes ?? done[0]?.changes ?? 0) > 0;
   };
   const raced = refused(409, 'Someone just changed this feedback. Reload the page.');
+  if (action === 'ai') {
+    if (!opts.start) return refused(503, 'Send to AI is not set up on this site (the dispatch token).');
+    const gate = await aiGate(env.STATS, now);   // 1 at a time, 3 a day: checked before anything changes
+    if (!gate.ok) return refused(gate.status, gate.error);
+  }
   if (input.from && input.from !== row.state) return raced;   // "Undo" names the state it undoes: a card that moved on is left alone
   if (action === 'impact') {
     const value = input.impact === '' || IMPACTS.includes(input.impact) ? input.impact : null;
@@ -82,7 +96,13 @@ export async function act(env, input, who, now = new Date()) {
   const detail = `${row.state} -> ${spec.to}${note || form.detail ? `: ${note || form.detail}` : ''}${form.tell ? ` (tell: ${form.tell})` : ''}`;
   // Why (5b code review, 3 Nov 2026): "Mark as released" decides whether to tell from the `told` it read, so the write also checks it: a card reopened and re-fixed with "never tell" in between is not told.
   const guard = action === 'released' ? ' AND told = ?' : '', guardArgs = action === 'released' ? [row.told] : [];
-  if (!await commit(env.STATS.prepare(`UPDATE feedback SET state = ?, state_at = ?, state_note = ?${sets} WHERE ref = ? AND state = ?${guard}`).bind(spec.to, at, spec.note ? note : '', ...keys.map(key => columns[key]), ref, row.state, ...guardArgs), detail)) return raced;
+  if (!await commit(env.STATS.prepare(`UPDATE feedback SET state = ?, state_at = ?, state_note = ?${sets} WHERE ref = ? AND state = ?${guard}`).bind(spec.to, at, form.stateNote ?? (spec.note ? note : ''), ...keys.map(key => columns[key]), ref, row.state, ...guardArgs), detail)) return raced;
+  if (action === 'ai') {   // the card is ai_running and logged; now the run. A start that fails sends the card straight back to new with the reason (never a card stuck "running").
+    try { await opts.start(ref); } catch (error) {
+      await act(env, {ref, action: 'ai_failed', why: `could not start the run: ${String(error.message || error).slice(0, 120)}`}, 'system', now, {trusted: true});
+      return refused(502, 'Could not start the AI run. The card is back to new; nothing was spent.');
+    }
+  }
   const told = form.tell === 'now' ? await tellOnce(env, ref, now, 'owner (told)') : undefined;   // after the change is saved: a failing mail never undoes it
   return {ok: true, state: spec.to, impact: columns.impact ?? row.impact, ...(told !== undefined ? {told} : {})};
 }

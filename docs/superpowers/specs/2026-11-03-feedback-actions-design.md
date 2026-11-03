@@ -70,14 +70,14 @@ admin button ─► POST act {ai, include} ─► site: state ai_running, one-ti
         ├ 3 gates   paths allowed (src/, desktop/, extension/ and their tests; never .github/, tools/, package files, secrets), a test file changed,
         │            the new test FAILS before the fix and PASSES after, the whole unit suite and the lint pass
         ├ 4 PR      branch fd-ai/<ref>, DRAFT PR "[fd-ai] <ref> <title>", label fd-ai: root cause, the failing test, the fix
-        └ 5 report  POST /api/feedback/ai-status {started|pr|none|failed} (same OIDC proof) ─► the card shows the run and the PR
-   merged ─► a job in the same file reports "merged" ─► state fixed, PR number kept, *When to tell* = at release (default); the owner can press "Tell the reporter now"
+        └ 5 report  POST /api/feedback/ai-status {pr|none|failed} (same OIDC proof; the run id must be the one that took the brief) ─► the card shows the run and the PR
+   merged / closed ─► a job in the same file (event `pull_request_target`, so it runs main's file) reports {merged|closed, pr} ─► state fixed, PR number kept, *When to tell* = at release (default); the owner can press "Tell the reporter now"
 ```
-- **What the agent gets:** the words, version, platform, screen name, the logs and the screen data (both ticked by default), **never the profile snapshot unless the owner ticks it for this run**, never the contact or the install id. The site runs the app's redactor again over the logs and the data before serving the brief (second pass, `desktop/lib` is already bundled into the site).
+- **What the agent gets:** the words, version, platform, screen name, the logs and the screen data (both ticked by default), **never the profile snapshot unless the owner ticks it for this run**, never the contact or the install id. The files were redacted by the app when they were sent; **the second pass runs in the CI run, on the brief it fetched, before the AI sees a character** (`desktop/lib/feedback-bundle.js redact`). *Changed on 3 Nov 2026 (7/7): the Worker has no `node:` modules, so it cannot import that redactor; the run is where the code already is.* The site serves only what the owner ticked, as stored, and never the contact, the install id or the screenshot.
 - **The repo is public, so the PR is public.** The branch, commit, PR title and body, run log and artifacts are written by a script that (a) never quotes the feedback or the logs, only the AI's own root cause and fixture data it invents, (b) is scanned for e-mails, tokens, home-folder names and the install id before it is posted (a hit stops the run, nothing is pushed). The brief is a file that is never printed or uploaded.
 - **The AI may also say no:** verdict `fixed-already | not-reproducible | needs-human | false-positive` with a reason → no PR, the card returns to `new` with "🤖 <verdict>: <why>" (a false-positive verdict is a suggestion; only the owner sets that state).
 - **A refused broker call** (limit, login, down) is named, reported to the card as `failed: <cause>` and the run goes red (`AiRefused` handling already used by the site's jobs); nothing else breaks.
-- **Authenticity:** the Worker trusts the run only when GitHub's OIDC token verifies (`repository`, `workflow_ref` = `.github/workflows/feedback-ai.yml@refs/heads/main`, `event_name` = `workflow_dispatch`) **and** the feedback is in `ai_running` started within the last hour. Nothing secret is in the dispatch inputs (the repo and its run pages are public).
+- **Authenticity:** the Worker trusts the run only when GitHub's OIDC token verifies (`audience`, `repository`, `workflow_ref` = `.github/workflows/feedback-ai.yml@refs/heads/main`, `event_name` = `workflow_dispatch`, or `pull_request_target` for merged/closed) **and** the feedback is in `ai_running` started within the last hour; the first run id to fetch the brief owns the card and every later report must carry that id (merged/closed must name the PR the card holds). A run that never answers is sent back to `new` after an hour. The run's own steps (`ai_pr`, `ai_none`, `ai_failed`, `ai_merged`, `ai_closed`) are internal actions: not in the menu and refused on the owner's route. Nothing secret is in the dispatch inputs (the repo and its run pages are public).
 - Recorded fixtures in every test (a recorded broker answer); the live broker is never called in CI tests.
 
 ### Auth and the log
@@ -122,5 +122,6 @@ Replies back and forth with the reporter · editing a reporter's words · Linear
 - [x] Owner's add-on: version, platform, install id mandatory on every feedback (#342; e-mail stays optional)
 - [x] 5/7 site: released endpoint (`POST /api/feedback/released`, this PR)
 - [x] `released` state: a release (or "Mark as released") moves a waiting Fixed card to Released; Deferred relabelled "Acknowledged · deferred" (owner, 3 Nov 2026)
-- [ ] 6/7 release workflows call it
-- [ ] 7/7 Send to AI (site + CI)
+- [x] 6/7 release workflows call it (jobadabra #3072)
+- [ ] 7/7 site half: Send to AI button, caps, brief and status routes, run/PR chips (this PR)
+- [ ] 7/7 public half: `feedback-ai.yml` (the run, gates, leak scan, callbacks)
