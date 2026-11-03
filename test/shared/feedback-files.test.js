@@ -10,7 +10,7 @@ import {purgeFiles, undelivered, TEXT_FILES} from '../../shared/feedback.js';
 
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const name of ['0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql']) db.exec(readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'));
+  for (const name of ['0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql', '0126_feedback_actions.sql']) db.exec(readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'));
   const statement = (sql, args = []) => ({bind: (...values) => statement(sql, values), run: async () => db.prepare(sql).run(...args),
     all: async () => ({results: db.prepare(sql).all(...args)}), first: async () => db.prepare(sql).get(...args)});
   return {db, prepare: sql => statement(sql)};
@@ -142,7 +142,8 @@ test('past the day\'s cap of feedbacks with files, the words still go and the fi
 
 test('a poll keeps the cards it already drew (an open Logs viewer must not snap shut) and scrolls to #ref only on the first load', async () => {
   const page = await (await view(new Request('https://x/feedback', {headers: {Authorization: 'Bearer owner'}}), env())).text();
-  assert.match(page, /kept\.sig === sigOf\(row\)/);   // a kept card is rebuilt when its delivery verdict or files change
+  assert.match(page, /kept\.sig === sig/);   // a kept card is rebuilt when what it shows changes: the delivery verdict, the files, and (3 Nov 2026) the state, its note and the impact
+  assert.match(page, /const sig = \[row\.notified[^\]]*row\.state, row\.state_note, row\.impact/);
   assert.match(page, /const mark = \(card, fresh\)/);   // NEW is set on a poll and cleared on the next
   assert.match(page, /firstLoad && location\.hash/);
 });

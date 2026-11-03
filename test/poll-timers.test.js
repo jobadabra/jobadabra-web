@@ -21,7 +21,7 @@ test('no page timer fires faster than once a minute, and every file with one che
     }
     if (/http-equiv=.?refresh/.test(text)) found.push({name, delay: 0, text: 'meta refresh (cannot pause while hidden)'});
   }
-  assert.ok(found.some(item => item.name === 'admin/applying.js') && found.some(item => item.name === 'admin/feedback.js'), 'the scan found no timer: it is blind');
+  assert.ok(found.some(item => item.name === 'admin/applying.js') && found.some(item => item.name === 'admin/feedback-page.js'), 'the scan found no timer: it is blind');
   for (const item of found) {
     assert.ok(item.delay >= MIN_MS, `${item.name}: "${item.text}" fires every ${item.delay} ms (minimum ${MIN_MS})`);
     assert.match(source(item.name), /document\.hidden/, `${item.name}: a timer without a document.hidden check`);

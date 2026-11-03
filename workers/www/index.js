@@ -76,7 +76,7 @@ import {playbook} from '../../api/playbook.js';
 import {install} from '../../api/install.js';
 import {signals} from '../../api/signals.js';
 import {feedback} from '../../api/feedback.js';
-import {view as feedbackView, file as feedbackFile} from '../../admin/feedback.js';
+import {view as feedbackView, file as feedbackFile, actRoute as feedbackAct} from '../../admin/feedback.js';
 import {purgeFiles as purgeFeedbackFiles} from '../../shared/feedback.js';
 import {reportForm} from '../../shared/report-form.js';
 import {view as reportsView} from '../../admin/report-view.js';
@@ -264,6 +264,7 @@ async function route(request, env, ctx) {
   if (pathname === '/api/contributions') return pool.aggregate(request, env);
   if (pathname === '/api/signals') return signals(request, env);
   if (pathname === '/api/feedback') return feedback(request, env);
+  if (pathname === '/admin/growth/feedback/act') return feedbackAct(request, env);   // one action on one feedback, the owner only (shared/feedback-actions.js)
   if (pathname === '/admin/growth/feedback/file') return feedbackFile(request, env);   // a feedback's screenshot or logs, the owner only (admin/feedback.js)
   if (pathname === '/api/report-form' || pathname.startsWith('/api/report-form/')) return reportForm(request, env, pathname);   // "Report this form": an encrypted recording from an install (shared/report-form.js)
   if (pathname === '/api/attribution') return attribution(request, env);   // a downloaded app's first start: its channel
