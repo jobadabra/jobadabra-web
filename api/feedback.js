@@ -64,6 +64,10 @@ export async function feedback(request, env, fetcher = fetch, now = new Date(), 
   const text = clip(body.text, 2000).trim();
   const install = clip(body.install, 64);
   if (!text || !/^[\w-]{8,64}$/.test(install)) return Response.json({ok: false, error: 'give a message'}, {status: 400});
+  // Why (owner, 3 Nov 2026: "this should be mandatory for every feedback sent"): every row says which build and which system it came from, so a bug can be reproduced and an answer can be matched
+  // to the build that fixes it. Text only (a number or an object is not a version); the e-mail stays optional. Every app build sends both, so this refuses only a caller that is not the app.
+  const version = typeof body.version === 'string' ? clip(body.version, 30).trim() : '', platform = typeof body.platform === 'string' ? clip(body.platform, 40).trim() : '';
+  if (!version || !platform) return Response.json({ok: false, error: 'give the app version and platform: update the app and try again'}, {status: 400});
   const day = now.toISOString().slice(0, 10);
   const {n} = await env.STATS.prepare('SELECT COUNT(*) AS n FROM feedback WHERE day = ? AND install = ?').bind(day, install).first() || {n: 0};
   if (n >= PER_INSTALL_PER_DAY) return Response.json({ok: false, error: 'limit reached for today'}, {status: 429});
@@ -85,7 +89,7 @@ export async function feedback(request, env, fetcher = fetch, now = new Date(), 
     skipped.push(...(shot ? ['screenshot'] : []), ...Object.keys(kept));
     shot = null; for (const kind of Object.keys(kept)) delete kept[kind];
   }
-  const row = {at: now.toISOString(), day, install, version: clip(body.version, 30) || '?', platform: clip(body.platform, 40) || '?',
+  const row = {at: now.toISOString(), day, install, version, platform,
     text, contact: clip(body.contact, 200).trim(), ref, screen: clip(body.screen, 60).trim(), shot: shot?.type || '', logs: kept.logs ? 1 : 0, page: kept.page ? 1 : 0, profile: kept.profile ? 1 : 0};
   await env.STATS.prepare('INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, screen, shot, logs, page, profile) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(row.at, row.day, row.install, row.version, row.platform, row.text, row.contact, row.ref, row.screen, row.shot, row.logs, row.page, row.profile).run();

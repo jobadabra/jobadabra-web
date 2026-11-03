@@ -29,6 +29,15 @@ const telegramOk = calls => async (url, init) => { calls.push({method: url.split
 const send = (e, body, fetcher, now) => feedback(new Request('https://x/api/feedback', {method: 'POST', body: JSON.stringify(body)}), e, fetcher, now);
 const row = e => e.STATS.db.prepare('SELECT * FROM feedback ORDER BY rowid DESC').get();
 
+// Owner, 3 Nov 2026 (mandatory version and platform): a refused feedback leaves nothing behind. Positive control first: the same body with a platform does store its files.
+test('a feedback refused for a missing platform stores no file and sends no message, while the same body with a platform does', async () => {
+  const e = env(), calls = [];
+  assert.equal((await send(e, {...good, platform: ''}, telegramOk(calls))).status, 400);
+  assert.deepEqual([e.FEEDBACK_FILES.kept.size, calls.length, e.STATS.db.prepare('SELECT COUNT(*) AS n FROM feedback').get().n], [0, 0, 0]);
+  assert.equal((await send(e, good, telegramOk(calls))).status, 200);
+  assert.ok(e.FEEDBACK_FILES.kept.size >= 2 && calls.length >= 1, 'the control stores its files and tells the owner');
+});
+
 test('a screenshot and logs are kept in R2 under the row\'s ref, and the owner gets the words, then the photo, with the logs link', async () => {
   const e = env(), calls = [];
   const answer = await (await send(e, good, telegramOk(calls))).json();
