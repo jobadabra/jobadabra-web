@@ -46,6 +46,7 @@ import {view as integrationView} from '../../admin/integration-page.js';
 import {view as gtmReadinessView} from '../../admin/gtm-readiness.js';
 import {ingest as gtmIngest} from '../../admin/gtm-intel.js';
 import {ingest as buildLogIngest, view as buildLogView} from '../../admin/build-log.js';
+import {released as feedbackReleased} from '../../admin/feedback-release.js';
 import {ingest as prChecksIngest, view as prChecksView} from '../../admin/pr-checks.js';
 import {ingest as agentCodingIngest, view as agentCodingView} from '../../admin/agent-coding.js';
 import {view as monetizationView} from '../../admin/monetization.js';
@@ -266,6 +267,7 @@ async function route(request, env, ctx) {
   if (pathname === '/api/contributions') return pool.aggregate(request, env);
   if (pathname === '/api/signals') return signals(request, env);
   if (pathname === '/api/feedback') return feedback(request, env, fetch, new Date(), ctx);
+  if (pathname === '/api/feedback/released') return feedbackReleased(request, env);   // CI's release workflows: tells the reporters whose fix the build includes (Bearer SELFHEAL_PUBLISH_KEY, admin/feedback-release.js)
   if (pathname === '/api/feedback/replies' || pathname === '/api/feedback/replies/seen') return feedbackReplies(request, env);   // the app reads the owner's answer to its own feedback (api/feedback-replies.js)
   if (pathname === '/admin/growth/feedback/act') return feedbackAct(request, env);   // one action on one feedback, the owner only (shared/feedback-actions.js)
   if (pathname === '/admin/growth/feedback/file') return feedbackFile(request, env);   // a feedback's screenshot or logs, the owner only (admin/feedback.js)

@@ -115,9 +115,10 @@ Replies back and forth with the reporter · editing a reporter's words · Linear
 - [x] Spec (this file)
 - [x] Sketch + owner's yes on the design (3 Nov 2026, with: AI-suggested impact, ⋯ menu, automatic tell at release)
 - [x] 1/7 site: menu, states, impact chips, Dismiss/Delete/False positive (#338)
-- [ ] 2/7 site: AI-suggested impact
-- [ ] 3/7 site: Fixed, Defer, replies API, mail
-- [ ] 4/7 app: notice card
-- [ ] 5/7 site: released endpoint
+- [x] 2/7 site: AI-suggested impact (#339)
+- [x] 3/7 site: Fixed, Defer, replies API (needs the app's own JPF1 key), mail (#341)
+- [x] 4/7 app: notice card (jobadabra #3044)
+- [x] Owner's add-on: version, platform, install id mandatory on every feedback (#342; e-mail stays optional)
+- [x] 5/7 site: released endpoint (`POST /api/feedback/released`, this PR)
 - [ ] 6/7 release workflows call it
 - [ ] 7/7 Send to AI (site + CI)

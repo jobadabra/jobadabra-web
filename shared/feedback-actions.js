@@ -76,7 +76,7 @@ export async function act(env, input, who, now = new Date()) {
   if (form.error) return refused(400, form.error);
   const columns = {...form.columns};
   if (action === 'defer' && IMPACTS.includes(input.impact) && !row.impact) columns.impact = input.impact;   // the Defer form rates it in the same step
-  if (action === 'reopen') columns.told = row.told === 'pending' ? '' : row.told;   // a fix that waited for a release stops waiting; what was already told stays
+  if (action === 'reopen') columns.told = ['pending', 'telling'].includes(row.told) ? '' : row.told;   // a fix that waited for a release (or was being told) stops; what was already told stays
   const keys = Object.keys(columns), sets = keys.map(key => `, ${key} = ?`).join('');
   const detail = `${row.state} -> ${spec.to}${note ? `: ${note}` : ''}${form.tell ? ` (tell: ${form.tell})` : ''}`;
   if (!await commit(env.STATS.prepare(`UPDATE feedback SET state = ?, state_at = ?, state_note = ?${sets} WHERE ref = ? AND state = ?`).bind(spec.to, at, spec.note ? note : '', ...keys.map(key => columns[key]), ref, row.state), detail)) return raced;
