@@ -103,6 +103,10 @@ NOTION_CLIENT_ID = "3e9d872b-594c-8104-bce6-0037f95cea29"  # public; the secret 
 # Worker secret: security find-generic-password -a jobadabra -s jobadabra.linkedin.client_secret -w | npx wrangler@4 secret put LINKEDIN_CLIENT_SECRET
 # Redirect URLs registered in the LinkedIn app: https://www.jobpilotto.top/api/linkedin/callback and the workers.dev one.
 LINKEDIN_CLIENT_ID = "77cda0c4oymws4"
+# Import your LinkedIn profile (LinkedIn app "Jobadabra", id 264991117; product: Member Data Portability API (3rd Party), scope r_dma_portability_3rd_party). Public id;
+# the secret is a Worker secret: security find-generic-password -a jobadabra -s jobadabra.linkedin.dma_client_secret -w | npx wrangler@4 secret put LINKEDIN_IMPORT_CLIENT_SECRET
+# Redirect URLs registered in the LinkedIn app: https://www.jobadabra.top/api/linkedin-import/callback and the workers.dev one.
+LINKEDIN_IMPORT_CLIENT_ID = "7718i0ua0yjuj6"
 
 # INDEX_GATE: removed on 2 Oct 2026, so the token is enforced. During the rollout, INDEX_GATE = "soft" let installs without an index token keep
 # downloading (counted as index-open on /telemetry); set it back to "soft" only to re-open the list temporarily.

@@ -8,9 +8,13 @@ const text = page.replace(/<[^>]*>/g, '');
 
 test('the privacy page has a LinkedIn profile import section: what is read, where it is kept, how to delete it', () => {
   const section = text.slice(text.indexOf('Import your LinkedIn profile'), text.indexOf('LinkedIn jobs (off until you turn it on)'));
-  assert.match(section, /positions, education, skills and name/);
+  assert.match(section, /positions, education, skills, languages and name/);
+  assert.match(section, /location, postal code, street and website/);
+  assert.match(section, /access key passes through our server[^]*encrypted[^]*deleted as soon as the app collects it/);
+  assert.match(section, /Keychain for up to 60 days[^]*Disconnect deletes it/);
+  assert.match(section, /Jobadabra never reads/);
   assert.match(section, /Member Data Portability API/);
-  assert.match(section, /only when you press Import/);
+  assert.match(section, /only when you press Import or Update/);
   assert.match(section, /kept in your own store[^]*not on our servers/);
   assert.match(section, /built-in Free AI, through our server to Cloudflare Workers AI[^]*We do not keep the text or the answer/);   // as the Google section says (Gitar, 2 Nov 2026): the text is not "only on your computer"
   assert.match(section, /never sell it[^]*train AI models/);
