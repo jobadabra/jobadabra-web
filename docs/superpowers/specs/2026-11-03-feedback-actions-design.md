@@ -28,10 +28,11 @@ No other file writes `state`. The table below is the code: an action not listed 
 | `new` | 🆕 New | the INSERT; any "Reopen" | every action |
 | `dismissed` | 🙈 Dismissed | new | Reopen (undo), Delete |
 | `false_positive` | 🚫 False positive + the one-line reason | new | Reopen, Delete |
-| `deferred` | ⏳ Deferred (+ JOB link) | new | Reopen, Fixed, Send to AI, Delete |
+| `deferred` | ⏳ Acknowledged · deferred (+ JOB link) | new | Reopen, Fixed, Send to AI, Delete |
 | `ai_running` | 🤖 AI running (+ run link) | new, deferred | `ai_pr` (PR opened), `new` (AI found nothing or the run failed; the reason is kept) |
 | `ai_pr` | 🔀 PR open (+ PR link) | `ai_running` | `fixed` when the PR merges (callback), `new` if the PR is closed unmerged |
-| `fixed` | ✅ Fixed (+ version / PR) | new, deferred, `ai_pr` | Reopen, Delete |
+| `fixed` | ✅ Fixed (+ version / PR); "⏳ Fixed · waiting for release" while the reporter is to be told at a release | new, deferred, `ai_pr` | Mark as released, Reopen, Delete |
+| `released` | 📦 Released in <version> (<channel>) | `fixed`: a release call finds a waiting card, or the owner's "Mark as released" (asks the version) | Reopen, Delete |
 
 - **Open** (the header count) = `new` + `ai_running` + `ai_pr`. The header reads `7 open · 3 deferred · 41 total`, plus one noise line `False positive: 4 of 41 (10%)`. Filters on the page: All · Open · Deferred · Fixed · Dismissed · False positive; and impact: High · Medium · Low · Unrated. Sort: newest (default) or impact (high first, then newest).
 - Columns (migration `0126`; `impact_ai`, `impact_why`, `tell_mode`, `tell_message` and `tell_mail` arrive with the PR that needs them, as 0127+, all additive, old rows = `new`/unrated): `state`, `state_at`, `state_note` (≤ 200: reason / message), `impact` (`''|high|medium|low`), `fixed_in` (version text or `''`), `pr_url`, `run_url`, `linear_url`, `told` (`''|app|app+mail|app, mail refused: <why>`), `seen_at` (the app showed the reply). Table `feedback_log(at, ref, who, action, detail)` — **who** is `owner (session)` or `owner (key)` — written in the same batch as the state change; shown per card under "History".
@@ -120,5 +121,6 @@ Replies back and forth with the reporter · editing a reporter's words · Linear
 - [x] 4/7 app: notice card (jobadabra #3044)
 - [x] Owner's add-on: version, platform, install id mandatory on every feedback (#342; e-mail stays optional)
 - [x] 5/7 site: released endpoint (`POST /api/feedback/released`, this PR)
+- [x] `released` state: a release (or "Mark as released") moves a waiting Fixed card to Released; Deferred relabelled "Acknowledged · deferred" (owner, 3 Nov 2026)
 - [ ] 6/7 release workflows call it
 - [ ] 7/7 Send to AI (site + CI)

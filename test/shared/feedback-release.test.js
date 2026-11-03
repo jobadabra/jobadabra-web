@@ -88,7 +88,7 @@ test('a mail that is refused is written on the card and the in-app reply still g
   assert.equal(mails.length, 0);
   const {e: e2, mails: sent} = setup(), again = await waiting(e2, {pr_url: PR(3012), mail: true});
   const real = e2.STATS.batch; let failed = false;
-  e2.STATS.batch = async list => { if (!failed) { failed = true; throw new Error('d1 down'); } return real(list); };   // the mail went out, then the write failed
+  let calls = 0; e2.STATS.batch = async list => { if (++calls === 2) { failed = true; throw new Error('d1 down'); } return real(list); };   // the 1st batch is the claim; the mail went out, then the 2nd (the tell's write) failed
   const done = await tellRelease(e2, release(), now);
   assert.deepEqual([done.told, done.failed], [0, [again]]);
   assert.match(rowOf(e2, again).told, /^app, error/, 'visible on the card, not "pending" (that would mail again) and not blank');
@@ -145,7 +145,7 @@ test('two calls at once tell a reporter once, with one mail', async () => {
 
 test('a card changed between the read and the claim (Reopen, then Fixed with another PR) is not told for the old match', async () => {
   const {e} = setup(), ref = await waiting(e, {pr_url: PR(3012)}), real = e.STATS.prepare.bind(e.STATS);
-  e.STATS.prepare = text => { if (/^UPDATE feedback SET fixed_in/.test(text)) e.STATS.db.prepare('UPDATE feedback SET pr_url = ? WHERE ref = ?').run(PR(9999), ref); return real(text); };
+  e.STATS.prepare = text => { if (/^UPDATE feedback SET state = 'released'/.test(text)) e.STATS.db.prepare('UPDATE feedback SET pr_url = ? WHERE ref = ?').run(PR(9999), ref); return real(text); };
   assert.equal((await tellRelease(e, release(), now)).told, 0);
   assert.equal(rowOf(e, ref).told, 'pending');
 });

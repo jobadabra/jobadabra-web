@@ -27,11 +27,12 @@ export const seeds = {
     await env.STATS.prepare("UPDATE feedback SET impact_ai = 'low', impact_why = 'praise with a timing remark' WHERE ref = '0f0e0d0c0b0a0908'").run();
     await env.STATS.prepare("UPDATE feedback SET impact_ai = 'medium', impact_why = 'real problem, a workaround exists' WHERE ref = '1122334455667788'").run();
     await env.STATS.prepare("UPDATE feedback SET impact_why = 'AI unavailable: 4006: daily free allocation used', impact_tries = 1 WHERE ref = 'aaaa000011112222'").run();
-    // PR 3/7: a fixed one (told in the app and by e-mail, seen), one fixed and waiting for a release, one deferred with its Linear link
+    // PR 3/7 and the Released PR: a fixed one (told, seen), one fixed and waiting for a release, three released (told; mid-tell; e-mail not confirmed), one deferred with its Linear link
     for (const [ref, text, state, hours, cols] of [['cccc000011112222', 'Setup stops at Connect LinkedIn and the button does nothing.', 'fixed', 80, {fixed_in: '0.9.12', pr_url: 'https://github.com/jobadabra/jobadabra/pull/3012', told: 'app+mail', seen_at: 'x'}],
       ['dddd000011112222', 'The tracker loses my column order after an update.', 'fixed', 90, {pr_url: 'https://github.com/jobadabra/jobadabra/pull/3020', told: 'pending', tell_mode: 'release'}],
-      ['ffff000011112222', 'The CV import drops my last job.', 'fixed', 70, {fixed_in: '0.9.13 (beta)', pr_url: 'https://github.com/jobadabra/jobadabra/pull/3031', told: 'app, error: not confirmed'}],
-      ['9999000011112222', 'Reminders fire an hour late after the clocks change.', 'fixed', 60, {fixed_in: '0.9.13 (beta)', pr_url: 'https://github.com/jobadabra/jobadabra/pull/3033', told: 'telling'}],
+      ['ffff000011112222', 'The CV import drops my last job.', 'released', 70, {fixed_in: '0.9.13 (beta)', pr_url: 'https://github.com/jobadabra/jobadabra/pull/3031', told: 'app, error: not confirmed'}],
+      ['9999000011112222', 'Reminders fire an hour late after the clocks change.', 'released', 60, {fixed_in: '0.9.13 (beta)', pr_url: 'https://github.com/jobadabra/jobadabra/pull/3033', told: 'telling'}],
+      ['abab000011112222', 'The Windows installer says the app is damaged.', 'released', 50, {fixed_in: '0.9.12 (stable)', pr_url: 'https://github.com/jobadabra/jobadabra/pull/3015', told: 'app+mail', impact: 'high'}],
       ['eeee000011112222', 'Would be nice to export the tracker as CSV.', 'deferred', 100, {linear_url: 'https://linear.app/jobadabra/issue/JOB-142', told: 'app, mail refused: unsubscribed', impact: 'low'}]]) {
       const at = new Date(Date.now() - hours * 3600000).toISOString();
       await env.STATS.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, notified, state, state_at, fixed_in, pr_url, linear_url, told, tell_mode, seen_at, impact) VALUES (?, ?, ?, '0.5.70', 'darwin', ?, 'ana@example.com', ?, 'sent', ?, ?, ?, ?, ?, ?, ?, ?, ?)")

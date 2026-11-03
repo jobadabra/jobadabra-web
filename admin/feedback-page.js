@@ -13,7 +13,7 @@ h1{margin:0;font-size:24px}a{color:var(--amber)}.muted{color:var(--muted)}.live{
 .filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 6px}.sep{width:1px;height:18px;background:var(--line);margin:0 4px}
 .chip{display:inline-flex;align-items:center;gap:4px;font:inherit;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);white-space:nowrap}
 button.chip{cursor:pointer}button.chip:hover{color:var(--text)}button.chip[aria-pressed="true"]{color:var(--bg);background:var(--text);border-color:var(--text)}
-.chip.new{color:var(--green);border-color:var(--green)}.chip.running,.chip.deferred{color:var(--violet);border-color:var(--violet)}.chip.pr{color:var(--blue);border-color:var(--blue)}.chip.fixed{color:var(--green);border-color:var(--green)}
+.chip.new{color:var(--green);border-color:var(--green)}.chip.running,.chip.deferred{color:var(--violet);border-color:var(--violet)}.chip.pr{color:var(--blue);border-color:var(--blue)}.chip.fixed,.chip.released{color:var(--green);border-color:var(--green)}.chip.waits{color:var(--violet);border-color:var(--violet)}
 .chip.dismissed{color:var(--muted)}.chip.false_positive{color:var(--amber);border-color:var(--amber)}.chip.ai{color:var(--violet);border-color:var(--violet)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
 .card.fresh{border-color:var(--amber)}.card.quiet{opacity:.72}.top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
@@ -47,16 +47,18 @@ a.chip{text-decoration:none}.told{display:flex;gap:6px;flex-wrap:wrap;margin-top
 <script>
 const list = document.getElementById('list'), stateEl = document.getElementById('state'), live = document.getElementById('live'), toast = document.getElementById('toast');
 let known = null, rows = [], canAct = false, stateFilter = location.hash.length > 1 ? 'all' : 'open', impactFilter = '', sortBy = 'newest';
-const STATE = {new: ['🆕 New', 'new'], dismissed: ['🙈 Dismissed', 'dismissed'], false_positive: ['🚫 False positive', 'false_positive'], deferred: ['⏳ Deferred', 'deferred'],
-  ai_running: ['🤖 AI running', 'running'], ai_pr: ['🔀 PR open', 'pr'], fixed: ['✅ Fixed', 'fixed']};
+const STATE = {new: ['🆕 New', 'new'], dismissed: ['🙈 Dismissed', 'dismissed'], false_positive: ['🚫 False positive', 'false_positive'], deferred: ['⏳ Acknowledged · deferred', 'deferred'],
+  ai_running: ['🤖 AI running', 'running'], ai_pr: ['🔀 PR open', 'pr'], fixed: ['✅ Fixed', 'fixed'], released: ['📦 Released', 'released']};
+// Why (owner, 3 Nov 2026): a Fixed card that waits for its release says so, and a Released one names the build.
+const stateChip = row => (row.state === 'fixed' && row.told === 'pending' ? ['⏳ Fixed · waiting for release', 'waits'] : row.state === 'released' && row.fixed_in ? ['📦 Released in ' + row.fixed_in, 'released'] : STATE[row.state] || STATE.new);
 const OPEN = ['new', 'ai_running', 'ai_pr'];
-const STATE_FILTERS = [['open', 'Open', r => OPEN.includes(r.state)], ['all', 'All', () => true], ['deferred', '⏳ Deferred', r => r.state === 'deferred'], ['fixed', '✅ Fixed', r => r.state === 'fixed'],
+const STATE_FILTERS = [['open', 'Open', r => OPEN.includes(r.state)], ['all', 'All', () => true], ['deferred', '⏳ Acknowledged · deferred', r => r.state === 'deferred'], ['fixed', '✅ Fixed', r => r.state === 'fixed'], ['released', '📦 Released', r => r.state === 'released'],
   ['dismissed', '🙈 Dismissed', r => r.state === 'dismissed'], ['false_positive', '🚫 False positive', r => r.state === 'false_positive']];
 const IMPACT_FILTERS = [['high', '▲ High'], ['medium', '● Medium'], ['low', '▽ Low'], ['none', 'Unrated']];
 const RANK = {high: 0, medium: 1, low: 2, '': 3};
 const eff = row => row.impact || row.impact_ai || '';   // the owner's rating wins; until he rates it, the AI's suggestion counts for the filters and the sort
 const NAME = {high: 'High', medium: 'Medium', low: 'Low'};
-const LABEL = {fixed: '✅ Fixed + tell the reporter…', defer: '⏳ Acknowledge + defer…', dismiss: '🙈 Dismiss', false_positive: '🚫 False positive…', reopen: '↩ Reopen', delete: '🗑 Delete…'};
+const LABEL = {fixed: '✅ Fixed + tell the reporter…', released: '📦 Mark as released…', defer: '⏳ Acknowledge + defer…', dismiss: '🙈 Dismiss', false_positive: '🚫 False positive…', reopen: '↩ Reopen', delete: '🗑 Delete…'};
 const el = (tag, className, text) => { const e = document.createElement(tag); if (className) e.className = className; if (text !== undefined) e.textContent = text; return e; };
 
 let toastTimer;
@@ -98,6 +100,7 @@ function menuOf(row, card) {
 function choose(row, action, card) {
   card.querySelector('.panel, .form')?.remove();
   if (action === 'fixed' || action === 'defer') return card.append(formFor(row, action));
+  if (action === 'released') return card.append(releasedForm(row));
   if (action === 'dismiss') return send({ref: row.ref, action}, 'Dismissed.', {undo: {ref: row.ref, action: 'reopen', from: 'dismissed'}});
   if (action === 'reopen') return send({ref: row.ref, action}, 'Back to new.');
   const panel = el('div', 'panel'), go = el('button', action === 'delete' ? 'danger' : 'go', action === 'delete' ? 'Delete' : 'Save'), cancel = el('button', '', action === 'delete' ? 'Keep' : 'Cancel');
@@ -142,6 +145,18 @@ function formFor(row, action) {
   return form;
 }
 
+// "Mark as released": the version the fix shipped in. A card still waiting for a release is told when this is saved, like a release call would; one told already keeps what it was told. The server checks the version again.
+function releasedForm(row) {
+  const form = el('div', 'form'), label = el('label', '', 'Shipped in (a version)'), version = el('input');
+  version.type = 'text'; version.maxLength = 40; version.placeholder = 'e.g. 0.9.12'; version.value = (row.fixed_in || '').split(' ')[0]; label.append(version); form.append(label);
+  form.append(el('div', 'note', row.told === 'pending' ? 'The reporter is told now, in the app' + (row.mailable ? ' and by e-mail if you ticked it' : '') + ', as a release would.' : 'The reporter was told already: nothing is sent again.'));
+  const buttons = el('div', 'row'), go = el('button', 'go', 'Save'), cancel = el('button', '', 'Cancel'); go.type = cancel.type = 'button'; cancel.onclick = () => form.remove();
+  go.onclick = () => { if (!version.value.trim()) return version.focus(); send({ref: row.ref, action: 'released', version: version.value}, 'Marked as released.'); };
+  version.onkeydown = event => { if (event.key === 'Enter') go.click(); };
+  buttons.append(go, cancel); form.append(buttons); setTimeout(() => version.focus());
+  return form;
+}
+
 const toldChips = row => {
   const box = el('div', 'told');
   if (row.fixed_in) box.append(el('span', 'chip', 'in ' + row.fixed_in));
@@ -157,7 +172,7 @@ const toldChips = row => {
 
 const make = row => {
   const card = el('div', 'card' + (OPEN.includes(row.state) ? '' : ' quiet')), top = el('div', 'top'), meta = el('div', 'meta'), text = el('div', 'text');
-  const [label, tone] = STATE[row.state] || STATE.new;
+  const [label, tone] = stateChip(row);
   meta.append(el('span', 'chip ' + tone, label));
   const parts = [String(row.at).slice(0, 16).replace('T', ' ') + ' UTC', row.version + ' · ' + row.platform, 'install ' + String(row.install).slice(0, 8)];
   for (const part of parts) meta.append(el('span', '', part));
