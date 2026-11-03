@@ -6,6 +6,7 @@
 import {escTags} from '../shared/html.js';
 import {TEXT_FILES} from '../shared/feedback.js';
 import {suggestImpact} from '../shared/feedback-impact.js';
+import {telegram} from '../shared/telegram.js';
 
 const PER_INSTALL_PER_DAY = 10;
 // Why (2 Nov 2026, owner: "the app version, the OS platform, the installation id"): the platform field carries the OS version and architecture too ("win32 10.0.19045 x64"), so 40 characters, not 20.
@@ -23,19 +24,6 @@ export function decodeShot(value) {
   if (!match || match[2].length * 3 / 4 > MAX_SHOT_BYTES + 3) return null;
   const bytes = Uint8Array.from(atob(match[2]), char => char.charCodeAt(0));
   return bytes.length <= MAX_SHOT_BYTES ? {bytes, type: match[1] === 'jpeg' ? 'jpg' : 'png'} : null;
-}
-
-// One Telegram call: -> '' when Telegram accepted it, else why not (never the token).
-async function telegram(fetcher, env, method, body) {
-  try {
-    const response = await fetcher(`https://api.telegram.org/bot${env.BRAIN_BOT_TOKEN}/${method}`, body instanceof FormData ? {method: 'POST', body}
-      : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
-    const answer = await response.json().catch(() => ({}));
-    if (response.ok && answer.ok !== false) return {why: '', id: answer.result?.message_id};
-    return {why: `${response.status} ${answer.description || ''}`.trim()};
-  } catch (error) {
-    return {why: `network ${String(error.message).split(env.BRAIN_BOT_TOKEN).join('<token>')}`};
-  }
 }
 
 // Messages to the owner: the words first (with the logs link), then the screenshot as a photo under it. -> 'sent' | 'off' | 'failed: <why>'
