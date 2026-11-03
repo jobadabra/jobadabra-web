@@ -91,7 +91,7 @@ test('a container reports counts, never a Submit; prepared needs nothing left em
   assert.equal(e.STATS.db.prepare("SELECT state FROM ready_jobs WHERE job = 'j1'").get().state, 'partial');
 });
 
-test('the night stops at its cost cap and the cost is reported to /admin/growth/ai-cost', async () => {
+test('the night stops at its cost cap and the cost is reported to /admin/ai/costs', async () => {
   const {e, bearer} = await night(env({READY_NIGHT_MAX_USD: '0.01'}));
   const first = await (await call(e, 'POST', 'result', {job: 'j1', state: 'prepared', filled: 5, left: 0, costMicro: 12000}, bearer)).json();
   assert.equal(first.stop, true);

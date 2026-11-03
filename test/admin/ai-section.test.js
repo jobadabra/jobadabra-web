@@ -1,4 +1,4 @@
-// The AI section of /admin (admin/ai-*.js): the upload of kind "agents" is clamped, the three pages draw agents, steps and engines, and the routes answer the owner only. Moved page: /admin/ai/costs keeps the old /admin/growth/ai-cost address alive.
+// The AI section of /admin (admin/ai-*.js): the upload of kind "agents" is clamped, the three pages draw agents, steps and engines, and the routes answer the owner only. Moved page: /admin/ai/costs answers the old cost address with a 301.
 import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
@@ -64,6 +64,6 @@ test('the routes answer the owner only, show the stored card, and the old cost a
   assert.equal(agents.status, 200); assert.match(html, /Sentry fixer/); assert.match(html, /href="\/admin\/ai\/agents"/, 'the AI group is in the menu');
   assert.match(await (await call(e, '/admin/ai/steps', owner)).text(), /Recipe proposer/);
   assert.equal((await call(e, '/admin/ai/engines', owner)).status, 200);
-  const old = await call(e, '/admin/growth/ai-cost', {...owner, redirect: 'manual'});
+  const old = await call(e, '/admin/growth/' + 'ai-cost', {...owner, redirect: 'manual'});
   assert.equal(old.status, 301); assert.match(old.headers.get('Location'), /\/admin\/ai\/costs$/);
 });

@@ -193,7 +193,7 @@ test('Free AI section shows the day\'s neurons as a share of the free allowance'
   assert.match(freeSection(summary, 'last 30 days'), /5000 of 10000 neurons \(50%\)/);
 });
 
-test('/admin/growth/ai-cost says how many trial installs are near or at the $2 lifetime budget', async () => {
+test('/admin/ai/costs says how many trial installs are near or at the $2 lifetime budget', async () => {
   const {freeSection, freeSummary, trialUse} = await import('../../admin/free-ai-cost.js');
   const store = new Map([['freeai:life:aaaa1111bbbb', String(2 * 1e6)], ['freeai:life:cccc2222dddd', String(1.7 * 1e6)], ['freeai:life:eeee3333ffff', String(0.2 * 1e6)], ['freeai:usd:2026-10-16', '5']]);
   const kv = {list: async ({prefix}) => ({keys: [...store.keys()].filter(k => k.startsWith(prefix)).map(name => ({name}))}), get: async k => store.get(k) ?? null};
@@ -202,7 +202,7 @@ test('/admin/growth/ai-cost says how many trial installs are near or at the $2 l
   assert.match(freeSection(freeSummary([], new Date('2026-10-16T10:00:00Z')), 'last 30 days', null, trial), /Trial budget \$2 per install, for life: 1 at it, 1 near it \(80%\+\), of 3 with use/);
 });
 
-test('/admin/growth/ai-cost shows each install\'s day and month use against its limits, and the month total against $60', async () => {
+test('/admin/ai/costs shows each install\'s day and month use against its limits, and the month total against $60', async () => {
   const {freeSection, freeSummary} = await import('../../admin/free-ai-cost.js');
   const model = '@cf/qwen/qwen3-30b-a3b-fp8', now = new Date('2026-10-16T10:00:00Z');
   const summary = freeSummary([{day: '2026-10-16', who: 'aaaa1111', action: 'kit', model, calls: 3, tokens_in: 1, tokens_out: 1, micro_usd: 150000},
@@ -223,7 +223,7 @@ test('Free AI section shows the account\'s own neuron count from Cloudflare when
   assert.doesNotMatch(freeSection(summary, 'last 30 days'), /Account today/);
 });
 
-test('/admin/growth/ai-cost compares each install with the lines in force (wrangler.toml), money and tokens, as the route enforces them', async () => {
+test('/admin/ai/costs compares each install with the lines in force (wrangler.toml), money and tokens, as the route enforces them', async () => {
   const {freeSection, freeSummary} = await import('../../admin/free-ai-cost.js');
   const {limitsOf} = await import('../../shared/free-ai.js');
   const toml = readFileSync(new URL('../../workers/www/wrangler.toml', import.meta.url), 'utf8');
@@ -251,7 +251,7 @@ test('guarded admin read shows broker fallback spend, holds and caps from its se
   const data = await read(env);
   assert.equal(data.fallback.claude, 4.25); assert.equal(data.fallback.freeAi, 0.12);
   assert.deepEqual(data.chain.map(item => item.name), ['codex', 'claude'], 'one health read gives the spend and the engines');
-  const request = new Request('https://x.dev/admin/growth/ai-cost', {headers: {cookie: 'stats_key=fixture-key'}});
+  const request = new Request('https://x.dev/admin/ai/costs', {headers: {cookie: 'stats_key=fixture-key'}});
   // Use the same supported owner bearer as the local page-shot Worker.
   env.STATS_API_KEY = 'fixture-owner';
   const response = await view(new Request(request, {headers: {Authorization: 'Bearer fixture-owner'}}), env);
@@ -262,7 +262,7 @@ test('guarded admin read shows broker fallback spend, holds and caps from its se
   assert.match(html, /Claude \$5.00/); assert.match(html, /Free AI \$2.00/); assert.match(html, /reserved: Claude \$0.03/);
   let accessed = false;
   env.AI_BROKER.fetch = async () => { accessed = true; throw new Error('offline'); };
-  assert.equal((await view(new Request('https://x.dev/admin/growth/ai-cost'), env)).status, 404);
+  assert.equal((await view(new Request('https://x.dev/admin/ai/costs'), env)).status, 404);
   assert.equal(accessed, false);
   const unavailable = await view(new Request(request, {headers: {Authorization: 'Bearer fixture-owner'}}), env);
   const none = await unavailable.text();
