@@ -28,6 +28,22 @@ test('feedback is stored and sent to the owner with the version and the contact'
   assert.match(sent[0].text, /ana@example\.com/);
 });
 
+// Owner, 3 Nov 2026: "this should be mandatory for every feedback sent" (the app version, the OS platform, the install id); the e-mail stays optional.
+test('a feedback without the app version, the platform or the install id is refused and says why; the e-mail stays optional', async () => {
+  const e = env();
+  for (const missing of ['version', 'platform']) {
+    for (const blank of [undefined, '', '   ']) {
+      const answer = await send(e, {...good, [missing]: blank});
+      assert.equal(answer.status, 400, `${missing}=${JSON.stringify(blank)}`);
+      assert.match((await answer.json()).error, /version and platform/);
+    }
+  }
+  assert.equal((await send(e, {...good, install: undefined})).status, 400);
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM feedback').get().n, 0, 'nothing stored');
+  assert.equal((await send(e, {...good, contact: ''})).status, 200);
+  assert.equal((await send(e, {...good, contact: undefined})).status, 200);
+});
+
 test('empty text or a bad install id is refused; 10 a day per install', async () => {
   const e = env();
   assert.equal((await send(e, {...good, text: '  '})).status, 400);
