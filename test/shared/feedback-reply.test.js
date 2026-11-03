@@ -7,7 +7,7 @@ import {test} from 'node:test';
 import {actRoute} from '../../admin/feedback.js';
 import {replies} from '../../api/feedback-replies.js';
 import {act} from '../../shared/feedback-actions.js';
-import {DEFAULT_DEFER, defaultFixed, excerptOf, repliesFor, replyText} from '../../shared/feedback-reply.js';
+import {DEFAULT_DEFER, defaultFixed, excerptOf, markSeen, repliesFor, replyText} from '../../shared/feedback-reply.js';
 
 const sql = name => readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8');
 function d1() {
@@ -130,4 +130,30 @@ test('through the owner\'s route the Fixed answer carries told; a guest cannot s
   assert.equal((await post({})).status, 404);
   const ok = await (await post({Authorization: 'Bearer owner-key'})).json();
   assert.deepEqual([ok.ok, ok.state, ok.told], [true, 'fixed', 'app+mail']);
+});
+
+// Code review of 3/7 (3 Nov 2026): a reply's visibility had three owners (told, seen_at, state); these play the owner's own sequences through all of them.
+test('a deferred reply the person closed does not hide the later Fixed reply: a new telling is a new reply', async () => {
+  const {e} = setup(), ref = add(e);
+  await run(e, {ref, action: 'defer', mail: false});
+  assert.equal(await markSeen(e.STATS, 'install-aaaa-bbbb', ref, now), true);
+  await run(e, {ref, action: 'fixed', fixed_in: '1.0', mail: false});
+  const waiting = await repliesFor(e.STATS, 'install-aaaa-bbbb');
+  assert.deepEqual(waiting.map(reply => [reply.kind, reply.fixedIn]), [['fixed', '1.0']]);
+});
+
+test('a reply that is withdrawn (Reopen, then Dismiss) is not served with the wrong kind, and cannot be closed as if it were', async () => {
+  const {e} = setup(), ref = add(e);
+  await run(e, {ref, action: 'fixed', fixed_in: '1.0', mail: false});
+  await run(e, {ref, action: 'reopen'});
+  await run(e, {ref, action: 'dismiss'});
+  assert.deepEqual(await repliesFor(e.STATS, 'install-aaaa-bbbb'), []);
+  assert.equal(await markSeen(e.STATS, 'install-aaaa-bbbb', ref, now), false);
+});
+
+test('a version or link longer than its limit is refused, never silently cut to fit', async () => {
+  const {e} = setup(), ref = add(e);
+  assert.equal((await run(e, {ref, action: 'fixed', fixed_in: '1'.repeat(60)})).status, 400);
+  assert.equal((await run(e, {ref, action: 'fixed', pr_url: `https://github.com/a/b/pull/${'1'.repeat(200)}`})).status, 400);
+  assert.equal(rowOf(e, ref).state, 'new');
 });

@@ -122,8 +122,8 @@ function formFor(row, action) {
   const version = fixed ? field('Fixed in (a version; blank = the next update)', text(40, 'e.g. 0.9.12')) : null;
   const link = field(fixed ? 'PR or commit link (lets a release find it and tell the reporter by itself)' : 'Linear issue (optional)', text(200, fixed ? 'https://github.com/…/pull/123' : 'https://linear.app/…/issue/JOB-12'));
   const message = field('Message to the reporter (blank = the standard sentence)', text(300, fixed ? 'Thank you: this is fixed.' : 'Thank you: we saw this and parked it for later.'));
-  const mail = el('input'); mail.type = 'checkbox'; mail.disabled = !row.mailable; mail.checked = !!row.mailable;
-  const mailRow = el('label', 'check'); mailRow.append(mail, row.mailable ? 'Also e-mail ' + row.contact : 'No e-mail: the contact is not an address (they are told in the app)');
+  const mail = el('input'); mail.type = 'checkbox'; const told = /^app/.test(row.told || ''); mail.disabled = !row.mailable; mail.checked = !!row.mailable && !told;   // Why (3/7 review): a card told before (deferred, then fixed) does not mail again unless the owner ticks it
+  const mailRow = el('label', 'check'); mailRow.append(mail, row.mailable ? (told ? 'Already told once: e-mail ' : 'Also e-mail ') + row.contact : 'No e-mail: the contact is not an address (they are told in the app)');
   form.append(mailRow);
   let when = null, impact = null, tell = null;
   if (fixed) {

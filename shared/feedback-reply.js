@@ -6,8 +6,10 @@ import {send, validAddress} from './mail.js';
 export const DEFAULT_DEFER = 'Thank you: we saw this and parked it for later. If we pick it up we will tell you.';
 export const defaultFixed = fixedIn => (fixedIn ? `Thank you: this is fixed in ${fixedIn}.` : 'Thank you: this is fixed and will arrive in the next update.');
 const clip = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
-const PR = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|commit)\/\w+$/, LINEAR = /^https:\/\/linear\.app\/[\w./-]+$/, VERSION = /^[\w.+ -]{0,40}$/;
+const PR = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|commit)\/\w+$/, LINEAR = /^https:\/\/linear\.app\/[\w./-]+$/, VERSION = /^[\w.+ -]{0,40}$/, PR_MAX = 200;
 const WHEN = ['now', 'release', 'never'];
+// Why (3/7 code review, 3 Nov 2026): one rule says when the app may show a reply, used by the list and by closing: the card is Fixed or Deferred, it was told, and the person has not closed this telling.
+const VISIBLE = "state IN ('fixed', 'deferred') AND told LIKE 'app%' AND seen_at = '' AND ref != ''";
 
 /** What the reporter reads: the owner's own words, else the default sentence for the state. */
 export const replyText = row => clip(row.tell_message, 300) || (row.state === 'fixed' ? defaultFixed(row.fixed_in) : DEFAULT_DEFER);
@@ -19,17 +21,17 @@ export const excerptOf = text => { const one = clip(text, 400); return one.lengt
  * -> {columns, tell}. A release-timed fix waits (`told = 'pending'`) until PR 5/7's release call finds it.
  */
 export function fixedColumns(input) {
-  const fixedIn = clip(input.fixed_in, 40), pr = clip(input.pr_url, 200);
+  const fixedIn = clip(input.fixed_in, 400), pr = clip(input.pr_url, 400);   // cut only to bound the work: a value over its limit then fails its own check, never passes cut to fit
   if (!VERSION.test(fixedIn)) return {error: 'The version has letters, digits, dots and dashes only.'};
-  if (pr && !PR.test(pr)) return {error: 'The link is a GitHub pull request or commit, like https://github.com/jobadabra/jobadabra/pull/123.'};
+  if (pr && (pr.length > PR_MAX || !PR.test(pr))) return {error: 'The link is a GitHub pull request or commit, like https://github.com/jobadabra/jobadabra/pull/123.'};
   const tell = WHEN.includes(input.when) ? input.when : (fixedIn ? 'now' : 'release');
   return {tell, columns: {fixed_in: fixedIn, pr_url: pr, tell_mode: tell, tell_message: clip(input.message, 300), tell_mail: input.mail ? 1 : 0, told: tell === 'release' ? 'pending' : ''}};
 }
 
 /** The columns the Acknowledge + defer form sets, or {error}. `tell`: false = do not tell (default true). */
 export function deferColumns(input) {
-  const linear = clip(input.linear_url, 200);
-  if (linear && !LINEAR.test(linear)) return {error: 'The link is a Linear issue, like https://linear.app/jobadabra/issue/JOB-12.'};
+  const linear = clip(input.linear_url, 400);
+  if (linear && (linear.length > PR_MAX || !LINEAR.test(linear))) return {error: 'The link is a Linear issue, like https://linear.app/jobadabra/issue/JOB-12.'};
   const tell = input.tell === false ? 'never' : 'now';
   return {tell, columns: {linear_url: linear, tell_mode: tell, tell_message: clip(input.message, 300), tell_mail: input.mail ? 1 : 0, told: ''}};
 }
@@ -47,7 +49,7 @@ export async function tellReporter(env, ref, now = new Date()) {
     told = sent.ok ? 'app+mail' : `app, mail refused: ${sent.reason}`;
   } else if (row.tell_mail) told = 'app, mail refused: not an address';
   await env.STATS.batch([
-    env.STATS.prepare('UPDATE feedback SET told = ?, told_at = ? WHERE ref = ?').bind(told, now.toISOString(), ref),
+    env.STATS.prepare('UPDATE feedback SET told = ?, told_at = ?, seen_at = \'\' WHERE ref = ?').bind(told, now.toISOString(), ref),
     env.STATS.prepare('INSERT INTO feedback_log (at, ref, who, action, detail) VALUES (?, ?, ?, ?, ?)').bind(now.toISOString(), ref, 'owner (told)', 'tell', told.slice(0, 200)),
   ]);
   return told;
@@ -55,12 +57,12 @@ export async function tellReporter(env, ref, now = new Date()) {
 
 /** The replies the app has not shown yet for this install, newest first, at most 5: {ref, on, excerpt, kind, fixedIn, message}. */
 export async function repliesFor(db, install) {
-  const rows = (await db.prepare("SELECT ref, at, text, state, fixed_in, tell_message FROM feedback WHERE install = ? AND told LIKE 'app%' AND seen_at = '' AND ref != '' ORDER BY told_at DESC LIMIT 5").bind(install).all()).results || [];
+  const rows = (await db.prepare(`SELECT ref, at, text, state, fixed_in, tell_message FROM feedback WHERE install = ? AND ${VISIBLE} ORDER BY told_at DESC LIMIT 5`).bind(install).all()).results || [];
   return rows.map(row => ({ref: row.ref, on: String(row.at).slice(0, 10), excerpt: excerptOf(row.text), kind: row.state === 'fixed' ? 'fixed' : 'deferred', fixedIn: row.fixed_in, message: replyText(row)}));
 }
 
 /** The person closed a reply in the app. -> true when a row changed. */
 export async function markSeen(db, install, ref, now = new Date()) {
-  const done = await db.prepare("UPDATE feedback SET seen_at = ? WHERE install = ? AND ref = ? AND told LIKE 'app%' AND seen_at = ''").bind(now.toISOString(), install, ref).run();
+  const done = await db.prepare(`UPDATE feedback SET seen_at = ? WHERE install = ? AND ref = ? AND ${VISIBLE}`).bind(now.toISOString(), install, ref).run();
   return (done?.meta?.changes ?? done?.changes ?? 0) > 0;
 }
