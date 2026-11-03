@@ -19,3 +19,6 @@ export function problem(chain) {
   if (chain.some(item => item.name === 'claude' && item.configured && item.state === 'token-invalid')) return 'Claude token rejected';
   return chain.some(item => item.configured) ? '' : 'no AI engine can answer';
 }
+
+/** The per-workflow tally from a health answer: {days: {<YYYY-MM-DD>: {<workflow>: {calls, ok, tokens, ms, engines}}}}, or null when this broker build has none (an older one). */
+export const tallyOf = health => (health?.tally && typeof health.tally.days === 'object' && health.tally.days !== null ? health.tally : null);

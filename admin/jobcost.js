@@ -11,7 +11,8 @@ import {esc} from '../shared/html.js';
 import {equal} from '../shared/guard.js';
 import {filterLinks} from './admin.js';
 import {brokerCard} from './ai-broker-card.js';
-import {chainOf, fetchHealth} from '../shared/ai-broker.js';
+import {chainOf, fetchHealth, tallyOf} from '../shared/ai-broker.js';
+import {workflowCard} from './ai-workflow-tokens.js';
 
 export const JOBS = {   // job id -> [label, group]; an unknown id still shows, under "other"
   'central-scout': ['Central scout', 'Discovery'],
@@ -89,7 +90,7 @@ export function byKey(rows, now = new Date(), range = '30d') {
   return Object.values(keys).filter(k => k.range > 0 || RANGES[range].hours >= 720).sort((a, b) => b.range - a.range);
 }
 
-export function page(rows, billed = [], keyRows = [], start = '', now = new Date(), range = '30d', freeRows = [], accountToday = null, trial = null, web = null, lines = undefined, pro = null, fallback = null, chain = null) {
+export function page(rows, billed = [], keyRows = [], start = '', now = new Date(), range = '30d', freeRows = [], accountToday = null, trial = null, web = null, lines = undefined, pro = null, fallback = null, chain = null, tally = null) {
   const spaceRows = keyRows.filter(row => String(row.key).startsWith('ws.')).map(row => ({...row, key: row.key.slice(3)}));   // a workspace's days: the sum of its keys (ai-cost-report.mjs)
   const s = summarize(rows, billed, now, range), keys = byKey(keyRows.filter(row => !String(row.key).startsWith('ws.')), now, range), spaces = byKey(spaceRows, now, range), r = RANGES[range], last = `Last ${r.label}`, daily = r.hours <= 24;
   const fresh = range === '30d' && start && start > new Date(now.getTime() - 29 * 86400000).toISOString().slice(0, 10);   // the start date is inside the 30 days: say so
@@ -119,6 +120,7 @@ td{padding:6px 4px;border-top:1px solid var(--line)}td.n{text-align:right;font-v
 <section class="card" id="ci-fallback-cost">${fallback ? `<p style="margin:0"><b>CI fallback: Claude ${money(fallback.claude)}, Free AI ${money(fallback.freeAi)} today</b></p>
 <small class="muted">${esc(fallback.day)} UTC · Daily caps: Claude ${money(fallback.claudeCap)}, Free AI ${fallback.freeAiCap ? money(fallback.freeAiCap) : 'disabled (cap pending approval)'} · Outstanding reserved: Claude ${money(fallback.held.claude)}, Free AI ${money(fallback.held.freeAi)}</small>` : '<p class="muted" style="margin:0">CI fallback: data unavailable</p>'}</section>
 ${brokerCard(chain)}
+${workflowCard(tally, now.toISOString().slice(0, 10))}
 <section class="card"><h2>🏷️ By provider</h2><small class="muted">Claude and OpenAI separately, and together</small><div class="wrap"><table><tr><th>Provider</th><th>Today</th><th>${last}</th><th>Share</th><th>Runs</th></tr>
 ${s.providers.map(p => `<tr><td>${esc(PROVIDERS[p.id])}</td><td class="n">${money(p.today)}</td><td class="n">${money(p.usd)}</td><td class="n">${s.total ? Math.round(100 * p.usd / s.total) : 0}%</td><td class="n">${p.runs}</td></tr>`).join('')}
 <tr class="total"><td>Total</td><td class="n">${money(s.today)}</td><td class="n">${money(s.total)}</td><td class="n">${s.total ? '100%' : '–'}</td><td class="n">${s.runs}</td></tr>
@@ -200,12 +202,12 @@ export async function readBroker(env) {
     const health = await response.json(), data = health.fallback;
     if (data?.day !== new Date().toISOString().slice(0, 10) ||
         ![data.claude, data.freeAi, data.claudeCap, data.freeAiCap, data.held?.claude, data.held?.freeAi].every(n => Number.isFinite(n) && n >= 0)) return null;
-    return {fallback: data, chain: chainOf(health)};
+    return {fallback: data, chain: chainOf(health), tally: tallyOf(health)};
   } catch { return null; }
 }
 
 export async function read(env) {
-  const {fallback = null, chain = null} = await readBroker(env) || {};
+  const {fallback = null, chain = null, tally = null} = await readBroker(env) || {};
   try {
     const window = new Date(Date.now() - 35 * 86400000).toISOString().slice(0, 10), from = since(env) > window ? since(env) : window;
     const runs = (await env.STATS.prepare('SELECT job, run_id, day, at, usd, calls, provider FROM ai_cost_runs WHERE day >= ?').bind(from).all()
@@ -213,8 +215,8 @@ export async function read(env) {
     const billed = (await env.STATS.prepare('SELECT day, usd FROM ai_cost_billed WHERE day >= ?').bind(from).all()).results || [];
     const keys = await env.STATS.prepare('SELECT day, key, usd FROM ai_cost_keys WHERE day >= ?').bind(from).all().then(r => r.results || []).catch(() => []);   // before migration 0036: none
     const free = await env.STATS.prepare("SELECT day, who, action, model, calls, tokens_in, tokens_out, micro_usd FROM ai_calls WHERE day >= ? AND model LIKE '@cf/%'").bind(from).all().then(r => r.results || []).catch(() => []);
-    return {runs, billed, keys, free, fallback, chain};
-  } catch { return {runs: [], billed: [], keys: [], free: [], fallback, chain}; }
+    return {runs, billed, keys, free, fallback, chain, tally};
+  } catch { return {runs: [], billed: [], keys: [], free: [], fallback, chain, tally}; }
 }
 
 // GET /ai-cost (?key=<STATS_KEY> once; the cookie after that)
@@ -222,11 +224,11 @@ export async function view(request, env) {
   if (!await viewer(request, env)) return new Response('Not found', {status: 404});
   const url = new URL(request.url);
   if (url.searchParams.has('key')) return remember(url, env, request);
-  const {runs, billed, keys, free, fallback, chain} = await read(env);
+  const {runs, billed, keys, free, fallback, chain, tally} = await read(env);
   const now = new Date(), accountToday = env.WAITLIST ? await accountNeurons(env, env.WAITLIST, now.toISOString().slice(0, 10), now) : null;   // Cloudflare's own count, any caller
   const trial = env.WAITLIST?.list ? await trialUse(env.WAITLIST, Number(env.FREE_AI_TRIAL_USD) > 0 ? Number(env.FREE_AI_TRIAL_USD) : undefined) : null;
   const range = rangeOf(url.searchParams.get('range'));
   const pro = env.STATS ? await readProCosts(env.STATS, now, RANGES[range].hours, since(env)) : null;
   const web = await webMonth(env.WAITLIST, env, now);   // the Free AI board web search against its month line
-  return new Response(page(runs, billed, keys, since(env), now, range, free, accountToday, trial, web, limitsOf(env), pro, fallback, chain), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
+  return new Response(page(runs, billed, keys, since(env), now, range, free, accountToday, trial, web, limitsOf(env), pro, fallback, chain, tally), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
 }
