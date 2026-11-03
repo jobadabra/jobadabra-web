@@ -10,7 +10,7 @@ import {purgeFiles, undelivered, TEXT_FILES} from '../../shared/feedback.js';
 
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const name of ['0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql', '0126_feedback_actions.sql', '0127_feedback_impact_ai.sql', '0128_feedback_replies.sql']) db.exec(readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'));
+  for (const name of ['0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql', '0126_feedback_actions.sql', '0127_feedback_impact_ai.sql', '0128_feedback_replies.sql', '0129_feedback_ai.sql']) db.exec(readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'));
   const statement = (sql, args = []) => ({bind: (...values) => statement(sql, values), run: async () => db.prepare(sql).run(...args),
     all: async () => ({results: db.prepare(sql).all(...args)}), first: async () => db.prepare(sql).get(...args)});
   return {db, prepare: sql => statement(sql)};

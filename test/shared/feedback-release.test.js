@@ -12,7 +12,7 @@ import {tellRelease} from '../../shared/feedback-release.js';
 const sql = name => readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const name of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql', '0126_feedback_actions.sql', '0127_feedback_impact_ai.sql', '0128_feedback_replies.sql']) db.exec(sql(name));
+  for (const name of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql', '0126_feedback_actions.sql', '0127_feedback_impact_ai.sql', '0128_feedback_replies.sql', '0129_feedback_ai.sql']) db.exec(sql(name));
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values), run: async () => db.prepare(text).run(...args),
     all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
   return {db, prepare: text => statement(text), batch: async list => { const out = []; for (const item of list) out.push({meta: {changes: (await item.run()).changes}}); return out; }};

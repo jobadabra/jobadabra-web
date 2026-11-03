@@ -58,7 +58,7 @@ const IMPACT_FILTERS = [['high', '▲ High'], ['medium', '● Medium'], ['low', 
 const RANK = {high: 0, medium: 1, low: 2, '': 3};
 const eff = row => row.impact || row.impact_ai || '';   // the owner's rating wins; until he rates it, the AI's suggestion counts for the filters and the sort
 const NAME = {high: 'High', medium: 'Medium', low: 'Low'};
-const LABEL = {fixed: '✅ Fixed + tell the reporter…', released: '📦 Mark as released…', defer: '⏳ Acknowledge + defer…', dismiss: '🙈 Dismiss', false_positive: '🚫 False positive…', reopen: '↩ Reopen', delete: '🗑 Delete…'};
+const LABEL = {fixed: '✅ Fixed + tell the reporter…', released: '📦 Mark as released…', ai: '🤖 Send to AI…', defer: '⏳ Acknowledge + defer…', dismiss: '🙈 Dismiss', false_positive: '🚫 False positive…', reopen: '↩ Reopen', delete: '🗑 Delete…'};
 const el = (tag, className, text) => { const e = document.createElement(tag); if (className) e.className = className; if (text !== undefined) e.textContent = text; return e; };
 
 let toastTimer;
@@ -101,6 +101,7 @@ function choose(row, action, card) {
   card.querySelector('.panel, .form')?.remove();
   if (action === 'fixed' || action === 'defer') return card.append(formFor(row, action));
   if (action === 'released') return card.append(releasedForm(row));
+  if (action === 'ai') return card.append(aiForm(row));
   if (action === 'dismiss') return send({ref: row.ref, action}, 'Dismissed.', {undo: {ref: row.ref, action: 'reopen', from: 'dismissed'}});
   if (action === 'reopen') return send({ref: row.ref, action}, 'Back to new.');
   const panel = el('div', 'panel'), go = el('button', action === 'delete' ? 'danger' : 'go', action === 'delete' ? 'Delete' : 'Save'), cancel = el('button', '', action === 'delete' ? 'Keep' : 'Cancel');
@@ -145,6 +146,18 @@ function formFor(row, action) {
   return form;
 }
 
+// "Send to AI": one CI run reads this report and opens a DRAFT PR for the owner. The ticks say what the AI may read besides the words (never the e-mail, the install id or the screenshot);
+// the profile snapshot is off unless ticked for this run. The server checks the limits again (3 a day, one at a time).
+function aiForm(row) {
+  const form = el('div', 'form'), tick = (label, on, disabled) => { const box = el('input'); box.type = 'checkbox'; box.checked = on; box.disabled = disabled; const l = el('label', 'check'); l.append(box, label); form.append(l); return box; };
+  const logs = tick('Its logs', !!row.logs, !row.logs), page = tick('Its screen data', !!row.page, !row.page), profile = tick('The Profile snapshot (off unless you tick it for this run)', false, !row.profile);
+  form.append(el('div', 'note', 'A CI run reads the report, writes a failing test and the fix, and opens a draft PR for you to review. It never merges. At most 3 a day, one at a time. It uses the AI plan.'));
+  const buttons = el('div', 'row'), go = el('button', 'go', 'Send to AI'), cancel = el('button', '', 'Cancel'); go.type = cancel.type = 'button'; cancel.onclick = () => form.remove();
+  go.onclick = () => send({ref: row.ref, action: 'ai', include: {logs: logs.checked, page: page.checked, profile: profile.checked}}, 'Sent to the AI: its run starts in a minute.');
+  buttons.append(go, cancel); form.append(buttons); setTimeout(() => go.focus());
+  return form;
+}
+
 // "Mark as released": the version the fix shipped in. A card still waiting for a release is told when this is saved, like a release call would; one told already keeps what it was told. The server checks the version again.
 function releasedForm(row) {
   const form = el('div', 'form'), label = el('label', '', 'Shipped in (a version)'), version = el('input');
@@ -160,6 +173,7 @@ function releasedForm(row) {
 const toldChips = row => {
   const box = el('div', 'told');
   if (row.fixed_in) box.append(el('span', 'chip', 'in ' + row.fixed_in));
+  if (row.ai_run_url) { const a = el('a', 'chip ai', '🤖 run ↗'); a.href = row.ai_run_url; a.target = '_blank'; a.rel = 'noopener'; box.append(a); }
   for (const [url, label] of [[row.pr_url, 'PR ↗'], [row.linear_url, 'Linear ↗']]) if (url) { const a = el('a', 'chip', label); a.href = url; a.target = '_blank'; a.rel = 'noopener'; box.append(a); }
   if (row.told === 'pending') box.append(el('span', 'chip deferred', '⏳ waiting for a release to tell the reporter'));
   else if (row.told === 'telling') box.append(el('span', 'chip deferred', '⏳ telling the reporter…'));   // a release call is mid-way; a card that stays so was cut off
@@ -181,7 +195,7 @@ const make = row => {
   card.append(top, text);
   if (row.state_note) card.append(el('div', 'note', row.state === 'false_positive' ? 'Why: ' + row.state_note : row.state_note));
   card.id = row.ref || '';
-  if (row.fixed_in || row.pr_url || row.linear_url || row.told || row.seen_at) card.append(toldChips(row));
+  if (row.fixed_in || row.pr_url || row.linear_url || row.told || row.seen_at || row.ai_run_url) card.append(toldChips(row));
   if (canAct || row.impact || row.impact_ai) {
     const box = el('div', 'impact'); box.append('Impact');
     for (const [value, name] of [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]) {
@@ -250,7 +264,7 @@ function paint() {
   if (sortBy === 'impact') shown = shown.slice().sort((a, b) => RANK[eff(a)] - RANK[eff(b)] || (a.at < b.at ? 1 : -1));
   const keyOf = row => row.ref || row.at + row.install, seen = new Set(known || []), first = known === null;
   list.replaceChildren(...(shown.length ? shown.map(row => {
-    const sig = [row.notified, row.shot, row.logs, row.page, row.profile, row.state, row.state_note, row.impact, row.impact_ai, row.impact_why, row.actions.join(), row.fixed_in, row.pr_url, row.linear_url, row.told, row.seen_at, canAct].join('|'), kept = cards.get(keyOf(row));
+    const sig = [row.notified, row.shot, row.logs, row.page, row.profile, row.state, row.state_note, row.impact, row.impact_ai, row.impact_why, row.actions.join(), row.fixed_in, row.pr_url, row.ai_run_url, row.linear_url, row.told, row.seen_at, canAct].join('|'), kept = cards.get(keyOf(row));
     let card = kept && kept.sig === sig ? kept.card : null;
     if (!card) { card = make(row); cards.set(keyOf(row), {sig, card}); }
     mark(card, !first && !seen.has(keyOf(row))); return card;
