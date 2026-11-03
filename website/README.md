@@ -26,9 +26,9 @@ From a terminal or an agent session on the owner's Mac:
 
 ```sh
 curl -s -H "Authorization: Bearer $(security find-generic-password -s jobadabra.site.api_key -w)" \
-  https://www.jobadabra.top/admin/growth/ai-cost
+  https://www.jobadabra.top/admin/ai/costs
 ```
 
 - The Bearer token is the Worker secret `STATS_API_KEY`, kept in the Keychain as `jobadabra.site.api_key`.
 - `STATS_KEY` (`jobadabra.site.stats_key`) is **not** accepted as a Bearer token: it is the browser login (`?key=` once, then the session cookie).
-- The pages are HTML; strip the tags to read the tables (`/admin/growth/ai-cost`: By group, By day, By API key, By job).
+- The pages are HTML; strip the tags to read the tables (`/admin/ai/costs`: By group, By day, By API key, By job).

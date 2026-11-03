@@ -22,8 +22,8 @@ export function agentCard(agent, spend, now) {
 /** The Agents page from the latest card and the broker tally (null when unreadable). */
 export function agentsPage(card, tally, now = new Date()) {
   const agents = card?.agents || [], today = now.toISOString().slice(0, 10), rows = spendRows(tally, today);
-  const on = agents.filter(a => a.state === 'on').length, off = agents.filter(a => a.state === 'off').length, red = agents.filter(a => a.state === 'on' && a.runs.endsWith('r')).length;
-  const verdict = `<section class="card"><h2>${agents.length} agents <span class="muted">· acts by itself: code, a pull request, issues or clicks in the app</span></h2><div class="ai-chips">${chip('good', `🟢 ${on} on`)}${off ? chip('wait', `⏸ ${off} off`) : ''}${red ? chip('bad', `🔴 ${red} last run red`) : chip('good', 'no red last run')}</div>
+  const on = agents.filter(a => a.state === 'on').length, off = agents.filter(a => a.state === 'off').length, idle = agents.filter(a => a.state === 'idle').length, red = agents.filter(a => a.state === 'on' && a.runs.endsWith('r')).length;
+  const verdict = `<section class="card"><h2>${agents.length} agents <span class="muted">· acts by itself: code, a pull request, issues or clicks in the app</span></h2><div class="ai-chips">${chip('good', `🟢 ${on} on`)}${off ? chip('wait', `⏸ ${off} off`) : ''}${idle ? chip('wait', `💤 ${idle} idle`) : ''}${red ? chip('bad', `🔴 ${red} last run red`) : chip('good', 'no red last run')}</div>
 <p class="muted" style="margin:10px 0 0;font-size:13px">Jobs where the AI only answers a question and the code decides are on <a href="/admin/ai/steps">AI steps</a>.</p></section>`;
   const body = agents.length ? `<div class="ai-grid">${agents.map(agent => agentCard(agent, spendOf(rows, `jobadabra/${agent.id}.yml`), now.getTime())).join('')}</div>` : emptyCard;
   return shell({title: 'Agents', icon: '🤖', heading: 'AI agents', age: card?.at, verdict, body});

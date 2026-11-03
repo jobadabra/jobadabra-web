@@ -34,6 +34,12 @@ test('the agents upload keeps fixed words and clamps the rest', () => {
   assert.equal(clean.steps[0].repo, 'jobadabra');
   assert.equal(cleanAgents({agents: []}), null); assert.equal(cleanAgents(null), null);
 });
+test('an upload with an array where a string belongs cannot break the Agents page', () => {
+  const clean = cleanAgents({agents: [{id: 'a', name: 'A', state: 'on', runs: ['g'], lastRun: ['2026-11-03']}], steps: [{name: 'S', file: 'a.yml', repo: 'jobadabra', state: 'on', runs: ['g'], lastRun: []}]});
+  assert.equal(clean.agents[0].runs, ''); assert.equal(clean.agents[0].lastRun, ''); assert.equal(clean.steps[0].runs, '');
+  assert.ok(agentsPage(clean, null).includes('1 agents'));
+});
+
 test('the Agents page tags issues-only reviewers, shows a red last run and an off agent, with the broker tokens', () => {
   const tally = {days: {[day]: {'jobadabra/sentry-fix.yml': {calls: 3, ok: 3, tokens: 42000, ms: 1, engines: {codex: 3}}}}};
   const html = agentsPage({...card, at: '2026-11-03T13:41:00Z'}, tally, now);
