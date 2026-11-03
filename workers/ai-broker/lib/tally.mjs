@@ -15,7 +15,7 @@ const WORKFLOW = /^[^/]+\/([^/]+)\/\.github\/workflows\/([^/]+\.ya?ml)$/;
 
 /**
  * The workflow behind a verified run token, as "<repo>/<file>" (e.g. "jobadabra/ui-findings.yml"); "unknown" when the claim has no workflow.
- * Takes the verified claims. The owner part of the repo is dropped so the org move (GarryOne -> jobadabra) does not split one workflow in two.
+ * Takes the verified claims. The owner part of the repo is dropped so a move of the repos to another owner does not split one workflow in two.
  */
 export function workflowOf(claims) {
   const ref = String(claims?.job_workflow_ref || claims?.workflow_ref || '').split('@')[0];
