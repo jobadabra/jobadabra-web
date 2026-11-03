@@ -78,6 +78,7 @@ import {signals} from '../../api/signals.js';
 import {feedback} from '../../api/feedback.js';
 import {view as feedbackView, file as feedbackFile, actRoute as feedbackAct} from '../../admin/feedback.js';
 import {purgeFiles as purgeFeedbackFiles} from '../../shared/feedback.js';
+import {retryImpact} from '../../shared/feedback-impact.js';
 import {reportForm} from '../../shared/report-form.js';
 import {view as reportsView} from '../../admin/report-view.js';
 import * as recipeLibrary from '../../api/recipes.js';
@@ -263,7 +264,7 @@ async function route(request, env, ctx) {
   if (pathname === '/api/contribute') return pool.contribute(request, env);
   if (pathname === '/api/contributions') return pool.aggregate(request, env);
   if (pathname === '/api/signals') return signals(request, env);
-  if (pathname === '/api/feedback') return feedback(request, env);
+  if (pathname === '/api/feedback') return feedback(request, env, fetch, new Date(), ctx);
   if (pathname === '/admin/growth/feedback/act') return feedbackAct(request, env);   // one action on one feedback, the owner only (shared/feedback-actions.js)
   if (pathname === '/admin/growth/feedback/file') return feedbackFile(request, env);   // a feedback's screenshot or logs, the owner only (admin/feedback.js)
   if (pathname === '/api/report-form' || pathname.startsWith('/api/report-form/')) return reportForm(request, env, pathname);   // "Report this form": an encrypted recording from an install (shared/report-form.js)
@@ -329,6 +330,7 @@ export default {
       return;
     }
     ctx.waitUntil(sentryAlert.purge(env).catch(error => console.error(`sentry alert purge: ${error.message}`)));
+    ctx.waitUntil(retryImpact(env).catch(error => console.error(`feedback impact retry: ${error.message}`)));   // feedback the AI could not rate yet (shared/feedback-impact.js)
     ctx.waitUntil(purgeFeedbackFiles(env).catch(error => console.error(`feedback files purge: ${error.message}`)));   // screenshots and logs older than 90 days (shared/feedback.js)
     ctx.waitUntil(synthetic.purge(env).catch(error => console.error(`synthetic purge: ${error.message}`)));
     // The day's totals first (kept for good), then the 90-day purge of raw rows.

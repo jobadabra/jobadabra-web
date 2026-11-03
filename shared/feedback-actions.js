@@ -44,7 +44,7 @@ export async function act(env, input, who, now = new Date()) {
   const {ref, action} = input || {}, spec = Object.hasOwn(ACTIONS, action) ? ACTIONS[action] : null;
   if (!spec) return refused(400, 'Unknown action.');
   if (!/^[0-9a-f]{16}$/.test(String(ref))) return refused(400, 'Unknown feedback.');
-  const row = await env.STATS.prepare('SELECT state, impact FROM feedback WHERE ref = ?').bind(ref).first();
+  const row = await env.STATS.prepare('SELECT state, impact, impact_ai FROM feedback WHERE ref = ?').bind(ref).first();
   if (!row) return refused(404, 'This feedback is gone.');
   if (!spec.from.includes(row.state)) return refused(409, `Can't ${action.replace('_', ' ')} a feedback that is ${row.state.replace('_', ' ')}.`);
   const at = now.toISOString();
@@ -58,7 +58,7 @@ export async function act(env, input, who, now = new Date()) {
   if (action === 'impact') {
     const value = input.impact === '' || IMPACTS.includes(input.impact) ? input.impact : null;
     if (value === null) return refused(400, 'Impact is high, medium, low or none.');
-    if (!await commit(env.STATS.prepare('UPDATE feedback SET impact = ? WHERE ref = ?').bind(value, ref), `${row.impact || 'unrated'} -> ${value || 'unrated'}`)) return raced;
+    if (!await commit(env.STATS.prepare('UPDATE feedback SET impact = ? WHERE ref = ?').bind(value, ref), `${row.impact || 'unrated'} -> ${value || 'unrated'}${row.impact_ai ? ` (AI said ${row.impact_ai})` : ''}`)) return raced;
     return {ok: true, state: row.state, impact: value};
   }
   if (action === 'delete') {

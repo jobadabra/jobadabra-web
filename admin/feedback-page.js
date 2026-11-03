@@ -50,6 +50,8 @@ const STATE_FILTERS = [['open', 'Open', r => OPEN.includes(r.state)], ['all', 'A
   ['dismissed', '🙈 Dismissed', r => r.state === 'dismissed'], ['false_positive', '🚫 False positive', r => r.state === 'false_positive']];
 const IMPACT_FILTERS = [['high', '▲ High'], ['medium', '● Medium'], ['low', '▽ Low'], ['none', 'Unrated']];
 const RANK = {high: 0, medium: 1, low: 2, '': 3};
+const eff = row => row.impact || row.impact_ai || '';   // the owner's rating wins; until he rates it, the AI's suggestion counts for the filters and the sort
+const NAME = {high: 'High', medium: 'Medium', low: 'Low'};
 const LABEL = {dismiss: '🙈 Dismiss', false_positive: '🚫 False positive…', reopen: '↩ Reopen', delete: '🗑 Delete…'};
 const el = (tag, className, text) => { const e = document.createElement(tag); if (className) e.className = className; if (text !== undefined) e.textContent = text; return e; };
 
@@ -119,7 +121,7 @@ const make = row => {
   card.append(top, text);
   if (row.state_note) card.append(el('div', 'note', row.state === 'false_positive' ? 'Why: ' + row.state_note : row.state_note));
   card.id = row.ref || '';
-  if (canAct || row.impact) {
+  if (canAct || row.impact || row.impact_ai) {
     const box = el('div', 'impact'); box.append('Impact');
     for (const [value, name] of [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]) {
       if (!canAct) { if (row.impact === value) box.append(el('span', 'chip', name)); continue; }
@@ -127,6 +129,11 @@ const make = row => {
       chip.onclick = () => send({ref: row.ref, action: 'impact', impact: row.impact === value ? '' : value}, row.impact === value ? 'Impact cleared.' : 'Impact: ' + name + '.');
       box.append(chip);
     }
+    if (row.impact_ai && row.impact !== row.impact_ai && canAct) {
+      const use = el('button', 'chip ai', '🤖 AI suggests ' + NAME[row.impact_ai] + ' · use it'); use.type = 'button'; use.title = row.impact_why;
+      use.onclick = () => send({ref: row.ref, action: 'impact', impact: row.impact_ai}, 'Impact: ' + NAME[row.impact_ai] + '.'); box.append(use);
+    } else if (row.impact_ai) box.append(el('span', 'chip ai', '🤖 AI: ' + NAME[row.impact_ai]));
+    if (row.impact_why) box.append(el('span', row.impact_ai ? '' : 'warn', (row.impact_ai ? '' : '⚠ ') + row.impact_why));
     card.append(box);
   }
   if (row.notified === 'sent') { /* delivered: nothing to say */ } else if (row.notified) {
@@ -174,15 +181,15 @@ function paint() {
   for (const [n, name] of [[open, 'open'], [deferred, 'deferred'], [rows.length, 'total']]) { const s = el('span'); s.append(el('b', '', String(n)), ' ' + name); summary.append(s); }
   if (noise) summary.append(el('span', 'muted', 'False positive: ' + noise + ' of ' + rows.length + ' (' + Math.round(noise * 100 / rows.length) + '%)'));
   chips(document.getElementById('statef'), STATE_FILTERS.map(([value, label, test]) => [value, label, count(test)]), stateFilter, value => { stateFilter = value || 'open'; });
-  chips(document.getElementById('impactf'), IMPACT_FILTERS.map(([value, label]) => [value, label, count(r => (r.impact || 'none') === value)]), impactFilter, value => { impactFilter = value; });
+  chips(document.getElementById('impactf'), IMPACT_FILTERS.map(([value, label]) => [value, label, count(r => (eff(r) || 'none') === value)]), impactFilter, value => { impactFilter = value; });
   const sort = el('button', 'chip', 'Sort: ' + (sortBy === 'newest' ? 'newest' : 'impact first')); sort.type = 'button'; sort.onclick = () => { sortBy = sortBy === 'newest' ? 'impact' : 'newest'; paint(); };
   document.getElementById('impactf').append(el('span', 'sep'), sort);
   const keep = (STATE_FILTERS.find(f => f[0] === stateFilter) || STATE_FILTERS[0])[2];
-  let shown = rows.filter(r => keep(r) && (!impactFilter || (r.impact || 'none') === impactFilter));
-  if (sortBy === 'impact') shown = shown.slice().sort((a, b) => RANK[a.impact] - RANK[b.impact] || (a.at < b.at ? 1 : -1));
+  let shown = rows.filter(r => keep(r) && (!impactFilter || (eff(r) || 'none') === impactFilter));
+  if (sortBy === 'impact') shown = shown.slice().sort((a, b) => RANK[eff(a)] - RANK[eff(b)] || (a.at < b.at ? 1 : -1));
   const keyOf = row => row.ref || row.at + row.install, seen = new Set(known || []), first = known === null;
   list.replaceChildren(...(shown.length ? shown.map(row => {
-    const sig = [row.notified, row.shot, row.logs, row.page, row.profile, row.state, row.state_note, row.impact, row.actions.join(), canAct].join('|'), kept = cards.get(keyOf(row));
+    const sig = [row.notified, row.shot, row.logs, row.page, row.profile, row.state, row.state_note, row.impact, row.impact_ai, row.impact_why, row.actions.join(), canAct].join('|'), kept = cards.get(keyOf(row));
     let card = kept && kept.sig === sig ? kept.card : null;
     if (!card) { card = make(row); cards.set(keyOf(row), {sig, card}); }
     mark(card, !first && !seen.has(keyOf(row))); return card;

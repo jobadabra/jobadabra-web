@@ -5,6 +5,7 @@
 // was caught, so a refusal by Telegram (bad chat id, 4xx) vanished and nobody could tell whether the owner had been told.
 import {escTags} from '../shared/html.js';
 import {TEXT_FILES} from '../shared/feedback.js';
+import {suggestImpact} from '../shared/feedback-impact.js';
 
 const PER_INSTALL_PER_DAY = 10;
 // Why (2 Nov 2026, owner: "the app version, the OS platform, the installation id"): the platform field carries the OS version and architecture too ("win32 10.0.19045 x64"), so 40 characters, not 20.
@@ -56,7 +57,7 @@ async function tell(env, fetcher, row, shot) {
   return photo.why ? `failed: photo ${photo.why}`.slice(0, 200) : 'sent';
 }
 
-export async function feedback(request, env, fetcher = fetch, now = new Date()) {
+export async function feedback(request, env, fetcher = fetch, now = new Date(), ctx = null) {
   if (request.method !== 'POST') return new Response(null, {status: 405});
   if (!env.STATS) return Response.json({ok: false, error: 'not configured'}, {status: 503});
   const body = await request.json().catch(() => ({}));
@@ -91,5 +92,8 @@ export async function feedback(request, env, fetcher = fetch, now = new Date()) 
   const notified = await tell(env, fetcher, row, shot);
   await env.STATS.prepare('UPDATE feedback SET notified = ? WHERE ref = ?').bind(notified, ref).run().catch(error => console.log('feedback notified not saved', error.message));
   if (notified.startsWith('failed')) console.log('feedback notify failed', notified);
+  // The AI's suggested impact (shared/feedback-impact.js) runs after the answer is ready when a context is given (the Worker), else before it returns (tests); it never fails the request.
+  const suggest = suggestImpact(env, ref, now);
+  if (ctx?.waitUntil) ctx.waitUntil(suggest); else await suggest;
   return Response.json({ok: true, ...(skipped.length ? {skipped: [...new Set(skipped)]} : {})});
 }

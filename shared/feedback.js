@@ -13,7 +13,7 @@ export const TEXT_FILES = {
 // The owner's list on /telemetry (key only): newest first, with the contact when one was given.
 export async function feedbackList(db, days = 30, now = new Date()) {
   const from = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
-  return ((await db.prepare('SELECT at, version, platform, install, text, contact, ref, screen, shot, logs, page, profile, notified, state, state_at, state_note, impact FROM feedback WHERE day >= ? ORDER BY at DESC LIMIT 200')
+  return ((await db.prepare('SELECT at, version, platform, install, text, contact, ref, screen, shot, logs, page, profile, notified, state, state_at, state_note, impact, impact_ai, impact_why FROM feedback WHERE day >= ? ORDER BY at DESC LIMIT 200')
     .bind(from).all()).results || []);
 }
 
