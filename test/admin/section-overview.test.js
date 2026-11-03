@@ -52,7 +52,7 @@ test('Agents and Testing loaders read the rows their pages keep', async () => {
   const [heal, fixer] = await HEADLINES['/admin/testing/self-healing'](e, now);
   assert.deepEqual([heal.value, heal.status, heal.sub.includes('dead-button'), fixer.value], ['40%', 'warn', true, '21']);
   assert.deepEqual((await HEADLINES['/admin/agents/build-log'](e, now))[0].sub, '2 goals');
-  assert.equal((await HEADLINES['/admin/growth/ai-cost'](e, now))[0].value, '$8.15');
+  assert.equal((await HEADLINES['/admin/ai/costs'](e, now))[0].value, '$8.15');
 });
 
 test('the E2E tile counts reds and runs of the last 7 days and names the top cause', async () => {

@@ -1,5 +1,5 @@
 // The Free AI board web search (shared/free-ai-web.js, owner 26 Oct 2026: "Yes, $10/month cap"): the public prompt on its own key, one shared answer per
-// roles × places, the month line, the install's day, nothing else runs on it, and its line on /admin/growth/ai-cost (admin/free-ai-web-cost.js).
+// roles × places, the month line, the install's day, nothing else runs on it, and its line on /admin/ai/costs (admin/free-ai-web-cost.js).
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import PROMPT from '../../config/board_web_search.json' with {type: 'json'};
@@ -43,7 +43,7 @@ test('a web_search call runs the public prompt on the Anthropic API with its own
   assert.equal(body.model, WEB.model);
   assert.deepEqual(JSON.parse(body.messages[0].content)['known boards'], [], 'the answer is shared: no install\'s own boards in it');
   assert.equal(Number(e.WAITLIST.m.get(keys.month(MONTH))), Math.round(costOf(USAGE) * 1e6));
-  assert.ok(ACTIONS.includes(WEB_ACTION), 'its own step on /admin/growth/ai-cost');
+  assert.ok(ACTIONS.includes(WEB_ACTION), 'its own step on /admin/ai/costs');
 });
 
 test('another install asking the same roles × places gets the kept answer at $0; other roles search again', async () => {
@@ -108,7 +108,7 @@ test('the cell is the roles and places, whatever their case and order; 3 searche
   assert.equal(paramsOf(one.ask).max_tokens, PROMPT.max_tokens);
 });
 
-test('/admin/growth/ai-cost shows the month against its line, the paid searches and the shared answers', async () => {
+test('/admin/ai/costs shows the month against its line, the paid searches and the shared answers', async () => {
   const store = kv();
   store.m.set(keys.month(MONTH), String(3.5 * 1e6)); store.m.set(keys.calls(MONTH), '100'); store.m.set(keys.hits(MONTH), '40');
   const web = await webMonth(store, {WEB_SEARCH_ANTHROPIC_KEY: 'k'}, NOW);

@@ -19,7 +19,7 @@ test('on a phone the menu is one bar: where you are, and ☰ listing every page 
   const menu = html.match(/<details class="admin-menu">.*<\/details>/s)?.[0] || '';
   assert.match(menu, /<span class="here">Form filling › 🛡️ Lab Form Filling<\/span>/);
   assert.match(menu, /href="\/admin\/form-filling\/lab" aria-current="page"/);
-  for (const path of ['/admin', '/admin/growth/email', '/admin/testing/self-healing', '/admin/growth/ai-cost', '/admin/agents/access']) assert.ok(menu.includes(`href="${path}"`), `the ☰ menu lists ${path}`);
+  for (const path of ['/admin', '/admin/growth/email', '/admin/testing/self-healing', '/admin/ai/costs', '/admin/agents/access']) assert.ok(menu.includes(`href="${path}"`), `the ☰ menu lists ${path}`);
   assert.ok(!nav('/admin', {role: 'admin', name: 'Ann'}).includes('/admin/agents/access'), 'Access stays the super admin\'s');
   assert.match(NAV_STYLE, /@media \(max-width:700px\)\{\.admin-nav>div\{display:none\}\.admin-menu\{display:block\}/, 'the rows hide and the bar shows under 700px');
 });

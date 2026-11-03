@@ -6,16 +6,18 @@ import {GROUPS, PAGES} from '../../admin/admin.js';
 import {HEADLINES} from '../../admin/headlines.js';
 import {headlinePages} from '../../admin/section-overview.js';
 
-test('there is no Intelligence group; Insights, Product Brain and AI cost are Growth pages at /admin/growth/…', () => {
+// AI cost left Growth for the top-level AI section (owner, 3 Nov 2026: "a separate top level: AI tab ... AI Agents, AI steps ... AI costs"): /admin/ai/costs, the old address redirected (test/admin/admin-urls.test.js).
+test('there is no Intelligence group; Insights and Product Brain are Growth pages at /admin/growth/…, AI cost is in the AI group', () => {
   assert.ok(!GROUPS.some(([name]) => name === 'Intelligence'), 'the group is gone');
   assert.ok(!PAGES.some(page => page.group === 'Intelligence' || page.path.split('/')[2] === 'intelligence'), 'no page keeps the old group');
-  for (const slug of ['insights', 'brain', 'ai-cost']) assert.equal(PAGES.find(page => page.path === `/admin/growth/${slug}`)?.group, 'Growth', slug);
-  assert.equal(PAGES.filter(page => page.group === 'Growth').length, 9);
+  for (const slug of ['insights', 'brain']) assert.equal(PAGES.find(page => page.path === `/admin/growth/${slug}`)?.group, 'Growth', slug);
+  assert.equal(PAGES.find(page => page.path === '/admin/ai/costs')?.group, 'AI');
+  assert.equal(PAGES.filter(page => page.group === 'Growth').length, 8);
 });
 
 test('Growth\'s Overview has a tile for each of the moved pages', () => {
   const paths = headlinePages('Growth').map(page => page.path);
-  for (const slug of ['insights', 'brain', 'ai-cost']) assert.ok(paths.includes(`/admin/growth/${slug}`) && typeof HEADLINES[`/admin/growth/${slug}`] === 'function', slug);
+  for (const slug of ['insights', 'brain']) assert.ok(paths.includes(`/admin/growth/${slug}`) && typeof HEADLINES[`/admin/growth/${slug}`] === 'function', slug);
   assert.ok(!Object.keys(HEADLINES).some(path => path.split('/')[2] === 'intelligence'), 'no headline keeps the old group');
 });
 

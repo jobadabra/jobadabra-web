@@ -70,7 +70,7 @@ test('a failing log never breaks the relay, and the site knows every step the ap
 });
 
 test('the engine\'s other AI steps each get their own row, not "other"', async () => {
-  // 26 Oct 2026: 517 calls ($0.22) of 14 unnamed engine steps showed as one "other" row on /admin/growth/ai-cost, so the day's top spender could not be named.
+  // 26 Oct 2026: 517 calls ($0.22) of 14 unnamed engine steps showed as one "other" row on /admin/ai/costs, so the day's top spender could not be named.
   const e = env(), key = await installKey('dddd4444-install');
   const steps = ['places', 'title_triage', 'place_triage', 'place_vague', 'place_reading', 'visit_reader', 'visit_reader_second', 'visit_relevant', 'visit_filters', 'visit_unblock', 'visit_unblock_second',
     'role_ideas', 'role_counts', 'job_page_pick', 'field_redraft', 'few_jobs', 'board_queries'];

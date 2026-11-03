@@ -53,7 +53,7 @@ test('the AI cost page shows the broker tally next to who answered today', async
     chain: [{name: 'codex', configured: true, answeredToday: 1, ranOutToday: 0, failedToday: 0}],
     tally: {days: {[today]: {'jobadabra/ai-user-agents.yml': {calls: 5, ok: 5, tokens: 1234, ms: 9, engines: {codex: 5}}}}}})}};
   assert.equal((await read(env)).tally.days[today]['jobadabra/ai-user-agents.yml'].tokens, 1234);
-  const response = await view(new Request('https://x.dev/admin/growth/ai-cost', {headers: {Authorization: 'Bearer fixture-owner'}}), env);
+  const response = await view(new Request('https://x.dev/admin/ai/costs', {headers: {Authorization: 'Bearer fixture-owner'}}), env);
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.ok(html.indexOf('Who answered today') < html.indexOf('Tokens per CI workflow'));

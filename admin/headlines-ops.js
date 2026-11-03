@@ -94,4 +94,4 @@ async function integration(env, now) {
   return [{label: 'Integration green, 7 days', value: runs.length ? `${num(greens)} of ${num(runs.length)}` : 'No runs', sub: 'main runs of the three layers that ended green', status: !runs.length ? 'none' : greens === runs.length ? 'good' : greens / runs.length >= 0.9 ? 'warn' : 'bad'}];
 }
 
-export const OPERATIONS = {'/admin/agents/build-log': buildLog, '/admin/testing/pr-checks': prChecks, '/admin/agents/agent-coding': agentCoding, '/admin/testing/e2e': e2e, '/admin/testing/integrations': integration, '/admin/schedules/all-jobs': schedules, '/admin/testing/scheduled': scheduledTesting, '/admin/testing/self-healing': selfHealing, '/admin/testing/sentry': sentry, '/admin/growth/ai-cost': aiCost};
+export const OPERATIONS = {'/admin/agents/build-log': buildLog, '/admin/testing/pr-checks': prChecks, '/admin/agents/agent-coding': agentCoding, '/admin/testing/e2e': e2e, '/admin/testing/integrations': integration, '/admin/schedules/all-jobs': schedules, '/admin/testing/scheduled': scheduledTesting, '/admin/testing/self-healing': selfHealing, '/admin/testing/sentry': sentry, '/admin/ai/costs': aiCost};

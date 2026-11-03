@@ -10,7 +10,7 @@ const kv = () => { const m = new Map(); return {m, get: async k => m.get(k) ?? n
 const env = () => ({STATS_KEY: 'owner-key', WAITLIST: kv()});
 const page = (host, path, headers = {}) => new Request(`https://${host}${path}`, {headers: {Accept: 'text/html', ...headers}});
 const owner = async e => ({Cookie: `${SESSION_COOKIE}=${await sessionToken(e, now)}`});
-async function hopUrl(e, path = '/admin/growth/ai-cost?days=7') {
+async function hopUrl(e, path = '/admin/ai/costs?days=7') {
   const out = await hopOut(page('www.jobpilotto.top', path, await owner(e)), e, now);
   assert.equal(out.status, 302);
   return out.headers.get('Location');
@@ -22,7 +22,7 @@ test('a signed-in owner on the old host is hopped once, and lands signed in on t
   assert.ok(!location.includes('owner-key'));
   const first = await hopIn(page('www.jobadabra.top', new URL(location).pathname + new URL(location).search), e, now + 1000);
   assert.equal(first.status, 302);
-  assert.equal(first.headers.get('Location'), '/admin/growth/ai-cost?days=7');
+  assert.equal(first.headers.get('Location'), '/admin/ai/costs?days=7');
   const cookie = first.headers.get('Set-Cookie');
   assert.match(cookie, /^jp_admin=v1\./);
   assert.equal(await isOwner(page('www.jobadabra.top', '/admin', {Cookie: cookie.split(';')[0]}), e, now + 2000), true);
@@ -46,7 +46,7 @@ test('an expired, forged or re-aimed token is a 404', async () => {
 
 test('to must be a same-origin /admin path', () => {
   for (const to of ['https://evil.example/admin', '//evil.example', '/admin//evil.example', '/admin/../x', '/other', '/admin\\x', 'admin', '', '/admin?next=https://x']) assert.equal(safeTo(to), false, to);
-  for (const to of ['/admin', '/admin/growth/ai-cost?days=7', '/admin/testing/e2e']) assert.equal(safeTo(to), true, to);
+  for (const to of ['/admin', '/admin/ai/costs?days=7', '/admin/testing/e2e']) assert.equal(safeTo(to), true, to);
 });
 
 test('only an owner cookie on an old host, asking for a page, is hopped; no or a forged cookie is sent on without one', async () => {

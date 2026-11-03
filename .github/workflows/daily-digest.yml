@@ -1,7 +1,7 @@
 name: CI · Daily build digest
 # "What we built today" (spec docs/superpowers/specs/2026-10-16-daily-digest.md): every hour jobs/daily-digest.mjs asks the site what it holds for the Zurich day, and only when PRs were merged since
 # (at most once an hour, 8 drafts a day) has a Haiku-tier call on the Codex broker regroup them; the draft shows on https://www.jobpilotto.top/admin/agents/build-log. From 23:00 Zurich (and just after midnight for the day before) the final one is stored.
-# The hourly schedule is DST-proof: the script reads the Zurich hour itself. The AI runs on the Codex broker since 31 Oct 2026 (owner: "We should use fully the Codex"; no Anthropic key, no fallback: a refusal says "AI skipped" and alerts once); the spend is reported to /admin/growth/ai-cost as job daily-digest.
+# The hourly schedule is DST-proof: the script reads the Zurich hour itself. The AI runs on the Codex broker since 31 Oct 2026 (owner: "We should use fully the Codex"; no Anthropic key, no fallback: a refusal says "AI skipped" and alerts once); the spend is reported to /admin/ai/costs as job daily-digest.
 on:
   schedule:
     - cron: '11 * * * *'

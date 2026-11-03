@@ -37,7 +37,7 @@ export async function report(db, now = new Date()) {
     '/admin/growth/app': [app.machines, app.problems],
     '/admin/growth/insights': [insights.replies, insights.scores],
     '/admin/testing/self-healing': [{label: 'precision', values: byWeek(weekly(snaps), now, latest(snaps, 'precision')), format: pct}],
-    '/admin/growth/ai-cost': [{label: 'scheduled jobs + relay', values: byWeek([...jobCost, ...relay], now, sum('usd')), format: usd, higherIsBetter: false}],
+    '/admin/ai/costs': [{label: 'scheduled jobs + relay', values: byWeek([...jobCost, ...relay], now, sum('usd')), format: usd, higherIsBetter: false}],
     '/admin/form-filling/real-users': [{label: 'required questions filled', values: byWeek(filled, now, ratio('ok', 'n')), format: pct},
       {label: 'blind spots per 100', values: byWeek([...blind, ...exposure], now, list => { const base = sum('base')(list); return base ? (100 * sum('blind')(list)) / base : null; }),
         format: v => v.toFixed(1), higherIsBetter: false}],
@@ -55,8 +55,8 @@ export async function report(db, now = new Date()) {
   const r = cards['/admin/form-filling/real-users'][0].values;
   if (last(r) != null && prev(r) != null && last(r) < prev(r)) attention.push({page: '/admin/form-filling/real-users', text: `Required questions filled fell from ${pct(prev(r))} to ${pct(last(r))}`, tone: 'bad'});
   if (recall && recall.planted && recall.caught < recall.planted) attention.push({page: '/admin/testing/self-healing', text: `Self-healing missed ${recall.planted - recall.caught} of ${recall.planted} planted bugs`, tone: 'bad'});
-  const c = cards['/admin/growth/ai-cost'][0].values;
-  if (last(c) != null && prev(c) && last(c) > 1.5 * prev(c) && last(c) - prev(c) > 1) attention.push({page: '/admin/growth/ai-cost', text: `AI cost up from ${usd(prev(c))} to ${usd(last(c))} this week`, tone: 'warn'});
+  const c = cards['/admin/ai/costs'][0].values;
+  if (last(c) != null && prev(c) && last(c) > 1.5 * prev(c) && last(c) - prev(c) > 1) attention.push({page: '/admin/ai/costs', text: `AI cost up from ${usd(prev(c))} to ${usd(last(c))} this week`, tone: 'warn'});
   const p = app.problems.values;
   if (last(p) != null && prev(p) != null && last(p) > prev(p)) attention.push({page: '/admin/growth/app', text: `Problem reports up from ${prev(p)} to ${last(p)}`, tone: 'warn'});
   const f = app.feedback.values;

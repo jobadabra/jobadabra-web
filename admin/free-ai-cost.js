@@ -1,4 +1,4 @@
-// /admin/growth/ai-cost: what Free AI (Workers AI, shared/free-ai.js) costs us, from the relay's own per-step log (ai_calls, shared/aicost.js), shown beside the
+// /admin/ai/costs: what Free AI (Workers AI, shared/free-ai.js) costs us, from the relay's own per-step log (ai_calls, shared/aicost.js), shown beside the
 // jobs' Claude and OpenAI spend: it is not billed by Anthropic, so it stays out of their total. Counts and money only, per step.
 import {FREE_NEURONS_PER_DAY, neuronsOf} from '../shared/free-ai-models.js';
 import {LIMITS} from '../shared/free-ai.js';
