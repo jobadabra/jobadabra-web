@@ -85,7 +85,7 @@ export const seeds = {
     const day = now.toISOString().slice(0, 10), engines = {codex: 38, claude: 12};
     const tally = {days: {[day]: {'jobadabra/ai-user-agents.yml': {calls: 31, ok: 30, tokens: 412000, ms: 1, engines}, 'jobadabra/code-review.yml': {calls: 6, ok: 6, tokens: 88000, ms: 1, engines: {codex: 6}}, 'jobadabra/ui-findings.yml': {calls: 14, ok: 14, tokens: 120000, ms: 1, engines: {codex: 14}}, 'jobadabra/sentry-fix.yml': {calls: 2, ok: 2, tokens: 21000, ms: 1, engines: {codex: 2}}}}};
     const chain = [{name: 'codex', configured: true, answeredToday: 52, ranOutToday: 0, failedToday: 1, avgMs: 41000}, {name: 'claude', configured: true, answeredToday: 12, ranOutToday: 3, failedToday: 0, avgMs: 52000}, {name: 'free-ai', configured: true, answeredToday: 4, ranOutToday: 0, failedToday: 0, avgMs: 9000}];
-    env.AI_BROKER = {fetch: async () => new Response(JSON.stringify({fallback: {day, claude: 12, freeAi: 4, claudeCap: 40, freeAiCap: 200, held: {claude: 0, freeAi: 0}}, chain, tally}))};
+    env.AI_BROKER = {fetch: async () => new Response(JSON.stringify({fallback: {day, freeAi: 4, freeAiCap: 200, held: {freeAi: 0}}, chain, tally}))};
   },
   'agent-coding': async ({env}) => {   // made-up push-gate and CI days over 8 weeks: form stops dominating, fixes mostly product, one area circling this week (1 Nov 2026)
     const {ingest} = await import('../admin/agent-coding.js');
@@ -318,9 +318,9 @@ export const seeds = {
   'ai-cost-fallback': async ({env}) => {   // fictional CI spend; no broker, Telegram or AI is contacted
     await seeds['ai-cost-pro']({env});
     env.AI_BROKER = {fetch: async () => Response.json({fallback: {day: new Date().toISOString().slice(0, 10),
-      claude: 4.25, freeAi: 0.12, claudeCap: 5, freeAiCap: 2, held: {claude: 0, freeAi: 0}},
+      freeAi: 0.12, freeAiCap: 2, held: {freeAi: 0}},
       chain: [{name: 'codex', configured: true, answeredToday: 0, ranOutToday: 436, failedToday: 0, avgMs: null}, {name: 'claude', configured: true, state: 'ready', answeredToday: 350, ranOutToday: 0, failedToday: 3, avgMs: 18394},
-        {name: 'claude-api', configured: false, answeredToday: 0, ranOutToday: 0, failedToday: 0, avgMs: null}, {name: 'free-ai', configured: true, answeredToday: 3, ranOutToday: 0, failedToday: 0, avgMs: 4951}]})};
+        {name: 'free-ai', configured: true, answeredToday: 3, ranOutToday: 0, failedToday: 0, avgMs: 4951}]})};
   },
   'ai-cost-pro': async ({env}) => {   // fictional charged calls only; no provider request or real account
     const at = new Date().toISOString();

@@ -49,7 +49,7 @@ test('tallyOf takes only a tally with days', () => {
 test('the AI cost page shows the broker tally next to who answered today', async () => {
   const today = new Date().toISOString().slice(0, 10);
   const env = {STATS_KEY: 'fixture-key', STATS_API_KEY: 'fixture-owner', AI_BROKER: {fetch: async () => Response.json({
-    fallback: {day: today, claude: 0, freeAi: 0, claudeCap: 5, freeAiCap: 2, held: {claude: 0, freeAi: 0}},
+    fallback: {day: today, freeAi: 0, freeAiCap: 2, held: {freeAi: 0}},
     chain: [{name: 'codex', configured: true, answeredToday: 1, ranOutToday: 0, failedToday: 0}],
     tally: {days: {[today]: {'jobadabra/ai-user-agents.yml': {calls: 5, ok: 5, tokens: 1234, ms: 9, engines: {codex: 5}}}}}})}};
   assert.equal((await read(env)).tally.days[today]['jobadabra/ai-user-agents.yml'].tokens, 1234);

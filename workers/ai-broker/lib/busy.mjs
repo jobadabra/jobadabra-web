@@ -8,7 +8,7 @@ export const BUSY_MS = 10_000;
 
 /**
  * Whether a call may pass on when Claude is busy: no web search, no pinned engine (`only`), and an engine behind Claude that can take it now.
- * Codex counts when its week is not used up for this call (`verdict.ranOut`) and its login stands; the paid API and Free AI count while their UTC-day cap has room.
+ * Codex counts when its week is not used up for this call (`verdict.ranOut`) and its login stands; Free AI counts while its UTC-day cap has room.
  * Free AI does not count for a call with images (it cannot take them). A call that may not pass on waits for Claude as it always did.
  */
 export async function mayPassOn({chain, body, env, storage, verdict}) {
@@ -16,7 +16,7 @@ export async function mayPassOn({chain, body, env, storage, verdict}) {
   for (const engine of chain.slice(chain.indexOf('claude') + 1)) {
     if (engine === 'codex') { if (!verdict.ranOut && (await storage.get('login')) && !(await storage.get('lost'))) return true; }
     else if (engine === 'free-ai' && body.images?.length) continue;   // Why (3 Nov 2026, review): Free AI refuses images (fallback:unsupported), so a call with images would lose 10 s and its place in the line for nothing
-    else if (await underCap(storage, env, engine === 'claude-api' ? 'claude' : 'free-ai')) return true;
+    else if (await underCap(storage, env)) return true;
   }
   return false;
 }

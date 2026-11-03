@@ -11,12 +11,12 @@ const claudeAnswer = () => Response.json({type: 'message', content: [{type: 'tex
 const claudeOk = () => new Response(JSON.stringify({reply: 'claude ok', tokens: {input: 5, output: 3}, ms: 7, limits: {status: 'allowed', fiveHour: {utilization: 0.2}, sevenDay: {utilization: 0.05}}}));
 const claudeFails = (error, extra = {}, status = 500) => () => new Response(JSON.stringify({error, ...extra}), {status});
 // A fresh world per call: the env with a given ENGINE and fakes that count what each provider was asked.
-function world(t, engine, {free = freeAnswer, withKey = true, extra = {}, claude = claudeOk, token = false, codex = null} = {}) {
+function world(t, engine, {free = freeAnswer, extra = {}, claude = claudeOk, token = false, codex = null} = {}) {
   t.mock.method(Date, 'now', () => day);
-  const calls = {free: 0, claudeApi: 0, telegram: 0, claudeCli: 0, claudeBodies: [], claudeNow: 0, claudeMax: 0};
+  const calls = {free: 0, paid: 0, telegram: 0, claudeCli: 0, claudeBodies: [], claudeNow: 0, claudeMax: 0};
   const env = {...config.vars, ...(engine === undefined ? {ENGINE: undefined} : {ENGINE: engine}), BRAIN_BOT_TOKEN: 'fixture-bot', BRAIN_CHAT_ID: 'fixture-chat',
-    ...(withKey ? {ANTHROPIC_API_KEY: 'fixture-not-a-key'} : {}), ...(token ? {CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token'} : {}), AI: {run: async () => { calls.free++; return free(); }}, ...extra};
-  t.mock.method(globalThis, 'fetch', async url => { if (String(url).includes('telegram')) { calls.telegram++; return Response.json({ok: true}); } calls.claudeApi++; return claudeAnswer(); });
+    ...(token ? {CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token'} : {}), AI: {run: async () => { calls.free++; return free(); }}, ...extra};
+  t.mock.method(globalThis, 'fetch', async url => { if (String(url).includes('telegram')) { calls.telegram++; return Response.json({ok: true}); } calls.paid++; return claudeAnswer(); });   // no paid provider exists any more: any fetch but Telegram is a failure the asserts below catch
   const made = harness(undefined, env);
   const dispatched = [];
   const container = made.broker.containerFetch;
@@ -30,27 +30,27 @@ function world(t, engine, {free = freeAnswer, withKey = true, extra = {}, claude
 }
 const answered = async response => (await response.json()).engine;
 
-test('the shipped default is ENGINE=codex and the order is subscriptions, then paid, then capped-free', () => {
+test('the shipped default is ENGINE=codex and the order is the two subscriptions, then Free AI', () => {
   assert.equal(config.vars.ENGINE, 'codex');
-  assert.deepEqual(ORDER, ['codex', 'claude', 'claude-api', 'free-ai']);
+  assert.deepEqual(ORDER, ['codex', 'claude', 'free-ai']);
 });
 
 test('the chain starts at ENGINE and keeps the fixed order after it; unset or unknown is codex, an unknown value is said, not guessed', () => {
-  assert.deepEqual(chainOf({}).chain, ['codex', 'claude', 'claude-api', 'free-ai']);
-  assert.deepEqual(chainOf({ENGINE: 'codex'}).chain, ['codex', 'claude', 'claude-api', 'free-ai']);
-  assert.deepEqual(chainOf({ENGINE: 'claude'}).chain, ['claude', 'codex', 'claude-api', 'free-ai']);
-  assert.deepEqual(chainOf({ENGINE: 'free-ai'}).chain, ['free-ai', 'codex', 'claude', 'claude-api']);
+  assert.deepEqual(chainOf({}).chain, ['codex', 'claude', 'free-ai']);
+  assert.deepEqual(chainOf({ENGINE: 'codex'}).chain, ['codex', 'claude', 'free-ai']);
+  assert.deepEqual(chainOf({ENGINE: 'claude'}).chain, ['claude', 'codex', 'free-ai']);
+  assert.deepEqual(chainOf({ENGINE: 'free-ai'}).chain, ['free-ai', 'codex', 'claude']);
   const bad = chainOf({ENGINE: 'banana'});
   assert.deepEqual(bad.chain, ORDER); assert.equal(bad.first, 'codex'); assert.match(bad.warning, /unknown ENGINE "banana"/);
 });
 
-test('ENGINE=codex: Codex answers; its week used up, the Anthropic API answers next, then Free AI', async t => {
+test('ENGINE=codex: Codex answers; its week used up, Free AI answers next (no paid API)', async t => {
   const {broker, storage, calls} = world(t, 'codex');
   assert.equal(await answered(await broker.call('pr', body)), 'codex');
   await storage.put('limits', {usedPercent: 100, resetsAt: day / 1000 + 3600});
   broker.limits = null;
-  assert.equal(await answered(await broker.call('pr', body)), 'claude-api');
-  assert.equal(calls.claudeApi, 1); assert.equal(calls.free, 0);
+  assert.equal(await answered(await broker.call('pr', body)), 'free-ai');
+  assert.equal(calls.free, 1); assert.equal(calls.paid, 0);
 });
 
 test('ENGINE=claude: the subscription engine is not built yet, so its step is skipped and Codex answers; the order after Codex is unchanged', async t => {
@@ -58,10 +58,10 @@ test('ENGINE=claude: the subscription engine is not built yet, so its step is sk
   assert.equal(await answered(await broker.call('pr', body)), 'codex');
   await storage.put('limits', {usedPercent: 100, resetsAt: day / 1000 + 3600});
   broker.limits = null;
-  assert.equal(await answered(await broker.call('pr', body)), 'claude-api');
-  assert.equal(calls.claudeApi, 1);
+  assert.equal(await answered(await broker.call('pr', body)), 'free-ai');
+  assert.equal(calls.free, 1); assert.equal(calls.paid, 0);
   const health = await (await broker.health()).json();
-  assert.equal(health.engine, 'claude'); assert.deepEqual(health.chain.map(e => e.name), ['claude', 'codex', 'claude-api', 'free-ai']);
+  assert.equal(health.engine, 'claude'); assert.deepEqual(health.chain.map(e => e.name), ['claude', 'codex', 'free-ai']);
   assert.equal(health.chain[0].configured, false);   // not configured = skipped, never failed
 });
 
@@ -87,11 +87,11 @@ test('ENGINE=free-ai with a search request or without a Codex login: search goes
 });
 
 test('only "ran out" moves on from Codex: with Free AI first and nothing left, a Codex failure is Codex\'s refusal, not another engine\'s answer', async t => {
-  const {broker, calls} = world(t, 'free-ai', {free: () => { throw new Error('down'); }, withKey: false});
+  const {broker, calls} = world(t, 'free-ai', {free: () => { throw new Error('down'); }});
   broker.containerFetch = async () => new Response(JSON.stringify({error: 'codex-failed:1 boom'}), {status: 500});
   const response = await broker.call('pr', body);
   assert.equal(response.status, 502); assert.match((await response.json()).why, /codex-failed:1 boom/);
-  assert.equal(calls.claudeApi, 0);   // the Anthropic API sits after Codex and is not asked to cover a plain failure
+  assert.equal(calls.paid, 0);   // nothing sits after Codex that could cover a plain failure
 });
 
 test('the drift daily cap holds whichever engine answers, and the answered calls are counted per engine in /health', async t => {
@@ -159,13 +159,13 @@ test('one call can choose its engine (a workflow trying claude) while every othe
   }
 });
 
-test('the chain with Codex first: Codex\'s week used up, the Claude subscription answers before the paid API, and the reply says what it fell back from', async t => {
+test('the chain with Codex first: Codex\'s week used up, the Claude subscription answers before Free AI, and the reply says what it fell back from', async t => {
   const {broker, storage, calls} = world(t, 'codex', withToken);
   await storage.put('limits', {usedPercent: 100, resetsAt: day / 1000 + 3600});
   broker.limits = null;
   const answer = await (await broker.call('pr', body)).json();
   assert.equal(answer.engine, 'claude'); assert.deepEqual(answer.fellBack, [{engine: 'codex', why: 'ran-out'}]);
-  assert.equal(calls.claudeApi, 0);
+  assert.equal(calls.paid, 0);
   const health = await (await broker.health()).json();
   assert.equal(health.chain.find(e => e.name === 'codex').ranOutToday, 1);
 });
@@ -286,7 +286,7 @@ test('only: true pins a call to one engine for each of codex, claude and free-ai
   assert.equal(refused.status, 503);
   const answer = await refused.json();
   assert.equal(answer.why, 'only-claude: failed'); assert.equal(answer.engine, 'claude'); assert.deepEqual(answer.tried, [{engine: 'claude', why: 'failed', detail: 'claude-failed:1 boom'}]);
-  assert.equal(broken.calls.free, 0); assert.equal(broken.calls.claudeApi, 0); assert.ok(!broken.dispatched.some(path => path.endsWith('/call')));
+  assert.equal(broken.calls.free, 0); assert.equal(broken.calls.paid, 0); assert.ok(!broken.dispatched.some(path => path.endsWith('/call')));
   const noToken = world(t, 'codex');
   assert.equal((await (await noToken.broker.call('pr', {...body, engine: 'claude', only: true})).json()).why, 'only-claude: not-configured');
   const limit = world(t, 'codex', {...withToken, claude: claudeFails('claude-limit', {resetsAt: day / 1000 + 600})});

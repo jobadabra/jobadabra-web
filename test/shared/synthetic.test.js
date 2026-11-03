@@ -16,7 +16,7 @@ const good = {
   'https://www.jobpilotto.workers.dev/api/releases/latest': {tag_name: 'desktop-v0.8.60', assets: [{name: 'Jobadabra-0.8.60-arm64.dmg'}, {name: 'Jobadabra-windows-x64.exe'}]},
 };
 const CHAIN = [{name: 'codex', configured: true, answeredToday: 0, ranOutToday: 40}, {name: 'claude', configured: true, state: 'ready', answeredToday: 12}, {name: 'free-ai', configured: true, answeredToday: 1}];   // today's real shape: Codex ran out, Claude answers
-const BROKER = {fallback: {day: '2026-11-01', claude: 1, claudeCap: 10, freeAi: 0, freeAiCap: 10}, chain: CHAIN};
+const BROKER = {fallback: {day: '2026-11-01', freeAi: 0, freeAiCap: 10}, chain: CHAIN};
 const answer = body => (typeof body === 'string' ? new Response(body) : Response.json(body));
 
 function world(overrides = {}) {

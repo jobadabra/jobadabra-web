@@ -1,7 +1,7 @@
 // The AI broker as the site sees it (owner, 1 Nov 2026: "Claude, Codex or Free AI by one flag"): one read of its public /health through the service binding, and what that answer means.
 // One reader for the cost page and the synthetic probe, so the two cannot disagree about which engine is up. Never sends a prompt, a login or a provider key.
 
-/** The engines' names for people; the order is the broker's own chain order. */
+/** The engines' names for people; the order is the broker's own chain order. Why (3 Nov 2026): `claude-api` stays only to name past days' tallies; the broker no longer has that engine. */
 export const ENGINE_NAMES = {codex: 'Codex', claude: 'Claude', 'claude-api': 'Claude API', 'free-ai': 'Free AI'};
 
 /** GET /health through the `AI_BROKER` service binding; the caller handles a missing binding, a timeout and a non-200. */

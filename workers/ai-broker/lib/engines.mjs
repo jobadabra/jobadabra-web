@@ -1,21 +1,21 @@
 // Which engine answers first, and in what order the others follow (docs/superpowers/specs/2026-11-01-ai-broker-design.md, section 2).
 // Why (1 Nov 2026, owner: "support claude, codex, or Free AI with just a flag change"): one `ENGINE` var in wrangler.jsonc names the engine that answers first; the rest follow in the fixed ORDER.
-import {apiConfigured} from './fallback.mjs';
+import {freeAiConfigured} from './fallback.mjs';
 
-/** The engines a caller or the ENGINE var may ask for first. `claude-api` (the paid Anthropic API) is only ever a fallback in the order, never a first choice. */
+/** The engines a caller or the ENGINE var may ask for first. There is no paid-API engine (owner, 3 Nov 2026: no API keys): `claude-api` is not a name the broker knows. */
 export const CHOICES = ['codex', 'claude', 'free-ai'];
 
 /** The engines that may move for doing worse (lib/adapt.mjs): the two subscriptions. */
 export const SUBS = ['codex', 'claude'];
 
-/** Fixed order: subscriptions before paid engines, paid before capped-free. `claude` is the Claude subscription (4/7), `claude-api` the Anthropic API with its $5/day cap. */
-export const ORDER = ['codex', 'claude', 'claude-api', 'free-ai'];
+/** Fixed order: the two subscriptions, then Free AI with its own day cap. `claude` is the Claude subscription (4/7). */
+export const ORDER = ['codex', 'claude', 'free-ai'];
 
 /**
  * Whether an engine can be tried at all in this environment (a step that is not configured is skipped, never failed). Codex's login state is checked by its own step.
  * `claude` (the Claude subscription) needs its token as a Worker secret.
  */
-export const configured = (engine, env) => engine === 'codex' ? true : engine === 'claude' ? Boolean(env.CLAUDE_CODE_OAUTH_TOKEN) : apiConfigured(engine === 'claude-api' ? 'claude' : 'free-ai', env);
+export const configured = (engine, env) => engine === 'codex' ? true : engine === 'claude' ? Boolean(env.CLAUDE_CODE_OAUTH_TOKEN) : engine === 'free-ai' && freeAiConfigured(env);
 
 /**
  * The chain for this environment: `ENGINE` first, the others in ORDER. Unset = codex (today's behaviour). An unknown value is never guessed:

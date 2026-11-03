@@ -57,7 +57,7 @@ export const PROBES = [
     const response = await fetchHealth(env, TIMEOUT_MS).catch(() => red('unreachable'));
     if (!response.ok) red(`HTTP ${response.status}`);
     const health = await jsonOf(response, 'broker health'), fallback = health.fallback;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fallback?.day)) || !Number.isFinite(fallback.claudeCap)) red('no day meters');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fallback?.day)) || !Number.isFinite(fallback.freeAiCap)) red('no day meters');
     const wrong = problem(chainOf(health));
     if (wrong) red(wrong);
   }},
