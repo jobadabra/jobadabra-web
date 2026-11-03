@@ -7,6 +7,7 @@ import {test} from 'node:test';
 import {actRoute} from '../../admin/feedback.js';
 import {replies} from '../../api/feedback-replies.js';
 import {act} from '../../shared/feedback-actions.js';
+import {tokenFor} from '../../shared/guard.js';
 import {DEFAULT_DEFER, defaultFixed, excerptOf, markSeen, repliesFor, replyText} from '../../shared/feedback-reply.js';
 
 const sql = name => readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8');
@@ -108,20 +109,33 @@ test('Acknowledge + defer: the Linear link is kept as typed, an unrated card tak
   assert.equal((await run(e, {ref: rated, action: 'defer', impact: 'low'})).impact, 'high', 'the owner\'s rating wins');
 });
 
-test('the app\'s endpoint: unseen replies only, closing one hides it, another install cannot close it, a bad id or a stuck app is refused', async () => {
+test('the app\'s endpoint: its own key only, unseen replies only, closing one hides it, another install cannot close it, a stuck app is refused', async () => {
   const kv = new Map(), {e} = setup({WAITLIST: {get: async key => kv.get(key) ?? null, put: async (key, value) => { kv.set(key, value); }}}), ref = add(e);
   await run(e, {ref, action: 'defer', mail: false});
-  const get = install => replies(new Request(`https://x/api/feedback/replies?install=${install}`), e, now);
-  const post = body => replies(new Request('https://x/api/feedback/replies/seen', {method: 'POST', body: JSON.stringify(body)}), e, now);
+  const key = async install => `JPF1.${install}.${await tokenFor(install, e, 'ai')}`;
+  const get = async (install, header) => replies(new Request('https://x/api/feedback/replies', {headers: {'x-api-key': header ?? await key(install)}}), e, now);
+  const post = async (install, body) => replies(new Request('https://x/api/feedback/replies/seen', {method: 'POST', headers: {'x-api-key': await key(install)}, body: JSON.stringify(body)}), e, now);
   assert.equal((await (await get('install-aaaa-bbbb')).json()).replies.length, 1);
-  assert.equal((await (await post({install: 'install-zzzz-yyyy', ref})).json()).ok, false);
-  assert.equal((await (await post({install: 'install-aaaa-bbbb', ref})).json()).ok, true);
+  assert.equal((await (await post('install-zzzz-yyyy', {ref})).json()).ok, false);
+  assert.equal((await (await post('install-aaaa-bbbb', {ref})).json()).ok, true);
   assert.deepEqual((await (await get('install-aaaa-bbbb')).json()).replies, []);
   assert.equal(rowOf(e, ref).seen_at, now.toISOString());
-  assert.equal((await get('x')).status, 400);
   assert.equal((await replies(new Request('https://x/api/feedback/replies', {method: 'DELETE'}), e, now)).status, 405);
   for (let i = 0; i < 60; i++) await get('install-aaaa-bbbb');
   assert.equal((await get('install-aaaa-bbbb')).status, 429);
+});
+
+test('knowing an install id is not enough: no key, a wrong token, a key for another install and the old ?install= call are all refused, and give nothing', async () => {
+  const {e} = setup(), ref = add(e);
+  await run(e, {ref, action: 'defer', mail: false});
+  const ask = headers => replies(new Request('https://x/api/feedback/replies?install=install-aaaa-bbbb', {headers}), e, now);
+  const mine = await tokenFor('install-aaaa-bbbb', e, 'ai'), other = await tokenFor('install-zzzz-yyyy', e, 'ai');
+  for (const headers of [{}, {'x-api-key': 'JPF1.install-aaaa-bbbb.wrong'}, {'x-api-key': `JPF1.install-aaaa-bbbb.${other}`}, {'x-api-key': `JP1.install-aaaa-bbbb.${mine}`}]) {
+    const answer = await ask(headers);
+    assert.equal(answer.status, 401, JSON.stringify(headers));
+    assert.equal(JSON.stringify(await answer.json()).includes('excerpt'), false);
+  }
+  assert.equal((await ask({'x-api-key': `JPF1.install-aaaa-bbbb.${mine}`})).status, 200);
 });
 
 test('through the owner\'s route the Fixed answer carries told; a guest cannot send it', async () => {
