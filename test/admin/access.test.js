@@ -44,7 +44,7 @@ test('an invite link gives the admin role: every page, the menu without Access, 
   const opened = await get(e, path);
   assert.deepEqual([opened.status, opened.headers.get('Location')], [302, '/admin']);
   const session = cookie(opened);
-  for (const p of ['/admin', '/admin/growth/website', '/admin/growth/app', '/admin/growth/insights', '/admin/testing/self-healing', '/admin/growth/ai-cost', '/admin/form-filling/real-users', '/admin/growth/feedback']) {
+  for (const p of ['/admin', '/admin/growth/website', '/admin/growth/app', '/admin/growth/insights', '/admin/testing/self-healing', '/admin/growth/ai-cost', '/admin/form-filling/real-users', '/admin/feedback/inbox']) {
     const response = await get(e, p, {Cookie: session});
     assert.equal(response.status, 200, p);
     const html = await response.text();

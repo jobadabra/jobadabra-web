@@ -101,7 +101,7 @@ export async function retryImpact(env, now = new Date(), limit = 20, fetcher = f
   }
   if (failed && !done) {
     const kind = kindOfFailure(last);
-    await tellOutage(env, `⚠️ AI skipped (${kind}): the AI could not suggest an impact for ${failed} feedback message${failed === 1 ? '' : 's'}. Last answer: ${last}. You can still rate them by hand on /admin/growth/feedback.`, kind, now, fetcher);
+    await tellOutage(env, `⚠️ AI skipped (${kind}): the AI could not suggest an impact for ${failed} feedback message${failed === 1 ? '' : 's'}. Last answer: ${last}. You can still rate them by hand on /admin/feedback/inbox.`, kind, now, fetcher);
     throw new Error(`feedback impact: AI skipped (${kind}) for all ${failed} rows: ${last}`);
   }
   return done;

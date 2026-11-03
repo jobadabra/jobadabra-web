@@ -131,8 +131,8 @@ test('the private page counts feedback and links to the Feedback page (no copy o
     .run(new Date().toISOString(), new Date().toISOString().slice(0, 10), 'install-aaaa', '0.5.75', 'darwin', 'Setup took 20 <min>', 'ana@example.com');
   const open = await worker.fetch(new Request('https://www.jobpilotto.top/admin/growth/app', {headers: {Authorization: 'Bearer k3y'}}), e, {});
   const html = await open.text();
-  assert.match(html, /1 message in the last 30 days · <a href="\/admin\/growth\/feedback">Open Feedback →<\/a>/);
-  assert.doesNotMatch(html, /Setup took 20/, 'the messages live on /admin/growth/feedback only');
+  assert.match(html, /1 message in the last 30 days · <a href="\/admin\/feedback\/inbox">Open Feedback →<\/a>/);
+  assert.doesNotMatch(html, /Setup took 20/, 'the messages live on /admin/feedback/inbox only');
   assert.doesNotMatch(html, /ana@example\.com/);
   const closed = await worker.fetch(new Request('https://www.jobpilotto.top/admin/growth/app'), e, {});
   assert.equal(closed.status, 404);

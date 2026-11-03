@@ -1,4 +1,4 @@
-// The owner's /admin/growth/feedback page: live, newest on top, with the actions on each message. Same key or cookie as /admin. The HTML is admin/feedback-page.js; the states are shared/feedback-actions.js.
+// The owner's /admin/feedback/inbox page: live, newest on top, with the actions on each message. Same key or cookie as /admin. The HTML is admin/feedback-page.js; the states are shared/feedback-actions.js.
 // Guarded by test/shared/feedback.test.js, feedback-files.test.js and test/admin/feedback-actions.test.js.
 import {viewer, isOwner, remember} from '../shared/auth.js';
 import {feedbackList, undelivered, fileOf} from '../shared/feedback.js';

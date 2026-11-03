@@ -41,7 +41,7 @@ export async function report(db, now = new Date()) {
     '/admin/form-filling/real-users': [{label: 'required questions filled', values: byWeek(filled, now, ratio('ok', 'n')), format: pct},
       {label: 'blind spots per 100', values: byWeek([...blind, ...exposure], now, list => { const base = sum('base')(list); return base ? (100 * sum('blind')(list)) / base : null; }),
         format: v => v.toFixed(1), higherIsBetter: false}],
-    '/admin/growth/feedback': [app.feedback],
+    '/admin/feedback/inbox': [app.feedback],
     '/admin/job-search/scouting': [{label: 'employers in the central list', values: byWeek(index, now, list => (list.length ? list.at(-1).feeds : null))}],
     '/admin/growth/brain': [{label: 'recommendations', values: byWeek(brain, now, list => list.length)}],
   };
@@ -60,7 +60,7 @@ export async function report(db, now = new Date()) {
   const p = app.problems.values;
   if (last(p) != null && prev(p) != null && last(p) > prev(p)) attention.push({page: '/admin/growth/app', text: `Problem reports up from ${prev(p)} to ${last(p)}`, tone: 'warn'});
   const f = app.feedback.values;
-  if (last(f)) attention.push({page: '/admin/growth/feedback', text: `${last(f)} feedback message${last(f) === 1 ? '' : 's'} this week`, tone: 'info'});
+  if (last(f)) attention.push({page: '/admin/feedback/inbox', text: `${last(f)} feedback message${last(f) === 1 ? '' : 's'} this week`, tone: 'info'});
   // Refused logins this week (a wrong key, a used or removed invite): for the super admin, on the Access page.
   const failed = (await rows(db, 'SELECT COUNT(*) AS n FROM admin_logins WHERE ok = 0 AND day >= ?', weekAgo))[0]?.n || 0;
   if (failed) attention.unshift({page: '/admin/agents/access', text: `${failed} refused login${failed === 1 ? '' : 's'} this week`, tone: 'bad', superadmin: true});

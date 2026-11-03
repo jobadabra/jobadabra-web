@@ -49,7 +49,7 @@ test('a screenshot and logs are kept in R2 under the row\'s ref, and the owner g
   assert.deepEqual(calls.map(c => c.method), ['sendMessage', 'sendPhoto']);
   const text = JSON.parse(calls[0].body).text;
   assert.match(text, /Setup stops at step 2/); assert.match(text, /win32/); assert.match(text, /Settings/);
-  assert.match(text, new RegExp(`admin/growth/feedback#${saved.ref}`));
+  assert.match(text, new RegExp(`admin/feedback/inbox#${saved.ref}`));
   assert.ok(calls[1].body instanceof FormData);
   assert.equal(calls[1].body.get('reply_to_message_id'), '7');
   assert.ok(calls[1].body.get('photo') instanceof Blob);
