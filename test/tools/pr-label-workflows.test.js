@@ -64,4 +64,5 @@ test('every relative import of a checked-out script is in that workflow\'s spars
     }
   }
   assert.ok(sparseList(conflict).includes('tools/gitar-label.mjs'), 'conflict-label.mjs imports ./gitar-label.mjs (addLabel)');
+  for (const [name, flow] of [['gitar-label.yml', gitar], ['conflict-label.yml', conflict]]) assert.ok(sparseList(flow).includes('tools/gh_retry.py'), `${name}: both scripts run gh through tools/gh_retry.py (jobadabra #3091); a bare checkout has no copy to read, so it is pinned here`);
 });
