@@ -99,11 +99,11 @@ test('a mail that is refused is written on the card and the in-app reply still g
 
 test('the route: only the publish key may call it, POST only, a bad body is refused, and nothing is told on a refusal', async () => {
   const {e} = setup({SELFHEAL_PUBLISH_KEY: 'publish-key'}), ref = await waiting(e, {pr_url: PR(3012)});
-  const call = (headers, body, method = 'POST') => released(new Request('https://x/api/feedback/released', {method, headers: {'Content-Type': 'application/json', ...headers}, body: method === 'POST' ? JSON.stringify(body) : undefined}), e, now);
+  const call = (headers, body, method = 'POST') => released(new Request('https://x/api/feedback/released', {method, headers: {'Content-Type': 'application/json', ...headers}, body: method === 'POST' || method === 'PUT' ? JSON.stringify(body) : undefined}), e, now);
   const key = {Authorization: 'Bearer publish-key'};
   assert.equal((await call({}, release())).status, 401);
   assert.equal((await call({Authorization: 'Bearer wrong'}, release())).status, 401);
-  assert.equal((await call(key, release(), 'GET')).status, 405);
+  assert.equal((await call(key, release(), 'PUT')).status, 405);
   for (const bad of [{...release(), version: ''}, {...release(), channel: 'nightly'}, {...release(), prs: 'x'}, {...release(), cutAt: 'soon'}, {...release(), version: '1.0<x>'}]) assert.equal((await call(key, bad)).status, 400, JSON.stringify(bad));
   assert.equal(rowOf(e, ref).told, 'pending');
   const ok = await (await call(key, release())).json();
@@ -171,4 +171,21 @@ test('the route refuses what is not a release: a list over 2000, bad numbers, a 
   for (const bad of [{...release(), prs: Array.from({length: 2001}, (_, i) => i + 1)}, {...release(), prs: [1.5]}, {...release(), prs: [-1]}, {...release(), prs: [null]}, {...release(), cutAt: '9999'}, {...release(), cutAt: 1760000000000}, {...release(), cutAt: '2027-01-01T00:00:00Z'}]) assert.equal((await call(bad)).status, 400, JSON.stringify(bad).slice(0, 60));
   assert.equal((await call(release(), {...e, STATS: undefined})).status, 503);
   assert.equal((await call({...release(), prs: Array.from({length: 2000}, (_, i) => i + 1)})).status, 200);
+});
+
+// Why (owner, 3 Nov 2026, "Were they fixed? Were they released?"; card c1ea31a0): PR #3031 was in 0.9.3 beta and 0.9.4 stable (cut 03:30 UTC), the card was marked fixed at 04:15 UTC, and every later
+// release's PR list is "since the previous stable", so the card stayed "fixed / told pending" through 0.9.6. The site cannot see git: it says which PRs its waiting cards name, CI says which of them the tag contains.
+test('GET lists the PR numbers the waiting cards name, so the release workflow can check each against the tag (a fix that shipped before its card was marked fixed)', async () => {
+  const {e} = setup({SELFHEAL_PUBLISH_KEY: 'publish-key'}), key = {Authorization: 'Bearer publish-key'};
+  const early = await waiting(e, {pr_url: PR(3031)});
+  await waiting(e, {pr_url: PR(3040)}); await waiting(e, {});   // a second PR and a card with no link
+  await waiting(e, {pr_url: PR(3050), when: 'never'});          // told never: not waiting
+  const call = (headers = key) => released(new Request('https://x/api/feedback/released', {method: 'GET', headers}), e, now);
+  assert.equal((await call({})).status, 401);
+  const body = await (await call()).json();
+  assert.deepEqual(body, {ok: true, prs: [3031, 3040]});
+  // The caller found #3031 inside the tag and sends it with the tag's own list: the old card is told, the others keep waiting.
+  const done = await (await released(new Request('https://x/api/feedback/released', {method: 'POST', headers: {'Content-Type': 'application/json', ...key}, body: JSON.stringify(release({version: '0.9.6', channel: 'stable', prs: [3099, 3031]}))}), e, now)).json();
+  assert.deepEqual(done.matched.map(m => m.ref), [early]);
+  assert.equal(rowOf(e, early).state, 'released');
 });
