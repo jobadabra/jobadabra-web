@@ -32,7 +32,7 @@ async function answered(path, method) {
 }
 
 test('the list is well formed: unique paths, a known kind, methods only where a route is method-bound', () => {
-  const kinds = new Set(['app', 'ci', 'webhook', 'page', 'owner']);
+  const kinds = new Set(['app', 'ci', 'webhook', 'page', 'owner', 'retired']);
   const paths = manifest.routes.map(route => route.path);
   assert.ok(paths.length > 60, `routes listed: ${paths.length}`);
   assert.equal(new Set(paths).size, paths.length);
