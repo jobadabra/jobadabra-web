@@ -301,7 +301,6 @@ async function route(request, env, ctx) {
   if (pathname === '/api/linkedin/token') return linkedin.collect(request, env);
   if (pathname === '/api/linkedin-import/start') return linkedinImport.start(request, env);   // import your own profile (api/linkedin-import.js)
   if (pathname === linkedinImport.CALLBACK) return linkedinImport.callback(request, env);
-  if (pathname === '/api/linkedin-import/token') return linkedinImport.collect(request, env);
   if (pathname === '/api/linkedin-import/revoke') return linkedinImport.revoke(request, env);
   if (/^\/(old\/)?(media|images\/app)\//.test(pathname)) return mediaRange(request, env);   // videos need 206 for Safari (worker/range.js)
   return env.ASSETS.fetch(request);

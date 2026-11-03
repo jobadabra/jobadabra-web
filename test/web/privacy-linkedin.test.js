@@ -10,7 +10,7 @@ test('the privacy page has a LinkedIn profile import section: what is read, wher
   const section = text.slice(text.indexOf('Import your LinkedIn profile'), text.indexOf('LinkedIn jobs (off until you turn it on)'));
   assert.match(section, /positions, education, skills, languages and name/);
   assert.match(section, /location, postal code, street and website/);
-  assert.match(section, /access key passes through our server[^]*encrypted[^]*deleted as soon as the app collects it/);
+  assert.match(section, /access key passes through our server for the moment[^]*on your own computer, and is not stored there/);
   assert.match(section, /Keychain for up to 60 days[^]*Disconnect deletes it/);
   assert.match(section, /Jobadabra never reads/);
   assert.match(section, /Member Data Portability API/);
