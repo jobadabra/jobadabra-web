@@ -1,7 +1,7 @@
 // Every connect / sign-in hand-off (api/notion.js, api/linkedin.js) goes through shared/oauth-handoff.js: the result is redirected to the app on the CONSENTING browser's own
 // machine and nothing is kept for anyone to collect. Plays the attack for each flow: someone else's link with their own id, then asking for the result with that id.
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync, readdirSync} from 'node:fs';
 import {test} from 'node:test';
 import * as linkedin from '../../api/linkedin.js';
 import * as notion from '../../api/notion.js';
@@ -57,4 +57,11 @@ test('the shared hand-off only knows its own flows and the update answer carries
   assert.throws(() => toApp('other', ATTACKER, {}), /unknown hand-off flow/);
   const gone = legacyPoll();
   assert.deepEqual(await gone.json(), {ok: false, gone: true, error: UPDATE_TEXT});
+});
+
+test('the class: every api file with an OAuth callback hands its result over through the shared hand-off (no new store-and-poll flow)', () => {
+  const dir = new URL('../../api/', import.meta.url);
+  const withCallback = readdirSync(dir).filter(name => name.endsWith('.js') && /export (async )?function callback\(/.test(readFileSync(new URL(name, dir), 'utf8')));
+  assert.ok(['notion.js', 'linkedin.js'].every(name => withCallback.includes(name)), `positive control: ${withCallback}`);
+  for (const name of withCallback) assert.ok(readFileSync(new URL(name, dir), 'utf8').includes("from '../shared/oauth-handoff.js'"), `${name} must use shared/oauth-handoff.js`);
 });
