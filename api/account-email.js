@@ -7,6 +7,8 @@ import {fromTelegram} from './mail-html.js';
 import {CADENCES, deliver, hold} from './mail-held.js';
 import {page, switchOff} from './mail-unsub.js';
 import {accountOf, createAccount, link} from '../shared/pro.js';
+import {escTags} from '../shared/html.js';
+import {telegram} from '../shared/telegram.js';
 
 const parseKey = key => { const [tag, install, token] = String(key || '').split('.'); return tag === 'JPF1' && install && token ? {install, token} : null; };
 const json = (status, body) => Response.json(body, {status});
@@ -26,7 +28,22 @@ async function setMarketing(env, account, on, now) {
   else await switchOff(env, row.email_hash, 'marketing', 'settings', now);
 }
 
-export async function address(request, env, now = new Date()) {
+// Why (3 Nov 2026, owner: "Send me a telegram message everytime a new user puts his email, adds his email in the application"): the owner's Brain chat hears of each address an install gives, first time ("New user e-mail")
+// or changed ("User e-mail changed"); a re-save of the same address is not fresh, so it never pings. It runs after the account is written and never throws, so Telegram can never fail the save
+// (a bad answer or no BRAIN_* secrets = one log line without the token, or nothing). The address goes to the owner's own chat, as api/feedback.js does with a reporter's optional e-mail; no other personal data.
+async function tellOwner(env, fetcher, {email, install, changed}) {
+  if (!(env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID)) return;
+  try {
+    const total = (await env.STATS.prepare("SELECT COUNT(*) AS n FROM pro_accounts WHERE email IS NOT NULL AND email != ''").first().catch(() => null))?.n;
+    const text = `📧 <b>${changed ? 'User e-mail changed' : 'New user e-mail'}</b> · ${escTags(email)} · install ${escTags(install.slice(0, 8))}${total ? ` · ${total} with an e-mail` : ''}`;
+    const sent = await telegram(fetcher, env, 'sendMessage', {chat_id: env.BRAIN_CHAT_ID, text, parse_mode: 'HTML', disable_web_page_preview: true});
+    if (sent.why) console.log('account e-mail ping failed', sent.why.slice(0, 200));
+  } catch (error) {
+    console.log('account e-mail ping failed', String(error.message).split(env.BRAIN_BOT_TOKEN).join('<token>'));
+  }
+}
+
+export async function address(request, env, now = new Date(), fetcher = fetch, ctx = null) {
   const install = await who(request, env);
   if (!install || !env.STATS) return json(401, {ok: false, error: 'unauthorized'});
   let account = await accountOf(env, install);
@@ -43,12 +60,13 @@ export async function address(request, env, now = new Date()) {
   const hash = await digestOf(email);
   if (account && account.plan === 'pro') return json(409, {ok: false, error: 'pro'});   // a Pro account's address changes only through its own sign-in
   const holder = await env.STATS.prepare('SELECT id FROM pro_accounts WHERE email_hash = ?').bind(hash).first();
-  let fresh = false;   // a new or changed address: welcomed with the confirm button
+  let fresh = false, changed = false;   // a new or changed address: welcomed with the confirm button and told to the owner
   if (account && account.email_hash !== hash) {
     if (holder) return json(409, {ok: false, error: 'taken'});
     const id = `acc_${hash}`;   // a changed address is a new, unconfirmed one: same devices, same trial start
     await env.STATS.prepare('UPDATE pro_accounts SET id = ?, email_hash = ?, email = ?, email_confirmed_at = NULL, service_mail_off_at = NULL WHERE id = ?').bind(id, hash, email, account.id).run();
     await env.STATS.prepare('UPDATE pro_devices SET account = ? WHERE account = ?').bind(id, account.id).run();
+    changed = !!account.email_hash;   // read from the account as it was, before it is re-keyed
     account = {...account, id};
     fresh = true;
   } else if (!account) {
@@ -59,7 +77,11 @@ export async function address(request, env, now = new Date()) {
     account = {id};
     fresh = true;
   }
-  if (fresh) await welcome(env, email, now);
+  if (fresh) {
+    const ping = tellOwner(env, fetcher, {email, install, changed});   // the Worker passes ctx: the answer does not wait for Telegram; tests wait
+    if (ctx?.waitUntil) ctx.waitUntil(ping); else await ping;
+    await welcome(env, email, now);
+  }
   if (typeof body.marketing === 'boolean') await setMarketing(env, account.id, body.marketing, now);
   if (CADENCES.includes(body.cadence)) await env.STATS.prepare('UPDATE pro_accounts SET digest_cadence = ? WHERE id = ?').bind(body.cadence, account.id).run();   // how often the digest comes: daily or weekly
   return json(200, {ok: true});
