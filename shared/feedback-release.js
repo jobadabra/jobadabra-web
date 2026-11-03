@@ -6,6 +6,15 @@ import {TOLD_ERROR, releasePr, tellOnce} from './feedback-reply.js';
 const PAGE = 200, MAX_PAGES = 50;
 
 /**
+ * The public-repo PR numbers the waiting cards name (fixed, told pending), sorted, each once, at most 2000. The release workflow checks each against the tag it is telling for and sends the contained ones back in `prs`:
+ * a fix that shipped in an EARLIER release, before its card was marked fixed, is in no later release's own commit list (card c1ea31a0, 3 Nov 2026). Numbers only: no ref, contact or text.
+ */
+export async function waitingPrs(env) {
+  const rows = (await env.STATS.prepare("SELECT DISTINCT pr_url FROM feedback WHERE state = 'fixed' AND told = 'pending' AND pr_url != '' LIMIT 2000").all()).results || [];
+  return [...new Set(rows.map(row => releasePr(row.pr_url)).filter(Boolean))].sort((a, b) => a - b);
+}
+
+/**
  * Tells every waiting reporter whose fix is in this release. `release`: {version, channel: beta|stable, prs: [PR numbers in the release's commit list], cutAt: the time the release was cut}.
  * A card waits when it is `fixed` with `told = 'pending'` (the owner chose "at the next release"; a card told already stays Fixed, only his "Mark as released" moves it). It matches, in order: (1) its link is a public-repo PR whose number is in `prs`; (2) it has no link,
  * no typed version, and was marked fixed before `cutAt` (blank version = "the next update"); (3) the version the owner typed (a leading "v" ignored) equals `release.version`. A match is claimed first
