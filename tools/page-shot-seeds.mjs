@@ -27,6 +27,14 @@ export const seeds = {
     await env.STATS.prepare("UPDATE feedback SET impact_ai = 'low', impact_why = 'praise with a timing remark' WHERE ref = '0f0e0d0c0b0a0908'").run();
     await env.STATS.prepare("UPDATE feedback SET impact_ai = 'medium', impact_why = 'real problem, a workaround exists' WHERE ref = '1122334455667788'").run();
     await env.STATS.prepare("UPDATE feedback SET impact_why = 'AI unavailable: 4006: daily free allocation used', impact_tries = 1 WHERE ref = 'aaaa000011112222'").run();
+    // PR 3/7: a fixed one (told in the app and by e-mail, seen), one fixed and waiting for a release, one deferred with its Linear link
+    for (const [ref, text, state, hours, cols] of [['cccc000011112222', 'Setup stops at Connect LinkedIn and the button does nothing.', 'fixed', 80, {fixed_in: '0.9.12', pr_url: 'https://github.com/jobadabra/jobadabra/pull/3012', told: 'app+mail', seen_at: 'x'}],
+      ['dddd000011112222', 'The tracker loses my column order after an update.', 'fixed', 90, {pr_url: 'https://github.com/jobadabra/jobadabra/pull/3020', told: 'pending', tell_mode: 'release'}],
+      ['eeee000011112222', 'Would be nice to export the tracker as CSV.', 'deferred', 100, {linear_url: 'https://linear.app/jobadabra/issue/JOB-142', told: 'app, mail refused: unsubscribed', impact: 'low'}]]) {
+      const at = new Date(Date.now() - hours * 3600000).toISOString();
+      await env.STATS.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, notified, state, state_at, fixed_in, pr_url, linear_url, told, tell_mode, seen_at, impact) VALUES (?, ?, ?, '0.5.70', 'darwin', ?, 'ana@example.com', ?, 'sent', ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(at, at.slice(0, 10), `install-${ref.slice(0, 8)}`, text, ref, state, at, cols.fixed_in || '', cols.pr_url || '', cols.linear_url || '', cols.told || '', cols.tell_mode || '', cols.seen_at ? at : '', cols.impact || '').run();
+    }
     for (const [ref, text, state, note, hours] of [['aaaa000011112222', 'asdf test test', 'dismissed', '', 30], ['bbbb000011112222', 'Why does the app not open my own browser profile?', 'false_positive', 'Works as designed: it uses its own profile', 52]]) {
       const at = new Date(Date.now() - hours * 3600000).toISOString();
       await env.STATS.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, notified, state, state_at, state_note) VALUES (?, ?, ?, '0.5.70', 'darwin', ?, '', ?, 'sent', ?, ?, ?)")

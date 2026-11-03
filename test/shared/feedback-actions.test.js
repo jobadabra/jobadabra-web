@@ -10,7 +10,7 @@ import {recentFeedback, undelivered} from '../../shared/feedback.js';
 
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const name of ['0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql', '0126_feedback_actions.sql', '0127_feedback_impact_ai.sql']) db.exec(readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'));
+  for (const name of ['0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql', '0126_feedback_actions.sql', '0127_feedback_impact_ai.sql', '0128_feedback_replies.sql']) db.exec(readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8'));
   const statement = (sql, args = []) => ({bind: (...values) => statement(sql, values), run: async () => db.prepare(sql).run(...args),
     all: async () => ({results: db.prepare(sql).all(...args)}), first: async () => db.prepare(sql).get(...args)});
   return {db, prepare: sql => statement(sql), batch: async list => { const out = []; for (const item of list) out.push({meta: {changes: (await item.run()).changes}}); return out; }};   // D1's batch: in order, each result has meta.changes
@@ -29,7 +29,7 @@ function add(e, state = 'new', text = 'Setup stops at step 2 (invented)') {
   return ref;
 }
 const stateOf = (e, ref) => e.STATS.db.prepare('SELECT state, state_note, impact FROM feedback WHERE ref = ?').get(ref);
-const BODY = {dismiss: {}, false_positive: {note: 'works as designed'}, reopen: {}, delete: {}, impact: {impact: 'high'}};
+const BODY = {fixed: {when: 'never'}, defer: {tell: false}, dismiss: {}, false_positive: {note: 'works as designed'}, reopen: {}, delete: {}, impact: {impact: 'high'}};
 
 test('every state x action pair does what the table says: allowed ones end in the table\'s state, the others are refused with 409 and change nothing', async () => {
   for (const state of STATES) for (const action of Object.keys(ACTIONS)) {
@@ -47,7 +47,8 @@ test('every state x action pair does what the table says: allowed ones end in th
 });
 
 test('the menu offers exactly the actions the table allows for the state', () => {
-  assert.deepEqual(actionsFor('new'), ['dismiss', 'false_positive', 'delete']);
+  assert.deepEqual(actionsFor('new'), ['fixed', 'defer', 'dismiss', 'false_positive', 'delete']);
+  assert.deepEqual(actionsFor('deferred'), ['fixed', 'reopen', 'delete']);
   assert.deepEqual(actionsFor('dismissed'), ['reopen', 'delete']);
   assert.deepEqual(actionsFor('ai_running'), []);
 });
@@ -114,7 +115,7 @@ test('the route answers only the owner, only POST with JSON; a guest or a strang
 test('the page data carries the actions only for the owner', async () => {
   const e = env(); add(e);
   const owner = await (await view(new Request('https://x/admin/growth/feedback?json=1', {headers: {Authorization: 'Bearer owner-key'}}), e, new Date('2026-11-03T12:00:00Z'))).json();
-  assert.equal(owner.canAct, true); assert.deepEqual(owner.rows[0].actions, ['dismiss', 'false_positive', 'delete']);
+  assert.equal(owner.canAct, true); assert.deepEqual(owner.rows[0].actions, ['fixed', 'defer', 'dismiss', 'false_positive', 'delete']);
   assert.equal((await view(new Request('https://x/admin/growth/feedback?history=0000000000000001'), e)).status, 404);
 });
 

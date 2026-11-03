@@ -3,6 +3,7 @@
 import {viewer, isOwner, remember} from '../shared/auth.js';
 import {feedbackList, undelivered, fileOf} from '../shared/feedback.js';
 import {act, actionsFor, historyOf} from '../shared/feedback-actions.js';
+import {validAddress} from '../shared/mail.js';
 import {PAGE} from './feedback-page.js';
 
 // GET /feedback: the owner's live page (same key or cookie as /stats). It polls /feedback?json=1 every 60 s and puts
@@ -19,7 +20,7 @@ export async function view(request, env, now = new Date()) {
   }
   if (url.searchParams.has('json')) {
     const owner = await isOwner(request, env);
-    const rows = (await feedbackList(env.STATS, 90, now).catch(() => [])).map(row => ({...row, actions: owner ? actionsFor(row.state) : []}));
+    const rows = (await feedbackList(env.STATS, 90, now).catch(() => [])).map(row => ({...row, actions: owner ? actionsFor(row.state) : [], mailable: validAddress(row.contact)}));
     return Response.json({rows, canAct: owner, undelivered: await undelivered(env.STATS, 90, now).catch(() => 0), now: now.toISOString()}, {headers: {'Cache-Control': 'no-store'}});
   }
   return new Response(PAGE, {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'}});

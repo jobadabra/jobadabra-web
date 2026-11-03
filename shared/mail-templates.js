@@ -39,6 +39,13 @@ export const TEMPLATES = {
     button: ({confirmUrl}) => (confirmUrl ? {label: 'Confirm your email', url: confirmUrl} : null),
     text: () => "You asked for the confirm link again. Press it and your Jobadabra mails reach you.\n\nDidn't ask for this? Ignore this email; nothing changes.",
     html: () => `<p>You asked for the confirm link again. Press it and your Jobadabra mails reach you.</p>${muted("Didn't ask for this? Ignore this email; nothing changes.")}`},
+  // The owner's answer to a feedback the person sent from the app (shared/feedback-reply.js, owner 3 Nov 2026): "fixed" or "we saw it and parked it". Only when the person gave this address and the owner ticked it.
+  // A service mail (never a promotion). Data: {kind: 'fixed' | 'deferred', on: 'YYYY-MM-DD', excerpt, message}.
+  'feedback-update': {list: 'service',
+    subject: () => 'About your feedback',
+    title: ({kind}) => (kind === 'fixed' ? 'Your feedback is fixed' : 'Thanks for your feedback'),
+    text: ({on, excerpt, message}) => `You wrote on ${on}: "${excerpt}"\n\n${message}`,
+    html: ({on, excerpt, message}) => `${muted(`You wrote on ${on}: "${excerpt}"`)}<p>${esc(message)}</p>`},
   // Account mail: the code that proves an address (Pro device codes, sign-in). Data: {code}.
   'account-code': {list: 'service', essential: true,
     subject: () => 'Your Jobadabra code',

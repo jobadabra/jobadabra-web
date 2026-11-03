@@ -76,6 +76,7 @@ import {playbook} from '../../api/playbook.js';
 import {install} from '../../api/install.js';
 import {signals} from '../../api/signals.js';
 import {feedback} from '../../api/feedback.js';
+import {replies as feedbackReplies} from '../../api/feedback-replies.js';
 import {view as feedbackView, file as feedbackFile, actRoute as feedbackAct} from '../../admin/feedback.js';
 import {purgeFiles as purgeFeedbackFiles} from '../../shared/feedback.js';
 import {retryImpact} from '../../shared/feedback-impact.js';
@@ -265,6 +266,7 @@ async function route(request, env, ctx) {
   if (pathname === '/api/contributions') return pool.aggregate(request, env);
   if (pathname === '/api/signals') return signals(request, env);
   if (pathname === '/api/feedback') return feedback(request, env, fetch, new Date(), ctx);
+  if (pathname === '/api/feedback/replies' || pathname === '/api/feedback/replies/seen') return feedbackReplies(request, env);   // the app reads the owner's answer to its own feedback (api/feedback-replies.js)
   if (pathname === '/admin/growth/feedback/act') return feedbackAct(request, env);   // one action on one feedback, the owner only (shared/feedback-actions.js)
   if (pathname === '/admin/growth/feedback/file') return feedbackFile(request, env);   // a feedback's screenshot or logs, the owner only (admin/feedback.js)
   if (pathname === '/api/report-form' || pathname.startsWith('/api/report-form/')) return reportForm(request, env, pathname);   // "Report this form": an encrypted recording from an install (shared/report-form.js)

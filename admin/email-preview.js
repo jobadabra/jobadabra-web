@@ -13,6 +13,7 @@ export const SAMPLES = {
   'confirm-resend': {confirmUrl: `${SITE}/confirm?example`},
   'account-code': {code: '482913'},
   'digest': {matches: jobs, total: 12, openUrl: SITE},
+  'feedback-update': {kind: 'fixed', on: '2026-10-28', excerpt: 'Setup stops at Connect LinkedIn and the button does nothing', message: 'Thank you: this is fixed in 0.9.12.'},
   'trial-left': {left: 5},
   'trial-ending': {days: 3, pricingUrl: PRICING},
   'always-on-paused': {reason: 'trial-over', pricingUrl: PRICING, pro: true},

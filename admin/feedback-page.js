@@ -30,6 +30,10 @@ button.chip{cursor:pointer}button.chip:hover{color:var(--text)}button.chip[aria-
 button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .panel{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px}.panel input{flex:1 1 220px;font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 9px}
 .panel button{font:inherit;font-size:13px;font-weight:600;color:var(--text);background:transparent;border:1px solid var(--line);border-radius:8px;padding:5px 12px;cursor:pointer}.panel .go{border-color:var(--amber);color:var(--amber)}.panel .danger{border-color:var(--red);color:var(--red)}
+.form{margin-top:10px;display:grid;gap:8px;font-size:13px;border-top:1px solid var(--line);padding-top:10px}.form label{display:grid;gap:3px;color:var(--muted);font-size:12px}.form .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.form input[type=text],.form select{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 9px;width:100%}.form .check{display:flex;gap:6px;align-items:center;color:var(--text);font-size:13px}
+.form button{font:inherit;font-size:13px;font-weight:600;color:var(--text);background:transparent;border:1px solid var(--line);border-radius:8px;padding:5px 12px;cursor:pointer}.form .go{border-color:var(--amber);color:var(--amber)}
+a.chip{text-decoration:none}.told{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chip.warn{color:var(--amber);border-color:var(--amber)}
 .toast[hidden]{display:none}.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 14px;font-size:13px;display:flex;gap:12px;align-items:center;z-index:9;box-shadow:0 8px 24px #000a}
 .toast button{font:inherit;font-size:13px;font-weight:600;color:var(--amber);background:transparent;border:0;cursor:pointer}.toast.bad{border-color:var(--red)}
 </style></head><body><main>
@@ -52,7 +56,7 @@ const IMPACT_FILTERS = [['high', '▲ High'], ['medium', '● Medium'], ['low', 
 const RANK = {high: 0, medium: 1, low: 2, '': 3};
 const eff = row => row.impact || row.impact_ai || '';   // the owner's rating wins; until he rates it, the AI's suggestion counts for the filters and the sort
 const NAME = {high: 'High', medium: 'Medium', low: 'Low'};
-const LABEL = {dismiss: '🙈 Dismiss', false_positive: '🚫 False positive…', reopen: '↩ Reopen', delete: '🗑 Delete…'};
+const LABEL = {fixed: '✅ Fixed + tell the reporter…', defer: '⏳ Acknowledge + defer…', dismiss: '🙈 Dismiss', false_positive: '🚫 False positive…', reopen: '↩ Reopen', delete: '🗑 Delete…'};
 const el = (tag, className, text) => { const e = document.createElement(tag); if (className) e.className = className; if (text !== undefined) e.textContent = text; return e; };
 
 let toastTimer;
@@ -92,7 +96,8 @@ function menuOf(row, card) {
   wrap.append(button); return wrap;
 }
 function choose(row, action, card) {
-  card.querySelector('.panel')?.remove();
+  card.querySelector('.panel, .form')?.remove();
+  if (action === 'fixed' || action === 'defer') return card.append(formFor(row, action));
   if (action === 'dismiss') return send({ref: row.ref, action}, 'Dismissed.', {undo: {ref: row.ref, action: 'reopen', from: 'dismissed'}});
   if (action === 'reopen') return send({ref: row.ref, action}, 'Back to new.');
   const panel = el('div', 'panel'), go = el('button', action === 'delete' ? 'danger' : 'go', action === 'delete' ? 'Delete' : 'Save'), cancel = el('button', '', action === 'delete' ? 'Keep' : 'Cancel');
@@ -110,6 +115,44 @@ function choose(row, action, card) {
   card.append(panel);
 }
 
+// The two forms that carry the owner's words to the reporter. The server validates everything again (shared/feedback-reply.js); this only asks for it.
+function formFor(row, action) {
+  const form = el('div', 'form'), fixed = action === 'fixed', field = (label, input) => { const l = el('label', '', label); l.append(input); form.append(l); return input; };
+  const text = (max, placeholder) => { const i = el('input'); i.type = 'text'; i.maxLength = max; i.placeholder = placeholder; return i; };
+  const version = fixed ? field('Fixed in (a version; blank = the next update)', text(40, 'e.g. 0.9.12')) : null;
+  const link = field(fixed ? 'PR or commit link (lets a release find it and tell the reporter by itself)' : 'Linear issue (optional)', text(200, fixed ? 'https://github.com/…/pull/123' : 'https://linear.app/…/issue/JOB-12'));
+  const message = field('Message to the reporter (blank = the standard sentence)', text(300, fixed ? 'Thank you: this is fixed.' : 'Thank you: we saw this and parked it for later.'));
+  const mail = el('input'); mail.type = 'checkbox'; const told = /^app/.test(row.told || ''); mail.disabled = !row.mailable; mail.checked = !!row.mailable && !told;   // Why (3/7 review): a card told before (deferred, then fixed) does not mail again unless the owner ticks it
+  const mailRow = el('label', 'check'); mailRow.append(mail, row.mailable ? (told ? 'Already told once: e-mail ' : 'Also e-mail ') + row.contact : 'No e-mail: the contact is not an address (they are told in the app)');
+  form.append(mailRow);
+  let when = null, impact = null, tell = null;
+  if (fixed) {
+    when = el('select'); let touched = false;
+    for (const [value, label] of [['release', 'Tell automatically at the first release that includes it'], ['now', 'Tell now'], ['never', 'Do not tell']]) when.append(Object.assign(el('option', '', label), {value}));
+    when.onchange = () => { touched = true; }; version.oninput = () => { if (!touched) when.value = version.value.trim() ? 'now' : 'release'; };
+    field('When to tell the reporter', when);
+  } else {
+    tell = el('input'); tell.type = 'checkbox'; tell.checked = true; const t = el('label', 'check'); t.append(tell, 'Tell the reporter in the app'); form.append(t);
+    if (!row.impact) { impact = el('select'); for (const [value, label] of [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]) impact.append(Object.assign(el('option', '', label), {value})); impact.value = row.impact_ai || 'low'; field('Impact', impact); }
+  }
+  const buttons = el('div', 'row'), go = el('button', 'go', 'Save'), cancel = el('button', '', 'Cancel'); go.type = cancel.type = 'button'; cancel.onclick = () => form.remove();
+  go.onclick = () => send({ref: row.ref, action, message: message.value, mail: mail.checked && !mail.disabled, ...(fixed ? {fixed_in: version.value, pr_url: link.value, when: when.value} : {linear_url: link.value, tell: tell.checked, ...(impact ? {impact: impact.value} : {})})},
+    fixed ? 'Marked as fixed.' : 'Deferred.');
+  buttons.append(go, cancel); form.append(buttons); setTimeout(() => (version || message).focus());
+  return form;
+}
+
+const toldChips = row => {
+  const box = el('div', 'told');
+  if (row.fixed_in) box.append(el('span', 'chip', 'in ' + row.fixed_in));
+  for (const [url, label] of [[row.pr_url, 'PR ↗'], [row.linear_url, 'Linear ↗']]) if (url) { const a = el('a', 'chip', label); a.href = url; a.target = '_blank'; a.rel = 'noopener'; box.append(a); }
+  if (row.told === 'pending') box.append(el('span', 'chip deferred', '⏳ waiting for a release to tell the reporter'));
+  else if (/^app, mail refused/.test(row.told)) box.append(el('span', 'chip warn', '⚠ told in the app; ' + row.told.slice(5)));
+  else if (row.told) box.append(el('span', 'chip fixed', row.told === 'app+mail' ? '✉ told in the app and by e-mail' : '✉ told in the app'));
+  if (row.seen_at) box.append(el('span', 'chip', '👁 seen by the reporter'));
+  return box;
+};
+
 const make = row => {
   const card = el('div', 'card' + (OPEN.includes(row.state) ? '' : ' quiet')), top = el('div', 'top'), meta = el('div', 'meta'), text = el('div', 'text');
   const [label, tone] = STATE[row.state] || STATE.new;
@@ -121,6 +164,7 @@ const make = row => {
   card.append(top, text);
   if (row.state_note) card.append(el('div', 'note', row.state === 'false_positive' ? 'Why: ' + row.state_note : row.state_note));
   card.id = row.ref || '';
+  if (row.fixed_in || row.pr_url || row.linear_url || row.told || row.seen_at) card.append(toldChips(row));
   if (canAct || row.impact || row.impact_ai) {
     const box = el('div', 'impact'); box.append('Impact');
     for (const [value, name] of [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]) {
@@ -189,7 +233,7 @@ function paint() {
   if (sortBy === 'impact') shown = shown.slice().sort((a, b) => RANK[eff(a)] - RANK[eff(b)] || (a.at < b.at ? 1 : -1));
   const keyOf = row => row.ref || row.at + row.install, seen = new Set(known || []), first = known === null;
   list.replaceChildren(...(shown.length ? shown.map(row => {
-    const sig = [row.notified, row.shot, row.logs, row.page, row.profile, row.state, row.state_note, row.impact, row.impact_ai, row.impact_why, row.actions.join(), canAct].join('|'), kept = cards.get(keyOf(row));
+    const sig = [row.notified, row.shot, row.logs, row.page, row.profile, row.state, row.state_note, row.impact, row.impact_ai, row.impact_why, row.actions.join(), row.fixed_in, row.pr_url, row.linear_url, row.told, row.seen_at, canAct].join('|'), kept = cards.get(keyOf(row));
     let card = kept && kept.sig === sig ? kept.card : null;
     if (!card) { card = make(row); cards.set(keyOf(row), {sig, card}); }
     mark(card, !first && !seen.has(keyOf(row))); return card;
