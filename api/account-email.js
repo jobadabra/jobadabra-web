@@ -1,7 +1,8 @@
 // The address a person gives Jobadabra (onboarding, Settings → Notifications) and the mail the app or a run sends to it. The install proves itself with its AI key
-// (x-api-key: JPF1.<install>.<token>). PUT/GET /api/account/email makes or reads the trial account; POST /api/notify/email mails a Telegram-style message to it;
+// (x-api-key: JPF1.<install>.<token>); POST /api/notify/email also takes the trial key an Always-on repo holds (JPT1.<install>.<token>, shared/trial-key.js). PUT/GET /api/account/email makes or reads the trial account; POST /api/notify/email mails a Telegram-style message to it;
 // POST /api/account/email/resend sends the confirm link again; /confirm confirms the address. An address another account already holds is refused here (joining it takes a code sent to that address, the device sign-in). Guard: test/api/account-email.test.js.
 import {authorize, digestOf, equal, tokenFor} from '../shared/guard.js';
+import {installOfTrialKey} from '../shared/trial-key.js';
 import {addrOf, confirmLink, send, validAddress, clean} from '../shared/mail.js';
 import {fromTelegram} from './mail-html.js';
 import {CADENCES, deliver, hold} from './mail-held.js';
@@ -120,7 +121,7 @@ export async function resend(request, env, now = new Date()) {
 
 // POST /api/notify/email {subject, html, buttons?: [{text, url}], kind?: 'activity'}: 'activity' is held for the digest, anything else goes at once; `html` is the Telegram HTML the engine built (tgcard.py); only a safe subset reaches the mail (mail-html.js).
 export async function notify(request, env, now = new Date()) {
-  const install = await who(request, env);
+  const install = (await installOfTrialKey(request.headers.get('x-api-key'), env))?.install;   // also the JPT1 key an Always-on repo holds: it reaches only this route and the trial status
   if (!install || !env.STATS) return json(401, {ok: false, error: 'unauthorized'});
   if (request.method !== 'POST') return json(405, {ok: false});
   const account = await accountOf(env, install);
