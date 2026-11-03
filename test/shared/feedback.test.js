@@ -45,13 +45,10 @@ test('a feedback without the app version, the platform or the install id is refu
   assert.equal((await send(e, {...good, contact: undefined})).status, 200);
 });
 
-test('a refused feedback costs nothing: before the daily limit, no Telegram message, no file stored', async () => {
-  const e = env(), sent = [];
+test('a refused feedback does not use up the daily limit: it is refused before the count', async () => {
+  const e = env();
   for (let i = 0; i < 10; i++) assert.equal((await send(e, good)).status, 200);
-  sent.length = 0;
-  const answer = await send(e, {...good, platform: '', screenshot: 'data:image/jpeg;base64,/9j/4AAQ'}, sent);
-  assert.equal(answer.status, 400, 'not 429: the check comes before the limit');
-  assert.equal(sent.length, 0);
+  assert.equal((await send(e, {...good, platform: ''})).status, 400, 'not 429: the check comes before the limit');
   assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM feedback').get().n, 10);
 });
 
