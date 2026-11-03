@@ -126,3 +126,10 @@ test('a store error while telling a manual release is written on the card and ne
   assert.equal(mails.length, 1);
 });
 
+
+test('Mark as released does not tell a card whose "tell" choice changed between the read and the write', async () => {
+  const {e, mails} = setup(), ref = await waiting(e, {pr_url: PR(3012), mail: true}), real = e.STATS.prepare.bind(e.STATS);
+  e.STATS.prepare = text => { if (/^UPDATE feedback SET state = \?, state_at/.test(text)) e.STATS.db.prepare("UPDATE feedback SET told = '', tell_mode = 'never' WHERE ref = ?").run(ref); return real(text); };   // the owner Reopened and re-fixed it with "do not tell" meanwhile
+  assert.equal((await run(e, {ref, action: 'released', version: '0.9.12'})).status, 409);
+  assert.deepEqual([stateOf(e, ref), rowOf(e, ref).told, mails.length], ['fixed', '', 0]);
+});

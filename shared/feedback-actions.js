@@ -80,7 +80,9 @@ export async function act(env, input, who, now = new Date()) {
   if (action === 'reopen') columns.told = ['pending', 'telling'].includes(row.told) ? '' : row.told;   // a fix that waited for a release (or was being told) stops; what was already told stays
   const keys = Object.keys(columns), sets = keys.map(key => `, ${key} = ?`).join('');
   const detail = `${row.state} -> ${spec.to}${note || form.detail ? `: ${note || form.detail}` : ''}${form.tell ? ` (tell: ${form.tell})` : ''}`;
-  if (!await commit(env.STATS.prepare(`UPDATE feedback SET state = ?, state_at = ?, state_note = ?${sets} WHERE ref = ? AND state = ?`).bind(spec.to, at, spec.note ? note : '', ...keys.map(key => columns[key]), ref, row.state), detail)) return raced;
+  // Why (5b code review, 3 Nov 2026): "Mark as released" decides whether to tell from the `told` it read, so the write also checks it: a card reopened and re-fixed with "never tell" in between is not told.
+  const guard = action === 'released' ? ' AND told = ?' : '', guardArgs = action === 'released' ? [row.told] : [];
+  if (!await commit(env.STATS.prepare(`UPDATE feedback SET state = ?, state_at = ?, state_note = ?${sets} WHERE ref = ? AND state = ?${guard}`).bind(spec.to, at, spec.note ? note : '', ...keys.map(key => columns[key]), ref, row.state, ...guardArgs), detail)) return raced;
   const told = form.tell === 'now' ? await tellOnce(env, ref, now, 'owner (told)') : undefined;   // after the change is saved: a failing mail never undoes it
   return {ok: true, state: spec.to, impact: columns.impact ?? row.impact, ...(told !== undefined ? {told} : {})};
 }
