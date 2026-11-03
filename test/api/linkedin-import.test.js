@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 import * as imp from '../../api/linkedin-import.js';
+import {handedOff} from '../shared/handoff-form.js';
 
 const STATE = 'a'.repeat(43);
 const TOKEN = 'AQV-fake-dma-token-1234567890';
@@ -29,10 +30,10 @@ test('start sends the person to LinkedIn with the Data Portability scope, the ap
 test('the code is traded server-side and the token goes ON to the app on the browser\'s own machine; nothing is kept', async () => {
   const calls = [], e = env();
   const response = await callback(e, undefined, fetcher(calls));
-  assert.equal(response.status, 302);
-  const to = new URL(response.headers.get('Location'));
-  assert.equal(to.origin + to.pathname, 'http://127.0.0.1:47111/linkedin-import/callback', 'only the loopback of the machine that consented, a fixed address (not a parameter)');
-  assert.deepEqual([to.searchParams.get('state'), to.searchParams.get('access_token'), to.searchParams.get('expires_in')], [STATE, TOKEN, '5184000']);
+  const sent2 = await handedOff(response);
+  assert.equal(sent2.action, 'http://127.0.0.1:47111/linkedin-import/callback', 'only the loopback of the machine that consented, a fixed address (not a parameter)');
+  assert.deepEqual([sent2.fields.state, sent2.fields.access_token, sent2.fields.expires_in], [STATE, TOKEN, '5184000']);
+  assert.equal(response.headers.get('Location'), null, 'the key is in the form body, never in an address');
   assert.equal(response.headers.get('Cache-Control'), 'no-store');
   assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer');
   assert.equal(calls.length, 1, 'one call to LinkedIn: the token; the site never fetches the profile');
@@ -45,8 +46,9 @@ test('the code is traded server-side and the token goes ON to the app on the bro
 
 test('an attacker\'s link cannot move the token off the victim\'s machine: the way back is fixed, whatever the link says', async () => {
   const evil = await callback(env(), `code=c&state=${STATE}&redirect_uri=https://evil.test/x&port=9999&to=https://evil.test`);
-  assert.equal(new URL(evil.headers.get('Location')).origin, 'http://127.0.0.1:47111');
-  assert.ok(!(await evil.text()).includes(TOKEN));
+  const evilSent = await handedOff(evil);
+  assert.equal(evilSent.action, 'http://127.0.0.1:47111/linkedin-import/callback');
+  assert.ok(!JSON.stringify(Object.keys(evilSent.fields)).includes('evil') && !evilSent.html.includes('evil.test'), 'nothing the link says reaches the page');
   const source = readFileSync(new URL('../../api/linkedin-import.js', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /WAITLIST|\.put\(|expirationTtl/, 'this module stores nothing (the first design held the token under an id anyone could name)');
 });

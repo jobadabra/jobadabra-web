@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import * as notion from '../../api/notion.js';
+import {handedOff} from '../shared/handoff-form.js';
 
 const STATE = 'a'.repeat(43);
 const env = () => ({NOTION_CLIENT_ID: 'client-1', NOTION_CLIENT_SECRET: 'secret-1'});
@@ -18,16 +19,17 @@ test('start sends the user to Notion with the state and this site as the way bac
   assert.equal(notion.start(new Request('https://site.test/api/notion/start?state=short'), env()).status, 400);
 });
 
-test('the code is traded for the token server-side and the token goes to the app\'s own socket, with the workspace and template', async () => {
+test('the code is traded for the token server-side and the token is posted to the app\'s own socket, with the workspace and template', async () => {
   let sent;
   const fetcher = async (url, init) => { sent = {url, init}; return new Response(JSON.stringify({access_token: 'ntn_user', workspace_name: 'Ada\'s Space', duplicated_template_id: 'tpl'}), {status: 200}); };
   const back = await notion.callback(new Request(`https://site.test/api/notion/callback?code=c-1&state=${STATE}`), env(), fetcher);
   assert.equal(sent.init.headers.Authorization, `Basic ${btoa('client-1:secret-1')}`);
   assert.equal(JSON.parse(sent.init.body).redirect_uri, 'https://site.test/api/notion/callback');
-  assert.equal(back.status, 302);
-  const to = new URL(back.headers.get('Location'));
-  assert.equal(to.origin + to.pathname, 'http://127.0.0.1:47111/notion-connect/callback');
-  assert.deepEqual(Object.fromEntries(to.searchParams), {state: STATE, access_token: 'ntn_user', workspace_name: 'Ada\'s Space', workspace_id: '', duplicated_template_id: 'tpl'});
+  const sent2 = await handedOff(back);
+  assert.equal(sent2.method, 'post');
+  assert.equal(sent2.action, 'http://127.0.0.1:47111/notion-connect/callback');
+  assert.deepEqual(sent2.fields, {state: STATE, access_token: 'ntn_user', workspace_name: 'Ada\'s Space', workspace_id: '', duplicated_template_id: 'tpl'});
+  assert.ok(!sent2.action.includes('ntn_user') && back.headers.get('Location') === null, 'the token is in the form body, never in an address');
 });
 
 test('cancelled, broken or unconfigured: a clear page, nothing handed on', async () => {

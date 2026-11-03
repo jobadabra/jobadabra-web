@@ -5,7 +5,9 @@ import {readFileSync, readdirSync} from 'node:fs';
 import {test} from 'node:test';
 import * as linkedin from '../../api/linkedin.js';
 import * as notion from '../../api/notion.js';
+import * as imp from '../../api/linkedin-import.js';
 import {APP_ORIGIN, FLOWS, UPDATE_TEXT, legacyPoll, toApp} from '../../shared/oauth-handoff.js';
+import {handedOff} from './handoff-form.js';
 
 const ATTACKER = 'z'.repeat(43);   // an id the attacker chose and put in the link
 const trap = () => new Proxy({}, {get: name => () => { throw new Error(`the hand-off touched storage (${String(name)})`); }});   // any use of KV fails the test
@@ -23,12 +25,13 @@ for (const [name, spec] of Object.entries(FLOW)) {
     const link = mod.start(new Request(`https://site.test/api/${name}/start?state=${ATTACKER}`), env);   // the attacker's link, opened by the victim
     assert.equal(link.status, 302);
     const back = await mod.callback(new Request(`https://site.test/api/${name}/callback?code=c1&state=${ATTACKER}`), env, fetcher);   // the victim approved; env.WAITLIST throws on any use
-    assert.equal(back.status, 302);
-    const to = new URL(back.headers.get('Location'));
-    assert.equal(to.origin, APP_ORIGIN, 'only the victim\'s own machine');
-    assert.equal(to.pathname, `/${spec.flow}/callback`);
-    assert.equal(to.searchParams.get('state'), ATTACKER);
-    assert.equal(to.searchParams.get(spec.secretField), spec.secret);
+    assert.equal(back.headers.get('Location'), null, 'no redirect: the result never travels in an address (it would stay in the browser history)');
+    const sent = await handedOff(back);
+    assert.equal(sent.method, 'post');
+    assert.equal(sent.action, `${APP_ORIGIN}/${spec.flow}/callback`, 'only the victim\'s own machine, a fixed address');
+    assert.equal(new URL(sent.action).search, '');
+    assert.equal(sent.fields.state, ATTACKER);
+    assert.equal(sent.fields[spec.secretField], spec.secret);
     assert.equal(back.headers.get('Referrer-Policy'), 'no-referrer');
     assert.match(back.headers.get('Cache-Control'), /no-store/);
     // The attacker asks for the result with the id they chose (the old way): there is nothing to hand out.
@@ -52,6 +55,16 @@ for (const [name, spec] of Object.entries(FLOW)) {
   });
 }
 
+test('the hand-off page escapes what it carries and the import flow uses it too', async () => {
+  const hostile = await handedOff(toApp('notion-connect', ATTACKER, {workspace_name: '"><script>steal()</script>'}));
+  assert.ok(!hostile.html.includes('<script>steal()'), 'a value cannot break out of its field');
+  assert.equal(hostile.fields.workspace_name, '"><script>steal()</script>', 'and arrives intact');
+  const ok = await handedOff(await imp.callback(new Request(`https://site.test/api/linkedin-import/callback?code=c&state=${ATTACKER}`), {LINKEDIN_IMPORT_CLIENT_ID: 'i', LINKEDIN_IMPORT_CLIENT_SECRET: 's'},
+    async () => new Response(JSON.stringify({access_token: 'AQV-FAKE-token-123456789012', expires_in: 5184000}), {status: 200})));
+  assert.equal(ok.action, `${APP_ORIGIN}/linkedin-import/callback`);
+  assert.equal(ok.fields.access_token, 'AQV-FAKE-token-123456789012');
+});
+
 test('the shared hand-off only knows its own flows and the update answer carries no data', async () => {
   assert.deepEqual(FLOWS, ['notion-connect', 'linkedin-signin', 'linkedin-import']);
   assert.throws(() => toApp('other', ATTACKER, {}), /unknown hand-off flow/);
@@ -62,6 +75,6 @@ test('the shared hand-off only knows its own flows and the update answer carries
 test('the class: every api file with an OAuth callback hands its result over through the shared hand-off (no new store-and-poll flow)', () => {
   const dir = new URL('../../api/', import.meta.url);
   const withCallback = readdirSync(dir).filter(name => name.endsWith('.js') && /export (async )?function callback\(/.test(readFileSync(new URL(name, dir), 'utf8')));
-  assert.ok(['notion.js', 'linkedin.js'].every(name => withCallback.includes(name)), `positive control: ${withCallback}`);
+  assert.ok(['notion.js', 'linkedin.js', 'linkedin-import.js'].every(name => withCallback.includes(name)), `positive control: ${withCallback}`);
   for (const name of withCallback) assert.ok(readFileSync(new URL(name, dir), 'utf8').includes("from '../shared/oauth-handoff.js'"), `${name} must use shared/oauth-handoff.js`);
 });

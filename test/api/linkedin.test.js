@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import * as linkedin from '../../api/linkedin.js';
+import {handedOff} from '../shared/handoff-form.js';
 
 const STATE = 'a'.repeat(43);
 const env = () => ({LINKEDIN_CLIENT_ID: 'id-1', LINKEDIN_CLIENT_SECRET: 'secret-1'});
@@ -26,23 +27,22 @@ test('start sends the user to LinkedIn with the state, the scopes and this site 
   assert.equal(linkedin.start(new Request('https://site.test/api/linkedin/start?state=short'), env()).status, 400);
 });
 
-test('the code is traded server-side; only the profile goes to the app\'s own socket, never the LinkedIn token or the picture', async () => {
+test('the code is traded server-side; only the profile is posted to the app\'s own socket, never the LinkedIn token or the picture', async () => {
   const calls = [];
   const back = await callback(env(), fetcher(INFO, calls));
   const body = new URLSearchParams(calls[0].init.body);
   assert.equal(body.get('client_secret'), 'secret-1');
   assert.equal(body.get('redirect_uri'), 'https://site.test/api/linkedin/callback');
   assert.equal(calls[1].init.headers.Authorization, 'Bearer AQ-secret-token');
-  assert.equal(back.status, 302);
-  const to = new URL(back.headers.get('Location'));
-  assert.equal(to.origin + to.pathname, 'http://127.0.0.1:47111/linkedin-signin/callback');
-  assert.deepEqual(Object.fromEntries(to.searchParams), {state: STATE, sub: 'abc123', name: 'Ada Example', given_name: 'Ada', family_name: 'Example', email: 'ada@example.test', locale: 'en'});
-  assert.ok(!to.toString().includes('AQ-secret-token') && !to.toString().includes('licdn'));
+  const sent = await handedOff(back);
+  assert.equal(sent.action, 'http://127.0.0.1:47111/linkedin-signin/callback');
+  assert.deepEqual(sent.fields, {state: STATE, sub: 'abc123', name: 'Ada Example', given_name: 'Ada', family_name: 'Example', email: 'ada@example.test', locale: 'en'});
+  assert.ok(!sent.html.includes('AQ-secret-token') && !sent.html.includes('licdn'));
 });
 
 test('an unverified email is not passed on; cancelled, broken or unconfigured: a clear page, nothing handed on', async () => {
   const unverified = await callback(env(), fetcher({...INFO, email_verified: false}));
-  assert.equal(new URL(unverified.headers.get('Location')).searchParams.get('email'), '');
+  assert.equal((await handedOff(unverified)).fields.email, '');
   assert.equal((await linkedin.callback(new Request(`https://site.test/api/linkedin/callback?error=user_cancelled_login&state=${STATE}`), env())).status, 400);
   const bad = async () => new Response(JSON.stringify({error: 'invalid_request', error_description: 'bad code'}), {status: 400});
   const page = await callback(env(), bad);
