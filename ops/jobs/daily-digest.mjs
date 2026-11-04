@@ -17,6 +17,18 @@ const base = process.env.DIGEST_URL || 'https://www.jobpilotto.top/digest/data';
 const gh = (...args) => JSON.parse(execFileSync('gh', args, {encoding: 'utf8', maxBuffer: 1 << 28}) || 'null');
 const arg = name => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : ''; };
 
+/**
+ * askBroker with one more try after a lost connection. Takes the request and {ask, onRetry}; returns ask's answer. A timeout or a refusal is final: a second 3-minute wait does not help a slow broker.
+ * Why (4 Nov 2026, a8 via mac-32): the whole day hangs on this call and the "hourly" run really comes every 6-8 hours, so one lost connection (2 of 8,354 calls in 7 days, cause not known yet) cost a night. Said in the log so it stays counted: this treats the symptom until the logged cause names the real one.
+ */
+export async function askOnceMore(body, {ask = askBroker, onRetry = () => {}} = {}) {
+  const first = await ask(body);
+  if (first.ok || first.status !== 'unreachable' || /timeout/i.test(first.detail || '')) return first;
+  console.log(`Digest: ${first.detail}; one more try`);
+  onRetry();
+  return ask(body);
+}
+
 // The PRs merged on `day` (Zurich) and the open ones. gh's search is by UTC date: ask for the day before too, then keep the exact Zurich day.
 export function collect(day) {
   const before = new Date(Date.parse(`${day}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
@@ -34,8 +46,9 @@ async function runDay({day, late, publishKey, now}) {
   if (publishKey && !process.argv.includes('--force')) stored = await (await fetch(`${base}?day=${day}`, {headers: {Authorization: `Bearer ${publishKey}`}})).json();
   const decision = process.argv.includes('--force') ? {final: process.argv.includes('--final')} : plan({now, numbers, stored, late, zurichHour: zurichHour(now)});
   if (decision.skip) { console.log(`${day}: skipped (${decision.skip})`); return null; }
-  const digest = await makeDigest({day, prs, open, broker: askBroker});
-  const usd = 0, {calls} = digest, {count, min, max} = countOf(digest.numbers);   // the Codex plan has no dollars; `calls` is what the job costs
+  let retried = 0;
+  const digest = await makeDigest({day, prs, open, broker: body => askOnceMore(body, {onRetry: () => { retried += 1; }})});
+  const usd = 0, calls = digest.calls + retried, {count, min, max} = countOf(digest.numbers);   // the Codex plan has no dollars; `calls` is what the job costs
   console.log(`${day}: ${decision.final ? 'FINAL' : 'draft'}, ${count} PRs${count ? ` (#${min}-#${max})` : ''}, ${digest.groups.length} groups, ${calls} broker ${calls === 1 ? 'call' : 'calls'}`);
   if (aiLine(digest.answered)) console.log(aiLine(digest.answered));   // Why (owner, 1 Nov 2026): CI should know which model answers; the 23:33 timeout was only visible in the broker's health
   const rewrite = process.argv.includes('--rewrite');   // a closed day written again in the new form: stored over the old one, no Telegram post
