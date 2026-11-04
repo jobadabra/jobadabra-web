@@ -20,7 +20,7 @@ const bucket = () => {
 const env = (extra = {}) => ({LAB_FILLS: bucket(), REPLAYS_PUBLISH_KEY: KEY, STATS_API_KEY: 'owner-key', STATS_KEY: 'k', ...extra});
 const record = (run, extra = {}) => ({run, at: '2026-11-04T15:00:00Z', kind: 'replay', commit: 'b4d64112', plan: 'learned-questions', goals: [{n: 1, verdict: 'could-not-finish'}, {n: 2, verdict: 'worked'}], notes: [{goal: 1}], cost: {calls: 58, tokens: 1836000, minutes: 13}, ...extra});
 const put = (e, {run = '41857218091', file = 'run.json', type, body, size = 1000, key = KEY, now = new Date('2026-11-04T16:00:00Z')} = {}) => {
-  const asJson = file === 'run.json', kind = type || (asJson ? 'application/json' : file.endsWith('.webm') ? 'video/webm' : 'image/jpeg');
+  const asJson = file === 'run.json', kind = type || (asJson ? 'application/json' : file.endsWith('.webm') ? 'video/webm' : 'image/png');
   const bytes = body ?? (asJson ? new TextEncoder().encode(JSON.stringify(record(run))) : new Uint8Array(size).fill(7));
   return runIngest(new Request(`https://x.test/agent/run?run=${run}&file=${encodeURIComponent(file)}`, {method: 'PUT', headers: {Authorization: `Bearer ${key}`, 'Content-Type': kind}, body: bytes}), e, now);
 };
@@ -39,11 +39,11 @@ test('only the publish key writes; no key, a wrong key or no bucket never stores
 test('refuses a run id that is not a number, a file name that is not one of three, a wrong type, a size over the cap, an empty body and a record that is not this run\'s', async () => {
   const e = env();
   for (const run of ['', 'abc', '../41857218091', '41857218091/x', '1']) assert.equal((await put(e, {run})).status, 400, `run ${run}`);
-  for (const name of ['../run.json', 'agent/run.json', 'run.json/x', 'shot-0.jpg', 'shot-100.jpg', 'shot-1.png', 'notes.txt', '']) assert.equal((await put(e, {file: name, size: 10})).status, 400, `file ${name}`);
+  for (const name of ['../run.json', 'agent/run.json', 'run.json/x', 'shot-0.png', 'shot-100.png', 'shot-1.jpg', 'notes.txt', '']) assert.equal((await put(e, {file: name, size: 10})).status, 400, `file ${name}`);
   assert.equal((await put(e, {file: 'video.webm', type: 'text/html'})).status, 400);
   assert.equal((await put(e, {file: 'run.json', type: 'text/html', body: new TextEncoder().encode('{}')})).status, 400);
   assert.equal((await put(e, {file: 'video.webm', size: MAX_VIDEO + 1})).status, 413);
-  assert.equal((await put(e, {file: 'shot-1.jpg', size: MAX_SHOT + 1})).status, 413);
+  assert.equal((await put(e, {file: 'shot-1.png', size: MAX_SHOT + 1})).status, 413);
   assert.equal((await put(e, {file: 'run.json', body: new Uint8Array(MAX_RECORD + 1)})).status, 413);
   assert.equal((await put(e, {file: 'video.webm', size: 0})).status, 400);
   assert.equal((await put(e, {body: new TextEncoder().encode('not json')})).status, 400);
@@ -54,9 +54,9 @@ test('refuses a run id that is not a number, a file name that is not one of thre
 
 test('a run\'s record, video and screenshots are kept under agent/<run>/ and the list shows verdict counts, cost, the video and the number of screenshots, newest first', async () => {
   const e = env();
-  for (const file of ['run.json', 'video.webm', 'shot-1.jpg', 'shot-2.jpg']) assert.equal((await put(e, {file})).status, 200, file);
+  for (const file of ['run.json', 'video.webm', 'shot-1.png', 'shot-2.png']) assert.equal((await put(e, {file})).status, 200, file);
   assert.equal((await put(e, {run: '41860394127', body: new TextEncoder().encode(JSON.stringify(record('41860394127', {at: '2026-11-04T16:30:00Z', goals: [{verdict: 'bug'}], notes: []}))), now: new Date('2026-11-04T16:31:00Z')})).status, 200);
-  assert.deepEqual([...e.LAB_FILLS.kept.keys()].sort(), ['agent/41857218091/run.json', 'agent/41857218091/shot-1.jpg', 'agent/41857218091/shot-2.jpg', 'agent/41857218091/video.webm', 'agent/41860394127/run.json']);
+  assert.deepEqual([...e.LAB_FILLS.kept.keys()].sort(), ['agent/41857218091/run.json', 'agent/41857218091/shot-1.png', 'agent/41857218091/shot-2.png', 'agent/41857218091/video.webm', 'agent/41860394127/run.json']);
   const {runs} = await (await data(e, '?index')).json();
   assert.deepEqual(runs.map(row => row.run), ['41860394127', '41857218091']);
   const [newer, older] = runs;
@@ -94,5 +94,5 @@ test('only the owner reads a run: the record, then a video or screenshot whole o
   assert.equal(part.status, 206);
   assert.equal(part.headers.get('Content-Range'), 'bytes 100-199/1000');
   assert.equal((await file(e, q, {Range: 'bytes=5000-'})).status, 416);
-  for (const bad of ['?run=41857218091&name=run.json', '?run=41857218091&name=../x', '?run=41857218091&name=shot-1.jpg', '?run=abc&name=video.webm', '?name=video.webm']) assert.equal((await file(e, bad)).status, 404, bad);
+  for (const bad of ['?run=41857218091&name=run.json', '?run=41857218091&name=../x', '?run=41857218091&name=shot-1.png', '?run=abc&name=video.webm', '?name=video.webm']) assert.equal((await file(e, bad)).status, 404, bad);
 });

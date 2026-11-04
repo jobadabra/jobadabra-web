@@ -5,7 +5,7 @@
 import {equal} from '../shared/guard.js';
 import {viewer} from '../shared/auth.js';
 
-export const KEEP_DAYS = 14, MAX_RECORD = 1024 * 1024, MAX_VIDEO = 40 * 1024 * 1024, MAX_SHOT = 600 * 1024;
+export const KEEP_DAYS = 14, MAX_RECORD = 1024 * 1024, MAX_VIDEO = 40 * 1024 * 1024, MAX_SHOT = 900 * 1024;
 const DAY = 86400000;
 const no = (status, error) => new Response(JSON.stringify({ok: false, error}), {status, headers: {'Content-Type': 'application/json', 'Cache-Control': 'no-store'}});
 
@@ -13,7 +13,7 @@ const no = (status, error) => new Response(JSON.stringify({ok: false, error}), {
 const FILES = [
   {test: /^run\.json$/, type: 'application/json', max: MAX_RECORD},
   {test: /^video\.webm$/, type: 'video/webm', max: MAX_VIDEO},
-  {test: /^shot-([1-9]\d?)\.jpg$/, type: 'image/jpeg', max: MAX_SHOT},
+  {test: /^shot-([1-9]\d?)\.png$/, type: 'image/png', max: MAX_SHOT},
 ];
 const kindOf = name => FILES.find(kind => kind.test.test(name));
 const runOf = value => (/^\d{6,15}$/.test(String(value ?? '')) ? String(value) : null);
@@ -37,7 +37,7 @@ const summaryOf = record => {
     calls: String(Number(record.cost?.calls) || 0), tokens: String(Number(record.cost?.tokens) || 0), minutes: String(Number(record.cost?.minutes) || 0)};
 };
 
-// PUT /agent/run?run=<github run id>&file=<run.json|video.webm|shot-N.jpg>: the raw file as the body. A wrong or missing key is a 404, as the other publish keys.
+// PUT /agent/run?run=<github run id>&file=<run.json|video.webm|shot-N.png>: the raw file as the body. A wrong or missing key is a 404, as the other publish keys.
 export async function runIngest(request, env, now = new Date()) {
   const given = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   if (!(env.REPLAYS_PUBLISH_KEY && equal(given, env.REPLAYS_PUBLISH_KEY))) return new Response('Not found', {status: 404});
@@ -45,7 +45,7 @@ export async function runIngest(request, env, now = new Date()) {
   const url = new URL(request.url), run = runOf(url.searchParams.get('run')), name = String(url.searchParams.get('file') || ''), kind = kindOf(name);
   const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
   if (!run) return no(400, 'run is the numeric id of the run');
-  if (!kind) return no(400, 'file is run.json, video.webm or shot-N.jpg');
+  if (!kind) return no(400, 'file is run.json, video.webm or shot-N.png');
   if (type !== kind.type) return no(400, `${name} is ${kind.type}`);
   if (Number(request.headers.get('Content-Length')) > kind.max) return no(413, 'too large');
   const body = await request.arrayBuffer();
@@ -91,7 +91,7 @@ export async function runData(request, env) {
   return new Response(object.body, {headers: {'Content-Type': 'application/json', 'Cache-Control': 'private, no-store'}});
 }
 
-// GET /admin/ai-persona/file?run=<id>&name=<video.webm|shot-N.jpg>: the file, whole or by Range. Signed out is a 404.
+// GET /admin/ai-persona/file?run=<id>&name=<video.webm|shot-N.png>: the file, whole or by Range. Signed out is a 404.
 export async function runFile(request, env) {
   if (!await viewer(request, env) || !env.LAB_FILLS) return new Response('Not found', {status: 404});
   const url = new URL(request.url), run = runOf(url.searchParams.get('run')), name = String(url.searchParams.get('name') || '');
