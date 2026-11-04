@@ -64,7 +64,8 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BODY: ${{ github.event.pull_request.body }}
-          PR_TITLE: ${{ endsWith(github.actor, '[bot]') && '' || github.event.pull_request.title }}   # the "[xx] " session tag (public tools/pr-body-check.py)
+          # Why (4 Nov 2026, #3095): '' is falsy in a GitHub expression, so "&& '' ||" always gave the title and a bot's PR went red on the session tag. The PR's author, not the actor: a person may edit a bot's PR.
+          PR_TITLE: ${{ github.event.pull_request.user.type != 'Bot' && github.event.pull_request.title || '' }}   # the "[xx] " session tag (public tools/pr-body-check.py)
         run: printf '%s' "$BODY" | python3 tools/pr-body-check.py   # the public repo's own check, from the joined tree: the same layout the owner reads in 2-5 seconds
       - name: playwright-core for the phone checks   # test/admin/admin-no-sideways.test.js, test/web/no-sideways.test.js (390 px) and test/admin/palette-pages.test.js (⌘K) open pages in the runner's Google Chrome; without it they skip (26 Oct 2026, admin on a phone)
         timeout-minutes: 3
