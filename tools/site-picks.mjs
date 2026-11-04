@@ -10,7 +10,7 @@ const STARTED = /new URL\(\s*['"](\.[^'"]+)['"]\s*,\s*import\.meta\.url/g;   // 
 const NAMED_FILE = /['"]((?:[\w.-]+\/)+[\w.-]+\.m?js)['"]/g;   // and the tool loads the Worker by a joined path
 const JOINED_FOLDER = /path\.join\(\s*\w+\s*,\s*['"]([\w./-]+)['"]\s*\)/g;   // or serves one: the phone check's path.join(repo, 'web/public')
 const FOLDER_READ = /readdirSync\(\s*(?:new URL\(\s*['"]([^'"]+\/)['"]\s*,\s*import\.meta\.url\s*\)|path\.join\(\s*\w+\s*,\s*['"]([\w./-]+)['"]\s*\))/g;
-const VALUE_FOLDER = /[`'"](?:\.{1,2}\/)*((?:[\w.-]+\/)+)\$\{/g;   // `admin/${page}.js`: a file named by a value
+const VALUE_FOLDER = /[`'"]((?:\.{1,2}\/)*(?:[\w.-]+\/)+)\$\{/g;   // `admin/${page}.js`: a file named by a value
 const IMPORT_LINE = /^\s*import\b[^\n]*$/gm;
 const SCAN = /readdirSync|globSync|git ls-files|git ls-tree|['"]ls-(?:files|tree)['"]|(?:execFile|exec|spawn)(?:Sync)?\([^\n]*['"]tools\//;
 const WORKFLOW_FOLDER = /\.github['"]?\s*[/,]\s*['"]?workflows/;
@@ -77,6 +77,8 @@ export function pick(root, changed) {
   };
   const folders = file => [...[...text(file).matchAll(FOLDER_READ)].map(([, url, joined]) => named(file, url, joined)), ...[...text(file).matchAll(JOINED_FOLDER)].map(([, joined]) => named(file, '', joined))]
     .filter(Boolean).map(folder => `${rel(folder)}/`);
+  // `../../db/migrations/${name}` from a test helper: relative to that file; `admin/${page}.js`: from the tree's root.
+  const valueFolders = file => [...text(file).matchAll(VALUE_FOLDER)].map(([, spec]) => `${rel(path.resolve(spec.startsWith('.') ? path.dirname(file) : root, spec))}/`);
   const scans = file => SCAN.test(text(file).replace(IMPORT_LINE, '').replace(FOLDER_READ, (read, url, joined) => named(file, url, joined) ? '' : read));
   const names = (source, file) => source.includes(file) || (path.basename(file).length >= 6 && source.includes(path.basename(file)));
 
@@ -87,8 +89,8 @@ export function pick(root, changed) {
   return {tests: tests.filter(test => {
     const source = text(test), reached = [...reach(test)];
     const readers = reached.filter(file => READS_TREE.test(rel(file)) && !HARNESS.test(rel(file)));
-    const listed = [...reached.flatMap(folders), ...[...source.matchAll(VALUE_FOLDER)].map(([, folder]) => folder)];
-    return reached.some(file => changedFiles.has(file)) || (workflows && WORKFLOW_FOLDER.test(source)) || changed.some(file => names(source, file))
+    const listed = [...reached.flatMap(folders), ...readers.flatMap(valueFolders)];   // only test helpers and tools: in the Worker, `admin/${page}` is a URL, not a file
+    return reached.some(file => changedFiles.has(file)) || (workflows && WORKFLOW_FOLDER.test(source)) || changed.some(file => readers.some(seen => names(text(seen), file)))
       || scans(test) || readers.some(scans) || changed.some(file => listed.some(folder => file.startsWith(folder)));
   }).map(rel)};
 }

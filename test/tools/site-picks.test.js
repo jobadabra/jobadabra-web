@@ -27,6 +27,10 @@ const TREE = {
   'test/admin/own-fixtures.test.js': "import {readdirSync} from 'node:fs';\nimport path from 'node:path';\nreaddirSync(path.join(here, 'fixtures'));\n",
   'test/admin/repo-root.test.js': "import {readdirSync} from 'node:fs';\nreaddirSync(new URL('../../', import.meta.url));\n",
   'test/admin/reads-readme.test.js': "import {readFileSync} from 'node:fs';\nreadFileSync('README.md');\n",
+  'test/shared/kit.js': "import {readFileSync} from 'node:fs';\nexport const seed = name => readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url));\n",
+  'test/shared/named-kit.js': "export const seeds = ['0002_named.sql'];\n",
+  'test/admin/kit-user.test.js': "import {seed} from '../shared/kit.js';\n",
+  'test/admin/named-kit-user.test.js': "import {seeds} from '../shared/named-kit.js';\n",
   'test/admin/alone.test.js': 'export const nothing = 1;\n',
 };
 
@@ -61,6 +65,12 @@ test('shared/ is followed past its first file', () => {
 
 test('a file named by a value counts its folder', () => {
   assert.ok(picked('admin/page.js').includes('test/admin/by-value.test.js'));
+});
+
+test('a helper a test imports counts: its value-built folder and the files it names', () => {
+  assert.ok(picked('db/migrations/0001_a.sql').includes('test/admin/kit-user.test.js'));
+  assert.ok(picked('db/migrations/0002_named.sql').includes('test/admin/named-kit-user.test.js'));
+  assert.ok(!picked('admin/page.js').includes('test/admin/kit-user.test.js'));
 });
 
 test('a read that names no real sub-folder stays a scan', () => {
