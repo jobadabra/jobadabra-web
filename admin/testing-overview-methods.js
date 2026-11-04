@@ -57,6 +57,9 @@ export const METHODS = [
     lines: [{label: 'Promote to stable', wf: 'canary-promote.yml'}, {label: 'Stable canary', wf: 'stable-canary.yml'}], bugs: {none: 'not counted as a bug yet'}},
   {id: 'synthetic', ring: 'real', icon: '📡', title: 'Synthetic monitoring', proves: 'Probes the live site and services every 15 min.', href: '/admin/testing/synthetic-monitoring',
     lines: [{label: 'Probe round', when: 'every 15 min', last: {synthetic: true}}], bugs: {none: 'a probe finds outages, not bugs'}},
+  // Why (4 Nov 2026, AI user agents 9/12 part 3): the planned card became live when the agent's nightly run and its Admin tab shipped; its bug count is the Finder's detector for the agent's filed notes.
+  {id: 'agents', ring: 'find', icon: '🤖', title: 'AI user agents', proves: 'An AI persona clicks through the app nightly.', href: '/admin/testing/ai-persona',
+    lines: [{label: 'Night', wf: 'ai-user-agents.yml'}], bugs: {detector: 'ai-user-agent'}},
   {id: 'pool', ring: 'real', icon: '🏭', title: 'Real-site pool', proves: 'Recorded apply sites, replayed offline.', href: '/admin/form-filling/lab',
     lines: [{label: 'Offline replays', wf: 'site-replays.yml', byHand: true}, {label: 'Recording', wf: 'record-sites.yml'}], bugs: {none: 'the Lab page counts them per site'}},
   {id: 'quality-ai', ring: 'real', icon: '🎯', title: 'Quality AI and prompt cases', proves: 'Are the answers of the AI right and steady?', href: '/admin/testing/e2e',
@@ -66,5 +69,4 @@ export const METHODS = [
 // Owner-approved methods that are not built yet (1 Nov 2026): grey cards, so the page grows when one lands. A landed one moves up into METHODS with a workflow.
 export const PLANNED = [
   {id: 'faults', ring: 'find', icon: '⚡', title: 'Fault injection', proves: 'Notion errors, timeouts, offline, full disk.'},
-  {id: 'agents', ring: 'find', icon: '🤖', title: 'AI user agents', proves: 'A persona drives the app; reports where it got stuck.'},
 ];

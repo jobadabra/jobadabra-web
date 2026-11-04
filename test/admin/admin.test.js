@@ -27,14 +27,15 @@ const owner = {headers: {Cookie: 'jp_stats=k3y'}};
 const get = (e, path, init = {}) => worker.fetch(new Request(`https://www.jobpilotto.top${path}`, init), e, {});
 const now = new Date('2026-10-12T12:00:00Z');
 
-test('the menu: every page has a group, no group row has more than 10 pages, Access is a lock link for the super admin only', () => {
+test('the menu: every page has a group, no group row has more than 11 pages, Access is a lock link for the super admin only', () => {
   const names = GROUPS.map(([name]) => name);
   for (const page of PAGES) assert.ok(names.includes(page.group), `${page.path} has a group from GROUPS`);
   // Why (owner, 1 Nov 2026, "2 groups"): Operations was split into Testing (5 pages) and Agents (4 pages + Access), so no group needs more than the usual 7.
   // Why (owner, 1 Nov 2026): 8, not 7, so Testing keeps Overview, E2E, GTM readiness, Integrations, PR checks, Self-healing, Sentry and Scheduled in one row.
   // Why (owner, 1 Nov 2026, "Add a separate tab on the Admin -> Testing, to be called Synthetic Monitoring"): 9, so Testing holds that tab too; he is shown the 9-page row with the mockup.
   // Why (owner, 2 Nov 2026, asked to fit the Report only tab, a 10th: "Synthetic Monitoring can be renamed to Synthetics and that's it"): 10, with the shorter label so the Testing row still sits in one line at 1440.
-  for (const name of names) assert.ok(PAGES.filter(page => page.group === name && !page.superadmin).length <= 10, `${name} row is short`);
+  // Why (owner, 4 Nov 2026, asked to fit the AI persona tab, an 11th: "Allow 11 and rename GTM readiness to GTM"): 11, with the shorter label so the Testing row still sits in one line at 1440.
+  for (const name of names) assert.ok(PAGES.filter(page => page.group === name && !page.superadmin).length <= 11, `${name} row is short`);
   const access = PAGES.find(page => page.superadmin);
   const row = html => html.match(/<div class="admin-sub">.*?<\/div>/s)?.[0] || '';
   const sup = nav('/admin/growth/website', {role: 'superadmin'}), adm = nav('/admin/growth/website', {role: 'admin', name: 'Ann'});
