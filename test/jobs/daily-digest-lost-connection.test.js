@@ -11,8 +11,10 @@ test('one lost connection is one more try and is said; a timeout, a refusal or a
   console.log = line => lines.push(String(line));
   try {
     const healed = plays([lost, {ok: true}]);
-    assert.equal((await askOnceMore({}, {ask: healed.ask})).ok, true);
+    let retried = 0;
+    assert.equal((await askOnceMore({}, {ask: healed.ask, onRetry: () => { retried += 1; }})).ok, true);
     assert.equal(healed.calls(), 2);
+    assert.equal(retried, 1, 'the job adds it to the calls it reports');
     assert.deepEqual(lines, [`Digest: ${lost.detail}; one more try`]);
     const twice = plays([lost, lost]);
     assert.equal((await askOnceMore({}, {ask: twice.ask})).status, 'unreachable');
