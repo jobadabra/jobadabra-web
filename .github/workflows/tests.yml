@@ -73,9 +73,17 @@ jobs:
           npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/pw" playwright-core@1.63.0
           echo "PLAYWRIGHT_CORE=$RUNNER_TEMP/pw/node_modules/playwright-core" >> "$GITHUB_ENV"
           echo "CHROME=$(command -v google-chrome)" >> "$GITHUB_ENV"
+      - name: Which files does this PR change?   # Why (5 Nov 2026, owner: "We run "site tests" (which are all tests) no matter what's the PR change"): Site tests run only what these reach; main and the daily run keep every test
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          # No list means every test: a failed call must never shrink the run. A renamed file counts under both names.
+          gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[] | .filename, (.previous_filename // empty)' > "$RUNNER_TEMP/pr-files" || { echo "::warning::could not read this PR's files, so every site test runs"; : > "$RUNNER_TEMP/pr-files"; }
       - name: Site tests
         env:
           SITE_ROUTES_STRICT: ${{ github.event_name == 'schedule' && '1' || '' }}   # a route the Worker has but public never listed fails the daily run, not a pair in flight
-        run: bash tools/check.sh --area site
+        run: bash .private/tools/site-tests.sh .private "$RUNNER_TEMP/pr-files"
       - name: Tests that read site files, and the tests of this repo
         run: if [ "${MEDIA_TOOLS:-1}" = 0 ]; then bash .private/tools/site-guards.sh . .private; else xvfb-run -a bash .private/tools/site-guards.sh . .private; fi   # a display for Electron (the render test)
