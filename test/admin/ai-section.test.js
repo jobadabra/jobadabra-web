@@ -6,6 +6,7 @@ import {test} from 'node:test';
 import worker from '../../workers/www/index.js';
 import {cleanAgents} from '../../admin/agent-coding.js';
 import {agentsPage} from '../../admin/ai-agents.js';
+import {STYLE} from '../../admin/ai-section.js';
 import {stepsPage} from '../../admin/ai-steps.js';
 import {enginesPage} from '../../admin/ai-engines.js';
 
@@ -46,6 +47,7 @@ test('the Agents page tags issues-only reviewers, shows a red last run and an of
   assert.match(html, /4 agents/); assert.match(html, /skipped runs only, never ran/); assert.match(html, /issues only/); assert.match(html, /last run red/); assert.match(html, /⏸ Off/); assert.match(html, /42\.0k<\/b> tokens/);
   assert.match(html, /PRs, 30 days: <b>2<\/b> opened/); assert.match(html, /Issues, 30 days: <b>36<\/b> filed/); assert.match(html, /data as of 2026-11-03 13:41 UTC/);
   assert.match(agentsPage(null, null, now), /No agent numbers yet/);
+  assert.match(STYLE, /\.ai-grid\{[^}]*grid-template-columns:minmax\(0,1fr\)/, 'one agent card per row on every width (owner, 4 Nov 2026)');
 });
 test('the AI steps page flags an API-key job and says which rows have no runs here', () => {
   const html = stepsPage(card, null, now);
