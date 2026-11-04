@@ -1,6 +1,6 @@
 name: Release · Website staging
 
-# A staging copy of the website on its own Worker (www-staging, https://www-staging.jobpilotto.workers.dev): no custom domain, no cron, none of production's secrets, production untouched.
+# A staging copy of the website on its own Worker (www-staging, https://www-staging.jobpilotto.workers.dev): no custom domain, no cron, none of production's secrets and its own Hosted data (D1, KV, bucket, queue: tools/staging-config.mjs), production untouched.
 # Then every route of docs/site-routes.json is asked on both and the table goes to the run's summary. By hand only (the proof that this repo deploys the site, owner 20 Oct 2026).
 # Secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID.
 on:
@@ -31,9 +31,22 @@ jobs:
           node-version: '22'
       - name: Staging config (own name, no routes, no cron)
         run: node tools/staging-config.mjs www-staging
+      - name: Apply the migrations to staging's own database
+        working-directory: workers/www
+        run: ../../tools/cf-retry.sh npx --yes wrangler@4 d1 migrations apply www-stats-staging --remote --config wrangler.staging.toml
       - name: Deploy the staging Worker
         working-directory: workers/www
         run: ../../tools/cf-retry.sh npx --yes wrangler@4 deploy --config wrangler.staging.toml
+      - name: Staging's own secrets, made once (random, never read by anyone)
+        # Why (5 Nov 2026, hr 3/6): staging has its own Hosted data now, so it needs a salt and a key of its own. A value is made here only when the Worker lacks it; it is never printed or stored
+        # elsewhere, and staging holds fictional data only, so losing it costs nothing (delete the secret to start fresh). Production's secrets are never touched.
+        working-directory: workers/www
+        run: |
+          have="$(npx --yes wrangler@4 secret list --config wrangler.staging.toml --format json)"
+          for name in STATS_SALT HOSTED_KEK; do
+            echo "$have" | grep -q "\"$name\"" && { echo "$name: already set"; continue; }
+            openssl rand -hex 32 | ../../tools/cf-retry.sh npx --yes wrangler@4 secret put "$name" --config wrangler.staging.toml
+          done
       - name: Ask every route on staging and on production
         run: |
           set -o pipefail
