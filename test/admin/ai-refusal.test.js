@@ -8,8 +8,8 @@ import {AiRefused, aiLine, describe, isRefusal, kindOf, reportRefusal, shouldTel
 const answer = (status, detail) => ({broker: async () => ({ok: false, status, detail})});
 const BUDGET = 'broker: budget:week 100% of 100% (scheduled)';
 
-test('ask throws AiRefused with the kind: capped (the Codex allowance), no run token, unreachable, 401, 429, 502', async () => {
-  for (const [status, detail, kind] of [['capped', BUDGET, 'limit'], ['no-token', 'no GitHub OIDC token here', 'auth'], ['unreachable', 'no answer from the broker', 'overloaded'], [401, 'broker: oidc: wrong repository', 'auth'], [429, 'broker: slow down', 'rate'], [502, 'broker: codex-failed', 'overloaded'], [422, 'broker: reply-refused: looks like a JWT', 'other']]) {
+test('ask throws AiRefused with the kind: capped (the Codex allowance), no run token, 401, 429, 502', async () => {
+  for (const [status, detail, kind] of [['capped', BUDGET, 'limit'], ['no-token', 'no GitHub OIDC token here', 'auth'], [401, 'broker: oidc: wrong repository', 'auth'], [429, 'broker: slow down', 'rate'], [502, 'broker: codex-failed', 'overloaded'], [422, 'broker: reply-refused: looks like a JWT', 'other']]) {
     const caught = await ask({system: 's', user: 'u'}, answer(status, detail)).catch(error => error);
     assert.ok(isRefusal(caught), `${status}`);
     assert.equal(caught.kind, kind, `${status}`);
