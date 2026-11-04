@@ -244,12 +244,12 @@ test('/admin/ai/costs compares each install with the lines in force (wrangler.to
 test('guarded admin read shows broker fallback spend, holds and caps from its service binding', async () => {
   const env = {STATS_KEY: 'fixture-key', AI_BROKER: {fetch: async request => {
     assert.equal(new URL(request.url).pathname, '/health');
-    return Response.json({fallback: {day: new Date().toISOString().slice(0, 10), claude: 4.25, freeAi: 0.12,
-      claudeCap: 5, freeAiCap: 2, held: {claude: 0.03, freeAi: 0}},
+    return Response.json({fallback: {day: new Date().toISOString().slice(0, 10), freeAi: 0.12,
+      freeAiCap: 2, held: {freeAi: 0.03}},
       chain: [{name: 'codex', configured: true, answeredToday: 0, ranOutToday: 436}, {name: 'claude', configured: true, state: 'ready', answeredToday: 350, failedToday: 3, avgMs: 18394}]});
   }}};
   const data = await read(env);
-  assert.equal(data.fallback.claude, 4.25); assert.equal(data.fallback.freeAi, 0.12);
+  assert.equal(data.fallback.freeAi, 0.12);
   assert.deepEqual(data.chain.map(item => item.name), ['codex', 'claude'], 'one health read gives the spend and the engines');
   const request = new Request('https://x.dev/admin/ai/costs', {headers: {cookie: 'stats_key=fixture-key'}});
   // Use the same supported owner bearer as the local page-shot Worker.
@@ -257,9 +257,13 @@ test('guarded admin read shows broker fallback spend, holds and caps from its se
   const response = await view(new Request(request, {headers: {Authorization: 'Bearer fixture-owner'}}), env);
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /CI fallback: Claude \$4.25, Free AI \$0.12 today/);
+  assert.match(html, /CI fallback: Free AI \$0.12 today/); assert.doesNotMatch(html, /CI fallback: Claude/);
   assert.match(html, /Who answered today/); assert.match(html, /<td>Claude<\/td><td class="n">350<\/td>/);
-  assert.match(html, /Claude \$5.00/); assert.match(html, /Free AI \$2.00/); assert.match(html, /reserved: Claude \$0.03/);
+  assert.match(html, /Daily cap: Free AI \$2.00/); assert.match(html, /reserved: Free AI \$0.03/); assert.doesNotMatch(html, /Claude \$/);
+  // Until the broker is redeployed it still reports the Claude API meters: the page ignores them and still reads the day.
+  const older = {...env, AI_BROKER: {fetch: async () => Response.json({fallback: {day: new Date().toISOString().slice(0, 10), claude: 4.25, freeAi: 0.12, claudeCap: 5, freeAiCap: 2, held: {claude: 0.03, freeAi: 0}}, chain: []})}};
+  const oldHtml = await (await view(new Request(request, {headers: {Authorization: 'Bearer fixture-owner'}}), older)).text();
+  assert.match(oldHtml, /CI fallback: Free AI \$0.12 today/); assert.doesNotMatch(oldHtml, /Claude \$/);
   let accessed = false;
   env.AI_BROKER.fetch = async () => { accessed = true; throw new Error('offline'); };
   assert.equal((await view(new Request('https://x.dev/admin/ai/costs'), env)).status, 404);

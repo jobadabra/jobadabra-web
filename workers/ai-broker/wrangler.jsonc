@@ -8,13 +8,13 @@
   "compatibility_date": "2026-09-01",
   "workers_dev": true,
   "observability": {"enabled": true},
-  // Why (31 Oct 2026, owner: '$2/day'): Free AI has its own UTC-day cap, separate from Claude's $5/day.
+  // Why (31 Oct 2026, owner: '$2/day'; paid Claude API removed 3 Nov 2026, owner: no API keys): Free AI is the only engine with a UTC-day cap; the two subscriptions have their own allowances.
   "vars": {"AUDIENCE": "jobadabra-ai-broker", "REPOSITORY": "GarryOne/jobadabra,GarryOne/jobadabra-web,GarryOne/jobadabra-lab,jobadabra/jobadabra,jobadabra/jobadabra-web,jobadabra/jobadabra-lab", "FALLBACK_FREE_AI_DAY_USD": "2", "ENGINE": "codex", "ENGINE_ADAPT": "on"},
   // Container application name `ai-broker` (not derived from the class), so the later class rename does not create a new application (proven 1 Nov 2026).
   "containers": [
     {"name": "ai-broker", "image": "./container/Dockerfile", "image_build_context": ".", "instance_type": "basic", "max_instances": 1}
   ],
-  // Owner sets ANTHROPIC_API_KEY, BRAIN_BOT_TOKEN and BRAIN_CHAT_ID as Worker secrets (they must be set on this Worker too: secrets do not move with the namespace).
+  // Owner sets BRAIN_BOT_TOKEN and BRAIN_CHAT_ID as Worker secrets (they must be set on this Worker too: secrets do not move with the namespace).
   "ai": {"binding": "AI"},
   "durable_objects": {"bindings": [{"name": "BROKER", "class_name": "CodexBroker"}]},
   "exports": {"CodexBroker": {"type": "durable-object", "storage": "sqlite", "container": "ai-broker"}}

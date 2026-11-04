@@ -117,8 +117,8 @@ td{padding:6px 4px;border-top:1px solid var(--line)}td.n{text-align:right;font-v
 </style></head><body><main>
 <header><h1>💸 AI cost</h1><span class="muted">${filterLinks(Object.entries(RANGES).map(([id, item]) => [id, item.label, `?range=${id}`]), range)}</span></header>
 <div class="tiles">${tiles.map(([label, value, note]) => `<div class="card tile"><span class="muted">${label}</span><b>${esc(value)}</b><small class="muted">${esc(note)}</small></div>`).join('')}</div>
-<section class="card" id="ci-fallback-cost">${fallback ? `<p style="margin:0"><b>CI fallback: Claude ${money(fallback.claude)}, Free AI ${money(fallback.freeAi)} today</b></p>
-<small class="muted">${esc(fallback.day)} UTC · Daily caps: Claude ${money(fallback.claudeCap)}, Free AI ${fallback.freeAiCap ? money(fallback.freeAiCap) : 'disabled (cap pending approval)'} · Outstanding reserved: Claude ${money(fallback.held.claude)}, Free AI ${money(fallback.held.freeAi)}</small>` : '<p class="muted" style="margin:0">CI fallback: data unavailable</p>'}</section>
+<section class="card" id="ci-fallback-cost">${fallback ? `<p style="margin:0"><b>CI fallback: Free AI ${money(fallback.freeAi)} today</b></p>
+<small class="muted">${esc(fallback.day)} UTC · Daily cap: Free AI ${fallback.freeAiCap ? money(fallback.freeAiCap) : 'disabled (cap pending approval)'} · Outstanding reserved: Free AI ${money(fallback.held.freeAi)}</small>` : '<p class="muted" style="margin:0">CI fallback: data unavailable</p>'}</section>
 ${brokerCard(chain)}
 ${workflowCard(tally, now.toISOString().slice(0, 10))}
 <section class="card"><h2>🏷️ By provider</h2><small class="muted">Claude and OpenAI separately, and together</small><div class="wrap"><table><tr><th>Provider</th><th>Today</th><th>${last}</th><th>Share</th><th>Runs</th></tr>
@@ -201,7 +201,7 @@ export async function readBroker(env) {
     if (!response.ok) return null;
     const health = await response.json(), data = health.fallback;
     if (data?.day !== new Date().toISOString().slice(0, 10) ||
-        ![data.claude, data.freeAi, data.claudeCap, data.freeAiCap, data.held?.claude, data.held?.freeAi].every(n => Number.isFinite(n) && n >= 0)) return null;
+        ![data.freeAi, data.freeAiCap, data.held?.freeAi].every(n => Number.isFinite(n) && n >= 0)) return null;
     return {fallback: data, chain: chainOf(health), tally: tallyOf(health)};
   } catch { return null; }
 }

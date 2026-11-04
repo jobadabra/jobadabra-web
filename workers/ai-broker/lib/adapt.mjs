@@ -1,7 +1,7 @@
 // Engines that do worse move back (JOB-202; owner, 1 Nov 2026: "adapt or report if one is doing worse than the other").
 // Design: the two SUBSCRIPTION engines (codex, claude) are each in their normal place or demoted for 30 minutes. An engine is demoted when at least half of its last 10 real failures-or-answers
 // were failures (at least 6 recorded): it goes behind the other subscription, the owner is told on Telegram, /health shows it, and after 30 minutes it is tried first again with a fresh window.
-// Never moved: the paid API and Free AI (fallbacks), a call that names its own engine, and anything counted as "ran out" (an empty allowance is not "worse"). Latency is reported in /health, never acted on: tiers and models differ and it is noisy.
+// Never moved: Free AI (the fallback), a call that names its own engine, and anything counted as "ran out" (an empty allowance is not "worse"). Latency is reported in /health, never acted on: tiers and models differ and it is noisy.
 import {SUBS} from './engines.mjs';
 import {noteOnce} from './fallback.mjs';
 

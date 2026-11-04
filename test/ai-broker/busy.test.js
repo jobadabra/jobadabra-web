@@ -14,11 +14,11 @@ const settles = promise => { const state = {done: false}; promise.then(() => { s
 const quiet = () => new Promise(resolve => setImmediate(resolve)).then(() => new Promise(resolve => setImmediate(resolve)));
 
 // A broker whose Claude calls stay in the container until the test releases them (`held`), so its 3 slots can be full. Codex's week is used up unless `week` says otherwise.
-async function setup(t, {engine = 'codex', key = false, week = 100, hold = true, free = () => ({response: 'free answer', usage: {prompt_tokens: 100, completion_tokens: 20}}), extra = {}} = {}) {
+async function setup(t, {engine = 'codex', week = 100, hold = true, free = () => ({response: 'free answer', usage: {prompt_tokens: 100, completion_tokens: 20}}), extra = {}} = {}) {
   t.mock.method(Date, 'now', () => day);
   t.mock.timers.enable({apis: ['setTimeout']});
   const calls = {free: 0, claudeCli: 0}, held = [];
-  const env = {...config.vars, ENGINE: engine, CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token', ...(key ? {ANTHROPIC_API_KEY: 'fixture-not-a-key'} : {}), AI: {run: async () => { calls.free++; return free(); }}, ...extra};
+  const env = {...config.vars, ENGINE: engine, CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token', AI: {run: async () => { calls.free++; return free(); }}, ...extra};
   t.mock.method(globalThis, 'fetch', async () => Response.json({ok: true}));
   const made = harness(undefined, env);
   made.broker.containerFetch = async url => {

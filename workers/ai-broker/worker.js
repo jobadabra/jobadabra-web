@@ -10,7 +10,7 @@ import {refuseReply} from './lib/guard.mjs';
 import {slots} from './lib/queue.mjs';
 import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
 import {modelOf, validEffort, weightOf, EFFORTS} from './lib/tiers.mjs';
-import {exhausted, fallbackToday, newNote, apiPrecheck, apiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
+import {exhausted, fallbackToday, newNote, apiPrecheck, freeAiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
 import {chainOf, configured, recordOutcome, engineHealth, CHOICES} from './lib/engines.mjs';
 import {CLAUDE_MODELS} from './lib/tiers.mjs';
 import {demotedNow, recordPerf} from './lib/adapt.mjs';
@@ -144,8 +144,8 @@ export class CodexBroker extends Container {
       let reply = null;
       if (engine === 'codex') { reply = await this.codexStep(lane, body, model, verdict, later.length > 0, chain[0] === 'codex'); if (!reply) await skip(engine, 'ran-out'); }
       else if (engine === 'claude') reply = await this.claudeStep(lane, body, skip, waitMs);
-      else if (engine === 'claude-api' || engine === 'free-ai') {
-        reply = (!body.search && apiPrecheck(body)) || await apiStep(engine === 'claude-api' ? 'claude' : 'free-ai', ctx);
+      else if (engine === 'free-ai') {
+        reply = (!body.search && apiPrecheck(body)) || await freeAiStep(ctx);
         if (!reply && !body.search && configured(engine, env)) await skip(engine, 'unavailable');
       }
       if (!reply) continue;
@@ -160,7 +160,7 @@ export class CodexBroker extends Container {
       if (held) return held;
     }
     if (body.only === true) {
-      if (chain[0] === 'free-ai' || chain[0] === 'claude-api') return apiFinish(env, note);   // Why (Gitar on #296): their own reasons stay: fallback:search-unsupported, fallback:unavailable, the 429 day cap
+      if (chain[0] === 'free-ai') return apiFinish(env, note);   // Why (Gitar on #296): their own reasons stay: fallback:search-unsupported, fallback:unavailable, the 429 day cap
       return json(503, {why: `only-${chain[0]}: ${skipped.find(entry => entry.engine === chain[0])?.why ?? (configured(chain[0], env) ? 'unavailable' : 'not-configured')}`, engine: chain[0], tried: skipped});   // strict call: nobody else answers, and the reason is named
     }
     return apiFinish(env, note);

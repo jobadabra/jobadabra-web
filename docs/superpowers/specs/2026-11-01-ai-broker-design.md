@@ -31,10 +31,10 @@ Owner (1 Nov 2026): "Let's change the codex-broker to ai-broker, and support cla
 |---|---|---|---|
 | `codex` | Codex CLI, owner's ChatGPT login (today) | $0 | own-share/week brake or a usage-limit error (today's rule) |
 | `claude` | Claude Code CLI in the container, owner's Claude subscription token | $0 | Claude's "limit reached" answer; plus the broker's own per-day call count |
-| `claude-api` | Anthropic Messages API (today's fallback) | up to $5/day | the $5 UTC-day cap |
+| ~~`claude-api`~~ | ~~Anthropic Messages API~~ **removed 3 Nov 2026** (decision 2 below) | — | — |
 | `free-ai` | Workers AI | up to $2/day | the $2 UTC-day cap |
 
-- `ENGINE` (non-secret `vars` in `wrangler.jsonc`) names the first engine. The rest follow in a fixed order after it: `codex, claude, claude-api, free-ai`. Example: `ENGINE=claude` → claude, codex, claude-api, free-ai. Unset or unknown = `codex` (today's behaviour), and an unknown value is refused loudly in `/health`, never guessed.
+- `ENGINE` (non-secret `vars` in `wrangler.jsonc`) names the first engine. The rest follow in a fixed order after it: `codex, claude, free-ai` (`claude-api` removed 3 Nov 2026). Example: `ENGINE=claude` → claude, codex, free-ai. Unset or unknown = `codex` (today's behaviour), and an unknown value is refused loudly in `/health`, never guessed.
 - Subscriptions come before paid engines, paid before capped-free. A step is skipped, not failed, when it is not configured (no token, no key, no AI binding).
 - Only "ran out" and "not configured" move to the next engine. A bad request, a token-shaped reply, a lost login and the daily drift cap keep today's refusal: another engine cannot bypass a control. Search requests are answered only by engines that support them (`codex`, and `claude` with its WebSearch tool since 2 Nov 2026; Free AI and the paid API refuse them with `fallback:search-unsupported`).
 - Every answer carries `engine`; `/health` lists `engine` (configured), `chain`, and per-engine state/day counts; the admin AI cost page and the Telegram notes name the engine.
@@ -58,7 +58,7 @@ Owner (1 Nov 2026): "Let's change the codex-broker to ai-broker, and support cla
 
 ## 4. Decisions (all made, 1 Nov 2026)
 1. **Decided (owner, 1 Nov 2026): rename the Worker too.** Therefore the namespace transfer in section 1; its risk is a possible re-login (owner step).
-2. **Decided (owner, 1 Nov 2026): the paid Claude API stays**, $5/day as today, after the subscription engines.
+2. ~~**Decided (owner, 1 Nov 2026): the paid Claude API stays**, $5/day as today, after the subscription engines.~~ **Reversed (owner, 3 Nov 2026: "We should not use API Keys at all anymore. Everything should be around the ai-broker."): the paid Claude API is removed.** When Codex and the Claude subscription are both out, a call goes to Free AI (its own $2/day cap); with Free AI off or at its cap it fails with its reason (`budget:week …` from Codex, or `budget:fallback-day $2 Free AI (UTC)`). Tests: `test/ai-broker/free-ai-fallback.test.js`.
 3. **Decided (owner, 1 Nov 2026): no cap on the Claude subscription at first**; watch the daily count in `/health` for a week, then decide.
 
 ## 5. Acceptance

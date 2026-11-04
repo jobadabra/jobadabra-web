@@ -7,7 +7,6 @@ const now = Date.parse('2026-11-02T01:00:00Z');
 const CHAIN = [
   {name: 'codex', configured: true, answeredToday: 0, ranOutToday: 436, failedToday: 0, avgMs: null},
   {name: 'claude', configured: true, state: 'ready', answeredToday: 350, ranOutToday: 0, failedToday: 3, avgMs: 18394},
-  {name: 'claude-api', configured: false, answeredToday: 0, ranOutToday: 0, failedToday: 0, avgMs: null},
   {name: 'free-ai', configured: true, answeredToday: 3, ranOutToday: 0, failedToday: 0, avgMs: 4951},
 ];
 
@@ -23,15 +22,18 @@ test('one row per engine in chain order, with what it answered, ran out on and f
 });
 
 test('the state is a word with an icon: ready, used up (ran out all day), paused (demoted), token rejected, off', () => {
-  assert.deepEqual(CHAIN.map(item => stateOf(item, now)), ['⛔ used up', '✅ ready', '⚪ off', '✅ ready']);
+  assert.deepEqual(CHAIN.map(item => stateOf(item, now)), ['⛔ used up', '✅ ready', '✅ ready']);
+  assert.equal(stateOf({name: 'free-ai', configured: false}, now), '⚪ off', 'Free AI with its cap at 0 is off');
   assert.equal(stateOf({name: 'claude', configured: true, state: 'token-invalid'}, now), '❌ token rejected');
   assert.equal(stateOf({name: 'claude', configured: true, state: 'ran-out'}, now), '⛔ used up');
   assert.equal(stateOf({name: 'claude', configured: true, state: 'ready', demotedUntil: '2026-11-02T01:30:00.000Z'}, now), '⏸ paused until 01:30');
   assert.equal(stateOf({name: 'claude', configured: true, state: 'ready', demotedUntil: '2026-11-02T00:30:00.000Z'}, now), '✅ ready', 'a demotion in the past is over');
 });
 
-test('the not-configured paid API row is left out (it is off on purpose); a missing chain says so, never an empty table', () => {
+test('no paid API row (the broker has none since 3 Nov 2026); a missing chain says so, never an empty table', () => {
   assert.doesNotMatch(brokerCard(CHAIN, now), /Claude API/);
+  const older = [CHAIN[0], CHAIN[1], {name: 'claude-api', configured: true, answeredToday: 0, ranOutToday: 0, failedToday: 0, avgMs: null}, CHAIN[2]];
+  assert.doesNotMatch(brokerCard(older, now), /Claude API/, 'an older broker still lists the removed engine until it is redeployed');
   assert.match(brokerCard(null, now), /data unavailable/);
   assert.doesNotMatch(brokerCard(null, now), /<table/);
 });
