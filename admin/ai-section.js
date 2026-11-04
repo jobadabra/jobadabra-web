@@ -9,10 +9,10 @@ const STATE_WORDS = {on: ['good', '🟢 On'], idle: ['wait', '⚪ Idle'], off: [
 const RUN_WORDS = {g: 'green', r: 'red', s: 'skipped', c: 'cancelled', '.': 'running'};
 const COUNT = new Intl.NumberFormat('en-US');
 
-/** The newest stored "agents" card {agents, steps} with its day, or null when nothing was uploaded. Takes the D1 handle. */
-export async function latestCard(env) {
+/** The newest stored card of `kind` ("agents" {agents, steps}, "harness" {plan, layers, sources, runs}) with its day, or null when nothing was uploaded. Takes the D1 handle. */
+export async function latestCard(env, kind = 'agents') {
   try {
-    const row = await env.STATS?.prepare("SELECT day, card, updated_at FROM agent_coding_days WHERE kind = 'agents' ORDER BY day DESC LIMIT 1").first();
+    const row = await env.STATS?.prepare('SELECT day, card, updated_at FROM agent_coding_days WHERE kind = ? ORDER BY day DESC LIMIT 1').bind(kind).first();
     return row ? {...JSON.parse(row.card), day: row.day, at: row.updated_at} : null;
   } catch { return null; }
 }
@@ -34,10 +34,10 @@ export const STYLE = `.ai-top{display:flex;gap:12px;align-items:baseline;flex-wr
 .ai-dots{display:inline-flex;gap:3px;vertical-align:middle}.ai-dots i{width:10px;height:10px;border-radius:50%;background:#5b6470}.ai-dots i.r-g{background:#5ec47a}.ai-dots i.r-r{background:#e5484d}.ai-dots i.r-x{background:#f2c14e}
 .ai-nums{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13px;color:#c4c9cf}.ai-nums b{font-variant-numeric:tabular-nums}.ai-wrap{overflow-x:auto}.ai-wrap table{min-width:640px}`;
 
-/** The page shell the three views share: title, heading with the data's age, a verdict card, then the body. `age` is the card's stored time or ''. */
-export function shell({title, icon, heading, age, verdict, body}) {
+/** The page shell the three views share: title, heading with the data's age, a verdict card, then the body. `age` is the card's stored time or ''; `style` is a page's own CSS. */
+export function shell({title, icon, heading, age, verdict, body, style = ''}) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${esc(title)} · AI · Admin</title>
-<link rel="icon" href="/favicon-32.png"><style>${STYLE}</style></head><body><main>
+<link rel="icon" href="/favicon-32.png"><style>${STYLE}${style}</style></head><body><main>
 <header><h1>${icon} ${esc(heading)}</h1><span class="muted ai-top">${age ? `data as of ${esc(String(age).slice(0, 16).replace('T', ' '))} UTC` : 'no data yet'}</span></header>
 ${verdict}${body}</main></body></html>`;
 }
