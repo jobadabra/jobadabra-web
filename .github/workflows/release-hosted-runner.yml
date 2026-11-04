@@ -21,6 +21,9 @@ jobs:
   deploy:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    # Why (5 Nov 2026, Gitar on #369; owner: "You, at that step"): a production deploy waits for the owner's approval. The job runs in the GitHub environment `production`, whose required reviewer is the owner;
+    # `staging` has none. Without that setting on the environment the gate is not real: see the PR.
+    environment: ${{ inputs.target == 'production' && 'production' || 'staging' }}
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -42,6 +45,10 @@ jobs:
       - name: The staging copy of the config (own Worker name, own queue)
         if: env.CLOUDFLARE_API_TOKEN != '' && inputs.target == 'staging'
         run: node tools/runner-config.mjs staging
+      - name: The staging queue, made when missing (the deploy refuses a consumer queue that does not exist)
+        if: env.CLOUDFLARE_API_TOKEN != '' && inputs.target == 'staging'
+        working-directory: workers/hosted-runner
+        run: npx --yes wrangler@4 queues info hosted-runs-staging >/dev/null 2>&1 || ../../tools/cf-retry.sh npx --yes wrangler@4 queues create hosted-runs-staging
       - name: Deploy the runner and its image
         if: env.CLOUDFLARE_API_TOKEN != ''
         working-directory: workers/hosted-runner

@@ -33,4 +33,6 @@ test('the deploy workflow is by hand only and picks staging or production', () =
   assert.ok(/workflow_dispatch:/.test(flow) && !/^\s{2}(push|schedule|pull_request):/m.test(flow), 'no push, schedule or PR trigger: production waits for the owner');
   assert.ok(/options: \[staging, production\]/.test(flow));
   assert.ok(/runner-config\.mjs staging/.test(flow));
+  assert.ok(/environment: \$\{\{ inputs\.target == 'production' && 'production'/.test(flow), 'production runs in its own environment, where the owner is the required reviewer');
+  assert.ok(/queues create hosted-runs-staging/.test(flow), 'the staging queue is made when missing');
 });
