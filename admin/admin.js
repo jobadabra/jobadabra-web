@@ -39,6 +39,7 @@ export const PAGES = [
   {path: '/admin/agents/build-log', group: 'Agent Coding', question: 'What did we build each day, in plain words?', old: ['/admin/operations/build-log'], name: 'Build log', icon: '🗓️'},
   {path: '/admin/ai/agents', group: 'AI', question: 'Which AI jobs on the CI act by themselves, and are they running and green?', name: 'Agents', icon: '🤖'},
   {path: '/admin/ai/steps', group: 'AI', question: 'Which CI jobs use AI to answer a question, on which engine, and did they run?', slug: 'steps', name: 'AI steps', icon: '⚙️'},
+  {path: '/admin/ai/harness', group: 'AI', question: 'How is the CI fixer harness doing, and what happened in each run?', slug: 'harness', name: 'Agent harness', icon: '🧰'},
   {path: '/admin/ai/engines', group: 'AI', question: 'Which AI engine answers the CI today, and is any used up?', name: 'Engines', icon: '🔌'},
   {path: '/admin/ai/costs', group: 'AI', question: 'What does the AI cost us, and for which jobs?', old: ['/admin/growth/ai-cost', '/admin/intelligence/ai-cost', '/admin/ai-cost', '/ai-cost'], name: 'Costs', icon: '💸'},
   {path: '/admin/testing/overview', group: 'Testing', question: 'Which ways do we look for bugs, and did each one run green last time?', name: 'Overview', icon: '🧭'},   // its own page (admin/testing-overview.js), not section-overview's tiles: no `overview` flag, so Testing's pages need no headline loaders

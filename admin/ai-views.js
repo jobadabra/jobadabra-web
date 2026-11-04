@@ -1,10 +1,11 @@
-// The routes of the AI section of /admin (owner, 3 Nov 2026): /admin/ai/agents, /admin/ai/steps, /admin/ai/engines. Each checks the owner like its siblings, reads the stored "agents" card and the broker's /health, and draws the page.
+// The routes of the AI section of /admin (owner, 3 Nov 2026): /admin/ai/agents, /admin/ai/steps, /admin/ai/harness, /admin/ai/engines. Each checks the owner like its siblings, reads the stored "agents" card and the broker's /health, and draws the page.
 import {viewer, remember} from '../shared/auth.js';
 import {readBroker} from './jobcost.js';
 import {latestCard} from './ai-section.js';
 import {agentsPage} from './ai-agents.js';
 import {stepsPage} from './ai-steps.js';
 import {enginesPage} from './ai-engines.js';
+import {harnessPage} from './ai-harness.js';
 
 const HEADERS = {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'};
 const route = draw => async (request, env, now = new Date()) => {
@@ -15,4 +16,5 @@ const route = draw => async (request, env, now = new Date()) => {
 };
 export const agentsView = route(async (env, now) => agentsPage(await latestCard(env), (await readBroker(env))?.tally || null, now));
 export const stepsView = route(async (env, now) => stepsPage(await latestCard(env), (await readBroker(env))?.tally || null, now));
+export const harnessView = route(async (env, now) => harnessPage(await latestCard(env, 'harness'), now));
 export const enginesView = route(async (env, now) => enginesPage(await readBroker(env), now));
