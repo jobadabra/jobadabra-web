@@ -3,8 +3,19 @@ name: Release · AI broker
 # benchmark AI call (spec docs/superpowers/specs/2026-10-28-ci-on-codex-subscription-design.md in the public repo). Same secrets as Release · Ready to send runner. The image holds no secret; the login lives in the Durable Object.
 # Why (28 Oct 2026, owner): CI on Free AI billed ~$4/day of neurons unseen; the owner bought a Codex plan and wants CI on it.
 # Why (1 Nov 2026, owner: rename to ai-broker): by hand only until the Durable Object transfer from jobadabra-codex-broker has run (done 1 Nov 2026); a push trigger would deploy the new Worker name
-# with an EMPTY namespace and lose the Codex login. The transfer has run (1 Nov 2026) and its folder is gone (7/7, 2 Nov 2026); the push trigger comes back in its own PR once this workflow has deployed the broker once (CI path unproven: the broker so far was deployed from the owner's Mac).
+# with an EMPTY namespace and lose the Codex login. The transfer has run (1 Nov 2026) and its folder is gone (7/7, 2 Nov 2026).
+# Why (4 Nov 2026, owner: "Yes, deploy on merge (Recommended)"): this workflow deployed the broker from CI twice (3 Nov, 4 Nov: run 41803869726), so a merge to main that changes the broker or a shared file it imports
+# deploys it. The "Refuse unless the broker holds a login" step below stays: a deploy that would lose the login stops before it ships. By hand still works.
 on:
+  push:
+    branches: [main]
+    paths:   # the broker, and the four shared files it imports (a test-only or workflow-only change deploys nothing)
+             # Gap (Gitar, 4 Nov 2026): free-ai-models.js and free-ai-translate.js only re-export the public repo's desktop/lib/; a change THERE does not trigger this, run it by hand
+      - 'workers/ai-broker/**'
+      - 'shared/github-oidc.js'
+      - 'shared/free-ai-models.js'
+      - 'shared/free-ai-translate.js'
+      - 'shared/pro-claude.js'
   workflow_dispatch:
 permissions:
   contents: read
