@@ -3,7 +3,7 @@
 # Usage: tools/site-tests.sh <this repo's dir> [<file with the PR's changed paths>]. No list, or a picker that fails, means every test: a failure never shrinks the run.
 set -uo pipefail
 here="$1"; list="${2:-}"
-every() { exec bash tools/check.sh --area site; }
+every() { exec node --test 'test/**/*.test.js'; }   # this repo's own run: jobadabra's check tools are for desktop and the extension
 [ -s "$list" ] || every
 picks="$(node "$here/tools/site-picks.mjs" "$list")" || every
 [ -n "$picks" ] || { echo 'site-tests: this PR reaches no site test'; exit 0; }
