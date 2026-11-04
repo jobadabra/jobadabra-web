@@ -10,6 +10,7 @@ on:
   push:
     branches: [main]
     paths:   # the broker, and the four shared files it imports (a test-only or workflow-only change deploys nothing)
+             # Gap (Gitar, 4 Nov 2026): free-ai-models.js and free-ai-translate.js only re-export the public repo's desktop/lib/; a change THERE does not trigger this, run it by hand
       - 'workers/ai-broker/**'
       - 'shared/github-oidc.js'
       - 'shared/free-ai-models.js'
