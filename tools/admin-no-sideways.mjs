@@ -4,7 +4,7 @@
 // Run: tools/site-run.sh node tools/admin-no-sideways.mjs [--width 390]. Exit 1 when a page is too wide, 2 when no browser is found. Test: test/admin/admin-no-sideways.test.js.
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {launchChromium, workerServer} from './worker-server.mjs';
+import {eachPage, launchChromium, workerServer} from './worker-server.mjs';
 
 const root = process.cwd();
 const width = Number(process.argv.includes('--width') ? process.argv[process.argv.indexOf('--width') + 1] : 390);
@@ -14,7 +14,7 @@ const {PAGES} = await import(pathToFileURL(path.join(root, 'admin/admin.js')));
 const site = await workerServer(root, 'all');
 let bad = 0;
 try {
-  for (const {path: route} of PAGES) {
+  await eachPage(PAGES, async ({path: route}) => {
     const context = await browser.newContext({viewport: {width, height: 844}, isMobile: true, hasTouch: true, reducedMotion: 'reduce'});
     await context.route(url => !url.href.startsWith(site.base), r => r.abort());   // never the live site
     const page = await context.newPage();
@@ -32,7 +32,7 @@ try {
       console.log(`admin-no-sideways: ${route} ${response.status() !== 200 ? `answered ${response.status()}` : `is ${Math.max(seen.inner, seen.scroll)}px wide on a ${width}px phone: ${seen.over.join(', ') || 'no single element named'}`}`);
     }
     await context.close();
-  }
+  });
 } finally { await browser.close(); site.close(); }
 console.log(`admin-no-sideways: ${PAGES.length} admin pages at ${width}px, ${bad} wider than the screen`);
 process.exit(bad ? 1 : 0);

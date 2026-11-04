@@ -57,6 +57,15 @@ export async function workerServer(root, seedNames = []) {
   return {base: `http://127.0.0.1:${server.address().port}`, env, call, close: () => server.close()};
 }
 
+/**
+ * Runs `work` on every admin page of a walk, a few pages at once. Each page has its own browser context, so no page sees another's state.
+ * Why (4 Nov 2026, owner: "I want us to optimize the PR time"): one page at a time made the ⌘K walk 158 s of the 197 s Site tests step, nearly all of it waiting.
+ */
+export async function eachPage(pages, work) {
+  const left = [...pages];
+  await Promise.all(Array.from({length: 4}, async () => { while (left.length) await work(left.shift()); }));
+}
+
 // playwright-core: PLAYWRIGHT_CORE (a path), else the tree's own e2e kit, else the public checkout's (the overlay has no node_modules). null when none.
 // The browser: CHROME, else the Mac's or the CI runner's Google Chrome, else playwright's own download.
 export async function launchChromium(root) {
