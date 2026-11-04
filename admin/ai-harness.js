@@ -8,18 +8,20 @@ const VERDICT = {fix: ['good', '🛠 fix'], 'fixed-already': ['wait', '✔ fixed
 const HEAD = {'fixed-already': 'Already fixed', 'not-reproducible': 'Could not reproduce it', 'needs-human': 'Needs a human', 'false-positive': 'Judged a false positive', answer: 'Answered, no change', none: 'Stopped before a verdict'};
 const STOP_HEAD = {time: 'Ran out of time', rounds: 'Ran out of rounds', 'same-failure': 'Same failure twice', refused: 'A wall refused the change', conflict: 'Stopped on a conflict', 'round-failed': 'A round failed', 'no-change': 'Made no change', wall: 'Hit a safety wall', dispatch: 'Could not start a round', 'bad-deadline': 'Bad deadline given'};
 const PLAN_STATE = {done: ['good', '✅ done'], doing: ['agent', '🔨 in progress'], next: ['wait', '⏭ next']};
+/** A table's own entry or undefined: a word from an upload like "constructor" must not find Object's members. */
+const own = (table, key) => (Object.hasOwn(table, key) ? table[key] : undefined);
 const PR_URL = 'https://github.com/jobadabra/jobadabra/pull/';
 const TIME_STYLE = 'font-size:13px';
 
 /** The headline of a run in about five words: what happened, from its stop word, its verdict and its PR. */
 export function headline(run) {
   if (run.stop === 'ready') return run.pr ? `Reached READY on PR #${run.pr}` : 'Reached READY';
-  if (run.stop) return STOP_HEAD[run.stop] || `Stopped: ${run.stop}`;
+  if (run.stop) return own(STOP_HEAD, run.stop) || `Stopped: ${run.stop}`;
   if (run.verdict === 'fix') return run.pr ? `Opened PR #${run.pr}` : 'Wrote a fix';
-  return HEAD[run.verdict] || `Ended: ${run.verdict}`;
+  return own(HEAD, run.verdict) || `Ended: ${run.verdict}`;
 }
 const ago = (at, now) => { const min = Math.max(0, Math.floor((now - Date.parse(at)) / 60000)); return min < 2 ? 'just now' : min < 120 ? `${min} min ago` : min < 2880 ? `${Math.floor(min / 60)} h ago` : `${Math.floor(min / 1440)} days ago`; };
-const verdictChip = run => chip(...(VERDICT[run.verdict] || ['plain', run.verdict]));
+const verdictChip = run => chip(...(own(VERDICT, run.verdict) || ['plain', run.verdict]));
 const stopChip = run => (run.stop === 'ready' ? chip('good', '✅ READY') : run.stop ? chip('bad', `⛔ ${run.stop}`, 'Why the driver stopped') : '');
 const prLink = pr => `<a href="${PR_URL}${pr}">PR #${pr}</a>`;
 const cut = (value, max) => (value.length > max ? `${value.slice(0, max - 1)}…` : value);
@@ -45,7 +47,8 @@ const stepper = rows => `<ol class="hn-chain">${rows.map(row => `<li class="hn-s
 export function harnessPage(card, now = new Date()) {
   const runs = (card?.runs || []).filter(run => Date.parse(run.started) >= now.getTime() - 30 * 86400000), last = runs[0];
   const ready = runs.filter(run => run.stop === 'ready').length, prs = runs.filter(run => run.pr).length, human = runs.filter(run => run.verdict === 'needs-human').length, red = runs.filter(run => run.stop && run.stop !== 'ready').length;
-  const verdict = `<section class="card"><h2>${runs.length} run${runs.length === 1 ? '' : 's'} <span class="muted">· last 30 days, the CI fixer on one item each</span></h2><div class="ai-chips">${chip(ready ? 'good' : 'wait', `✅ ${ready} READY`)}${chip(prs ? 'good' : 'wait', `🔀 ${prs} PR opened`)}${chip(human ? 'warn' : 'wait', `🙋 ${human} needs-human`)}${chip(red ? 'bad' : 'good', `⛔ ${red} stopped red`)}${card?.dropped ? chip('warn', `▲ ${card.dropped} record${card.dropped === 1 ? '' : 's'} unreadable`, 'Not a v1 record of an ai-fixer run: dropped, never shown') : ''}</div>
+  const ribbon = card?.demo ? '<div class="hn-demo" role="note">🧪 <b>Demo data</b> · made-up runs and plan rows to show the layout; the real page shows only what CI recorded</div>' : '';
+  const verdict = `${ribbon}<section class="card"><h2>${runs.length} run${runs.length === 1 ? '' : 's'} <span class="muted">· last 30 days, the CI fixer on one item each</span></h2><div class="ai-chips">${chip(ready ? 'good' : 'wait', `✅ ${ready} READY`)}${chip(prs ? 'good' : 'wait', `🔀 ${prs} PR opened`)}${chip(human ? 'warn' : 'wait', `🙋 ${human} needs-human`)}${chip(red ? 'bad' : 'good', `⛔ ${red} stopped red`)}${card?.dropped ? chip('warn', `▲ ${card.dropped} record${card.dropped === 1 ? '' : 's'} unreadable`, 'Not a v1 record of an ai-fixer run: dropped, never shown') : ''}</div>
 <p style="margin:10px 0 0;font-size:13px">${last ? `Last run: <b>${esc(headline(last))}</b> <span class="muted">· ${esc(last.source === 'other' ? '' : `${last.source} ${last.ref}`.trim())} · ${esc(ago(last.started, now.getTime()))}</span>` : '<span class="muted">No run recorded yet: the fixer writes a record per run and the daily stats run uploads it.</span>'}</p></section>`;
   const plan = card?.plan?.rows?.length ? `<section class="card"><h2>Fixer chain <span class="muted">· the CI plan's PRs</span></h2>${stepper(card.plan.rows)}${card.plan.web?.length ? `<h3 class="hn-sub">Pages on this site</h3>${stepper(card.plan.web)}` : ''}</section>` : '<section class="card"><h2>Fixer chain</h2><p class="muted" style="margin:0">Plan not reported yet.</p></section>';
   const layers = card?.layers?.length || card?.sources?.length ? `<section class="card"><h2>Context layers and sources <span class="muted">· file facts from the repo, not proof a key works</span></h2>
@@ -56,6 +59,6 @@ export function harnessPage(card, now = new Date()) {
 }
 
 const HARNESS_STYLE = `.hn-chain{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:8px 0 0;padding:0}.hn-step{display:flex;gap:8px;align-items:center;border:1px solid #262c33;border-radius:8px;padding:6px 10px;font-size:13px}.hn-step.done{border-color:#2d5a3b}.hn-step.doing{border-color:#4d3a7a}
-.hn-n{font-weight:700;font-variant-numeric:tabular-nums;color:#8d949c}.hn-sub{font-size:13px;margin:14px 0 0;color:#8d949c;font-weight:600}.hn-runs{margin:18px 0 8px}
+.hn-demo{border:1px dashed #f2c14e;color:#f2c14e;border-radius:8px;padding:8px 12px;font-size:13px;margin:0 0 12px}.hn-n{font-weight:700;font-variant-numeric:tabular-nums;color:#8d949c}.hn-sub{font-size:13px;margin:14px 0 0;color:#8d949c;font-weight:600}.hn-runs{margin:18px 0 8px}
 .hn-run{display:grid;gap:8px;margin:0 0 12px!important}.hn-steps{display:inline-flex;flex-wrap:wrap;gap:4px 6px;align-items:center}.hn-steps i{font-style:normal;border:1px solid #262c33;border-radius:6px;padding:1px 7px;font-size:12.5px}.hn-steps u{text-decoration:none;color:#5b6470}
 .hn-err{color:#ff8f84;word-break:break-word}.hn-run details summary{cursor:pointer;color:#8d949c;font-size:13px}.hn-run dd{min-width:0;word-break:break-word}`;

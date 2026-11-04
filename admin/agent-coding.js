@@ -66,7 +66,7 @@ export async function ingest(request, env, now = new Date()) {
   if (body.length > 400000) return new Response('Too large', {status: 413});
   let data;
   try { data = JSON.parse(body); } catch { return new Response('Not JSON', {status: 400}); }
-  const clean = CLEAN[data?.kind];
+  const clean = Object.hasOwn(CLEAN, data?.kind) ? CLEAN[data.kind] : null;
   if (!clean || !Array.isArray(data.days) || !data.days.length || data.days.length > 60) return new Response('Unexpected shape', {status: 400});
   const rows = data.days.map(item => ({day: String(item?.day ?? ''), card: clean(item)}));
   if (rows.some(row => !DAY.test(row.day) || !row.card)) return new Response('Unexpected shape', {status: 400});
