@@ -68,7 +68,8 @@ test('the route answers the owner only, stores the upload clamped, and the menu 
   const e = env();
   assert.equal((await call(e, '/admin/ai/harness')).status, 404);
   assert.match(await (await call(e, '/admin/ai/harness', owner)).text(), /No run recorded yet/);
-  const put = await call(e, '/agent-coding/data', {method: 'PUT', headers: {Authorization: 'Bearer pub'}, body: JSON.stringify({kind: 'harness', days: [{day: '2026-11-04', ...card, runs: [record, {...record, v: 7}]}]})});
+  const recent = `${new Date(Date.now() - 90 * 60000).toISOString().slice(0, 19)}Z`;   // Why (Gitar on #367): the route reads the real clock (30-day window, no future dates), so a fixed 2026 date would turn this test red after 4 Dec 2026
+  const put = await call(e, '/agent-coding/data', {method: 'PUT', headers: {Authorization: 'Bearer pub'}, body: JSON.stringify({kind: 'harness', days: [{day: recent.slice(0, 10), ...card, runs: [{...record, started: recent}, {...record, v: 7}]}]})});
   assert.equal(put.status, 200);
   const html = await (await call(e, '/admin/ai/harness', owner)).text();
   assert.match(html, /Needs a human/); assert.match(html, /1 record unreadable/); assert.match(html, /href="\/admin\/ai\/harness"/, 'the AI group has the tab');
