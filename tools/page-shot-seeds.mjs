@@ -135,6 +135,9 @@ export const seeds = {
     await seeds.schedules(context);
     await context.env.STATS.prepare('INSERT INTO intel_start (workflow, at, ok, reason) VALUES (?, ?, 0, ?)').bind('schedules-snapshot.yml', new Date().toISOString(), 'E2E_INTEL_GITHUB_TOKEN is not set (the site GITHUB_TOKEN covers the public repo, not this one)').run();
   },
+  'build-log-not-starting': async ({env}) => {   // the Build log when the Worker's last start of daily-digest.yml was refused (4 Nov 2026)
+    await env.STATS.prepare('INSERT INTO intel_start (workflow, at, ok, reason) VALUES (?, ?, 0, ?)').bind('daily-digest.yml', new Date(Date.now() - 3600000).toISOString(), 'E2E_INTEL_GITHUB_TOKEN is not set').run();
+  },
   'self-healing': async ({env}) => {   // made-up snapshots of the self-healing loop over 10 days, with long issue titles and detector names (26 Oct 2026, admin on a phone)
     const today = Date.now();
     for (let back = 9; back >= 0; back--) {

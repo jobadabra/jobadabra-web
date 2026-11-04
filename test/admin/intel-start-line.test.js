@@ -9,6 +9,7 @@ import {INTEL_COLLECTORS, readStartProblem, recordStarts} from '../../shared/int
 import {page as e2ePage} from '../../admin/e2e-page.js';
 import {page as integrationPage} from '../../admin/integration-page.js';
 import {page as schedulesPage} from '../../admin/schedules.js';
+import {page as buildLogPage} from '../../admin/build-log.js';
 import {startLine} from '../../admin/intel-start-line.js';
 
 // D1 on real SQLite with every migration, in order, as the deploy applies them.
@@ -21,7 +22,7 @@ function d1() {
 const seen = html => html.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, '');   // what the owner reads
 const tick = (minute, hour = 12) => new Date(Date.UTC(2026, 10, 1, hour, minute));
 const PAGES = {'e2e-intel.yml': {path: '/admin/testing/e2e', html: e2ePage}, 'integration-intel.yml': {path: '/admin/testing/integrations', html: integrationPage},
-  'schedules-snapshot.yml': {path: '/admin/testing/scheduled', html: schedulesPage}};   // every collector in INTEL_COLLECTORS has a page that draws the line (Why, 1 Nov 2026: the Worker started the snapshot too, #263)
+  'schedules-snapshot.yml': {path: '/admin/testing/scheduled', html: schedulesPage}, 'daily-digest.yml': {path: '/admin/agents/build-log', html: (rows, options) => buildLogPage(rows || [], options)}};   // every collector in INTEL_COLLECTORS has a page that draws the line (Why, 1 Nov 2026: the Worker started the snapshot too, #263)
 
 test('a refused start draws "collector not starting: <reason>" on that collector\'s page only, and the next good start clears it', async () => {
   const db = d1();

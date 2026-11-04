@@ -16,7 +16,7 @@ export const INTEL_COLLECTORS = [
   {workflow: 'integration-intel.yml', minute: 15, backup: 17, home: 'public'},
   // Why (1 Nov 2026, coordinator mac-07: /admin/testing/scheduled read "as of 15:02" at 18:41 while claiming "refreshed hourly"; GitHub ran it at 01:05, 07:29, 15:02): the Scheduled pages' own snapshot is a collector too, on the tick that was free.
   {workflow: 'schedules-snapshot.yml', minute: 0, backup: 3, home: 'web'},
-  // Why (4 Nov 2026, owner chose "the Worker cron"): GitHub ran the "hourly" digest 32 times in 7 days, so a failed night waited until morning. Not a collector, but the same start.
+  // Why (4 Nov 2026, owner chose "the Worker cron"): GitHub ran the "hourly" digest 32 times in 7 days, so a failed night waited until morning. Not a collector, but the same start and the same red line, on the Build log page.
   {workflow: 'daily-digest.yml', minute: 10, backup: 11, home: 'web'},
 ];
 
