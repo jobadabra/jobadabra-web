@@ -14,7 +14,7 @@ import {digestOf, tokenFor} from '../../shared/guard.js';
 import {tick} from '../../api/hosted-tick.js';
 import {run as lifecycle} from '../../admin/mail-lifecycle.js';
 import {pullInbox, schedule, turnOff, turnOn} from '../../desktop/lib/hosted-search.js';
-import {TRIAL_KEY} from '../../desktop/lib/ai-free.js';
+import {FREE_BASE, TRIAL_KEY} from '../../desktop/lib/ai-free.js';
 import {startCloud} from './worker-fakes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -70,7 +70,14 @@ function app(cloud, install) {
   fs.copyFileSync(path.join(HERE, 'fixtures/profile.md'), path.join(home, 'profile.md'));
   const secrets = new Map(), settings = {};
   const storage = {secret: name => secrets.get(name) || '', setSecret: (name, value) => secrets.set(name, value), settings: () => settings, saveSettings: patch => Object.assign(settings, patch), path: name => path.join(home, name)};
-  const fetcher = (url, init) => fetch(String(url).replace('https://www.jobpilotto.top', cloud.site), init);
+  // Why (5 Nov 2026): the address is read from the app (FREE_BASE), never typed here. A typed domain went stale when the app moved to www.jobadabra.top (public #2969): every call then reached
+  // the real site, which answered 404 while Always on is off, and the e2e was red 10 runs in a row. A call to any other host fails loudly instead of leaving the machine.
+  const site = new URL(FREE_BASE).origin;
+  const fetcher = (url, init) => {
+    const target = String(url);
+    if (!target.startsWith(`${site}/`)) throw new Error(`hosted-e2e: the app called ${target}, not ${site}: the fake cloud would be bypassed`);
+    return fetch(target.replace(site, cloud.site), init);
+  };
   const engine = args => new Promise(resolve => { let stdout = ''; const child = spawn(PYTHON, ['-m', ...args], {cwd: ROOT, env: {...process.env, JOBADABRA_STORE: 'sqlite', JOBADABRA_DATA_DIR: path.join(home, 'data'), JOBADABRA_CONFIG_DIR: path.join(home, 'config'), JOBADABRA_NO_DOTENV: '1'}});
     child.stdout.on('data', chunk => { stdout += chunk; process.stdout.write(chunk); });
     child.on('exit', code => resolve({code, stdout})); });
