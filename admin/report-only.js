@@ -2,7 +2,7 @@
 // the AI quality, the wall-clock... and so on)"). Test layers: the e2e journeys and the integration tests are the proofs; a measurement runs nightly and only reports. So the proof cards
 // (Testing → Overview) keep only proof plus a one-line link here. ONE reader per source: the nightly summary (admin/nightly-summary.js) and the self-healing snapshots
 // (admin/report-only-finders.js); this file groups and draws them with the renderer the Scheduled rows use (admin/nightly-summary-html.js). No AI, no new table.
-// Guard: test/admin/report-only.test.js.
+// Guard: test/unit/admin/report-only.test.js.
 import {viewer, remember} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE} from './chip.js';

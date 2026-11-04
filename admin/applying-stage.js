@@ -6,7 +6,7 @@
 //   working   works, is not new and is not on the daily list: waits to be archived
 //   archived  fixed or working and not daily, or its posting is gone: the recorder never re-runs it; kept for history and offline debugging (the row's data: stage "archived" + why)
 // Stages are DATA on the row (`stageData`) only for "watch" and "archived" (desktop/e2e/smoke-sites.json, uploaded with the pool); every other stage is derived here from what the page already computes.
-// `archivable` says why a row may be archived, or null: tools/archive-pool-rows.mjs writes it into the pool list. Guard: test/admin/applying-stage.test.js.
+// `archivable` says why a row may be archived, or null: tools/archive-pool-rows.mjs writes it into the pool list. Guard: test/unit/admin/applying-stage.test.js.
 export const STAGES = ['fix', 'new', 'working', 'fixed', 'watch', 'archived'];   // the order the Stage filter shows
 export const STAGE_WORD = {new: 'New', fix: 'Needs a fix', fixed: 'Fixed', watch: 'Daily watch', working: 'Working', archived: 'Archived'};
 export const STAGE_DATA = ['watch', 'archived'];   // the two stages a row's data sets

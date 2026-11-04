@@ -1,6 +1,6 @@
 // The Lab's "▶ Watch" (owner, 18 Oct 2026): a pool row's fill video, shown by every list that draws a pool row (Sites, Needs a fix) through ONE helper, so a new list gets it the same way.
 // Owns WATCH_CSS and WATCH_SCRIPT, the client code that sits after the page's tabs inside the fetch callback (needs el). Videos come from admin/lab-video.js (GET ?index, ?name=); a row
-// without one shows no button and a muted line in its opened details. Plain quotes only: it sits in a template literal. Guard: test/admin/applying-watch.test.js.
+// without one shows no button and a muted line in its opened details. Plain quotes only: it sits in a template literal. Guard: test/unit/admin/applying-watch.test.js.
 export const WATCH_URL = '/admin/form-filling/lab/video';
 
 export const WATCH_CSS = `.watchbtn{border:1px solid var(--amber);color:var(--amber);background:none;border-radius:7px;padding:3px 10px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}

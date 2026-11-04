@@ -1,5 +1,5 @@
 // One rule for every number made from real users' fill cards: fewer than 3 distinct installs (the learned layer's k) in the period means "too few to judge",
-// never a percentage or a ranking. Used by the page (admin/formlearning.js) and the digest (shared/digest.js, its .md). Guard: test/shared/thin-data.test.js.
+// never a percentage or a ranking. Used by the page (admin/formlearning.js) and the digest (shared/digest.js, its .md). Guard: test/unit/shared/thin-data.test.js.
 export const MIN_INSTALLS = 3;
 
 // cards: the user fill cards of the period (rows with an `install`; '' = before the column, never counted).

@@ -1,6 +1,6 @@
 // Telling the person who sent a feedback (spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md, PR 3/7): the owner's words, what he linked, the in-app reply the app reads,
 // and the one e-mail through the sender we already have (shared/mail.js, template `feedback-update`, service list). Nothing is sent that the owner did not write or accept.
-// Guarded by test/shared/feedback-reply.test.js.
+// Guarded by test/unit/shared/feedback-reply.test.js.
 import {send, validAddress} from './mail.js';
 import {PUBLIC_REPO, githubUrl} from './repos.js';
 

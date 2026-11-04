@@ -2,7 +2,7 @@
 // about each one that is NEW, REGRESSED (came back after being resolved) or SPIKING (this hour 10x its usual hourly count). Never one message per event.
 // State in D1 (sentry_alerts: which issue was told as what, when); limits: an issue is told once per kind per cooldown, at most 20 messages an hour, then one "N more".
 // Needs SENTRY_AUTH_TOKEN (read-only, as /admin/testing/sentry), SENTRY_TELEGRAM_TOKEN + SENTRY_TELEGRAM_CHAT (Worker secrets); wrangler var SENTRY_TELEGRAM = "on"|"off".
-// The owner's own app already tells fill errors to the owner's main Telegram (desktop/lib/real-errors.js); that is left alone. Guarded by test/admin/sentry-alert.test.js.
+// The owner's own app already tells fill errors to the owner's main Telegram (desktop/lib/real-errors.js); that is left alone. Guarded by test/unit/admin/sentry-alert.test.js.
 import {fixer, status} from './sentry.js';
 
 const SENTRY = 'https://de.sentry.io/api/0', ORG = 'job-pilotto', PROJECT = 'job-pilotto-app';

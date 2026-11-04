@@ -1,5 +1,5 @@
 // What every public page shares: the nav's edge on scroll, sections easing in, the cursor glow on cards, one FAQ answer open, the live numbers, copy buttons,
-// close-up strips, and (landing only) old #section links sent to the page that now holds that section. Guarded by test/web/landing.test.js and effects.test.js.
+// close-up strips, and (landing only) old #section links sent to the page that now holds that section. Guarded by test/unit/website/landing.test.js and effects.test.js.
 (() => {
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
   document.documentElement.classList.add('js');
@@ -24,7 +24,7 @@
   // Windows download choice (owner, 31 Oct 2026: "offer on the website, a dropdown, to download the Windows version as a binary, or from the Windows Store"). Every Windows button is the Store
   // link (as it was) followed by its own `a.dl-exe` link with the same ?from=; here the pair becomes one split button: the main button stays the Store, the caret opens both choices. Both
   // links are counted by their own route (/download/windows, /download/windows-exe). Without this script both links stay on the page. The words live only here.
-  // Guarded by test/web/windows-choice.test.js.
+  // Guarded by test/unit/website/windows-choice.test.js.
   const CHOICES = [
     {title: 'Microsoft Store', note: 'Installs and updates with no warning. New versions arrive after Microsoft’s review (1–3 days).'},
     {title: 'Direct download (.exe)', note: 'The newest version now. Windows asks once (More info → Run anyway). It updates itself in the app.'}];
@@ -75,7 +75,7 @@
   } else document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
 
   // The cursor glow on every card (effects.css .glow): the light follows a mouse or pen, never a finger, and stays still with reduced motion.
-  // A new kind of card joins CARDS, or LEFT_OUT in test/web/effects.test.js says why not.
+  // A new kind of card joins CARDS, or LEFT_OUT in test/unit/website/effects.test.js says why not.
   const CARDS = ['.glow-panel', '.steps li', '.numbers li', '.next-page', '.os-card', '.trust-grid li', '.stop-panel', '.setup-cols > div', '.pass', '.boarding',
     '.faq details', '.promise', '.plat-card', '.ai-step', '.apply-steps li', '.evidence-stats li', '.first-run li', 'details.tech'];
   for (const card of document.querySelectorAll(CARDS.join(','))) {
@@ -99,7 +99,7 @@
   for (const item of answers) item.addEventListener('toggle', () => { if (item.open) for (const other of answers) if (other !== item) other.open = false; });
 
   // The live numbers: counts only, from the same daily snapshot the Coverage page reads (/api/coverage), so every page shows the same count and its day.
-  // The page keeps its written floor when this fails. Guarded by test/web/site-facts.test.js.
+  // The page keeps its written floor when this fails. Guarded by test/unit/website/site-facts.test.js.
   const slots = document.querySelectorAll('[data-count]');
   if (slots.length) fetch('/api/coverage').then(r => (r.ok ? r.json() : null)).then(data => {
     if (!data || !data.employers) return;

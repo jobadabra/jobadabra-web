@@ -1,5 +1,5 @@
 // Turns the Telegram HTML the engine already builds (src/tgcard.py) into a safe e-mail body: only b, i, u, s, code, pre and https links survive, everything else is escaped text.
-// This is how every Telegram message gets an e-mail form without a second layout. Guard: test/api/account-email.test.js.
+// This is how every Telegram message gets an e-mail form without a second layout. Guard: test/unit/api/account-email.test.js.
 const esc = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const unescape = text => String(text).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&amp;/g, '&');
 const TAG = /<(\/?)(b|strong|i|em|u|s|code|pre|a)(\s[^>]*)?>/gi;

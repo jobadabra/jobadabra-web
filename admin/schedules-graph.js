@@ -2,7 +2,7 @@
 // one bar of every scheduled job by its last run (the Overview's summaryBar, same colours), and a 24-hour timeline: one row per job, one tick per start in the next 24 hours,
 // and above the rows how many jobs start in each hour. Built from the decorated snapshot rows alone (admin/schedules.js decorate): no second reader, no table, no AI.
 // Why a timeline and not a 14-day heat strip (1 Nov 2026): the snapshot keeps a job's newest 14 runs, so an hourly job covers 14 hours; its strip would be hatched "not stored" for 13 of 14 days.
-// Status is never colour alone: a job's label carries ✓ / ✕ / ◷ / ◌ (and ⚠ when a start was missed). Guard: test/admin/schedules.test.js.
+// Status is never colour alone: a job's label carries ✓ / ✕ / ◷ / ◌ (and ⚠ when a start was missed). Guard: test/unit/admin/schedules.test.js.
 import {esc} from '../shared/html.js';
 import {clock, matches, parseCron} from '../shared/schedules-model.js';
 import {summaryBar, BAR_STYLE} from './testing-overview-map.js';

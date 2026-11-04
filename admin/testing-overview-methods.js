@@ -1,7 +1,7 @@
 // Testing → Overview: the catalogue of every way we look for bugs (owner, 1 Nov 2026: "all different methods of testing and finding bugs we use to keep the app
 // qualitative, bug-free and reliable"; unit tests are left off: they are for agent development, not proof the app is stable). Pure data: what each method proves, how its
 // last run and its bug count are found in stored data (admin/testing-overview-data.js), the page that has the detail. Cadence comes from the workflow's own cron when the
-// schedules snapshot has one; `when` is the trigger in words for the ones that are not crons (checked against the public workflows by test/admin/testing-overview.test.js).
+// schedules snapshot has one; `when` is the trigger in words for the ones that are not crons (checked against the public workflows by test/unit/admin/testing-overview.test.js).
 //
 // A line = one way the method runs:  {label, wf?: workflow file, when?: trigger words, last?: where the last run is read, byHand?: true}
 //   byHand: the workflow has no trigger but workflow_dispatch (debugging only): shown as "by hand", its last run is information and never paints the card red (owner, 1 Nov 2026)

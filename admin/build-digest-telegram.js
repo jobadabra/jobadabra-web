@@ -1,5 +1,5 @@
 // The Build Log Telegram post: the day's FINAL digest as HTML messages (Telegram's markdown dislikes plain text), split at group boundaries under its 4096-character limit (spec docs/superpowers/specs/2026-10-16-daily-digest.md).
-// A separate bot and chat from the job digest bot and the CI alerts (secrets BUILDLOG_TELEGRAM_TOKEN / BUILDLOG_TELEGRAM_CHAT). Pure + an injected fetch, so tests never reach Telegram. Guard: test/admin/build-digest-telegram.test.js.
+// A separate bot and chat from the job digest bot and the CI alerts (secrets BUILDLOG_TELEGRAM_TOKEN / BUILDLOG_TELEGRAM_CHAT). Pure + an injected fetch, so tests never reach Telegram. Guard: test/unit/admin/build-digest-telegram.test.js.
 import {countOf, dayWords} from './build-digest.js';
 
 const LIMIT = 3800;

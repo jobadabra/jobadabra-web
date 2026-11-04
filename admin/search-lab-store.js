@@ -1,6 +1,6 @@
 // /admin/job-search/lab's data (owner, 18 Oct 2026): one row per candidate per replayed search, in D1 (migration 0095). Owns the row's shape and checks (fixed-length ids, counts and seconds,
 // nothing free-form beyond a short label and the name of the step that crashed), the upload (PUT /search-lab/rows: Bearer REPLAYS_PUBLISH_KEY, main only, as admin/applying-ci-rows.js) and the
-// read. rowFromPress turns one line of tools/persona-search presses.jsonl into a row. Guard: test/admin/search-lab.test.js.
+// read. rowFromPress turns one line of tools/persona-search presses.jsonl into a row. Guard: test/unit/admin/search-lab.test.js.
 import {equal} from '../shared/guard.js';
 
 export const KEEP_RUNS = 30;   // runs kept per candidate

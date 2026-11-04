@@ -1,6 +1,6 @@
 // The "Needs a fix" order of /admin/form-filling/lab, in ONE place: the page embeds ORDER_SOURCE (the function's own source) into its script, and jobs/needs-fix-order.mjs imports the
 // function, so the page and the command can never disagree. Self-contained on purpose (no outer names, no backticks, no template or backslash characters): it is pasted into the page.
-// Guard: test/needs-fix-order.test.js (same seeded data through the page and the command).
+// Guard: test/unit/jobs/needs-fix-order.test.js (same seeded data through the page and the command).
 
 // pool: the page's pool rows (name, platform, reached, regression, short, note, status: {state}); scorecard: [{platform, matchShare}]; steps: the page's step names, earliest first.
 // -> {rows: the sites that need a fix, worst first; rank: Map(shape -> place; the shape is unique, two sites can share a display name); needs(site); useOf(site)}.

@@ -1,6 +1,6 @@
 // The client side of /admin/form-filling/lab's Outcomes tab, inside admin/applying.js's page (it uses that page's el, tile, heads, sortRows, ago and its s-*/st-* pill colours): the headline tile,
 // the ending pills (counts; a press shows that ending's rows in the Sites tab's pool table) and Week by week. "Every pool row" went into the pool table (each row's Last result carries its ending: endingLine)
-// and "How the weighted number is built" into the Platform scorecard (admin/applying-coverage-view.js), 15 Oct 2026. Words come from extension/ladder/endings.js; guard: test/admin/applying-resolution.test.js.
+// and "How the weighted number is built" into the Platform scorecard (admin/applying-coverage-view.js), 15 Oct 2026. Words come from extension/ladder/endings.js; guard: test/unit/admin/applying-resolution.test.js.
 import {CAUSES, ENDING_MEANS, WORST_FIRST} from '../extension/ladder/endings.js';
 import {PUBLIC_REPO, githubUrl} from '../shared/repos.js';
 

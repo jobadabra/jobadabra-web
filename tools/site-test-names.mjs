@@ -15,7 +15,7 @@ export function misnamed(folders, files) {
   });
 }
 
-// Why (layout 3/3, 2 Nov 2026): public's folders are JOINED-tree paths (tests, desktop/test); this repo keeps them elsewhere (tools/layout-map.txt: test/python, test/desktop).
+// Why (layout 3/3, 2 Nov 2026): public's folders are JOINED-tree paths (tests, desktop/test); this repo keeps them elsewhere (tools/layout-map.txt: test/python, test/media).
 // A raw folder that holds a mapped one (test) leaves that one out: its files belong to the other joined folder.
 function mapPairs(dir) {
   return readFileSync(path.join(dir, 'tools/layout-map.txt'), 'utf8').split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#')).map(line => line.split(/\s+/));

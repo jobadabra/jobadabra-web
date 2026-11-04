@@ -1,5 +1,5 @@
 // The one colour rule of the tiles on /admin/form-filling/lab (owner, 15 Oct 2026): a share of a GOOD thing is green at or above its target, amber in a middle band, red below;
-// a count of a BAD thing is green at 0, amber when small, red above. Thresholds live here only; the tooltips are written from them. Guard: test/admin/applying-tiles.test.js.
+// a count of a BAD thing is green at 0, amber when small, red above. Thresholds live here only; the tooltips are written from them. Guard: test/unit/admin/applying-tiles.test.js.
 export const SHARE = {target: 70, floor: 50};   // % resolved, % that reached the form: green at 70 or more, amber 50-69, red under 50
 export const COUNT = {small: 3};                // regressions of our build, sites needing a fix, boards dropped: green 0, amber 1-3, red 4 or more
 

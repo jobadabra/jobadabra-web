@@ -1,6 +1,6 @@
 // Lab Form Filling's "What we test on" (Coverage tab, top): the sets the lab tests with, how many each holds and its runs in the last 14 days where known. The repo's counts (saved form pages, control-test
 // pages) come from CI on main with the replay upload it already does, counted by structure (desktop/e2e/lib/repo-counts.mjs; the site cannot read the repo); the pool and the recorded journeys are the site's own.
-// "As of" is the commit and day of the upload the repo counts came from. Guard: test/admin/what-we-test.test.js.
+// "As of" is the commit and day of the upload the repo counts came from. Guard: test/unit/admin/what-we-test.test.js.
 import {esc} from '../shared/html.js';
 
 const DAYS = 14;

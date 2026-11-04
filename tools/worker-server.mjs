@@ -1,7 +1,7 @@
 // The REAL Worker (workers/www/index.js) on demo data, served on 127.0.0.1 as the owner, and the browser that opens it: shared by tools/page-shot.mjs
 // (one page's styled shots) and tools/admin-no-sideways.mjs (every admin page at phone width). Moved out of page-shot.mjs on 26 Oct 2026 (admin on a phone).
 // The data is an in-memory database built from db/migrations/ plus seeds (tools/page-shot-seeds.mjs); the owner login is the test key; the live site is never contacted.
-// Guards: test/tools/page-shot.test.js, test/admin/admin-no-sideways.test.js.
+// Guards: test/tooling/page-shot.test.js, test/integration/admin-no-sideways.test.js.
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';

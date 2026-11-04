@@ -1,6 +1,6 @@
 // The report-only numbers that come from the self-healing snapshots (one row a day, admin/selfheal.js snapshots): what the layout, screenshot and interaction finders filed, and
 // whether the planted bugs are still caught (owner, 2 Nov 2026: the Report only page). Same job shape as admin/nightly-summary.js, so the page draws them with the same renderer.
-// A day with no snapshot is a grey cell, never a 0. Report only: nothing here blocks anything. Guard: test/admin/report-only.test.js.
+// A day with no snapshot is a grey cell, never a 0. Report only: nothing here blocks anything. Guard: test/unit/admin/report-only.test.js.
 import {empty, newestWithValue} from './nightly-summary.js';
 
 // Finder jobs: the detector name in the snapshot's periods.last7.byDetector → the id and title the page shows.

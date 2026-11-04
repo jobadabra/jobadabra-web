@@ -1,6 +1,6 @@
 // Ready to send, the morning's way to the held tabs (spec docs/superpowers/specs/2026-10-17-ready-to-send.md): the owner's calls for the live view, the hand-off and "what is held" go to the night's container through the runner Worker
 // (service binding env.READY_RUNNER), carrying the night token the container was started with. Without the binding (not deployed yet) they answer 503 "not wired". Also the close: when a night has nothing left, its tabs are closed.
-// The night token is derived from the batch id (a Worker secret), never stored. Guard: test/api/ready-wiring.test.js, ready-to-send.test.js (the kept hand-off).
+// The night token is derived from the batch id (a Worker secret), never stored. Guard: test/unit/api/ready-wiring.test.js, ready-to-send.test.js (the kept hand-off).
 import {tokenFor} from '../shared/guard.js';
 import {keptGet} from './ready-kept.js';
 

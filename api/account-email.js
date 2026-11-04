@@ -1,6 +1,6 @@
 // The address a person gives Jobadabra (onboarding, Settings → Notifications) and the mail the app or a run sends to it. The install proves itself with its AI key
 // (x-api-key: JPF1.<install>.<token>); POST /api/notify/email also takes the trial key an Always-on repo holds (JPT1.<handle>.<mac>, no install id: shared/trial-key.js). PUT/GET /api/account/email makes or reads the trial account; POST /api/notify/email mails a Telegram-style message to it;
-// POST /api/account/email/resend sends the confirm link again; /confirm confirms the address. An address another account already holds is refused here (joining it takes a code sent to that address, the device sign-in). Guard: test/api/account-email.test.js.
+// POST /api/account/email/resend sends the confirm link again; /confirm confirms the address. An address another account already holds is refused here (joining it takes a code sent to that address, the device sign-in). Guard: test/unit/api/account-email.test.js.
 import {authorize, digestOf, equal, tokenFor} from '../shared/guard.js';
 import {installOfTrialKey} from '../shared/trial-key.js';
 import {addrOf, confirmLink, send, validAddress, clean} from '../shared/mail.js';
@@ -97,7 +97,7 @@ async function welcome(env, email, now) {
 }
 
 // POST /api/account/email/resend: the confirm link again, to the address this account holds and has not confirmed (the welcome mail goes once per address ever, so a lost mail had no way back).
-// At most 1 an hour and 3 a day per address -> {ok:false, error:'wait'}; 'confirmed' / 'stopped' (the person stopped our mail) / 'no_address' / 'off' (mail switched off) / 'not_sent' say why nothing went. Guard: test/api/account-email.test.js.
+// At most 1 an hour and 3 a day per address -> {ok:false, error:'wait'}; 'confirmed' / 'stopped' (the person stopped our mail) / 'no_address' / 'off' (mail switched off) / 'not_sent' say why nothing went. Guard: test/unit/api/account-email.test.js.
 export const RESEND_PER_HOUR = 1, RESEND_PER_DAY = 3;
 export async function resend(request, env, now = new Date()) {
   const install = await who(request, env);

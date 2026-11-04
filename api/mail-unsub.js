@@ -1,6 +1,6 @@
 // Unsubscribe and bounces for shared/mail.js. GET /unsubscribe?a=<address digest>&l=<service|marketing>&t=<signed token> shows a one-button page (a mail scanner opening the link changes nothing);
 // POST on the same URL (the button, or a mail client's one-click List-Unsubscribe-Post) turns that list off. Bounce/complaint events from the Email Sending queue turn every list off.
-// Both also set the columns on pro_accounts (service_mail_off_at, marketing_opt_in). Guard: test/shared/mail.test.js.
+// Both also set the columns on pro_accounts (service_mail_off_at, marketing_opt_in). Guard: test/unit/shared/mail.test.js.
 import {cardPage} from '../shared/card-page.js';
 import {digestOf, equal, tokenFor} from '../shared/guard.js';
 

@@ -1,6 +1,6 @@
 // "How sources were read" on /admin/job-search/scouting (owner, 24 Oct 2026): per day and per read method, the sources read, the jobs found in the user's places,
 // the seconds and the AI cost, for the central scout (each run's record, shared/scouting.js) and for real installs (their search reports, shared/search-report.js).
-// Counts under five fixed method names only; never a host, URL or company. The engine names the methods (src/read_methods.py). Tests: test/shared/readmethods.test.js.
+// Counts under five fixed method names only; never a host, URL or company. The engine names the methods (src/read_methods.py). Tests: test/unit/shared/readmethods.test.js.
 import {C, bars, esc, n, tile} from './scoutingcharts.js';
 
 export const METHODS = ['feed_api', 'plain_page', 'ai_board', 'browser', 'extension_tab'];

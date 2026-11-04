@@ -1,6 +1,6 @@
 // Ready to send, a night's forms in a line (owner, 18 Oct 2026, sketch: "one server, forms in a line", a bar and a live line per row, Stop per row and for the night):
 // the container reports the step each form is on (fixed words, never page text), and the owner's Stop puts a waiting or filling form back to how it was before
-// the press (the result a Fill again replaced) or marks it stopped; a night with nothing left to fill ends. Guard: test/api/ready-line.test.js.
+// the press (the result a Fill again replaced) or marks it stopped; a night with nothing left to fill ends. Guard: test/unit/api/ready-line.test.js.
 
 // The steps the container may report (hosted/ready-fill/fill-job.mjs); the app words each one (desktop/renderer/pages/ready-rows.js).
 export const STEPS = ['opening', 'form', 'filling', 'answering', 'reading'];

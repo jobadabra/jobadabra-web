@@ -1,7 +1,7 @@
 // Technical reports from Jobadabra apps (desktop/lib/telemetry.js scrubs them before sending): what is kept (D1 "telemetry", 90 days) and how it is read.
 // The POST that stores them is api/telemetry.js, the /admin/growth/app page is admin/telemetry.js, and a daily run (scheduled) drops old reports
 // (problems are no longer filed as issues since 20 Oct 2026). Design: Notion "📡 Technical reports (telemetry) — design".
-// Guarded by test/shared/telemetry.test.js.
+// Guarded by test/unit/shared/telemetry.test.js.
 import {installsByEngine} from './engines.js';
 import {tabHandoff} from './tab-handoff.js';
 

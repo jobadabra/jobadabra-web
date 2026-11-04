@@ -1,6 +1,6 @@
 /* Compare page (owner, 24 Oct 2026: "I like more the before version", "All on desktop, one on phone"). From 1001px: the old table, every tool in a
    column, a mark and a short note per cell. Up to 1000px: "Compare with" picks one tool (compare.js) and each capability is a card with its answers in
-   words, so nothing is wider than the screen. Guarded by test/web/compare-page.test.js. */
+   words, so nothing is wider than the screen. Guarded by test/unit/website/compare-page.test.js. */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .cmp-controls { display: none; align-items: center; gap: 10px; margin-bottom: 16px; }
 .cmp-controls label { color: var(--muted); font-size: .9rem; }

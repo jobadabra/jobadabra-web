@@ -1,6 +1,6 @@
 // Send to AI (spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md, PR 7/7): one click on a feedback starts one CI run (feedback-ai.yml in the public repo) that ends in a DRAFT PR the owner reviews.
 // This file holds what the site decides: the caps, the columns each step writes, the dispatch and the brief the run reads. The state changes themselves are rows of shared/feedback-actions.js; the CI-facing
-// routes are admin/feedback-ai.js. Guarded by test/shared/feedback-ai.test.js.
+// routes are admin/feedback-ai.js. Guarded by test/unit/shared/feedback-ai.test.js.
 // Why (3 Nov 2026, owner: "send it to a claude session (on the CI using the ai-broker, that the outcome should be a PR with the fix)"; first live run on one feedback he picks): it runs only on his click,
 // at most 3 a day and 1 at a time, never merges and never pushes to main; the UI Fixer (scheduled, many findings) stays OFF (owner, 25 Oct 2026).
 import {releasePr} from './feedback-reply.js';

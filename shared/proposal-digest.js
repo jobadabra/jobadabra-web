@@ -1,7 +1,7 @@
 // The digest's "Proposed answers" section: what people did with the answers the app proposed on the session page (proposal_use, from
 // desktop/lib/proposal-use.js). Per source and per release: shown, used as proposed, edited, and the rest (ignored). A proposal used as it
 // was is the app being right without a code change; the share used per release is how proposals improve from one iteration to the next.
-// Guarded by test/shared/digest.test.js.
+// Guarded by test/unit/shared/digest.test.js.
 import {SOURCES} from '../desktop/lib/proposal-use.js';
 
 const share = (top, bottom) => (bottom ? Number((top / bottom).toFixed(3)) : null);

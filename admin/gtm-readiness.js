@@ -1,5 +1,5 @@
 // /admin/testing/gtm-readiness (owner, 1 Nov 2026): how stable each critical journey is, as one gauge, a Tier 1 table (e2e steps after merge, beta, night) and a Tier 2 table (integration tests).
-// Draws the ONE snapshot row the collector keeps (gtm_snapshot); no table scan. Report only: no gate, no CI check. Guard: test/admin/gtm-readiness.test.js.
+// Draws the ONE snapshot row the collector keeps (gtm_snapshot); no table scan. Report only: no gate, no CI check. Guard: test/unit/admin/gtm-readiness.test.js.
 import {viewer, remember} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {readSnapshot} from './gtm-intel.js';

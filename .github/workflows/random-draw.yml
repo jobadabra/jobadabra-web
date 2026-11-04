@@ -11,7 +11,7 @@
 # - Sites: data-centre IPs are refused by many boards; a refusal shows as "not reached" and is never retried or worked around (never past a login wall, captcha or 401/403/429).
 # - A re-run of a bad day: Run workflow with that day's seed (YYYY-MM-DD), and the role it drew (draw.json in the artifact) to keep the same role.
 # - The kept artifact is counts only (counts.json, draw.json): the search's top-10 job titles and source names stay out of it.
-# Guard: tests/test_site_draw_wide.py, test/admin/search-lab-draws.test.js, test/jobs/search-alarm.test.js, test/jobs/board-lines.test.js.
+# Guard: tests/test_site_draw_wide.py, test/unit/admin/search-lab-draws.test.js, test/unit/jobs/search-alarm.test.js, test/unit/jobs/board-lines.test.js.
 name: CI · Random draw (daily)
 
 on:

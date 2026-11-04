@@ -1,6 +1,6 @@
 // Paying for Pro and top-ups (spec docs/superpowers/specs/2026-10-16-pro-plan.md §2): POST /api/pro/checkout starts a one-time payment, POST /api/pro/webhook
 // turns the provider's signed events into accounts, devices, purchases and credit (shared/pro.js), and takes the credit back on a refund or a dispute. The provider
-// is only reached through ./payments (one adapter, Stripe today). Replay-safe: an event id and a payment's ref are each handled once. Guards: test/shared/pro-stripe.test.js.
+// is only reached through ./payments (one adapter, Stripe today). Replay-safe: an event id and a payment's ref are each handled once. Guards: test/unit/shared/pro-stripe.test.js.
 import {authorize} from '../shared/guard.js';
 import {accountOf, addCredit, createAccount, link, makePro, planOn} from '../shared/pro.js';
 import {CREDIT, PRO_KINDS, refusal} from '../shared/pro-packages.js';

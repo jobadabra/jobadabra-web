@@ -1,6 +1,6 @@
 // AI credit held by an install (owner, 26 Oct 2026: credit promo codes give "AI credit only", the plan stays Free): the balance, adding a code's euros, and spending
 // one AI call from it. The ledger rows go to pro_credit (append-only, as accounts), under 'install:' + the install's digest, never the raw id.
-// Served by the credit lane (shared/pro-ai.js proLane) while it lasts; then the Free rules apply again. Guard: test/shared/promo-credit.test.js.
+// Served by the credit lane (shared/pro-ai.js proLane) while it lasts; then the Free rules apply again. Guard: test/unit/shared/promo-credit.test.js.
 import {digestOf} from './guard.js';
 import {rawToCredit} from './pro-packages.js';
 

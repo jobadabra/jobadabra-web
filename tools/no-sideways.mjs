@@ -1,6 +1,6 @@
 // Opens every page in web/public/sitemap.xml at phone width (390px) and lists anything that reaches past the screen's right edge, unless it sits
 // inside a box that scrolls or clips it (a data table may scroll inside its own box). Exit 1 when a page has one, 2 when no browser is found.
-// Site audit, owner 24 Oct 2026: Platforms had an 820px table in a 342px box. Run: node tools/no-sideways.mjs [--width 390] [--web <folder>]. Test: test/web/no-sideways.test.js.
+// Site audit, owner 24 Oct 2026: Platforms had an 820px table in a 342px box. Run: node tools/no-sideways.mjs [--width 390] [--web <folder>]. Test: test/integration/no-sideways.test.js.
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';

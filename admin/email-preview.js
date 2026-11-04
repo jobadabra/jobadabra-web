@@ -1,5 +1,5 @@
 // Every mail template as the person sees it, filled with made-up sample data (owner, 26 Oct 2026: "every template rendered with sample data"). Built by shared/mail.js compose(), the same
-// frame as a real send, with example links (no real address, no signed token). A template without a sample here fails test/admin/email.test.js, so a new template cannot be left off the page.
+// frame as a real send, with example links (no real address, no signed token). A template without a sample here fails test/unit/admin/email.test.js, so a new template cannot be left off the page.
 import {compose} from '../shared/mail.js';
 import {OFFERS} from '../shared/pro-packages.js';
 import {TEMPLATES} from '../shared/mail-templates.js';

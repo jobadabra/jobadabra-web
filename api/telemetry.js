@@ -1,5 +1,5 @@
 // What installed apps call: POST /report/telemetry stores a scrubbed report, GET /telemetry/version answers the canary promote's question.
-// The data layer is shared/telemetry.js. Guarded by test/shared/telemetry.test.js.
+// The data layer is shared/telemetry.js. Guarded by test/unit/shared/telemetry.test.js.
 import {isOwner} from '../shared/auth.js';
 import {clean as cleanSearch} from '../shared/search-report.js';
 import {KINDS, KEEP_DAYS, MAX_BYTES, MAX_EVENTS, PER_INSTALL_PER_DAY, day, text, scrub, describe, hash} from '../shared/telemetry.js';

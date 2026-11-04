@@ -5,7 +5,7 @@
 // one person's consent could be collected by someone else. A result that only ever lands on the machine of the person who consented has no one else to give it to.
 // Why a POST body, not a redirect with the result in the address (independent review, 3 Nov 2026): the browser records the address of every page it opens, so a token in a query string stays in
 // the person's history (and history sync); a form body does not. The old poll routes stay as answers that say "update the app" (legacyPoll, legacyStart): an installed app that still polls cannot
-// be told from someone else who knows its id, so there is no safe way to keep it working. Guard: test/shared/oauth-handoff.test.js (every flow in FLOWS).
+// be told from someone else who knows its id, so there is no safe way to keep it working. Guard: test/unit/shared/oauth-handoff.test.js (every flow in FLOWS).
 import {cardPage} from './card-page.js';
 
 export const STATE = /^[A-Za-z0-9_-]{32,128}$/;

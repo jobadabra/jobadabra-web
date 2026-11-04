@@ -1,6 +1,6 @@
 // Pro accounts and the AI credit ledger (spec docs/superpowers/specs/2026-10-16-pro-plan.md §1, §3): who is Pro, how much credit is left,
 // the devices (3 per account), GET /api/pro/status for the app. Money is micro-USD; the app only ever sees a percent and a warning step, never dollars.
-// Guards: test/shared/pro-credit.test.js. Payments (Stripe) are the next PR: they call addCredit/refund/link here. Switch: env.PRO_PLAN = off | test | live.
+// Guards: test/unit/shared/pro-credit.test.js. Payments (Stripe) are the next PR: they call addCredit/refund/link here. Switch: env.PRO_PLAN = off | test | live.
 import {OFFERS, packageOf, rawToCredit} from './pro-packages.js';
 import {authorize, digestOf, flag} from './guard.js';
 import {promoActive} from './promo.js';

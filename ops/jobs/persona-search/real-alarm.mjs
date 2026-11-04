@@ -2,7 +2,7 @@
 // 3+ installs (GET /search-lab/real-gaps, admin/search-lab-real-gaps.js), MIN_INSTALLS+ installs whose latest search found 0 relevant jobs files or updates its
 // issue (search-alarm.mjs, one per field × place); a group where none did closes an open one; 1-2 such installs say nothing (k >= 3). Counts only.
 //   REPLAYS_PUBLISH_KEY=... GH_TOKEN=... node jobs/persona-search/real-alarm.mjs [--run <url>] [--repo owner/name] [--dry]
-// Guard: test/jobs/real-alarm.test.js.
+// Guard: test/unit/jobs/real-alarm.test.js.
 import {act, body, fingerprint, title, REPO} from './search-alarm.mjs';
 import {pathToFileURL} from 'node:url';
 

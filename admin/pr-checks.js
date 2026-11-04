@@ -1,5 +1,5 @@
 // /admin/testing/pr-checks: do our PR checks catch real bugs, and how long do they make us wait? The monthly scorecard (tools/pr-check-scorecard.mjs, pr-check-scorecard.yml) PUTs one card a month
-// to /pr-checks/data (Bearer SELFHEAL_PUBLISH_KEY, like the Build log); the page draws the latest month per check plus the catches of the months before. No AI. Guard: test/admin/pr-checks.test.js.
+// to /pr-checks/data (Bearer SELFHEAL_PUBLISH_KEY, like the Build log); the page draws the latest month per check plus the catches of the months before. No AI. Guard: test/unit/admin/pr-checks.test.js.
 import {viewer} from '../shared/auth.js';
 import {equal} from '../shared/guard.js';
 import {esc} from '../shared/html.js';

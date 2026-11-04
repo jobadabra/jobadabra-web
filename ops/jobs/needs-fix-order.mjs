@@ -3,7 +3,7 @@
 // Reads the owner page's data with the Keychain key jobadabra.site.api_key (never printed). Read-only: a saved copy of the page's data at most 15 minutes old (--refresh fetches it again).
 // Usage: node jobs/needs-fix-order.mjs [--json <file>]   (--json reads a saved copy of the page's ?json instead of the site)
 // Columns: rank, shape (the pool row's name), platform, reached, filled/left of the last run, claimed (when a session took the shape: its time only, never the session).
-// Guard: test/needs-fix-order.test.js.
+// Guard: test/unit/jobs/needs-fix-order.test.js.
 import fs from 'node:fs';
 import {pageJson} from '../tools/applying-page-copy.mjs';
 import path from 'node:path';

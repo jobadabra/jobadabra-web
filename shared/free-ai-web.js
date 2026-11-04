@@ -4,7 +4,7 @@
 // at most WEB.installPerDay searches a day per install, and a month line that stops every search at WEB.monthUsd (FREE_AI_WEB_MONTH_USD).
 // The key is its own Worker secret (WEB_SEARCH_ANTHROPIC_KEY, a workspace with its own spend limit); FREE_AI_WEB_SEARCH=off pauses it.
 // Kept: the boards answer (names and addresses of job boards) under a digest of the cell; never the roles' text, the install or a job.
-// Guard: test/shared/free-ai-web.test.js. Shown on /admin/ai/costs (admin/free-ai-web-cost.js).
+// Guard: test/unit/shared/free-ai-web.test.js. Shown on /admin/ai/costs (admin/free-ai-web-cost.js).
 import PROMPT from '../config/board_web_search.json' with {type: 'json'};
 import {record as recordCost} from './aicost.js';
 

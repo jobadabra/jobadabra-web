@@ -1,5 +1,5 @@
 /* The features page: five route sections (text left, a made-up app window right), then the extras row.
-   Windows are drawn here from the site's tokens; every name and number in them is invented. Guarded by test/web/features-page.test.js. */
+   Windows are drawn here from the site's tokens; every name and number in them is invented. Guarded by test/unit/website/features-page.test.js. */
 .f-hero { padding-block: 64px 36px; display: grid; gap: 16px; }
 .f-hero h1 { font-size: clamp(2.3rem, 5vw, 3.8rem); max-width: 18ch; }
 .f-hero .eyebrow { color: var(--amber); }

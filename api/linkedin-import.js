@@ -9,7 +9,7 @@
 // calls api.linkedin.com itself. POST /revoke asks LinkedIn to revoke a token the app is disconnecting, keeps nothing. This is the LinkedIn app "Jobadabra"
 // (264991117), not the sign-in one (api/linkedin.js, 264977227): a different scope, and a new scope on one app would invalidate the other's tokens.
 // Nothing here is about LinkedIn jobs. Configuration: LINKEDIN_IMPORT_CLIENT_ID (var) and LINKEDIN_IMPORT_CLIENT_SECRET (secret), see wrangler.toml.
-// Guarded by test/api/linkedin-import.test.js.
+// Guarded by test/unit/api/linkedin-import.test.js.
 import {cardPage} from '../shared/card-page.js';
 import {STATE, toApp} from '../shared/oauth-handoff.js';
 

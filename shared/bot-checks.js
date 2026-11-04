@@ -1,5 +1,5 @@
 // What installs' browsers met on sites that refused the engine, by ladder step (owner, 21 Oct 2026: "do we save and display any information about the bot checks?"). Reads the browser_read
-// site facts (api/pool.js readOf: outcome + step, one row per install and host). Counts only: no host name leaves this file. The card is admin/bot-checks.js. Guarded by test/admin/bot-checks.test.js.
+// site facts (api/pool.js readOf: outcome + step, one row per install and host). Counts only: no host name leaves this file. The card is admin/bot-checks.js. Guarded by test/unit/admin/bot-checks.test.js.
 const STEPS = ['engine', 'download', 'tab'];
 
 // [{outcome, step, sites, installs}] -> the numbers the card shows; a share without a step (before 21 Oct 2026) is counted as 'unknown'.

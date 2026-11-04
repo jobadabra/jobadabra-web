@@ -1,7 +1,7 @@
 // What the site keeps of the "harness" upload (owner, 4 Nov 2026: a new tab "Agent harness" with "some details about each run"; sent daily by tools/harness-stats.mjs in the public repo, kind "harness" of /agent-coding/data).
 // A card is {plan, layers, sources, runs} (and `demo: true` only from tools/page-shot-seeds.mjs: the page then wears a "Demo data" ribbon, owner 4 Nov 2026: the real page never invents history): the CI fixer's plan rows, the context layers, the sources and the last run records (schema v1 written by the fixer's own run). Everything is clamped here, so the page can draw it: a record is DATA, never HTML.
 // Words (agreed with the fixer's pane, 4 Nov 2026): verdict = the loop's (fix, fixed-already, not-reproducible, needs-human, false-positive, answer; none when the run stopped before one); stop = the driver's fixed word (ready, time, rounds, same-failure, refused, conflict, round-failed, no-change, wall, dispatch, bad-deadline) or '' - READY is a stop word, not a verdict.
-// A malformed run record is dropped and counted (`dropped`), never stored half-read. Test: test/admin/ai-harness.test.js.
+// A malformed run record is dropped and counted (`dropped`), never stored half-read. Test: test/unit/admin/ai-harness.test.js.
 const count = value => Math.min(1e7, Math.max(0, Math.round(Number(value) || 0)));
 const minutes = value => Math.min(1e5, Math.max(0, Math.round((Number(value) || 0) * 10) / 10));
 /** Printable text only, cut to `max`: control characters (a log's escape codes, newlines) become spaces. It is escaped again when drawn. */

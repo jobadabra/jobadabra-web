@@ -1,5 +1,5 @@
 // Hosted Always on, the daily digest e-mail (spec docs/superpowers/specs/2026-10-16-hosted-always-on.md §4c): one mail per run, only when it found new matches, at most one every 4 hours,
-// through the mail module's send() (limits, unsubscribe and footer are its job). A bounce or complaint turns the email channel off for the schedule. Guard: test/shared/hosted-notify.test.js.
+// through the mail module's send() (limits, unsubscribe and footer are its job). A bounce or complaint turns the email channel off for the schedule. Guard: test/unit/shared/hosted-notify.test.js.
 import {addrOf, mailAllowed, send} from './mail.js';
 
 export const DIGEST_GAP_MS = 4 * 60 * 60 * 1000, TOP = 5;

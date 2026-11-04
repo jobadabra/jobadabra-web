@@ -1,6 +1,6 @@
 // "Why fields were left empty": the last 14 days of required fields the fill left, in four groups, built once for /admin/form-filling/real-users (real use) and /admin/form-filling/lab (the pool).
 // Both columns come from the fill cards of the last 14 days (their cause words, required and filled counts: one source, so the shares add up): real use = user cards (fewer than 3 installs: counts muted,
-// "too few to judge", shared/thin-data.js), the lab = pool cards. They are never added together. ONE fixed table maps every reason word to its group: a word missing from it fails test/admin/left-empty.test.js, so a new word cannot land in "Other"
+// "too few to judge", shared/thin-data.js), the lab = pool cards. They are never added together. ONE fixed table maps every reason word to its group: a word missing from it fails test/unit/admin/left-empty.test.js, so a new word cannot land in "Other"
 // by silence. Later words slot into their group in GROUP_OF: the answer side's meaning words (the answer-side PR 1) under 'answer', the control cause words under 'control'.
 import {LEFT_REASONS} from '../shared/knowledge.js';   // the words the site accepts from the apps (it mirrors desktop/lib/question-labels.js)
 import {CAUSES} from '../extension/fill-card.js';

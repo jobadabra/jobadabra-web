@@ -1,5 +1,5 @@
 // The owner's /admin/job-search/scouting page: which employers the central scout finds and keeps, from shared/scouting-snapshot.js. Same key or cookie as /admin.
-// Guarded by test/shared/scoutingadmin.test.js.
+// Guarded by test/unit/shared/scoutingadmin.test.js.
 import {FAMILIES, familyLinks, familyParam} from '../shared/engines.js';
 import {viewer} from '../shared/auth.js';
 import {section as nightly} from '../shared/scouting.js';

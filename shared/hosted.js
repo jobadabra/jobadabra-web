@@ -1,5 +1,5 @@
 // Hosted Always on, server side part 1 (spec docs/superpowers/specs/2026-10-16-hosted-always-on.md): the schedule an install sets, the run token a container gets,
-// the one result post, and the inbox the app pulls. The cron tick, Queue and container start are the next PR. Guard: test/shared/hosted-schedule.test.js.
+// the one result post, and the inbox the app pulls. The cron tick, Queue and container start are the next PR. Guard: test/unit/shared/hosted-schedule.test.js.
 // Switch: env.HOSTED_ALWAYS_ON = off | on (off: every route answers 404). The container holds no long-lived secret: a run token is bound to one run, lives 30 minutes, posts once.
 import {authorize, digestOf, equal, tokenFor} from './guard.js';
 import {accountOf, createAccount, link} from './pro.js';

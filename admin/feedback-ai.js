@@ -1,7 +1,7 @@
 // The two routes the "Send to AI" run (feedback-ai.yml in the public repo) calls, proved by GitHub's own run token (OIDC), never by a shared secret:
 //   GET  /api/feedback/brief?ref=<16 hex>      what the AI may read about one feedback (shared/feedback-ai.js briefOf)
 //   POST /api/feedback/ai-status {ref, status: pr|none|failed|merged|closed, pr?, verdict?, why?}   the run reports; the card moves (shared/feedback-actions.js, internal actions)
-// Spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md (PR 7/7). Guarded by test/admin/feedback-ai.test.js.
+// Spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md (PR 7/7). Guarded by test/unit/admin/feedback-ai.test.js.
 // Authenticity (owner's rule: a run is trusted only when GitHub says so): the token's audience is `jobadabra-feedback`, its repository the public repo (env.TIMERS_REPO), its workflow_ref exactly
 // `<repo>/.github/workflows/feedback-ai.yml@refs/heads/main` (the file as merged, never a branch's copy), its event workflow_dispatch (the run the owner's click started) or, for merged/closed,
 // pull_request_target (runs main's file, never a PR's). And the card must be in the state the step needs, inside the hour. A fork's run has no token at all.

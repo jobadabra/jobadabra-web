@@ -1,7 +1,7 @@
 // Ready to send, phase 1, the Worker's side (spec docs/superpowers/specs/2026-10-17-ready-to-send.md): the owner's app pushes tonight's batch (url, kit, CV, letter, contact) encrypted into R2; a container reads
 // it with a one-night token, fills each form and posts only counts; the owner's page asks what is ready. The server never presses Submit: no route here accepts a submit from the container, only the owner marks one.
 // Only the owner's install (env.READY_OWNER) reaches any route; READY_TO_SEND = off answers 404. The data is deleted on Done, after 24 h (sweep, from the cron) and on Delete everything.
-// Counts, hosts and states stay 30 days for the morning measure; never a field value or an address. Guard: test/api/ready-to-send.test.js.
+// Counts, hosts and states stay 30 days for the morning measure; never a field value or an address. Guard: test/unit/api/ready-to-send.test.js.
 import {equal, tokenFor} from '../shared/guard.js';   // tokenFor: the night token is checked in batchOf
 import {installOf} from '../shared/hosted.js';
 import {open, seal} from './hosted-state.js';

@@ -5,7 +5,7 @@
 // The open page is read live (also what its script drew); the other pages are read the same way, each opened for a moment in a hidden frame
 // when the palette opens, at most once a day, and kept in the browser. Choosing an entry goes to page#id; on load the page opens the tab that holds it, scrolls to it and flashes it.
 // The ranking is the desktop app's (desktop/renderer/palette.js in the public repo): each typed word starts a word of the entry, the title counts more.
-// Guards: test/admin/palette.test.js (ranking, ids, the owner's example) and test/admin/palette-pages.test.js (every page, in a browser).
+// Guards: test/unit/admin/palette.test.js (ranking, ids, the owner's example) and test/integration/palette-pages.test.js (every page, in a browser).
 
 // ---- pure parts (unit-tested, and sent to the browser as they are) ----
 export function words(text) {

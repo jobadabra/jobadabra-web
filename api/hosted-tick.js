@@ -1,5 +1,5 @@
 // Hosted Always on, the cron side (spec docs/superpowers/specs/2026-10-16-hosted-always-on.md §1, §5): every 5 minutes (the one existing cron) the Worker scans due schedules, applies the guards, and puts one
-// message per run on the Queue (env.HOSTED_QUEUE); the runner Worker (workers/hosted-runner) starts the container. The Worker only enqueues. Guard: test/shared/hosted-guards.test.js.
+// message per run on the Queue (env.HOSTED_QUEUE); the runner Worker (workers/hosted-runner) starts the container. The Worker only enqueues. Guard: test/unit/shared/hosted-guards.test.js.
 import {digestOf} from '../shared/guard.js';
 import {hostedOn, INACTIVE_DAYS, startRun} from '../shared/hosted.js';
 import {monthStopUsd, trialUsd} from '../shared/free-ai.js';

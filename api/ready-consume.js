@@ -1,5 +1,5 @@
 // Ready to send, the Queue consumer's logic (the runner Worker workers/ready-runner/worker.js is only glue around it): each message starts one night's container and returns at once (the container fills in the background and answers 202).
-// A message is always acknowledged: the night token is bound to its batch and the container posts its own results; a night that never posts is finished by the next tick (api/ready-tick.js). Guard: test/api/ready-wiring.test.js.
+// A message is always acknowledged: the night token is bound to its batch and the container posts its own results; a night that never posts is finished by the next tick (api/ready-tick.js). Guard: test/unit/api/ready-wiring.test.js.
 export const START_TIMEOUT_MS = 60 * 1000;
 
 // `runner(batchId)` -> {fetch(request)}: the container instance for that night. -> {ok, failed} counts.

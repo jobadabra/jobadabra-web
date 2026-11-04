@@ -3,7 +3,7 @@
 // The app's AI key (JPF1.<install>.<token>, purpose 'ai') spends the install's Free AI budget. The repo key (JPT1.<handle>.<mac>) carries NO install id: <handle> is a random value the site maps to the install in KV,
 // so a copy of it names nothing the app's own keys can be derived from (JOB-270, found by the code review of the first version, 3 Nov 2026).
 // Minting the repo key needs the install's own AI key, so only the app can ask. Every AI route (shared/free-ai.js, hosted.js, pro.js, promo.js) reads only JPF1 with purpose 'ai': a JPT1 key is refused there by construction.
-// Guard: test/shared/trial-key.test.js.
+// Guard: test/unit/shared/trial-key.test.js.
 import {authorize, digestOf, equal, tokenFor} from './guard.js';
 
 const parseAi = key => { const [tag, install, token] = String(key || '').split('.'); return tag === 'JPF1' && install && token ? {install, token} : null; };

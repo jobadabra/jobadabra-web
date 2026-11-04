@@ -1,6 +1,6 @@
 // The Lab Job Search "Needs a fix" and "Fixed" tabs (owner, 18 Oct 2026: "Let's have needs a fix and fixed tabs"): each candidate's kept runs are walked once, and a run of bad results (FAILED, Worse, or a stale tape)
 // that starts after a good one is an episode: still going = Needs a fix, ended by a good run = Fixed. Derived from the runs the page already keeps (no new table), so it covers the last 30 runs of each candidate.
-// Counts, seconds and build ids only. A compare link (last good build ... first bad build) shows which commits to read. Guard: test/admin/search-lab-fixes.test.js.
+// Counts, seconds and build ids only. A compare link (last good build ... first bad build) shows which commits to read. Guard: test/unit/admin/search-lab-fixes.test.js.
 import {esc} from '../shared/html.js';
 import {reasons} from './search-lab-judge.js';
 import {PUBLIC_REPO, githubUrl} from '../shared/repos.js';

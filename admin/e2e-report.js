@@ -2,7 +2,7 @@
 // The e2e run's HTML report on this site, kept ONLY because the E2E workflows print "/admin/operations/e2e/run/<run>/report" on their GitHub run Summary page and in each suite's
 // table (.github/workflows/e2e*.yml, desktop.yml, desktop/e2e/lib/step-summary.mjs). The /admin/e2e runs page itself was dropped on 15 Oct 2026 (owner: "not useful").
 // /admin/operations/e2e/run/<run>/report sends an admin to the run's Playwright report; /admin/operations/e2e/report/<artifact>/<token>/<file> serves its files out of the e2e-report artifact
-// (byte ranges, signed address). Nothing is stored; the GitHub token is the site's GITHUB_TOKEN. Tests: test/admin/e2e-report.test.js.
+// (byte ranges, signed address). Nothing is stored; the GitHub token is the site's GITHUB_TOKEN. Tests: test/unit/admin/e2e-report.test.js.
 import {same, sign, viewer} from '../shared/auth.js';
 
 const REPORT = 'e2e-report';   // the run's merged Playwright HTML report (the workflows' report job)

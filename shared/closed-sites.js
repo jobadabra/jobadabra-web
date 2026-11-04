@@ -1,5 +1,5 @@
 // The closed sites behind /admin/job-search/scouting "Closed sites": sites and boards installs found refused, browser-only, unreachable, page gone or without a feed,
-// with who agrees. The table is admin/closed-sites.js. Guarded by test/admin/closed-sites.test.js.
+// with who agrees. The table is admin/closed-sites.js. Guarded by test/unit/admin/closed-sites.test.js.
 
 
 const all = async (db, sql, ...args) => ((await db.prepare(sql).bind(...args).all().catch(() => ({results: []}))).results) || [];

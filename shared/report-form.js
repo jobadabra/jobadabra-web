@@ -6,7 +6,7 @@
 //   GET    /api/report-form          the owner (Bearer = the scripts' key): the reports waiting, newest first
 //   GET    /api/report-form/<id>     the owner: the encrypted bundle, its wrapped key in X-Report-Key
 //   POST   /api/report-form/<id>?status=fetched   the owner marks it fetched
-// Limits: 8 MB per report, 3 per install per day, and 50 reports / 200 MB per UTC day across ALL installs (a minted install id gets a fresh per-install quota, so only the total holds; one D1 row a day). Without the bucket or the database: 503 "not configured" (nothing breaks). Guard: test/shared/report-form.test.js.
+// Limits: 8 MB per report, 3 per install per day, and 50 reports / 200 MB per UTC day across ALL installs (a minted install id gets a fresh per-install quota, so only the total holds; one D1 row a day). Without the bucket or the database: 503 "not configured" (nothing breaks). Guard: test/unit/shared/report-form.test.js.
 import {authorize, flag} from './guard.js';
 import {isOwner} from './auth.js';
 import {tellOwner} from './report-notify.js';

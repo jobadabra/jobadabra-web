@@ -1,5 +1,5 @@
 // The free trial as the server sees it (GET /api/trial/status): the app and the Always on runs on GitHub ask with the same install key (JPF1.<install>.<token>) and get the same answer.
-// Trial = 20 applications or 60 days since the first run, whichever lasts longer (desktop/lib/license.js); over it, new work pauses unless Pro or licensed. Guard: test/shared/trial.test.js.
+// Trial = 20 applications or 60 days since the first run, whichever lasts longer (desktop/lib/license.js); over it, new work pauses unless Pro or licensed. Guard: test/unit/shared/trial.test.js.
 // The caller reports `applied` and `first` (FSL accepts patching, 16 Oct 2026); the server keeps the highest count and the earliest first-run it has ever seen per install, so a lower number cannot reset the trial.
 import {installOfTrialKey} from './trial-key.js';
 import {verifyLicense} from './license.js';

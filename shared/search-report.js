@@ -1,7 +1,7 @@
 // Real installs' searches (owner, 18 Oct 2026): the app sends one "search" report per finished Find jobs run (desktop/lib/search-report.js: counts and
 // seconds, a role family from a fixed list, a country, a city candidate). This is the second check on the server: only the listed fields survive, each
 // with the shape it must have. Stored in the telemetry table (90 days, like every technical report); the Lab page's "Real installs" tab reads them.
-// A city is shown only when 3+ installs share it (k >= 3 at read time). Tests: test/shared/telemetry.test.js.
+// A city is shown only when 3+ installs share it (k >= 3 at read time). Tests: test/unit/shared/telemetry.test.js.
 import {READ_FIELDS} from './readmethods.js';
 const count = v => Number.isInteger(v) && v >= 0 && v < 1e6;
 export const FAMILIES = ['software', 'sales_b2b', 'sales_retail', 'logistics', 'hospitality', 'healthcare', 'creative_media', 'finance_admin', 'education', 'trades',

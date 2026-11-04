@@ -1,4 +1,4 @@
-// Lab Form Filling: one judgment per pool row, so Needs a fix and the Resolution tab never disagree. Pure; guard: test/admin/applying-judgment.test.js.
+// Lab Form Filling: one judgment per pool row, so Needs a fix and the Resolution tab never disagree. Pure; guard: test/unit/admin/applying-judgment.test.js.
 // One judgment per pool row (owner, 15 Oct 2026: Resolution said "unresolved 9", Needs a fix listed 6, only 2 in common). The row's status comes from its smoke run;
 // its ending (Resolution) is the extension's own judgment of a run. When the ending is at least as new as the smoke run, it decides the status, so Needs a fix
 // (what fix-recorded-sites works from) holds every unresolved row and none the ending calls resolved. A named test hold (account-first, login wall) stays a hold.

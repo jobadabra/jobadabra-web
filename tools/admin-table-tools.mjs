@@ -2,7 +2,7 @@
 // (--min, default 5: demo tables are short, real ones reach hundreds of rows), and fails when a long table got neither the tools (admin/table-tools.js) nor
 // a stated reason to skip, when a sort click throws, when the tools push the page sideways, or when one of their taps is under 40 px (owner, 27 Oct 2026:
 // sort, search and pages on every long admin table). Run: tools/site-run.sh node tools/admin-table-tools.mjs [--min 5] [--width 390].
-// Exit 1 on a failure, 2 when no browser is found. Test: test/admin/table-tools.test.js.
+// Exit 1 on a failure, 2 when no browser is found. Test: test/integration/table-tools.test.js.
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {eachPage, launchChromium, workerServer} from './worker-server.mjs';

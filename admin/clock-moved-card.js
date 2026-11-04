@@ -1,6 +1,6 @@
 // The "Time bombs" section of /admin/testing/integrations (a8, 2 Nov 2026, mac-07's Testing Overview ask): tests that pass today and fail when the clock moves (the public repo's nightly
 // clock-moved.yml), and how many files were already red on today's clock. Draws admin/clock-moved-intel.js's part of the snapshot only. REPORT ONLY: no target, no red/green on a number;
-// an area whose report is missing that night is "not measured", never 0. Built from the page's own pieces: .tiles/.card.tile, chip(), <details>. Guard: test/admin/clock-moved-card.test.js.
+// an area whose report is missing that night is "not measured", never 0. Built from the page's own pieces: .tiles/.card.tile, chip(), <details>. Guard: test/unit/admin/clock-moved-card.test.js.
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {CLOCK_AREAS} from './clock-moved-intel.js';

@@ -5,7 +5,7 @@ main = "index.js"
 compatibility_date = "2026-09-01"
 # Why (1 Nov 2026, owner: "Cmd + K not working anymore on the admin"): wrangler's esbuild default keep_names wraps inner functions of the bundle in __name(...); admin pages paste a function's own
 # source (fn.toString()) into inline scripts, where __name does not exist, so ⌘K and the table tools threw on every page. Nothing reads a function's name at run time except the palette, which
-# pastes the same (renamed or not) declaration it names. Guard: test/admin/bundle-scripts.test.js builds the bundle as deploy does and checks every admin page's inline scripts.
+# pastes the same (renamed or not) declaration it names. Guard: test/unit/admin/bundle-scripts.test.js builds the bundle as deploy does and checks every admin page's inline scripts.
 keep_names = false
 
 # Hosts: jobadabra.top (19 Oct 2026, the new main address) and jobpilotto.top are aliases of this worker; workers.dev stays on (installed apps and old engine tags call it, forever); jobpilotto.top is an alias on the same worker

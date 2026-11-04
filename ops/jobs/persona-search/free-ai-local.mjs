@@ -8,7 +8,7 @@
 //   - one throwaway install whose JPF1 key is signed with a salt made for this run.
 // GET /__report: {usd, calls, refused: {status: n}, by_action: {action: usd}} from the run's own ai_calls rows (the site's cost meter).
 //   node jobs/persona-search/free-ai-local.mjs <port> <key file> [--install-prefix ci-e2e-]     (prints "free-ai-local: listening on <port>"; prefix default ci-draw-)
-// Guard: test/jobs/free-ai-local.test.js.
+// Guard: test/unit/jobs/free-ai-local.test.js.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -32,7 +32,7 @@ export function vars(text = fs.readFileSync(new URL('workers/www/wrangler.toml',
   return out;
 }
 
-// D1 in memory, every migration applied (the shape test/admin/*.test.js use).
+// D1 in memory, every migration applied (the shape test/unit/admin/*.test.js use).
 export function memoryD1() {
   const db = new DatabaseSync(':memory:');
   for (const file of fs.readdirSync(new URL('db/migrations/', HERE)).filter(name => name.endsWith('.sql')).sort()) db.exec(fs.readFileSync(new URL(`db/migrations/${file}`, HERE), 'utf8'));

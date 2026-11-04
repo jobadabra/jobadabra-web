@@ -1,5 +1,5 @@
 // The site's hosts. workers.dev serves installed apps and old engine tags: its API is never redirected, only its pages move (27 Oct 2026);
-// jobpilotto.top is a replaceable alias (owner, 10 Oct 2026): its bare name sends people to www. Guarded by test/shared/hosts.test.js.
+// jobpilotto.top is a replaceable alias (owner, 10 Oct 2026): its bare name sends people to www. Guarded by test/unit/shared/hosts.test.js.
 export const ALIAS_APEXES = ['jobadabra.top', 'jobpilotto.top'];   // jobadabra.top: the new main address (19 Oct 2026)
 
 // Static pages are served by Workers Assets before this code runs, so the zone's Cloudflare Redirect Rule (<apex>/* -> www, 301, query kept)
@@ -20,7 +20,7 @@ export const OWN_HOSTS = [...ALIAS_APEXES, 'jobpilotto.workers.dev'];
 // www.jobpilotto.top/api/*, /report/*, /telemetry with POSTs and auth headers, which a redirect would break. Only the human pages move.
 // A page has one address, https://www.jobadabra.top/<page> (Search Console, 25-26 Oct 2026: the http:// copies were served and Google
 // saw two of each page): a GET of a page over http, on the old host, or as /<page>.html -> one 301 there, query kept. wrangler.toml's
-// run_worker_first lists the same paths (static pages are otherwise served before this code runs); test/shared/hosts.test.js fails when a
+// run_worker_first lists the same paths (static pages are otherwise served before this code runs); test/unit/shared/hosts.test.js fails when a
 // page in public/ is missing from either.
 export const MAIN_HOST = 'www.jobadabra.top';
 // The old hosts: their pages and /admin pages move to MAIN_HOST, their API stays. The bare jobpilotto.top goes through apexRedirect first.

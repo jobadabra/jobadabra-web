@@ -1,7 +1,7 @@
 // The integration tests' snapshot: this file is the site's half (the Worker route that stores it and hands it back); the collector and the validators are one copy in the public repo.
 // Why (2 Nov 2026, owner: the CI collectors move to the public repo, jobadabra#2989): integration-intel.yml runs there (tools/ci-intel/jobs/integration-intel.mjs) and PUTs /integration/data with Bearer SELFHEAL_PUBLISH_KEY;
 // cleanSnapshot (the shape it must have) is imported from tools/ci-intel/lib/integration-intel.mjs so the sender and this route cannot disagree. The site keeps ONE row (integration_snapshot); the page (admin/integration-page.js) reads that row only.
-// Guard: test/admin/integration-page.test.js (the ingest) and the collector's own tests in the public repo (desktop/test/ci-intel-integration-intel-collector.test.js).
+// Guard: test/unit/admin/integration-page.test.js (the ingest) and the collector's own tests in the public repo (desktop/test/ci-intel-integration-intel-collector.test.js).
 import {equal} from '../shared/guard.js';
 import {cleanSnapshot} from '../tools/ci-intel/lib/integration-intel.mjs';
 export {KEEP_DAYS, LAYERS, MAX_RUNS, cleanSnapshot} from '../tools/ci-intel/lib/integration-intel.mjs';

@@ -1,6 +1,6 @@
 // Hosted Always on money: what a run costs the person and how a container's calls are charged. A hosted run's AI calls carry its run token (HR1...) and are charged exactly like the
 // install's own Free AI calls (shared/free-ai.js: the $2 trial budget, per-install and global lines); the run's compute is a flat HOSTED_RUN_MICRO debited at its one result post, from the same
-// lifetime budget and the global Free AI lines (spec docs/superpowers/specs/2026-10-16-hosted-always-on.md §3, §4b). Pro's `pro_credit` debit comes with Pro. Guard: test/shared/hosted-guards.test.js.
+// lifetime budget and the global Free AI lines (spec docs/superpowers/specs/2026-10-16-hosted-always-on.md §3, §4b). Pro's `pro_credit` debit comes with Pro. Guard: test/unit/shared/hosted-guards.test.js.
 import {digestOf} from './guard.js';
 
 export const runMicro = env => (Number(env.HOSTED_RUN_MICRO) > 0 ? Math.round(Number(env.HOSTED_RUN_MICRO)) : 11000);

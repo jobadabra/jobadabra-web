@@ -1,6 +1,6 @@
 // Hosted Always on, the person's data at rest (spec docs/superpowers/specs/2026-10-16-hosted-always-on.md §2): the run's state (tar of data/) and the profile/search/CV the app pushes live encrypted in R2
 // (env.HOSTED_STATE) under a key per account derived from the Worker secret HOSTED_KEK. Routes: GET/PUT /api/hosted/state and GET /api/hosted/config (the run token, for the container);
-// PUT /api/hosted/config, GET /api/hosted/export and DELETE /api/hosted/data (the install key, for the person). Guard: test/api/hosted-state.test.js.
+// PUT /api/hosted/config, GET /api/hosted/export and DELETE /api/hosted/data (the install key, for the person). Guard: test/unit/api/hosted-state.test.js.
 import {accountOf} from '../shared/pro.js';
 import {hostedOn, installOf, runOf} from '../shared/hosted.js';
 

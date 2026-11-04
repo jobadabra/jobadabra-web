@@ -2,7 +2,7 @@
 // it made, Notion sends the user back to /api/notion/callback, this Worker trades the one-time code for the user's token and passes it ON, in that same request, to the app on the
 // consenting browser's own machine (shared/oauth-handoff.js). It keeps NOTHING: no store, no endpoint to poll. Configuration: NOTION_CLIENT_ID (var) and NOTION_CLIENT_SECRET
 // (secret); see workers/www/wrangler.toml. With the connection's template URL set, Notion copies the Jobadabra template for the user and the token carries
-// duplicated_template_id, which the app builds on (desktop/lib/notion-workspace.js). Guarded by test/api/notion.test.js.
+// duplicated_template_id, which the app builds on (desktop/lib/notion-workspace.js). Guarded by test/unit/api/notion.test.js.
 import {cardPage} from '../shared/card-page.js';
 import {STATE, legacyPoll, legacyStart, toApp} from '../shared/oauth-handoff.js';
 export const CALLBACK = '/api/notion/callback';

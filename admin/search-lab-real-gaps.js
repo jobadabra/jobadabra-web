@@ -2,7 +2,7 @@
 // (jobs/persona-search/real-alarm.mjs, owner 26 Oct 2026: "catch all of the app problems automatically, including this search problem"). Per role family × country,
 // each install's latest finished search of the last GAP_DAYS days ('search' reports, shared/search-report.js): how many installs got 0 relevant jobs (fit 70+).
 // A group is sent only when MIN_INSTALLS+ installs share it (k >= 3, as the Real installs tab shows a city). Counts only: no install id, city, title or CV.
-// Guard: test/admin/search-lab-real-gaps.test.js.
+// Guard: test/unit/admin/search-lab-real-gaps.test.js.
 import {equal} from '../shared/guard.js';
 import {KIND_NAMES} from '../shared/pool-labels.js';
 import {realRows} from './search-lab-real.js';

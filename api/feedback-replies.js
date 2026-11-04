@@ -1,7 +1,7 @@
 // What the app reads about its own feedback (spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md, PR 3/7): the owner's "fixed" or "parked" answer, shown once on Home.
 // GET /api/feedback/replies (header x-api-key: the app's JPF1 key) -> {replies: [{ref, on, excerpt, kind, fixedIn, message}]} (the install's replies not yet closed, newest first, at most 5);
 // POST /api/feedback/replies/seen {ref} -> {ok} when the person closes one. The random install id is the key: only that device and our D1 hold it, and the answer holds nothing
-// but the person's own first 80 characters, a date and the owner's one line. 60 requests an hour per install when the KV is there. Guarded by test/shared/feedback-reply.test.js.
+// but the person's own first 80 characters, a date and the owner's one line. 60 requests an hour per install when the KV is there. Guarded by test/unit/shared/feedback-reply.test.js.
 import {markSeen, repliesFor} from '../shared/feedback-reply.js';
 import {parseKey} from '../shared/free-ai.js';
 import {authorize} from '../shared/guard.js';

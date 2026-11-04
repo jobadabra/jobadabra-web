@@ -1,6 +1,6 @@
 // Testing → Overview's map: each method's last 14 days, one cell per day (owner, 1 Nov 2026: "a graph summarizing better visually everything"). Built only from the rows
 // admin/testing-overview-data.js already loaded: a workflow's newest runs (schedules snapshot), e2e runs per day and kind (e2e snapshot `days`), a suite's nights (`suiteNights`),
-// integration's main runs. A day before the oldest stored run is "unknown" (the schedules snapshot keeps a workflow's newest 14 runs only), never "no run". Guard: test/admin/testing-overview.test.js.
+// integration's main runs. A day before the oldest stored run is "unknown" (the schedules snapshot keeps a workflow's newest 14 runs only), never "no run". Guard: test/unit/admin/testing-overview.test.js.
 import {mainRuns} from './integration-page.js';
 
 export const MAP_DAYS = 14;

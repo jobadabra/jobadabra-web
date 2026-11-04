@@ -1,7 +1,7 @@
 // The daily discovery batch's input (owner, 17 Oct 2026; spec: the recordings strategy page). Installs share up to 40 public posting addresses each ("Help the pool grow",
 // src/contribute_candidates.py): only the address, its host and where it came from ('matches' | 'applying'). GET /applying/discovery-input (Bearer REPLAYS_PUBLISH_KEY, a
 // wrong or missing one is a 404) hands the CI picker (desktop/e2e/lib/discovery-pick.mjs) those addresses with the two things the site alone knows: the platforms real matches
-// are on (share, installs) and the weaknesses real fills show per named platform. No install, no title, no company ever. Guard: test/shared/discovery-candidates.test.js.
+// are on (share, installs) and the weaknesses real fills show per named platform. No install, no title, no company ever. Guard: test/unit/shared/discovery-candidates.test.js.
 import {digest} from './digest.js';
 import {equal} from './guard.js';
 import {PLATFORMS, platformDemand} from './nextsites.js';

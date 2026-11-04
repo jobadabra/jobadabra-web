@@ -1,6 +1,6 @@
 // The list behind "who gets our product news" on /admin/growth/email (owner, 28 Oct 2026: "a view of all the email list that subscribed for the promotional emails"): every address we hold
 // (accounts: trial, Always on, Pro; the waitlist in KV signup:<email>), where it came from, since when, and whether the next product mail would reach it. Full addresses: the owner only
-// (the page's counts stay for every admin). Reads the same gate send() uses (shared/mail.js mailAllowed). Guard: test/admin/email-audience.test.js.
+// (the page's counts stay for every admin). Reads the same gate send() uses (shared/mail.js mailAllowed). Guard: test/unit/admin/release-mail.test.js.
 import {esc} from '../shared/html.js';
 import {addrOf, clean, validAddress} from '../shared/mail.js';
 

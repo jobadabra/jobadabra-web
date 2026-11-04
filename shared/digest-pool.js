@@ -1,6 +1,6 @@
 // The digest's pool section (docs/superpowers/specs/2026-10-10-pool-feeds-learning.md): the owner's nightly smoke pool as a second, labelled source of fill cards
 // (fill_cards.source = 'pool'). Owns: which pool causes rank, the >= 2 nights rule, and the "seen by users / seen in the pool" pairing. It reads user cards only to show them
-// beside a pool weakness and never changes them: no user-facing number comes from here. Guard: test/shared/digest-pool.test.js.
+// beside a pool weakness and never changes them: no user-facing number comes from here. Guard: test/unit/shared/digest-pool.test.js.
 
 // The test applicant's gaps (no profile data, the AI not asked) are not mechanism failures: counted, never ranked.
 export const APPLICANT_GAPS = ['no_data', 'ai_declined', 'ai_unsure', 'ai_off', 'ai_error', 'proposed'];

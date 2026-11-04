@@ -1,7 +1,7 @@
 // /admin/agents/overview: where our engineering time goes (owner, 15 Oct 2026). CI (ops-overview.yml, on every push to main and hourly) sends each NEW merged PR once
 // (PUT /ops/data, Bearer SELFHEAL_PUBLISH_KEY; GET lists the numbers already stored, so CI looks up a PR's runs only once); the site keeps one row per PR (ops_prs) and, after each
 // write, ONE snapshot row (ops_snapshot) with the last 30 days per day and category plus the latest 20 PRs. The page reads that one row: no table scan per load (D1 free plan).
-// Categories: admin/ops-categories.js. No AI. Guard: test/admin/ops-overview.test.js.
+// Categories: admin/ops-categories.js. No AI. Guard: test/unit/admin/ops-overview.test.js.
 import {viewer} from '../shared/auth.js';
 import {equal} from '../shared/guard.js';
 import {esc} from '../shared/html.js';

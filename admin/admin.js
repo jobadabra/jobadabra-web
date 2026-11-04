@@ -7,7 +7,7 @@ import {TABLE_TOOLS_SCRIPT, TABLE_TOOLS_STYLE} from './table-tools.js';
 import {findButton, PALETTE_SCRIPT, PALETTE_STYLE} from './palette.js';
 
 // Every page lives at /admin/{group}/{page} (owner, 27 Oct 2026: "normalize all the page urls"): the group's slug, then the menu name's; /admin itself is the home.
-// slug (when set) = the page's part when its menu name would spell it differently (E-mail → email). old = the page's earlier addresses, redirected (test/admin/admin-urls.test.js fails a page off the pattern, or an old address that no longer answers).
+// slug (when set) = the page's part when its menu name would spell it differently (E-mail → email). old = the page's earlier addresses, redirected (test/unit/admin/admin-urls.test.js fails a page off the pattern, or an old address that no longer answers).
 export const GROUPS = [['Overview', '🧭'], ['Growth', '📈'], ['Form filling', '📝'], ['Job search', '🔎'], ['Testing', '🧪'], ['Agent Coding', '🤖', 'agents'], ['AI', '🧠'], ['Schedules', '⏰'], ['Feedback', '💬']];
 // A group's URL part: its name's, unless the entry says otherwise (owner, 1 Nov 2026: Agents became "Agent Coding" but its addresses stay /admin/agents/…, so no link breaks).
 export const groupSlug = ([name, , slug]) => slug || slugOf(name);
@@ -58,7 +58,7 @@ export const PAGES = [
   {path: '/admin/feedback/inbox', group: 'Feedback', question: 'What are users telling us?', old: ['/admin/growth/feedback', '/feedback'], slug: 'inbox', name: 'Feedback', icon: '💬'},
 ];
 // Old addresses of a page (one or more), a group's own address (its first page), and the sub-routes that moved with their page (the digest downloads,
-// the Lab's videos): the ONLY place the old paths may still be written (test/web/form-pages.test.js).
+// the Lab's videos): the ONLY place the old paths may still be written (test/unit/website/form-pages.test.js).
 const OLD = {...Object.fromEntries(PAGES.flatMap(page => [page.old].flat().filter(Boolean).map(old => [old, page.path]))),
   ...Object.fromEntries(GROUPS.slice(1).map(group => [`/admin/${groupSlug(group)}`, PAGES.find(page => page.group === group[0]).path])),
   ...Object.fromEntries(['/admin/form-filling', '/admin/real-form-filling'].flatMap(old => ['json', 'md'].map(kind => [`${old}/digest.${kind}`, `/admin/form-filling/real-users/digest.${kind}`]))),

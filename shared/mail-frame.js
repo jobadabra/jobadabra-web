@@ -1,6 +1,6 @@
 // The one frame every e-mail goes through (owner, 17 Oct 2026): a branded card with the logo, a title, the content, at most one yellow button and a footer saying why the person gets it,
 // with "Stop these emails", "Email settings" and jobadabra.top. Email-safe: a table layout, inline styles, a hosted https logo, light colours inline with a dark-mode override in <style>.
-// shared/mail.js applies it in send(), so no template can skip it; each template supplies only its content. A plain-text twin comes from frameText(). Guard: test/shared/mail-frame.test.js.
+// shared/mail.js applies it in send(), so no template can skip it; each template supplies only its content. A plain-text twin comes from frameText(). Guard: test/unit/shared/mail-frame.test.js.
 import {DARK, LIGHT as C} from './mail-palette.js';
 export const SITE = 'https://www.jobadabra.top';
 const LOGO = `${SITE}/images/logo-mark.png`;

@@ -2,7 +2,7 @@
 // ⌘K opens it, the page lists its cards, and every card heading has an id that lands (the tab that hides it opens, the card scrolls into view and flashes).
 // Then the owner's example across pages: on Website, "Promo Code" + Enter opens Promo codes; a page#card link opened cold lands on the card.
 // A new page or card that does not land fails here (owner, 27 Oct 2026). Run: tools/site-run.sh node tools/admin-palette-check.mjs [--width 1440]
-// Exit 1 on a failure, 2 when no browser is found. Test: test/admin/palette-pages.test.js.
+// Exit 1 on a failure, 2 when no browser is found. Test: test/integration/palette-pages.test.js.
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {eachPage, launchChromium, workerServer} from './worker-server.mjs';

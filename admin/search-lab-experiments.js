@@ -1,6 +1,6 @@
 // The Lab Job Search "Experiments" tab (owner, 18 Oct 2026, sketch https://claude.ai/artifact/5nEj5mc4aPknkSJCCxrFbw): one row per measured change, shipped or not, so what was tried, what it moved
 // and what was dropped is on /admin and not only in chat. The rows are docs/lab/search-experiments.json, read at deploy: the session that measured adds its row in the PR that ships or drops the change.
-// Owner-only like the rest of /admin. Fixed columns, no job or CV text. Guard: test/admin/search-lab-experiments.test.js.
+// Owner-only like the rest of /admin. Fixed columns, no job or CV text. Guard: test/unit/admin/search-lab-experiments.test.js.
 import ROWS from '../docs/lab/search-experiments.json' with {type: 'json'};
 import {esc} from '../shared/html.js';
 

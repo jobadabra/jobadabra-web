@@ -1,5 +1,5 @@
 // The owner's /stats page: visitors, Download clicks and sign-ups per day, from the tables api/downloads.js fills.
-// /stats opens with ?key=<STATS_KEY> (Worker secret; Keychain jobadabra.site.stats_key), then remembers it in a cookie. Guarded by test/admin/stats.test.js.
+// /stats opens with ?key=<STATS_KEY> (Worker secret; Keychain jobadabra.site.stats_key), then remembers it in a cookie. Guarded by test/unit/workers/www/stats.test.js.
 import {viewer, remember} from '../shared/auth.js';   // admins (invited) read this page too
 import {esc} from '../shared/html.js';
 import {filterLinks} from './admin.js';

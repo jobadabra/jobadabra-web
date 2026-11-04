@@ -1,6 +1,6 @@
 // "I have Pro" on another computer (Pro spec PR 5, owner 16 Oct 2026): the person gives the e-mail of their Pro account, we mail a 6-digit code (10 minutes, 5 tries, bound to the asking install,
 // rate-limited per address by shared/mail.js), and the code adds that install to pro_devices (max 3; a 4th asks which device to remove). It moves Pro only, never data (export/import does that).
-// The answer to "start" is the same whether or not the address has Pro, so it cannot be used to look addresses up. Hidden (404) while PRO_PLAN is off. Guard: test/api/pro-signin.test.js.
+// The answer to "start" is the same whether or not the address has Pro, so it cannot be used to look addresses up. Hidden (404) while PRO_PLAN is off. Guard: test/unit/api/pro-signin.test.js.
 import {authorize, digestOf, equal} from '../shared/guard.js';
 import {addrOf, clean, send} from '../shared/mail.js';
 import {DEVICES_PER_ACCOUNT, accountOf, link, planOn} from '../shared/pro.js';

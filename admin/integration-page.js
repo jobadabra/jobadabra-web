@@ -1,6 +1,6 @@
 // /admin/testing/integrations: the integration tests' own page (owner, 1 Nov 2026: "I'd like to keep the separate tbh"), built like /admin/testing/e2e but a page of its own.
 // Draws the ONE snapshot row admin/integration-intel.js keeps: main's green share per layer, the tests per layer and how long they take, flaky tests (red then green on the same
-// commit or on unchanged files), the 10 slowest tests, the move (e2e steps left against integration tests) and the nightly test coverage (admin/coverage-card.js). No table scan. Guard: test/admin/integration-page.test.js.
+// commit or on unchanged files), the 10 slowest tests, the move (e2e steps left against integration tests) and the nightly test coverage (admin/coverage-card.js). No table scan. Guard: test/unit/admin/integration-page.test.js.
 import {viewer, remember} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {filterLinks} from './admin.js';

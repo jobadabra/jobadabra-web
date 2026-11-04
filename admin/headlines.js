@@ -1,5 +1,5 @@
 // Every admin page's headline numbers, by path: a loader (env, now) -> tiles, drawn by admin/section-overview.js on its section's Overview. A page in a section with an Overview
-// that has no entry here fails test/admin/section-overview.test.js. Loaders live in headlines-<section>.js (one concern each).
+// that has no entry here fails test/unit/admin/section-overview.test.js. Loaders live in headlines-<section>.js (one concern each).
 import {OPERATIONS} from './headlines-ops.js';
 import {FORM_FILLING} from './headlines-form.js';
 import {GROWTH} from './headlines-growth.js';

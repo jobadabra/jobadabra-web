@@ -1,6 +1,6 @@
 // POST /api/feedback: feedback from the Jobadabra app ("Send feedback…"), kept in D1 (migrations 0003 + 0124) and sent at once to the owner's Telegram (the Brain bot).
 // It may carry the app window's screenshot (≤ 2 MB) and the redacted logs (≤ 200 KB): both go to the private R2 bucket FEEDBACK_FILES for 90 days and are read only on /admin.
-// At most 10 a day per install. The owner's list is admin/feedback.js; shared/feedback.js reads what is kept. Guarded by test/shared/feedback.test.js and feedback-files.test.js.
+// At most 10 a day per install. The owner's list is admin/feedback.js; shared/feedback.js reads what is kept. Guarded by test/unit/shared/feedback.test.js and feedback-files.test.js.
 // Why (2 Nov 2026, owner: "I should get a telegram message when a new feedback is received"): the send's answer is READ and written on the row (`notified`): before, only a network error
 // was caught, so a refusal by Telegram (bad chat id, 4xx) vanished and nobody could tell whether the owner had been told.
 import {escTags} from '../shared/html.js';

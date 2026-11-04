@@ -1,5 +1,5 @@
 // Test inboxes: the Email Worker for test-account-*@jobpilotto.top. Stores sender, recipient, subject, time, the text body and the links/codes in it
-// (D1 test_mail, 7 days); GET /admin/test-mail (Bearer, the owner's scripts only) reads them. Any other address is rejected and never stored. Guard: test/admin/test-mail.test.js.
+// (D1 test_mail, 7 days); GET /admin/test-mail (Bearer, the owner's scripts only) reads them. Any other address is rejected and never stored. Guard: test/unit/admin/test-mail.test.js.
 import {isOwner} from '../shared/auth.js';
 
 export const KEEP_DAYS = 7;

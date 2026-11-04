@@ -2,7 +2,7 @@
 // or, when the upload did not run (a branch), against its own numbers only. A reason in `alarm` (0 relevant jobs, a crash, a floor from the draws' numbers) files or updates the
 // issue for its field × place × path (search-alarm.mjs); a draw with none closes an open one.
 //   GH_TOKEN=... node jobs/persona-search/draw-alarm.mjs <out> [--verdict <upload answer.json>] [--run <url>] [--repo owner/name] [--dry]
-// Guard: test/jobs/search-alarm.test.js.
+// Guard: test/unit/jobs/search-alarm.test.js.
 import fs from 'node:fs';
 import path from 'node:path';
 import {judge, rowFromDraw} from '../../admin/search-lab-draws.js';

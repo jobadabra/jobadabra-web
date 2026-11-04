@@ -1,5 +1,5 @@
 // /admin/testing/overview: every method we use to find bugs and keep the app stable, one card each in four rings (owner, 1 Nov 2026). The catalogue is admin/testing-overview-methods.js,
-// the stored rows behind each card are resolved in admin/testing-overview-data.js; this file draws them. No AI, no new table. Guard: test/admin/testing-overview.test.js.
+// the stored rows behind each card are resolved in admin/testing-overview-data.js; this file draws them. No AI, no new table. Guard: test/unit/admin/testing-overview.test.js.
 import {viewer, remember} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {PAGES} from './admin.js';

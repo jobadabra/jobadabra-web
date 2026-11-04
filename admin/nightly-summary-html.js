@@ -1,6 +1,6 @@
 // How the nightly summary (admin/nightly-summary.js) is drawn, once, for the two pages that show it: the Testing Overview cards and the Testing → Scheduled rows (owner, 1 Nov 2026).
 // A job = its name, last night's key number as a chip (icon + word for the verdict), and 14 cells, one per night, oldest first: a bar for a rate or a count (a line marks its bar or
-// its median), a dot for a green/red night; grey for a night with no result. Only draws; no reader, no table. Guard: test/admin/nightly-summary.test.js.
+// its median), a dot for a green/red night; grey for a night with no result. Only draws; no reader, no table. Guard: test/unit/admin/nightly-summary.test.js.
 import {esc} from '../shared/html.js';
 
 // Own chip classes (nchip): /admin/testing/scheduled has its own .chip colours (shared/.. schedules.js CSS), the Overview uses admin/chip.js; this draws the same on both.

@@ -1,6 +1,6 @@
 // Form Learning's "Learning loop: best case (parked)": the most a learned fix could win back, from the lab's last 14 days (admin/left-empty.js, the pool's fill cards): the share of required fields lost
 // to controls, the part of that a recipe can express (RECIPE_EXPRESSIBLE: one fixed list next to GROUP_OF), and their product. An estimate, an upper bound: it assumes every expressible field would be
-// fixed. The loop was parked on 15 Oct 2026 (Discussion #803). Guard: test/admin/best-case.test.js.
+// fixed. The loop was parked on 15 Oct 2026 (Discussion #803). Guard: test/unit/admin/best-case.test.js.
 import {RECIPE_EXPRESSIBLE} from './left-empty.js';
 
 const pct = value => (value == null ? '–' : `${(Math.round(value * 1000) / 10).toString()}%`);

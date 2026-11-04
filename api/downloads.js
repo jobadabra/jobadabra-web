@@ -2,7 +2,7 @@
 // which records the click and redirects to the GitHub release file or the store listing). Called by visitors and by /install (api/install.js), never by /admin.
 // The /stats page that reads these tables is admin/stats.js. Stored in Cloudflare D1 (binding STATS, tables in migrations/). A visitor is a hash of
 // IP + browser + the day + the secret STATS_SALT: it counts unique people per day and can't be traced back to an address.
-// Guarded by test/api/stats.test.js.
+// Guarded by test/unit/workers/www/stats.test.js.
 import {OWN_HOSTS} from '../shared/hosts.js';
 import {net} from './attribution.js';
 import {device} from '../shared/device.js';
@@ -12,7 +12,7 @@ const RELEASE = `${githubUrl(PUBLIC_REPO)}/releases/latest/download/`;
 // The fixed fallback: the alias every stable release uploads beside its versioned file (the latest stable, desktop-v0.8.60, has both).
 export const FILES = {mac: 'Jobadabra-mac-arm64.dmg', 'windows-exe': 'Jobadabra-windows-x64.exe'};
 // Store listings (owner, 26 Oct 2026: "Store first, .exe small"): a Microsoft Store install never shows SmartScreen or Edge's Keep/Delete, and the
-// Store keeps that copy updated; the .exe stays one small link (windows-exe). Guarded by test/api/store-downloads.test.js.
+// Store keeps that copy updated; the .exe stays one small link (windows-exe). Guarded by test/unit/api/store-downloads.test.js.
 export const STORES = {windows: 'https://apps.microsoft.com/detail/9NW1JJ7Z90MP',
   chrome: 'https://chromewebstore.google.com/detail/nmbnjhmpofifgcdalfefddbiihccogoi'};
 const BOT = /bot|crawl|spider|slurp|preview|facebookexternalhit|headless|lighthouse|curl|wget|python|monitor/i;

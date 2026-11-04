@@ -1,5 +1,5 @@
 /* Platforms page (owner's Design 01, 24 Oct 2026): a question hero, cards of rows (brand tile, name, one line, status chip), Coming next as a list.
-   The status chip carries a word and an icon, never colour alone. Brand marks: simple-icons (CC0), tinted per brand. Guarded by test/web/site-facts.test.js and compare-page.test.js. */
+   The status chip carries a word and an icon, never colour alone. Brand marks: simple-icons (CC0), tinted per brand. Guarded by test/unit/website/site-facts.test.js and compare-page.test.js. */
 .plat-hero { display: grid; justify-items: center; gap: 14px; text-align: center; padding-block: 72px 40px; position: relative; }
 .plat-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(50% 70% at 50% 30%, var(--signal-soft), transparent 70%); }
 .plat-eyebrow { font: 500 .74rem var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--amber); }

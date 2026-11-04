@@ -1,5 +1,5 @@
 // The owner's page for a release mail draft (/admin/growth/email?release=<version>, the link in the Telegram message): the mail as a person sees it, an editable headline and one
-// button "Send to N people" (owner, 28 Oct 2026: a held draft to check and ship, never a curl). POST (same origin, owner) saves the headline or sends. Guard: test/admin/release-mail.test.js.
+// button "Send to N people" (owner, 28 Oct 2026: a held draft to check and ship, never a curl). POST (same origin, owner) saves the headline or sends. Guard: test/unit/admin/release-mail.test.js.
 import {isOwner, viewer} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {compose, send, validAddress} from '../shared/mail.js';

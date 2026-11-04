@@ -1,6 +1,6 @@
 // The landing's whole-journey panel (index.html #journey): each step is a tab that shows its words below the rows (on a phone: right under the
 // step, the list being vertical); arrows, Home and End move along the steps; a dashed loop leads back to the first step. Without this script
-// the first step's words show. Guarded by test/web/effects.test.js.
+// the first step's words show. Guarded by test/unit/website/effects.test.js.
 (() => {
   const tabs = [...document.querySelectorAll('#journey [role="tab"]')];
   const show = tab => {

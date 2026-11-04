@@ -2,7 +2,7 @@
 // positions and skills only to registered companies). The app never holds the secret. It opens /api/linkedin/start with a random `state` it made; LinkedIn sends the user back to
 // /api/linkedin/callback; this Worker trades the one-time code for a token, reads the member's OpenID profile ONCE, drops the token, and passes only that profile ON, in that same
 // request, to the app on the consenting browser's own machine (shared/oauth-handoff.js). It keeps NOTHING: no store, no endpoint to poll. Configuration: LINKEDIN_CLIENT_ID (var)
-// and LINKEDIN_CLIENT_SECRET (secret), see wrangler.toml. Guarded by test/api/linkedin.test.js.
+// and LINKEDIN_CLIENT_SECRET (secret), see wrangler.toml. Guarded by test/unit/api/linkedin.test.js.
 import {cardPage} from '../shared/card-page.js';
 import {STATE, legacyPoll, legacyStart, toApp} from '../shared/oauth-handoff.js';
 export const CALLBACK = '/api/linkedin/callback';

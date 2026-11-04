@@ -1,4 +1,4 @@
-// The sections the form-filling pages are built from, and the arrows and numbers they share (the data: admin/formlearning.js; the thin-data rule: shared/thin-data.js). Guard: test/shared/thin-data.test.js.
+// The sections the form-filling pages are built from, and the arrows and numbers they share (the data: admin/formlearning.js; the thin-data rule: shared/thin-data.js). Guard: test/unit/shared/thin-data.test.js.
 import {RESULT_STATES} from '../desktop/lib/application-result.js';
 import {MARKS_MIN} from './formlearning.js';
 import {esc} from '../shared/html.js';
