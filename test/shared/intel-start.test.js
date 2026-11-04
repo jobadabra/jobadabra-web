@@ -76,7 +76,7 @@ test('every collector workflow keeps its GitHub schedule as the backup (after th
     assert.ok(backup > minute && backup < minute + 5, `${workflow}: the backup minute follows the Worker's tick within the same 5 minutes`);
     assert.ok(yml.includes(`cron: '${backup} * * * *'`), `${workflow}: backup cron minute ${backup}`);
     assert.match(yml, /^  workflow_dispatch:\s*$/m, workflow);
-    assert.doesNotMatch(yml.slice(yml.indexOf('workflow_dispatch:'), yml.indexOf('permissions:')), /inputs:/, `${workflow}: no inputs declared, the Worker sends none`);
+    assert.doesNotMatch(yml.slice(yml.indexOf('workflow_dispatch:'), yml.indexOf('permissions:')), /required: true/, `${workflow}: no required input, the Worker sends none`);
     assert.match(yml, new RegExp(`group: ${name}\\n\\s+cancel-in-progress: false`), workflow);
     assert.match(yml, /^run-name: .*Worker timer/m, workflow);
   }
