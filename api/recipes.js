@@ -17,6 +17,7 @@ import {recordUse} from '../shared/hostuse.js';
 import {hashed} from './pool.js';
 import {isOwner} from '../shared/auth.js';
 import {authorize, digestOf, equal, flag, honeypotAmong, revoke, tokenFor} from '../shared/guard.js';
+import {mintTrialKey} from '../shared/trial-key.js';
 import {storeProposals as storeAliasProposals, storeUse as storeAliasUse} from './aliases.js';
 import {store as storeIntelligence} from '../shared/intelligence.js';
 import {store as storeKnowledge} from '../shared/knowledge.js';
@@ -75,13 +76,14 @@ export async function recipes(request, env, now = new Date()) {
 // addresses and one download is the whole index anyway. A token only opens what it was minted for.
 const MINTS_PER_ADDRESS_PER_DAY = {recipes: 10, index: 300, report: 5, ai: 20}, LOOKUPS_PER_INSTALL_PER_DAY = 2000, MAX_LOOKUP = 30;
 
-// POST /api/install-token {install, purpose?}: the app's token ('recipes' by default, 'index' for the employer index, or 'report' for "Report this form"). New tokens are limited per network address, so minting installs to
+// POST /api/install-token {install, purpose?}: the app's token ('recipes' by default, 'index' for the employer index, or 'report' for "Report this form"; 'trial' is the key an Always-on repo holds, minted only on proof of the install's own key: shared/trial-key.js). New tokens are limited per network address, so minting installs to
 // raise the lookup quota is slow; the quota is per install.
 export async function installToken(request, env, now = new Date()) {
   if (request.method !== 'POST') return new Response('Method not allowed', {status: 405});
   const body = await request.json().catch(() => ({}));
   const install = String(body.install || '');
   if (!/^[\w-]{8,64}$/.test(install)) return Response.json({ok: false, error: 'bad install'}, {status: 400});
+  if (body.purpose === 'trial') return mintTrialKey(request, env, install);
   const purpose = ['index', 'report', 'ai'].includes(body.purpose) ? body.purpose : 'recipes';
   const kv = env.WAITLIST;
   if (kv) {

@@ -1,13 +1,12 @@
 // The free trial as the server sees it (GET /api/trial/status): the app and the Always on runs on GitHub ask with the same install key (JPF1.<install>.<token>) and get the same answer.
 // Trial = 20 applications or 60 days since the first run, whichever lasts longer (desktop/lib/license.js); over it, new work pauses unless Pro or licensed. Guard: test/shared/trial.test.js.
 // The caller reports `applied` and `first` (FSL accepts patching, 16 Oct 2026); the server keeps the highest count and the earliest first-run it has ever seen per install, so a lower number cannot reset the trial.
-import {authorize} from './guard.js';
+import {installOfTrialKey} from './trial-key.js';
 import {verifyLicense} from './license.js';
 import {accountOf, planOn} from './pro.js';
 
 export const FREE_APPLICATIONS = 20, FREE_DAYS = 60;
 const DAY = 24 * 60 * 60 * 1000;
-const parseKey = key => { const [tag, install, token] = String(key || '').split('.'); return tag === 'JPF1' && install && token ? {install, token} : null; };
 
 // Pure: where an install stands. -> {ended, used, limit, daysLeft}
 export function stand({applied = 0, first, now = new Date()}) {
@@ -17,9 +16,8 @@ export function stand({applied = 0, first, now = new Date()}) {
 }
 
 export async function status(request, env, now = new Date()) {
-  const given = parseKey(request.headers.get('x-api-key'));
-  const access = given && await authorize(env, given.install, given.token, 'ai');
-  if (!access?.ok) return Response.json({ok: false, error: 'unauthorized'}, {status: 401});
+  const access = await installOfTrialKey(request.headers.get('x-api-key'), env);   // the app's JPF1 key or an Always-on repo's JPT1 key (shared/trial-key.js)
+  if (!access) return Response.json({ok: false, error: 'unauthorized'}, {status: 401});
   const url = new URL(request.url), kv = env.WAITLIST;
   const asked = Math.max(0, Math.min(100000, Math.floor(Number(url.searchParams.get('applied')) || 0)));
   const askedFirst = Date.parse(url.searchParams.get('first'));
@@ -33,7 +31,7 @@ export async function status(request, env, now = new Date()) {
     if (applied !== Number(seenApplied)) await kv.put(keys.applied, String(applied));
     if (first !== seenFirst) await kv.put(keys.first, first);
   }
-  const account = planOn(env) ? await accountOf(env, given.install) : null;
+  const account = planOn(env) ? await accountOf(env, access.install) : null;
   const pro = account?.status === 'active';
   const license = !pro && await verifyLicense(request.headers.get('x-jp-license'), env.LICENSE_PUBLIC_KEY);   // founder / friend / pass key: no wall
   const state = stand({applied, first, now});
