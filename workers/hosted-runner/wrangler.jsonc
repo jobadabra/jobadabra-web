@@ -1,5 +1,5 @@
 {
-  // The hosted Always on runner (see worker.js). standard-1 (4 GiB): measured 0.8-1.2 GB per run. max_instances is the number of runs at once.
+  // The hosted Always on runner (see worker.js), the PRODUCTION config; the staging copy is made by tools/runner-config.mjs. Deployed by .github/workflows/release-hosted-runner.yml. standard-1 (4 GiB): measured 0.8-1.2 GB per run. max_instances is the number of runs at once.
   "name": "www-hosted-runner",
   "main": "worker.js",
   "compatibility_date": "2026-09-01",
