@@ -16,7 +16,7 @@ const FILES = [
   {test: /^shot-([1-9]\d?)\.png$/, type: 'image/png', max: MAX_SHOT},
 ];
 const kindOf = name => FILES.find(kind => kind.test.test(name));
-const runOf = value => (/^\d{6,15}$/.test(String(value ?? '')) ? String(value) : null);
+export const runOf = value => (/^\d{6,15}$/.test(String(value ?? '')) ? String(value) : null);
 
 async function prune(bucket, now) {
   const old = [];
@@ -64,7 +64,7 @@ export async function runIngest(request, env, now = new Date()) {
 }
 
 // The run list: one row per run that has a record, newest first, with whether its video and how many screenshots are kept.
-async function index(bucket) {
+export async function listRuns(bucket) {
   const runs = new Map();
   let cursor;
   do {
@@ -81,11 +81,18 @@ async function index(bucket) {
   return [...runs.values()].filter(row => row.has).map(({has, ...row}) => row).sort((a, b) => String(b.at).localeCompare(String(a.at)));
 }
 
+// One run's record as an object (the tab draws it on the server), or null when the run is not kept or its record is not JSON.
+export async function readRun(bucket, run) {
+  const id = runOf(run), object = id ? await bucket.get(`agent/${id}/run.json`) : null;
+  if (!object) return null;
+  try { return JSON.parse(await object.text()); } catch { return null; }
+}
+
 // GET /admin/ai-persona/data: ?index -> {runs: [...]}; ?run=<id> -> that run's record. Signed out is a 404.
 export async function runData(request, env) {
   if (!await viewer(request, env) || !env.LAB_FILLS) return new Response('Not found', {status: 404});
   const url = new URL(request.url);
-  if (url.searchParams.has('index')) return Response.json({runs: await index(env.LAB_FILLS)}, {headers: {'Cache-Control': 'no-store'}});
+  if (url.searchParams.has('index')) return Response.json({runs: await listRuns(env.LAB_FILLS)}, {headers: {'Cache-Control': 'no-store'}});
   const run = runOf(url.searchParams.get('run')), object = run ? await env.LAB_FILLS.get(`agent/${run}/run.json`) : null;
   if (!object) return new Response('Not found', {status: 404});
   return new Response(object.body, {headers: {'Content-Type': 'application/json', 'Cache-Control': 'private, no-store'}});

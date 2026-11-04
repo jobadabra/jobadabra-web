@@ -1,6 +1,7 @@
 // Demo data for tools/page-shot.mjs: made-up rows only (codes, labels, people), never a real secret or the live site's data. Each seed gets {env, call}: call(path, init) goes through the real Worker as the owner.
 import {ACTIONS} from '../shared/aicost.js';
 import {LAB_REPO, PUBLIC_REPO, WEB_REPO, githubUrl} from '../shared/repos.js';
+import {aiPersona} from './page-shot-seed-ai-persona.mjs';
 const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields)});
 
 export const seeds = {
@@ -495,4 +496,5 @@ export const seeds = {
         .bind(day, 'demo0001', action, model, calls, tin, tout, micro).run();
     }
   },
+  'ai-persona': aiPersona,
 };

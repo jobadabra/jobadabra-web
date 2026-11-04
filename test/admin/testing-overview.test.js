@@ -91,7 +91,7 @@ test('the verdict counts live cards by their worst line; GTM readiness links onl
   const menu = resolve(data(), {pages: PAGES.map(item => item.path)});
   for (const card of menu.rings.flatMap(ring => ring.cards).filter(card => card.kind === 'live' && card.href)) assert.ok(PAGES.some(item => item.path === card.href), `${card.id} links to a menu page`);
   assert.equal(cardOf(menu, 'e2e').href, '/admin/testing/e2e');
-  assert.deepEqual(PLANNED.map(card => card.id).sort(), ['agents', 'faults']);
+  assert.deepEqual(PLANNED.map(card => card.id).sort(), ['faults']);
   const html = page(model, {now});
   assert.equal((html.match(/class="mcard planned"/g) || []).length, PLANNED.length);
   assert.doesNotMatch(html, /testing\/scheduled/);
