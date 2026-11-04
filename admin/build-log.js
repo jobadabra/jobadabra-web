@@ -7,6 +7,8 @@ import {esc} from '../shared/html.js';
 import {remember} from '../shared/auth.js';
 import {canClose, countOf, dayWords, isClosed, prList} from './build-digest.js';
 import {PUBLIC_REPO} from '../shared/repos.js';
+import {readStartProblem} from '../shared/intel-start.js';
+import {startLine} from './intel-start-line.js';
 
 const SHOWN = 45, MAX_DRAFTS = 8;
 const authorized = (request, env) => Boolean(env.SELFHEAL_PUBLISH_KEY && equal((request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, ''), env.SELFHEAL_PUBLISH_KEY));
@@ -68,7 +70,7 @@ function dayCard(row, {open = false, repo}) {
   return `<details class="day"${open ? ' open' : ''}><summary><b>${esc(dayWords(row.day))}</b> ${state} <span class="muted">${count} PRs${count ? `, #${min}-#${max}` : ''} · ${groups.length} goals · updated ${esc(String(row.updated_at).slice(11, 16))} UTC · ${usdText(row.usd)}</span></summary><div class="goals">${goals}</div><p><b>Still open:</b> ${esc(row.open_line || 'Nothing open.')}</p></details>`;
 }
 
-export function page(rows, {repo = PUBLIC_REPO, day = ''} = {}) {
+export function page(rows, {repo = PUBLIC_REPO, day = '', problem = null} = {}) {
   const list = day ? rows.filter(row => row.day === day) : rows;
   const body = list.length ? list.map((row, i) => dayCard(row, {open: i === 0, repo})).join('') : `<section class="card"><h2>No digest yet</h2><p class="muted">The workflow <code>daily-digest.yml</code> writes the day's digest every hour when a PR was merged; the first run fills this page.</p></section>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Build log · Agent Coding · Admin</title>
@@ -78,7 +80,7 @@ export function page(rows, {repo = PUBLIC_REPO, day = ''} = {}) {
 .chip{display:inline-block;padding:0 6px;border-radius:6px;background:#1b2027;font-size:12px;white-space:nowrap}
 .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;color:#0b0d10}</style></head><body><main>
 <header><h1>🗓️ Build log</h1><span class="muted">what we built each day, grouped by goal · the newest ${SHOWN} days</span></header>
-${body}</main></body></html>`;
+${startLine(problem)}${body}</main></body></html>`;
 }
 
 export async function view(request, env) {
@@ -87,6 +89,6 @@ export async function view(request, env) {
   if (url.searchParams.has('key')) return remember(url, env, request);
   let rows = [];
   try { rows = env.STATS ? (await env.STATS.prepare('SELECT day, groups, open_line, numbers, drafts, usd, updated_at, final_at FROM digest_days ORDER BY day DESC LIMIT ?').bind(SHOWN).all()).results || [] : []; } catch { rows = []; }
-  const day = url.searchParams.get('day');
-  return new Response(page(rows, {repo: env.GITHUB_REPO || undefined, day: isDay(day) ? day : ''}), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
+  const day = url.searchParams.get('day'), problem = await readStartProblem(env.STATS, 'daily-digest.yml');
+  return new Response(page(rows, {repo: env.GITHUB_REPO || undefined, day: isDay(day) ? day : '', problem}), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
 }
