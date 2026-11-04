@@ -4,7 +4,7 @@
 // Optional: with TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID set as secrets, each new sign-up is also sent to Telegram.
 import {mediaRange} from './range.js';
 import {videoIngest, videoView} from '../../admin/lab-video.js';
-import {runData, runFile, runIngest} from '../../api/agent-runs.js';
+import {runData, runFile, runIngest} from '../../shared/agent-runs.js';
 import * as sentryAlert from '../../admin/sentry-alert.js';
 import * as synthetic from '../../shared/synthetic.js';
 import {recordStarts, startIntelCollectors} from '../../shared/intel-start.js';
@@ -235,9 +235,9 @@ async function route(request, env, ctx) {
   if (pathname === '/applying/endings' && request.method === 'PUT') return endingsIngest(request, env);
   if (pathname === '/applying/video' && request.method === 'PUT') return videoIngest(request, env);   // CI's pool run: one fill video per row (Bearer REPLAYS_PUBLISH_KEY, admin/lab-video.js)
   if (pathname === '/admin/form-filling/lab/video' && request.method === 'GET') return videoView(request, env);   // the owner streams it (admin/lab-video.js)
-  if (pathname === '/agent/run' && request.method === 'PUT') return runIngest(request, env);   // CI's AI persona job: a run's record, video and screenshots (Bearer REPLAYS_PUBLISH_KEY, api/agent-runs.js)
-  if (pathname === '/admin/ai-persona/data' && request.method === 'GET') return runData(request, env);   // the owner reads the run list and a run's record (api/agent-runs.js)
-  if (pathname === '/admin/ai-persona/file' && request.method === 'GET') return runFile(request, env);   // the owner streams a run's video or screenshot (api/agent-runs.js)
+  if (pathname === '/agent/run' && request.method === 'PUT') return runIngest(request, env);   // CI's AI persona job: a run's record, video and screenshots (Bearer REPLAYS_PUBLISH_KEY, shared/agent-runs.js)
+  if (pathname === '/admin/ai-persona/data' && request.method === 'GET') return runData(request, env);   // the owner reads the run list and a run's record (shared/agent-runs.js)
+  if (pathname === '/admin/ai-persona/file' && request.method === 'GET') return runFile(request, env);   // the owner streams a run's video or screenshot (shared/agent-runs.js)
   if (pathname === '/applying/replays' && request.method === 'PUT') return replaysIngest(request, env);   // CI on main's recorded replays (Bearer REPLAYS_PUBLISH_KEY, admin/applying-replays.js)
   if (pathname === '/e2e/data' && (request.method === 'PUT' || request.method === 'GET')) return e2eIntelIngest(request, env);   // CI publishes finished e2e runs and their red suites (Bearer SELFHEAL_PUBLISH_KEY, admin/e2e-intel.js)
   if (pathname === '/gtm/data' && (request.method === 'PUT' || request.method === 'GET')) return gtmIngest(request, env);   // CI publishes the GTM readiness snapshot (Bearer SELFHEAL_PUBLISH_KEY, admin/gtm-intel.js)

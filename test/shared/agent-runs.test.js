@@ -1,9 +1,9 @@
-// The AI persona's runs (api/agent-runs.js): CI uploads a run's record, video and note screenshots (Bearer REPLAYS_PUBLISH_KEY) under agent/<run>/ in the Lab's private bucket, the owner reads them with Range,
+// The AI persona's runs (shared/agent-runs.js): CI uploads a run's record, video and note screenshots (Bearer REPLAYS_PUBLISH_KEY) under agent/<run>/ in the Lab's private bucket, the owner reads them with Range,
 // anything older than 14 days is dropped on the next upload without touching the Lab's own fill videos, and every refusal (key, id, file name, type, size, no bucket) is tested.
 // Guard: privacy — only the owner may read a run, and a name is never a path.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {KEEP_DAYS, MAX_RECORD, MAX_SHOT, MAX_VIDEO, runData, runFile, runIngest} from '../../api/agent-runs.js';
+import {KEEP_DAYS, MAX_RECORD, MAX_SHOT, MAX_VIDEO, runData, runFile, runIngest} from '../../shared/agent-runs.js';
 
 const KEY = 'k'.repeat(64);
 const bucket = () => {
@@ -94,5 +94,8 @@ test('only the owner reads a run: the record, then a video or screenshot whole o
   assert.equal(part.status, 206);
   assert.equal(part.headers.get('Content-Range'), 'bytes 100-199/1000');
   assert.equal((await file(e, q, {Range: 'bytes=5000-'})).status, 416);
+  const tail = await file(e, q, {Range: 'bytes=-5000'});   // a suffix longer than the file is the whole file (RFC 9110), as workers/www/range.js
+  assert.equal(tail.status, 206);
+  assert.equal(tail.headers.get('Content-Range'), 'bytes 0-999/1000');
   for (const bad of ['?run=41857218091&name=run.json', '?run=41857218091&name=../x', '?run=41857218091&name=shot-1.png', '?run=abc&name=video.webm', '?name=video.webm']) assert.equal((await file(e, bad)).status, 404, bad);
 });

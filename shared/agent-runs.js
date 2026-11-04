@@ -1,9 +1,9 @@
 // The AI persona's runs (owner, 4 Nov 2026: "a dedicated tab in admin where I'll see all the runs/paths/bugs found… and video recording for each"): CI's agent job uploads each run's record (one small JSON:
 // goals, path, notes), its video and the screenshots of its notes (PUT /agent/run?run=<id>&file=<name>, Bearer REPLAYS_PUBLISH_KEY) into the private R2 bucket LAB_FILLS under agent/<run>/; anything older
 // than 14 days is dropped on the next upload (no bucket rule to create by hand); only the owner reads them (GET /admin/ai-persona/data, /admin/ai-persona/file; Range so the player scrubs).
-// A fake applicant on a fake store, never a real person's data. Same bucket and key as the Lab's fill videos (admin/lab-video.js): no new bucket, no new secret. Guard: test/api/agent-runs.test.js.
-import {equal} from '../shared/guard.js';
-import {viewer} from '../shared/auth.js';
+// A fake applicant on a fake store, never a real person's data. Same bucket and key as the Lab's fill videos (admin/lab-video.js): no new bucket, no new secret. Guard: test/shared/agent-runs.test.js.
+import {equal} from './guard.js';
+import {viewer} from './auth.js';
 
 export const KEEP_DAYS = 14, MAX_RECORD = 1024 * 1024, MAX_VIDEO = 40 * 1024 * 1024, MAX_SHOT = 900 * 1024;
 const DAY = 86400000;
@@ -101,7 +101,7 @@ export async function runFile(request, env) {
   const headers = {'Content-Type': head.httpMetadata?.contentType || 'application/octet-stream', 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, no-store'};
   const asked = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get('Range') || '');
   if (!asked) return new Response((await env.LAB_FILLS.get(key)).body, {headers: {...headers, 'Content-Length': String(size)}});
-  const start = asked[1] === '' ? size - Number(asked[2]) : Number(asked[1]), end = asked[1] === '' || asked[2] === '' ? size - 1 : Math.min(Number(asked[2]), size - 1);
+  const start = asked[1] === '' ? Math.max(0, size - Number(asked[2])) : Number(asked[1]), end = asked[1] === '' || asked[2] === '' ? size - 1 : Math.min(Number(asked[2]), size - 1);
   if (!(start >= 0 && start < size && end >= start)) return new Response('Range not satisfiable', {status: 416, headers: {'Content-Range': `bytes */${size}`}});
   const part = await env.LAB_FILLS.get(key, {range: {offset: start, length: end - start + 1}});
   return new Response(part.body, {status: 206, headers: {...headers, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': String(end - start + 1)}});
