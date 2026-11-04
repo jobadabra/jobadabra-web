@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
-import {feedback, FILES_PER_DAY, MAX_LOGS_BYTES, MAX_SHOT_BYTES} from '../../api/feedback.js';
+import {feedback, FILES_PER_DAY, MAX_LOGS_BYTES, MAX_SHOT_BYTES, MAX_TEXT, TELEGRAM_TEXT} from '../../api/feedback.js';
 import {file, view} from '../../admin/feedback.js';
 import {purgeFiles, undelivered, TEXT_FILES} from '../../shared/feedback.js';
 
@@ -205,4 +205,31 @@ test('the platform field keeps the OS version and architecture (a Windows tester
   const e = env();
   await send(e, {...good, platform: 'win32 10.0.19045 x64'}, telegramOk([]));
   assert.equal(row(e).platform, 'win32 10.0.19045 x64');
+});
+
+// Why (4 Nov 2026, a tester: "The feedback box silently cuts text at about 2,000 characters… My last report lost its ending"): the words are kept whole up to MAX_TEXT, and a long one
+// reaches the owner on Telegram cut at TELEGRAM_TEXT with a link to the whole text.
+test('a long report is kept whole, and Telegram shows its start with a link to the rest', async () => {
+  const e = env(), calls = [], ending = 'THE-ENDING';
+  const text = 'word '.repeat(1200) + ending;   // ~6000 characters: past the old 2000
+  assert.equal((await send(e, {...good, text, screenshot: '', logs: ''}, telegramOk(calls))).status, 200);
+  assert.equal(row(e).text.endsWith(ending), true, 'the stored text is whole');
+  const told = JSON.parse(calls[0].body).text;
+  assert.ok(told.length < 4096, 'Telegram refuses a message over 4096 characters');
+  assert.doesNotMatch(told, new RegExp(ending));
+  assert.match(told, /Full text on \/admin/);
+  const over = await send(e, {...good, text: 'x'.repeat(MAX_TEXT + 500), screenshot: '', logs: ''}, telegramOk([]));
+  assert.equal(over.status, 200);
+  assert.equal(row(e).text.length, MAX_TEXT, 'beyond MAX_TEXT is cut, and the app says so before sending');
+  assert.ok(TELEGRAM_TEXT < 4096);
+});
+
+// Gitar on #357: an emoji across the cut would leave a lone surrogate that is not valid UTF-8, and Telegram refuses the whole message.
+test('the Telegram cut never ends on half an emoji', async () => {
+  const e = env(), calls = [];
+  const text = 'a'.repeat(TELEGRAM_TEXT - 1) + '😀' + 'b'.repeat(500);   // the emoji's two halves sit at 2999 and 3000
+  assert.equal((await send(e, {...good, text, screenshot: '', logs: ''}, telegramOk(calls))).status, 200);
+  const told = JSON.parse(calls[0].body).text;
+  assert.doesNotMatch(told, /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/, 'no lone high surrogate');
+  assert.doesNotMatch(told, /[^\uD800-\uDBFF][\uDC00-\uDFFF]/, 'no lone low surrogate');
 });

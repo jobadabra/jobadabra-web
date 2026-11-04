@@ -13,6 +13,9 @@ const PER_INSTALL_PER_DAY = 10;
 // Why (2 Nov 2026, Gitar on #334): the endpoint is open and the install id is the client's own, so a caller changing it per request could fill R2 and the owner's chat with photos.
 // The words are always kept; files (and so the photo) stop for the day past this many feedbacks that carried one.
 export const FILES_PER_DAY = 100;
+// Why (4 Nov 2026, a tester: "The feedback box silently cuts text at about 2,000 characters… My last report lost its ending"): a report is kept up to MAX_TEXT characters
+// (the app says so with a counter); Telegram takes 4096 per message, so the owner's message carries the first TELEGRAM_TEXT and a link to the whole text on /admin.
+export const MAX_TEXT = 8000, TELEGRAM_TEXT = 3000;
 export const MAX_SHOT_BYTES = 2 * 1024 * 1024, MAX_LOGS_BYTES = TEXT_FILES.logs.max;
 const SHOT = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/;
 const clip = (value, max) => String(value ?? '').replace(/\s+$/g, '').slice(0, max);
@@ -29,9 +32,10 @@ export function decodeShot(value) {
 // Messages to the owner: the words first (with the logs link), then the screenshot as a photo under it. -> 'sent' | 'off' | 'failed: <why>'
 async function tell(env, fetcher, row, shot) {
   if (!(env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID)) return 'off';
-  const have = [row.shot && 'Screenshot', row.logs && 'Logs', row.page && 'Screen data', row.profile && 'Profile'].filter(Boolean);
+  const cut = row.text.length > TELEGRAM_TEXT;
+  const have = [cut && 'Full text', row.shot && 'Screenshot', row.logs && 'Logs', row.page && 'Screen data', row.profile && 'Profile'].filter(Boolean);
   const link = have.length ? `\n\n📎 <a href="https://www.jobadabra.top/admin/feedback/inbox#${row.ref}">${have.join(' · ')} on /admin</a>` : '';
-  const message = `💬 <b>Feedback</b> · v${escTags(row.version)} · ${escTags(row.platform)}${row.screen ? ` · ${escTags(row.screen)}` : ''} · install ${escTags(row.install.slice(0, 8))}\n\n${escTags(row.text)}` +
+  const message = `💬 <b>Feedback</b> · v${escTags(row.version)} · ${escTags(row.platform)}${row.screen ? ` · ${escTags(row.screen)}` : ''} · install ${escTags(row.install.slice(0, 8))}\n\n${escTags(cut ? `${row.text.slice(0, TELEGRAM_TEXT).replace(/[\uD800-\uDBFF]$/, '').trimEnd()}…` : row.text)}` +
     (row.contact ? `\n\n↩︎ ${escTags(row.contact)}` : '') + link;
   const first = await telegram(fetcher, env, 'sendMessage', {chat_id: env.BRAIN_CHAT_ID, text: message, parse_mode: 'HTML', disable_web_page_preview: true});
   if (first.why) return `failed: ${first.why}`.slice(0, 200);
@@ -49,7 +53,7 @@ export async function feedback(request, env, fetcher = fetch, now = new Date(), 
   if (request.method !== 'POST') return new Response(null, {status: 405});
   if (!env.STATS) return Response.json({ok: false, error: 'not configured'}, {status: 503});
   const body = await request.json().catch(() => ({}));
-  const text = clip(body.text, 2000).trim();
+  const text = clip(body.text, MAX_TEXT).trim();
   const install = clip(body.install, 64);
   if (!text || !/^[\w-]{8,64}$/.test(install)) return Response.json({ok: false, error: 'give a message'}, {status: 400});
   // Why (owner, 3 Nov 2026: "this should be mandatory for every feedback sent"): every row says which build and which system it came from, so a bug can be reproduced and an answer can be matched
