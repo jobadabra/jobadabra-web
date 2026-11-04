@@ -32,7 +32,7 @@ The website, `/admin`, and the CI jobs that feed them. Moved out of the public `
 
 ## Secrets (set on this repo by the owner; never in code)
 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `AI_COST_PUBLISH_KEY`, `SELFHEAL_PUBLISH_KEY`, `REPLAYS_PUBLISH_KEY`, `BUILDLOG_TELEGRAM_TOKEN`, `BUILDLOG_TELEGRAM_CHAT`;
-Lab: `RANDOM_DRAWS_ANTHROPIC_KEY`, `LAB_HEAL_ANTHROPIC_KEY`, `CI_APP_ID`, `CI_APP_PRIVATE_KEY`, `NET_RECORD_KEY`, `NET_RECORDS_READ_TOKEN`, `NET_RECORDS_WRITE_TOKEN`.
+Lab: `RANDOM_DRAWS_ANTHROPIC_KEY`, `CI_APP_ID`, `CI_APP_PRIVATE_KEY`, `NET_RECORD_KEY`, `NET_RECORDS_READ_TOKEN`.
 
 Never deploy Worker `www` from here and from public `site.yml` at the same time.
 

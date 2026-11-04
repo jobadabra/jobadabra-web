@@ -16,9 +16,8 @@ if (ROOT / '.private' / '.github').is_dir():   # CI runs this repo's tests in th
 ALLOWED = {
     ('.github/workflows/random-draw.yml', 'RANDOM_DRAWS_ANTHROPIC_KEY'): "the search robot's SDK talks to the local Free AI relay with its throwaway key (the engine under test is Free AI, not Anthropic); only the variable's name says Anthropic",
     ('.github/workflows/random-draw.yml', 'ANTHROPIC_BASE_URL'): 'points that SDK at http://127.0.0.1:8787/api/ai, the local Free AI relay',
-    ('.github/workflows/search-lab-heal.yml', 'LAB_HEAL_ANTHROPIC_KEY'): "the engine under test: the live re-recording on the API engine users can choose; parked, by hand only, its own workspace and cap",
 }
-MAX_ENTRIES = 3   # lower this when an entry goes; never raise it
+MAX_ENTRIES = 2   # lower this when an entry goes; never raise it
 
 # Allowed by name anywhere, not on the shrinking list. Why (1 Nov 2026, coordinator 31 Oct 2026 in the public repo's tests/test_ci_no_anthropic.py; ai-cost-billed.yml moved here, rs 6a/6):
 # the Admin key only READS what Anthropic billed; it makes no model call and spends nothing. This guard bans keys that buy model calls.
