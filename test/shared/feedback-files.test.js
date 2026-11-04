@@ -223,3 +223,13 @@ test('a long report is kept whole, and Telegram shows its start with a link to t
   assert.equal(row(e).text.length, MAX_TEXT, 'beyond MAX_TEXT is cut, and the app says so before sending');
   assert.ok(TELEGRAM_TEXT < 4096);
 });
+
+// Gitar on #357: an emoji across the cut would leave a lone surrogate that is not valid UTF-8, and Telegram refuses the whole message.
+test('the Telegram cut never ends on half an emoji', async () => {
+  const e = env(), calls = [];
+  const text = 'a'.repeat(TELEGRAM_TEXT - 1) + '😀' + 'b'.repeat(500);   // the emoji's two halves sit at 2999 and 3000
+  assert.equal((await send(e, {...good, text, screenshot: '', logs: ''}, telegramOk(calls))).status, 200);
+  const told = JSON.parse(calls[0].body).text;
+  assert.doesNotMatch(told, /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/, 'no lone high surrogate');
+  assert.doesNotMatch(told, /[^\uD800-\uDBFF][\uDC00-\uDFFF]/, 'no lone low surrogate');
+});
