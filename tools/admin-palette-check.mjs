@@ -5,7 +5,7 @@
 // Exit 1 on a failure, 2 when no browser is found. Test: test/admin/palette-pages.test.js.
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {launchChromium, workerServer} from './worker-server.mjs';
+import {eachPage, launchChromium, workerServer} from './worker-server.mjs';
 
 const root = process.cwd();
 const width = Number(process.argv.includes('--width') ? process.argv[process.argv.indexOf('--width') + 1] : 1440);
@@ -23,7 +23,7 @@ const fresh = async () => {
   return {context, page};
 };
 try {
-  for (const {path: route} of PAGES) {
+  await eachPage(PAGES, async ({path: route}) => {
     const {context, page} = await fresh();
     await page.goto(site.base + route, {waitUntil: 'load'});
     await page.waitForLoadState('networkidle', {timeout: 5000}).catch(() => {});
@@ -49,7 +49,7 @@ try {
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
     if (!await page.locator('dialog.admin-palette[open]').count()) problems.push(`${route}: ⌘K did not open the palette`);
     await context.close();
-  }
+  });
   // The owner's example, across pages: from Website, "Promo Code" + Enter.
   const promo = PAGES.find(p => p.name === 'Promo codes').path, scouting = PAGES.find(p => p.name === 'Scouting').path;
   {

@@ -5,7 +5,7 @@
 // Exit 1 on a failure, 2 when no browser is found. Test: test/admin/table-tools.test.js.
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {launchChromium, workerServer} from './worker-server.mjs';
+import {eachPage, launchChromium, workerServer} from './worker-server.mjs';
 
 const root = process.cwd(), arg = (name, fallback) => Number(process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : fallback);
 const min = arg('--min', 5), width = arg('--width', 390);
@@ -16,7 +16,7 @@ const site = await workerServer(root, 'all');
 let bad = 0, tooled = 0, skipped = 0;
 const fail = (route, why) => { bad++; console.log(`admin-table-tools: ${route} ${why}`); };
 try {
-  for (const {path: route} of PAGES) {
+  await eachPage(PAGES, async ({path: route}) => {
     const context = await browser.newContext({viewport: {width, height: 844}, isMobile: true, hasTouch: true, reducedMotion: 'reduce'});
     await context.route(url => !url.href.startsWith(site.base), r => r.abort());   // never the live site
     await context.addInitScript(n => { window.__tableToolsMin = n; }, min);
@@ -45,7 +45,7 @@ try {
     if (looks.small.length) fail(route, `has table-tool taps under 40px: ${looks.small.join(', ')}`);
     if (errors.length) fail(route, `threw: ${errors[0]}`);
     await context.close();
-  }
+  });
 } finally { await browser.close(); site.close(); }
 console.log(`admin-table-tools: ${PAGES.length} admin pages, tables over ${min} rows: ${tooled} with the tools, ${skipped} skipped with a reason, ${bad} failures`);
 process.exit(bad ? 1 : 0);
