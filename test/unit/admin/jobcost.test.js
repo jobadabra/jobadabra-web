@@ -272,3 +272,13 @@ test('guarded admin read shows broker fallback spend, holds and caps from its se
   const none = await unavailable.text();
   assert.match(none, /CI fallback: data unavailable/); assert.match(none, /Who answered today: data unavailable/);
 });
+
+test('the AI cost page shows the limits rings from the broker health, above who answered today (owner, 4 Nov 2026)', async () => {
+  const soon = Math.round(Date.now() / 1000) + 3 * 3600, later = soon + 5 * 86400;
+  const env = {STATS_KEY: 'fixture-key', STATS_API_KEY: 'fixture-owner', AI_BROKER: {fetch: async () => Response.json({
+    fallback: {day: new Date().toISOString().slice(0, 10), freeAi: 0.12, freeAiCap: 2, held: {freeAi: 0}}, limits: {usedPercent: 55, resetsAt: later},
+    chain: [{name: 'claude', configured: true, state: 'ready', answeredToday: 1, limits: {status: 'allowed', fiveHour: {utilization: 0.8, resetsAt: soon}, sevenDay: {utilization: 0.3, resetsAt: later}}}]})}};
+  const html = await (await view(new Request('https://x.dev/admin/ai/costs', {headers: {Authorization: 'Bearer fixture-owner'}}), env)).text();
+  assert.match(html, /id="ai-limits"/); assert.match(html, />55%</); assert.match(html, />80%</); assert.match(html, />30%</);
+  assert.ok(html.indexOf('id="ai-limits"') < html.indexOf('id="ai-broker-today"'));
+});

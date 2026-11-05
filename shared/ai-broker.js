@@ -22,3 +22,17 @@ export function problem(chain) {
 
 /** The per-workflow tally from a health answer: {days: {<YYYY-MM-DD>: {<workflow>: {calls, ok, tokens, ms, engines}}}}, or null when this broker build has none (an older one). */
 export const tallyOf = health => (health?.tally && typeof health.tally.days === 'object' && health.tally.days !== null ? health.tally : null);
+
+/**
+ * The subscription windows from a health answer, as the providers report them: {codex: {usedPercent, resetsAt} | null, claude: {status, fiveHour, sevenDay} | null}.
+ * Times are epoch seconds. Claude's `utilization` is a fraction 0..1 (measured on the real CLI, 1 Nov 2026, workers/ai-broker/container/claude.mjs); anything else is dropped, never guessed.
+ */
+export function subscriptionOf(health) {
+  const win = w => (w && Number.isFinite(w.utilization) && w.utilization >= 0 && w.utilization <= 1 && Number.isFinite(w.resetsAt)
+    ? {utilization: w.utilization, resetsAt: w.resetsAt, status: typeof w.status === 'string' ? w.status : ''} : null);
+  const week = health?.limits, claude = Array.isArray(health?.chain) ? health.chain.find(item => item?.name === 'claude')?.limits : null;
+  return {
+    codex: week && Number.isFinite(week.usedPercent) && Number.isFinite(week.resetsAt) ? {usedPercent: week.usedPercent, resetsAt: week.resetsAt} : null,
+    claude: claude ? {status: typeof claude.status === 'string' ? claude.status : '', fiveHour: win(claude.fiveHour), sevenDay: win(claude.sevenDay)} : null,
+  };
+}

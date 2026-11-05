@@ -333,9 +333,11 @@ export const seeds = {
   },
   'ai-cost-fallback': async ({env}) => {   // fictional CI spend; no broker, Telegram or AI is contacted
     await seeds['ai-cost-pro']({env});
+    const soon = Math.round(Date.now() / 1000);   // fictional subscription windows (limits card): reset times are relative to now
     env.AI_BROKER = {fetch: async () => Response.json({fallback: {day: new Date().toISOString().slice(0, 10),
-      freeAi: 0.12, freeAiCap: 2, held: {freeAi: 0}},
-      chain: [{name: 'codex', configured: true, answeredToday: 0, ranOutToday: 436, failedToday: 0, avgMs: null}, {name: 'claude', configured: true, state: 'ready', answeredToday: 350, ranOutToday: 0, failedToday: 3, avgMs: 18394},
+      freeAi: 0.12, freeAiCap: 2, held: {freeAi: 0}}, limits: {usedPercent: 38, resetsAt: soon + (6 * 24 + 9) * 3600},
+      chain: [{name: 'codex', configured: true, answeredToday: 0, ranOutToday: 436, failedToday: 0, avgMs: null}, {name: 'claude', configured: true, state: 'ready', answeredToday: 350, ranOutToday: 0, failedToday: 3, avgMs: 18394,
+        limits: {status: 'allowed', fiveHour: {utilization: 0.76, resetsAt: soon + 3.5 * 3600, status: 'allowed'}, sevenDay: {utilization: 0.6, resetsAt: soon + 70 * 3600, status: 'allowed'}}},
         {name: 'free-ai', configured: true, answeredToday: 3, ranOutToday: 0, failedToday: 0, avgMs: 4951}]})};
   },
   'ai-cost-pro': async ({env}) => {   // fictional charged calls only; no provider request or real account
