@@ -72,6 +72,8 @@ test('the admin form shows the same sentence from the one copy, and sends nothin
   assert.match(PAGE, /Send reply \+ dismiss/);
   assert.match(PAGE, /Dismiss without a reply/);
   assert.match(PAGE, /Mark without a reply/);
+  assert.match(PAGE, /withReply \? \{\} : \{undo:/, 'Undo only when nothing was sent');
+  assert.match(PAGE, /The reply cannot be taken back/);
 });
 
 // Why (code review of 1b, 5 Nov 2026): before this change Dismiss left `told` alone, so a card told (Fixed or Defer), reopened and dismissed has told = 'app' with its telling older than its dismissal.

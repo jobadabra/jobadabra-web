@@ -130,7 +130,7 @@ function closeForm(row, action) {
     if (fp && !why.value.trim()) return why.focus();
     if (withReply && !message.value.trim()) return message.focus();
     send({ref: row.ref, action, ...(fp ? {note: why.value} : {}), ...(withReply ? {reply: true, message: message.value, mail: mail.checked && !mail.disabled} : {})},
-      (fp ? 'Marked as a false positive' : 'Dismissed') + (withReply ? ' and replied.' : '.'), {undo: {ref: row.ref, action: 'reopen', from: fp ? 'false_positive' : 'dismissed'}});
+      (fp ? 'Marked as a false positive' : 'Dismissed') + (withReply ? ' and replied. The reply cannot be taken back.' : '.'), withReply ? {} : {undo: {ref: row.ref, action: 'reopen', from: fp ? 'false_positive' : 'dismissed'}});   // Why (Gitar on #444): an Undo after a sent reply would look like it takes the reply back, and nothing can
   };
   reply.onclick = () => finish(true); quiet.onclick = () => finish(false);
   buttons.append(reply, quiet, cancel); form.append(buttons); setTimeout(() => (why || message).focus());
