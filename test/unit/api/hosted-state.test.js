@@ -58,7 +58,8 @@ test('the app pushes its config with its install key; the container reads it wit
   assert.equal((await config(req('PUT', 'x', app), e, now)).status, 400);
   assert.equal((await config(req('PUT', '{}', {'x-api-key': 'JPF1.nobody1.bad'}), e, now)).status, 401);
   const read = await (await config(req('GET', undefined, headers), e, now)).json();
-  assert.deepEqual(read, {search: {role_keywords: ['sre']}, profile: 'P', cv: 'C'});
+  // Why (5 Nov 2026, Gitar on #407): the privacy page says the CV is not sent to our servers; a cv the request carries anyway is never stored.
+  assert.deepEqual(read, {search: {role_keywords: ['sre']}, profile: 'P'});
   assert.equal((await config(req('GET', undefined, app), e, now)).status, 401);   // the install key does not read it back through this route
 });
 
