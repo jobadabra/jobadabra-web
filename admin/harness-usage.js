@@ -1,5 +1,5 @@
 // The "harness-fixer" upload and its card on /admin/ai/harness (owner, 5 Nov 2026: "how efficient it is ..." for the harness tools; then "Let's for now go on the CI harness only").
-// Sent daily by the public repo's tools/harness-stats.mjs (kind "harness-fixer" of /agent-coding/data) from the fixer's run records of the last 30 days: a run "used the map" when a step read or searched a path under docs/map/.
+// Sent daily by the public repo's tools/harness-stats.mjs (kind "harness-fixer" of /agent-coding/data) from the fixer's run records of the last 30 days: a run "used the map" when a step read a page under docs/map/.
 // Schema (agreed with the fixer's pane, 5 Nov 2026): {runs, tools: [{id: 'map-index'|'map-hub', runs}], help: {with_map, without_map}} where a group is {n, turns, calls, minutes, ready}: n runs, AVERAGES of turns/calls/minutes (1 decimal), ready = runs of the group that stopped 'ready'.
 // Numbers only. Every value is data: clamped here on write AND again on read (the page reads stored JSON as it is), so a card from before a change cannot throw or become HTML. Test: test/unit/admin/ai/harness-usage.test.js.
 import {esc} from '../shared/html.js';
@@ -53,5 +53,5 @@ export function fixerCard(stored) {
 <tr><td>Runs</td><td><b>${yes.n}</b></td><td><b>${no.n}</b></td></tr><tr><td>Turns (average)</td><td><b>${yes.turns}</b></td><td><b>${no.turns}</b></td></tr>
 <tr><td>Broker calls (average)</td><td><b>${yes.calls}</b></td><td><b>${no.calls}</b></td></tr><tr><td>Minutes (average)</td><td><b>${yes.minutes}</b></td><td><b>${no.minutes}</b></td></tr>
 <tr><td>Reached READY</td><td>${ready(yes)}</td><td>${ready(no)}</td></tr></table></div>
-<p class="muted" style="margin:6px 0 0">A run "used the map" when one of its steps read or searched a path under docs/map/. Counts come from the fixer's run records, no AI; the groups differ in more than the map, so read this as a hint.</p></details></section>`;
+<p class="muted" style="margin:6px 0 0">A run "used the map" when one of its steps read a page under docs/map/ (a search names a folder, not a page, so it does not count). Counts come from the fixer's run records, no AI; the groups differ in more than the map, so read this as a hint.</p></details></section>`;
 }
