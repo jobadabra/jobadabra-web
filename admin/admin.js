@@ -89,7 +89,7 @@ export async function redirectOld(request, env) {
 // One look on every admin page: the shared base comes after each page's own styles, so the width, type, colours, cards and
 // tables are the same everywhere; a page keeps only what is its own (its charts, badges, grids).
 export const BASE_STYLE = `body{margin:0;background:#0b0d10;color:#f4efe3;font:15px/1.45 system-ui,-apple-system,sans-serif}
-main{max-width:1040px;margin:0 auto;padding:0 16px 48px}h1{margin:0;font-size:24px;line-height:1.2}h2{font-size:15px}
+main{max-width:1200px;margin:0 auto;padding:0 16px 48px}h1{margin:0;font-size:24px;line-height:1.2}h2{font-size:15px}
 header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 18px}
 a{color:#f5b54a}.muted{color:#8d949c}.card{background:#14181d;border:1px solid #262c33;border-radius:14px}
 table{width:100%;border-collapse:collapse}th{text-align:left;font-weight:500;color:#8d949c;font-size:12px}td{border-top:1px solid #262c33}
@@ -117,7 +117,7 @@ body.forEach(r=>[...r.cells].forEach(c=>{if(/^\\d{4}-\\d\\d-\\d\\d( \\d\\d:\\d\\
 export const filterLinks = (options, current, label = '') => `<nav class="filters" aria-label="${esc(label || 'Filter')}">${label ? `<span class="filter-label">${esc(label)}</span>` : ''}${options.map(([value, text, href]) =>
   `<a class="filter${value === current ? ' on' : ''}" href="${esc(href)}"${value === current ? ' aria-current="true"' : ''}>${esc(text)}</a>`).join('')}</nav>`;
 export const NAV_STYLE = `.admin-nav{position:sticky;top:0;z-index:5;background:#0b0d10ee;backdrop-filter:blur(6px);border-bottom:1px solid #262c33;margin:0 0 18px}
-.admin-nav>div{max-width:1040px;margin:0 auto;padding:10px 16px;display:flex;gap:2px;flex-wrap:wrap;align-items:center;font:13.5px/1.3 system-ui,-apple-system,sans-serif}
+.admin-nav>div{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;gap:2px;flex-wrap:wrap;align-items:center;font:13.5px/1.3 system-ui,-apple-system,sans-serif}
 .admin-nav b{color:#f4efe3;margin-right:6px;white-space:nowrap}.admin-nav a{color:#8d949c;text-decoration:none;padding:5px 6px;border-radius:999px;white-space:nowrap}
 .admin-nav .me{margin-left:auto;color:#8d949c;font-size:12px;white-space:nowrap}.admin-nav a:hover{color:#f4efe3;background:#1b2027}.admin-nav a[aria-current]{color:#0b0d10;background:#f5b54a;font-weight:600}
 .trend{float:right;display:inline-flex;align-items:center;gap:8px;font-size:12px;color:#8d949c;margin-left:12px}.trend svg{display:block}
