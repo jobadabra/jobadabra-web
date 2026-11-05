@@ -43,9 +43,9 @@ test('a replay that does not add up is dropped, a second send of a night keeps t
 });
 
 test('the replays already stored with their quality night move to the new table when the migration runs', () => {
-  const e = d1(name => name.startsWith('0131_'));
+  const e = d1(name => name.startsWith('0132_'));
   e.db.prepare("INSERT INTO e2e_quality (run_id, day, pairs, within8, over20, prompt_cases) VALUES (1, '2026-11-02', 9, 8, 0, ?), (2, '2026-11-03', 9, 8, 0, NULL)").run(JSON.stringify(replay()));
-  e.db.exec(readFileSync(new URL('0131_e2e_prompt_cases.sql', MIGRATIONS), 'utf8'));
+  e.db.exec(readFileSync(new URL('0132_e2e_prompt_cases.sql', MIGRATIONS), 'utf8'));
   assert.deepEqual(e.db.prepare('SELECT run_id, day FROM e2e_prompt_cases').all().map(row => ({...row})), [{run_id: 1, day: '2026-11-02'}]);
 });
 
