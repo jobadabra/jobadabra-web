@@ -23,7 +23,7 @@ export function switchesCard(rows, confirm, facts) {
     return `<div class="sw-row">${form(row.on ? 'off' : 'on')}<button class="sw" type="submit" role="switch" aria-checked="${row.on}" aria-label="${esc(row.name)}"></button>
 <span class="sw-state ${row.on ? 'on' : 'off'}">${row.on ? 'On' : 'Off'}</span>
 <span class="sw-name">${esc(row.name)}<span class="sw-says">${esc(row.says)}${esc(note(row))}</span></span></form>
-${asking ? `<div class="sw-ask" role="alert">${form('on', '<input type="hidden" name="confirmed" value="1">')}<span>Turn <b>${esc(row.name)}</b> on? ${esc(row.says)} can then leave.</span><button type="submit">Yes, turn it on</button><a href="${PAGE}#switches">Cancel</a></form></div>` : ''}</div>`;
+${asking ? `<div class="sw-ask" role="alert">${form('on', '<input type="hidden" name="confirmed" value="1">')}<span>Turn <b>${esc(row.name)}</b> on? ${esc(row.says)} can then leave.</span><button type="submit">Yes, turn it on</button><a href="${PAGE}?tab=settings#switches">Cancel</a></form></div>` : ''}</div>`;
   }).join('');
   return `<section class="card" id="switches" style="margin-bottom:16px"><h2>Switches</h2><div class="sw-list">${list}</div><span class="muted">${facts}</span></section>`;
 }
@@ -37,5 +37,5 @@ export async function switchPress(request, env) {
   if (!NAMES.includes(name) || !['on', 'off'].includes(String(form.get('state')))) return new Response('Unknown switch.', {status: 400});
   const ask = on && SWITCHES.find(one => one.name === name).ask && form.get('confirmed') !== '1';
   if (!ask) try { await setSwitch(env, name, on); } catch (error) { return new Response(`Not saved: ${error.message}. If the mail_switch table is missing, migration 0137 has not run.`, {status: 503, headers: {'Cache-Control': 'no-store'}}); }
-  return new Response(null, {status: 303, headers: {Location: `${PAGE}${ask ? `?confirm=${name}` : ''}#switches`, 'Cache-Control': 'no-store'}});
+  return new Response(null, {status: 303, headers: {Location: `${PAGE}?tab=settings${ask ? `&confirm=${name}` : ''}#switches`, 'Cache-Control': 'no-store'}});
 }

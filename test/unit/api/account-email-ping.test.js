@@ -41,8 +41,8 @@ test('a first address pings the owner once, WITHOUT the address (owner, 5 Nov 20
   assert.equal(url, `https://api.telegram.org/bot${TOKEN}/sendMessage`);
   assert.equal(body.chat_id, '42');
   assert.equal(body.parse_mode, 'HTML');
-  assert.equal(body.text, '📧 <b>New user e-mail</b> · install install- · 1 with an e-mail\nhttps://www.jobadabra.top/admin/growth/email');
-  assert.ok(!body.text.includes('ana@example.com'), 'an alert never carries the address; /admin/growth/email shows it');
+  assert.equal(body.text, '📧 <b>New user e-mail</b> · install install- · 1 with an e-mail\nhttps://www.jobadabra.top/admin/growth/email?tab=people');
+  assert.ok(!body.text.includes('ana@example.com'), 'an alert never carries the address; /admin/growth/email?tab=people shows it');
   assert.equal((await put(s, 'install-aaaa1234', 'ana@example.com')).ok, true);
   await put(s, 'install-aaaa1234', null, 'GET');
   await put(s, 'install-aaaa1234', null, 'POST', resend);
@@ -62,7 +62,7 @@ test('a changed address on an existing account pings once, worded "changed"', as
   await put(s, 'install-aaaa1234', 'ana@example.com');
   assert.equal((await put(s, 'install-aaaa1234', 'ana.new@example.com')).ok, true);
   assert.equal(s.calls.length, 2);
-  assert.equal(s.calls[1].body.text, '📧 <b>User e-mail changed</b> · install install- · 1 with an e-mail\nhttps://www.jobadabra.top/admin/growth/email');
+  assert.equal(s.calls[1].body.text, '📧 <b>User e-mail changed</b> · install install- · 1 with an e-mail\nhttps://www.jobadabra.top/admin/growth/email?tab=people');
 });
 
 test('a taken or Pro refusal pings nobody', async () => {

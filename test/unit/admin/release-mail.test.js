@@ -176,7 +176,7 @@ test('the news list shows every address with its source and what each type does 
   assert.deepEqual([by['a@example.com'].tips, by['w@example.com'].tips, by['w@example.com'].launch, by['app@example.com'].launch, by['never@example.com'].launch], [true, false, true, true, false], 'tips need a tick; the Pro launch also reaches every waitlist signup');
   assert.deepEqual([by['never@example.com'].releasesWhy, by['stop@example.com'].releasesWhy, by['app@example.com'].releasesWhy], ['not asked yet', 'stopped', 'Pro mail only'], 'a confirmed address waits for the card');
   assert.match(audienceCard(rows), /2 New releases, 1 Tips and tricks, 0 Job digest, 5 addresses/);
-  const page = async headers => (await emailView(new Request('https://www.jobadabra.top/admin/growth/email', {headers}), e)).text();
+  const page = async headers => (await emailView(new Request('https://www.jobadabra.top/admin/growth/email?tab=people', {headers}), e)).text();
   assert.match(await page({Authorization: 'Bearer owner-key'}), /w@example\.com/);
   assert.doesNotMatch(await page({}), /w@example\.com/);
 });
@@ -390,7 +390,7 @@ test('the release template opens the newest real stable draft, while gallery and
   const response = await emailView(new Request('https://www.jobadabra.top/admin/growth/email?template=release', {headers}), e);
   assert.equal(response.status, 302);
   assert.equal(response.headers.get('Location'), '/admin/growth/email?release=0.9.10');
-  const page = await (await emailView(new Request('https://www.jobadabra.top/admin/growth/email', {headers}), e)).text();
+  const page = await (await emailView(new Request('https://www.jobadabra.top/admin/growth/email?tab=templates', {headers}), e)).text();
   assert.match(page, /Latest stable release/);
   assert.match(page, /Latest stable change/);
   assert.doesNotMatch(page, /Version 0\.8\.42|See why each job fits/);

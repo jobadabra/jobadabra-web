@@ -153,7 +153,7 @@ export async function waitlist(request, env) {
   const entry = {email, role, source, at: new Date().toISOString(), country: request.cf?.country || ''};
   await env.WAITLIST.put(key, JSON.stringify(entry), {metadata: {at: entry.at, role, source}});
   // Why (5 Nov 2026, owner: an alert never carries a name or e-mail address): the address is read on /admin/growth/email, the ping says one came.
-  await alertOwner(env, 'pro-waitlist', {text: `✈️ Pro early access sign-up${role ? ` · ${role}` : ''}${source !== 'web' ? ' · from the app' : ''}`, link: 'https://www.jobadabra.top/admin/growth/email',
+  await alertOwner(env, 'pro-waitlist', {text: `✈️ Pro early access sign-up${role ? ` · ${role}` : ''}${source !== 'web' ? ' · from the app' : ''}`, link: 'https://www.jobadabra.top/admin/growth/email?tab=people',
     legacy: env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID ? {token: env.TELEGRAM_BOT_TOKEN, chat: env.TELEGRAM_CHAT_ID} : null}).catch(() => {});
   return json(200, {ok: true});
 }
