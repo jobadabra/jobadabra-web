@@ -295,7 +295,7 @@ async function route(request, env, ctx) {
   if (pathname === '/api/hosted/schedule') return hosted.schedule(request, env);   // hosted Always on: the install's schedule (shared/hosted.js; 404 while HOSTED_ALWAYS_ON is off)
   if (pathname === '/api/hosted/result') return hosted.result(request, env);   // a container's one result post (run token)
   if (pathname === '/api/hosted/state') return hostedState.state(request, env);   // the container's state, encrypted in R2 (api/hosted-state.js)
-  if (pathname === '/api/hosted/config') return hostedState.config(request, env);   // profile, search and CV text the app pushes; the container reads
+  if (pathname === '/api/hosted/config') return hostedState.config(request, env);   // profile and search the app pushes (no CV); the container reads
   if (pathname === '/api/hosted/export' || pathname === '/api/hosted/data') return hostedState.own(request, env);   // download and delete my hosted data
   if (pathname.startsWith('/api/ready/')) return ready(request, env);   // Ready to send, phase 1: the owner's night batch and morning rows (api/ready.js; 404 while READY_TO_SEND is off)
   if (pathname === '/api/hosted/test') return hostedTest(request, env);   // the Test button on our servers' card: one real run now, steps in words (api/hosted-test.js)
