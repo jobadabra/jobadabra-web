@@ -5,8 +5,8 @@
 ## Decisions (owner, 28 Oct 2026)
 | Question | Answer |
 |---|---|
-| Audience | Every address we hold that has not turned promotional mail off: `pro_accounts.email` (trial, Always on, Pro) + KV `signup:<email>` (waitlist). Measured 28 Oct: 5 accounts, 1 waitlist signup, 0 unsubscribed. |
-| Consent | Opt-out. Joining the waitlist or giving an address in the wizard counts as agreeing to product news ("a user who puts himself on the waiting list is considered as wanting promotional emails"). `marketing_opt_in` stops gating; `mail_off` (list marketing/all) and the new `pro_accounts.marketing_off_at` do. |
+| Audience | Every address with a yes that has not turned promotional mail off: ticked `pro_accounts.email` (trial, Always on, Pro) + KV `signup:<email>` (waitlist; its promise is an open owner decision, 5 Nov 2026). Measured 28 Oct: 5 accounts, 1 waitlist signup, 0 unsubscribed. |
+| Consent | A yes (owner, 5 Nov 2026, replaces 28 Oct's opt-out: "Keep on, service mails only (Recommended)"; "the waitlist emails count..."). A tick (`marketing_opt_in = 1`) or a waitlist signup; an account with no stored choice gets no news. `mail_off` (list marketing/all) beats both. Rule: `saidYes` in `shared/mail.js`. |
 | Switch | `MARKETING_MAIL=on` is turned on by the owner (his 28 Oct yes); the first real send is still his click only. |
 | Unsubscribe | The footer of **every** promotional mail carries the one-click "stop" link + the `List-Unsubscribe` headers (already added by `shared/mail.js` for any non-essential template). A test loops over every `marketing` template and fails if one lacks it. |
 | Content | The complete `changelog_entries` row for the version: New / Improved / Fixed rows. Short subject `Jobadabra <version> · What's new`, prominent version heading; owner may add an introduction (5 Nov 2026). |

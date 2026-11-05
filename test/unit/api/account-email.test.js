@@ -194,12 +194,56 @@ test('an address unconfirmed for 14 days after its first mail gets no more mail;
   assert.equal((await send('2026-11-02T10:00:00Z')).ok, true, 'confirmed: mail comes again');
 });
 
-test('an account that never answered shows product news ON in the app (opt-out), and saving the address keeps it on', async () => {
+test('a "false" from the app stops news only when it takes back a yes: a never-ticked save writes no stop, an untick does', async () => {
+  // Why (review of #hr-24, 5 Nov 2026): the app sends marketing on every save, so a never-answered box became a stop that later beat a waitlist signup.
+  const {e} = setup();
+  const stops = () => e.STATS.db.prepare("SELECT COUNT(*) n FROM mail_off WHERE list = 'marketing'").get().n;
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: false});
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: false});
+  assert.equal(stops(), 0);
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: true});
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: false});
+  assert.equal(stops(), 1);
+  const listed = setup().e;
+  listed.WAITLIST = {get: async key => (key === 'signup:wait@example.com' ? '1' : null)};
+  await call(address, listed, 'install-bbbb', 'PUT', {email: 'wait@example.com', marketing: false});
+  assert.equal((await call(address, listed, 'install-bbbb', 'GET')).marketing, true, 'a new account\'s unticked box takes nothing back');
+});
+
+test('a Pro account saves its choices at its own address; only changing the address is refused', async () => {
+  // Why (review of #hr-24, 5 Nov 2026): the 409 came first, so a Pro person could not tick product news.
+  const {e} = setup();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com'});
+  e.STATS.db.prepare("UPDATE pro_accounts SET plan = 'pro'").run();
+  assert.equal((await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com', marketing: true})).status, 200);
+  assert.equal((await call(address, e, 'install-aaaa', 'GET')).marketing, true);
+  assert.equal((await call(address, e, 'install-aaaa', 'PUT', {email: 'other@example.com'})).status, 409);
+});
+
+test('a tick from an unconfirmed address does not erase that address\'s stop: it may be someone else\'s', async () => {
+  // Why (review of #hr-24, 5 Nov 2026): anyone can type an address, and a stop must beat a tick.
+  const {e} = setup();
+  e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'marketing', 'unsubscribe', 'x')").run(await addrOf('stopped@example.com'));
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'stopped@example.com', marketing: true});
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) n FROM mail_off WHERE list = 'marketing'").get().n, 1);
+  assert.equal((await call(address, e, 'install-aaaa', 'GET')).marketing, false);
+  e.STATS.db.prepare('UPDATE pro_accounts SET email_confirmed_at = ?').run('2026-10-16T09:00:00Z');
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'stopped@example.com', marketing: true});
+  assert.equal((await call(address, e, 'install-aaaa', 'GET')).marketing, true, 'the confirmed owner of the address can turn it back on');
+});
+
+test('an account that never answered shows product news OFF in the app; a tick turns it on; a waitlist signup counts as a yes', async () => {
+  // Why (owner, 5 Nov 2026: marketing is its own unticked choice; "the waitlist emails count..."; was opt-out since 28 Oct).
   const {e} = setup();
   await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com'});
-  assert.equal((await call(address, e, 'install-aaaa', 'GET')).marketing, true);
+  assert.equal((await call(address, e, 'install-aaaa', 'GET')).marketing, false);
   await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: true});
+  assert.equal((await call(address, e, 'install-aaaa', 'GET')).marketing, true);
   assert.equal(e.STATS.db.prepare("SELECT COUNT(*) n FROM mail_off WHERE list = 'marketing'").get().n, 0);
+  const listed = setup().e;
+  listed.WAITLIST = {get: async key => (key === 'signup:wait@example.com' ? '1' : null)};
+  await call(address, listed, 'install-bbbb', 'PUT', {email: 'wait@example.com'});
+  assert.equal((await call(address, listed, 'install-bbbb', 'GET')).marketing, true);
 });
 
 // Owner, 2 Nov 2026 ("Keep it, make it painless"): the welcome goes once per address ever, so a lost mail needs a Resend, rate-limited.

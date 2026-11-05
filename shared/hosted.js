@@ -70,8 +70,7 @@ export async function schedule(request, env, now = new Date()) {
     const linked = await link(env, id, install, now);
     if (!linked.ok) return Response.json({ok: false, error: linked.error}, {status: 409});
     if (body.marketing === true) await env.STATS.prepare('UPDATE pro_accounts SET marketing_opt_in = 1, marketing_opt_in_at = ? WHERE id = ?').bind(now.toISOString(), id).run();
-    // Why (28 Oct 2026, Gitar on #218): an address given here agrees to product news unless the box is explicitly declined; a declined box is a no, written where the mail reads it (mail_off).
-    else if (body.marketing === false) await env.STATS.prepare("INSERT OR REPLACE INTO mail_off (addr, list, reason, at) VALUES (?, 'marketing', 'wizard', ?)").bind(await digestOf(email), now.toISOString()).run();
+    // Why (owner, 5 Nov 2026; replaces 28 Oct opt-out): a new account gets product news only with a tick; an unticked box takes nothing back, so it writes no stop.
     account = await accountOf(env, install);
   }
   const pro = account.plan === 'pro' && account.status === 'active';

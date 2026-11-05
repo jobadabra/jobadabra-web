@@ -1,6 +1,6 @@
 // The "What's new" mail at a stable release (spec docs/superpowers/specs/2026-10-28-release-mail-design.md). The stable promotion calls POST /release-mail/draft {version}
 // (Bearer SELFHEAL_PUBLISH_KEY): the site builds a draft from changelog entries since the previous stable through that version and keeps it in release_mail, once per version. The owner reviews it
-// (POST /admin/mail/release?version=X, Bearer: counts and shows the draft; &headline=... edits it; &send=1 sends it). It goes to every address we hold that has not turned product news off
+// (POST /admin/mail/release?version=X, Bearer: counts and shows the draft; &headline=... edits it; &send=1 sends it). It goes to every address with a yes (a tick or the waitlist: shared/mail.js saidYes) that has not turned product news off
 // (shared/mail.js mailAllowed does the check per address), and a version is claimed for sending once, so a second click or a second promotion mails nobody twice. Guard: test/unit/admin/release-mail.test.js.
 import {equal} from '../shared/guard.js';
 import {isOwner} from '../shared/auth.js';
@@ -60,10 +60,10 @@ export async function releaseData(env, data, {status = 'draft'} = {}) {
     sections: (fresh?.sections || []).map(section => ({...data.sections?.find(saved => saved.title === section.title && saved.text === section.text), ...section}))};
 }
 
-// Everyone we hold an address for: accounts (trial, Always on, Pro) and the waitlist (KV signup:<email>), once each.
+// Everyone with a yes: ticked accounts (trial, Always on, Pro) and the waitlist (KV signup:<email>), once each.
 export async function audience(env) {
   const out = new Map();
-  for (const {email} of (await env.STATS.prepare('SELECT email FROM pro_accounts').all()).results || []) out.set(clean(email), true);
+  for (const {email} of (await env.STATS.prepare('SELECT email FROM pro_accounts WHERE marketing_opt_in = 1').all()).results || []) out.set(clean(email), true);   // a tick; the waitlist below (shared/mail.js saidYes)
   let cursor;
   do {
     const page = await env.WAITLIST.list({prefix: 'signup:', cursor});
@@ -100,7 +100,7 @@ export async function ingest(request, env) {
 }
 
 // TODO(AI): send in batches from a queue once the audience passes the Worker's subrequest limit (28 Oct 2026).
-// Sends only a stable release to everyone not stopped. Eligibility and content are checked before the one-time claim (draft -> sending), so no second run can start; a run that dies halfway is finished by hand (status shows 'sending').
+// Sends only a stable release to the audience, less the stopped. Eligibility and content are checked before the one-time claim (draft -> sending), so no second run can start; a run that dies halfway is finished by hand (status shows 'sending').
 export async function sendAll(env, version, {now = new Date()} = {}) {
   const row = await env.STATS.prepare('SELECT data FROM release_mail WHERE version = ?').bind(version).first();
   if (!row) return {refused: 'not a draft'};

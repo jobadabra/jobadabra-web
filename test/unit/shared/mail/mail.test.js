@@ -126,14 +126,19 @@ test('a sign-in code is not stopped by the service unsubscribe, and carries no u
   assert.ok(!sent[0].text.includes('unsubscribe') && !sent[0].headers);
 });
 
-test('marketing mail goes to anyone who has not stopped it (owner, 28 Oct 2026: opt-out), and its unsubscribe stops it; the service list is untouched', async () => {
+test('marketing mail needs a yes: a tick or the waitlist; an account with no stored choice gets none; its unsubscribe beats a tick; the service list is untouched', async () => {
+  // Why (owner, 5 Nov 2026: marketing is its own unticked choice; "the waitlist emails count..."; was opt-out since 28 Oct).
   TEMPLATES.news = {list: 'marketing', subject: () => 'News', title: () => 'News', text: () => 'Pro is here', html: () => '<p>Pro is here</p>'};
   try {
-    const {e, sent} = setup({MARKETING_MAIL: 'on'});
+    const {e, sent} = setup({MARKETING_MAIL: 'on', WAITLIST: {get: async key => (key === 'signup:wait@example.com' ? '1' : null)}});
     await createAccount(e, 'me@example.com', now, {plan: 'trial'});
     assert.equal((await send({...e, MARKETING_MAIL: 'off'}, 'news', 'me@example.com', {}, {now})).reason, 'marketing_off', 'the owner\'s flag is off: nothing promotional goes out');
-    assert.equal((await send(e, 'news', 'nobody@example.com', {}, {now})).ok, true, 'an address with no account (the waitlist) gets it too');
-    assert.equal((await send(e, 'news', 'me@example.com', {}, {now})).ok, true);
+    assert.equal((await send(e, 'news', 'me@example.com', {}, {now})).reason, 'no_tick', 'an account that never answered');
+    assert.equal((await send(e, 'news', 'nobody@example.com', {}, {now})).reason, 'no_tick', 'an address we hold no yes for');
+    assert.equal((await send(e, 'news', 'Wait@Example.com', {}, {now})).ok, true, 'the waitlist counts');
+    assert.equal((await send(e, 'news', 'nobody@example.com', {}, {now, test: true})).ok, true, 'a test send goes to the typed address');
+    e.STATS.db.prepare('UPDATE pro_accounts SET marketing_opt_in = 1').run();
+    assert.equal((await send(e, 'news', 'me@example.com', {}, {now})).ok, true, 'a tick');
     assert.match(sent[0].from, /^Igor from Jobadabra <no-reply@jobadabra\.top>$/);
     await unsubscribe(new Request(await stopLink(e, 'me@example.com', 'marketing'), {method: 'POST'}), e, now);
     assert.equal((await send(e, 'news', 'me@example.com', {}, {now})).reason, 'unsubscribed');

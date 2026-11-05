@@ -2,6 +2,7 @@
 // (tokenFor(address digest, 'unsub-service')). GET shows the form (a mail scanner opening the link changes nothing); POST saves. Product news shows off and locked while env.MARKETING_MAIL is not "on". Guard: test/unit/api/mail-settings.test.js.
 import {equal, tokenFor} from '../shared/guard.js';
 import {esc} from '../shared/mail-frame.js';
+import {saidYes} from '../shared/mail.js';
 import {CADENCES} from './mail-held.js';
 import {page, switchOff} from './mail-unsub.js';
 
@@ -10,9 +11,9 @@ const row = (name, checked, label, note, disabled = false) => `<p><label><input 
 
 async function stateOf(env, addr) {
   const off = (await env.STATS.prepare("SELECT list FROM mail_off WHERE addr = ? AND list IN ('all', 'service', 'marketing')").bind(addr).all()).results || [];
-  const account = await env.STATS.prepare('SELECT marketing_opt_in, service_mail_off_at, digest_cadence FROM pro_accounts WHERE email_hash = ?').bind(addr).first().catch(() => null);
+  const account = await env.STATS.prepare('SELECT email, marketing_opt_in, service_mail_off_at, digest_cadence FROM pro_accounts WHERE email_hash = ?').bind(addr).first().catch(() => null);
   const lists = new Set(off.map(r => r.list));
-  return {blocked: lists.has('all'), service: !lists.has('service') && !account?.service_mail_off_at, cadence: account?.digest_cadence || 'daily', marketing: !lists.has('marketing') && !lists.has('all'), account}   // opt-out since 28 Oct 2026 (shared/mail.js mailAllowed);
+  return {blocked: lists.has('all'), service: !lists.has('service') && !account?.service_mail_off_at, cadence: account?.digest_cadence || 'daily', marketing: !lists.has('marketing') && !lists.has('all') && (!account || await saidYes(env, account.email, account)), account};   // no account: only the waitlist mails this address (owner, 5 Nov 2026: a yes, not opt-out)
 }
 
 export async function settings(request, env, now = new Date()) {
@@ -33,7 +34,7 @@ export async function settings(request, env, now = new Date()) {
       if (form.get('marketing')) {
         await env.STATS.prepare("DELETE FROM mail_off WHERE addr = ? AND list = 'marketing'").bind(addr).run();
         await env.STATS.prepare('UPDATE pro_accounts SET marketing_opt_in = 1, marketing_opt_in_at = ? WHERE email_hash = ?').bind(now.toISOString(), addr).run();
-      } else await switchOff(env, addr, 'marketing', 'settings', now);
+      } else if (before.marketing) await switchOff(env, addr, 'marketing', 'settings', now);   // an unticked box takes back a yes, or nothing
     }
     return page('Saved', `<p>Your email settings are saved.</p><p><a href="${esc(url.pathname + url.search)}">Back to the settings</a></p>`);
   }

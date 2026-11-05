@@ -92,10 +92,11 @@ test('opening the app resumes a schedule the 14-day pause stopped, and only that
   assert.deepEqual(rows(e, 'SELECT state, pause_reason FROM hosted_schedules'), [{state: 'on', pause_reason: null}]);
 });
 
-test('an unticked wizard box is a no to product news, written to mail_off; no answer is not (opt-out since 28 Oct 2026, Gitar on #218)', async () => {
+test('product news need a tick in the wizard: an unticked box and no answer write no stop and no tick (owner, 5 Nov 2026)', async () => {
   const e = env();
   e.STATS.db.exec('CREATE TABLE IF NOT EXISTS mail_off (addr TEXT NOT NULL, list TEXT NOT NULL, reason TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (addr, list))');
   await put(e, 'install-aaaa1', {on: true, email: 'no@example.com', marketing: false});
   await put(e, 'install-bbbb2', {on: true, email: 'silent@example.com'});
-  assert.deepEqual(rows(e, 'SELECT list, reason FROM mail_off'), [{list: 'marketing', reason: 'wizard'}]);
+  assert.deepEqual(rows(e, 'SELECT list, reason FROM mail_off'), []);
+  assert.deepEqual(rows(e, 'SELECT marketing_opt_in FROM pro_accounts').map(r => r.marketing_opt_in), [0, 0]);
 });

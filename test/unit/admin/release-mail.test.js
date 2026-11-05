@@ -58,11 +58,14 @@ test('the trigger from a fake promotion: wrong key is a 404, right key drafts', 
   assert.deepEqual(await (await call('k')).json(), {drafted: true});
 });
 
-test('the audience is every account and waitlist address, once; sending reaches all but the stopped and never mails a version twice', async () => {
+test('the audience is every ticked account and waitlist address, once; an account that never ticked is out; sending reaches all but the stopped and never mails a version twice', async () => {
+  // Why (owner, 5 Nov 2026: marketing is its own unticked choice; "the waitlist emails count..."; was opt-out since 28 Oct).
   const {e, sent} = setup();
   await createAccount(e, 'trial@example.com', now, {plan: 'trial'});
   await createAccount(e, 'stop@example.com', now, {plan: 'trial'});
   await createAccount(e, 'bounced@example.com', now, {plan: 'trial'});
+  await createAccount(e, 'never@example.com', now, {plan: 'trial'});
+  e.STATS.db.prepare("UPDATE pro_accounts SET marketing_opt_in = 1 WHERE email IN ('stop@example.com', 'bounced@example.com')").run();
   await e.WAITLIST.put('signup:wait@example.com', '1');
   await e.WAITLIST.put('signup:trial@example.com', '1');   // on both lists: once
   assert.equal((await audience(e)).length, 4);
@@ -126,6 +129,8 @@ test('the review page shows the mail and "Send to N people" (N = who would get i
   const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
   await createAccount(e, 'a@example.com', now, {plan: 'trial'});
   await createAccount(e, 'stop@example.com', now, {plan: 'trial'});
+  await createAccount(e, 'never@example.com', now, {plan: 'trial'});
+  e.STATS.db.prepare("UPDATE pro_accounts SET marketing_opt_in = 1 WHERE email IN ('a@example.com', 'stop@example.com')").run();
   await e.WAITLIST.put('signup:w@example.com', '1');
   e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'marketing', 'unsubscribe', 'x')").run(await addrOf('stop@example.com'));
   await draft(e, '0.8.42', now);
@@ -151,12 +156,13 @@ test('the product news list shows every address with its source and whether it g
   e.STATS.db.exec('CREATE TABLE IF NOT EXISTS test_mail (received_at TEXT, to_addr TEXT, subject TEXT)');
   await createAccount(e, 'a@example.com', now, {plan: 'trial'});
   await createAccount(e, 'stop@example.com', now, {plan: 'trial'});
+  await createAccount(e, 'never@example.com', now, {plan: 'trial'});
   await e.WAITLIST.put('signup:a@example.com', '1');
   await e.WAITLIST.put('signup:w@example.com', '1');
   e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'marketing', 'unsubscribe', 'x')").run(await addrOf('stop@example.com'));
   const rows = await audienceRows(e);
-  assert.deepEqual(rows.map(r => [r.email, r.source, r.gets]).sort(), [['a@example.com', 'both', true], ['stop@example.com', 'account', false], ['w@example.com', 'waitlist', true]]);
-  assert.match(audienceCard(rows), /2 get it, 1 stopped/);
+  assert.deepEqual(rows.map(r => [r.email, r.source, r.gets]).sort(), [['a@example.com', 'both', true], ['never@example.com', 'account', false], ['stop@example.com', 'account', false], ['w@example.com', 'waitlist', true]]);
+  assert.match(audienceCard(rows), /2 get it, 1 stopped, 1 never ticked/);
   const page = async headers => (await emailView(new Request('https://www.jobadabra.top/admin/growth/email', {headers}), e)).text();
   assert.match(await page({Authorization: 'Bearer owner-key'}), /w@example\.com/);
   assert.doesNotMatch(await page({}), /w@example\.com/);

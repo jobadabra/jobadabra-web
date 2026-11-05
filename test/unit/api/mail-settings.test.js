@@ -48,6 +48,19 @@ test('saving turns service mail off and on and sets the digest cadence', async (
   assert.ok(id);
 });
 
+test('product news shows the yes the sender reads: an unticked account is off and saves no stop; an address with no account shows on (the link holds only a hash)', async () => {
+  // Why (owner, 5 Nov 2026: marketing is its own unticked choice; "the waitlist emails count...").
+  const e = {...env(), MARKETING_MAIL: 'on'};
+  await createAccount(e, 'me@example.com', now, {plan: 'trial'});
+  const box = async to => /name="marketing"[^>]* checked/.test(await (await settings(new Request(await settingsLink(e, to)), e, now)).text());
+  assert.equal(await box('me@example.com'), false, 'never ticked');
+  assert.equal(await box('wait@example.com'), true, 'the page cannot read the waitlist from a hash; only the waitlist mails an address with no account');
+  await save(e, await settingsLink(e, 'me@example.com'), {service: 'on'});
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_off WHERE list = 'marketing'").get().n, 0, 'an unticked box takes nothing back');
+  e.STATS.db.prepare('UPDATE pro_accounts SET marketing_opt_in = 1').run();
+  assert.equal(await box('me@example.com'), true, 'ticked');
+});
+
 test('product news shows off and cannot be switched on while the marketing flag is off; with the flag on it can', async () => {
   const e = env(), link = await settingsLink(e, 'me@example.com');
   await createAccount(e, 'me@example.com', now, {plan: 'trial'});

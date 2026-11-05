@@ -38,14 +38,21 @@ export async function settingsLink(env, to) {
 }
 
 // -> {ok: true} or {ok: false, reason}. For a caller that builds an expensive mail (the digest) and wants to know first.
-export async function mailAllowed(env, to, list = 'service', {essential = false} = {}) {
+/**
+ * Whether `email` said yes to product news: a tick on its account, or a signup on the waitlist (KV signup:<email>). An account with no stored choice is no yes.
+ * Why (owner, 5 Nov 2026, on jobadabra #3282: "Keep on, service mails only (Recommended)"; the list: "the waitlist emails count..."; replaces 28 Oct opt-out): marketing has its own unticked choice.
+ * A mail_off row beats it: callers check that first.
+ */
+export const saidYes = async (env, email, account) => !!account?.marketing_opt_in || !!await env.WAITLIST?.get(`signup:${clean(email)}`);
+
+export async function mailAllowed(env, to, list = 'service', {essential = false, test = false} = {}) {
   if (!validAddress(to)) return {ok: false, reason: 'bad_address'};
   if (list === 'marketing' && env.MARKETING_MAIL !== 'on') return {ok: false, reason: 'marketing_off'};   // owner, 17 Oct 2026: no promotional mail until he turns it on
   const addr = await addrOf(to);
   const off = await env.STATS.prepare("SELECT list, reason FROM mail_off WHERE addr = ? AND list IN ('all', ?)").bind(addr, list).all();
   for (const row of off.results || []) if (row.list === 'all' || !essential) return {ok: false, reason: row.list === 'all' ? 'suppressed' : 'unsubscribed'};
   const account = await env.STATS.prepare('SELECT marketing_opt_in, service_mail_off_at FROM pro_accounts WHERE email_hash = ?').bind(addr).first().catch(() => null);
-  // Why (28 Oct 2026, owner): news go to every address that has not turned them off (mail_off above): a waitlist signup or an address given in the wizard agrees to product news. No opt-in column is read.
+  if (list === 'marketing' && !test && !await saidYes(env, to, account)) return {ok: false, reason: 'no_tick'};   // a test send goes to the owner's typed address or the test inbox
   if (list === 'service' && !essential && account?.service_mail_off_at) return {ok: false, reason: 'unsubscribed'};
   return {ok: true};
 }
@@ -59,7 +66,7 @@ async function record(env, now, addr, list, template, status, id = null) {
 export function compose(template, data = {}, links = null) {
   const spec = TEMPLATES[template];
   const why = spec.essential ? 'A security email, sent even if you stopped other emails.'
-    : spec.list === 'marketing' ? 'You joined the waitlist or set up Jobadabra.' : 'You set up Jobadabra with this address.';
+    : spec.list === 'marketing' ? 'You joined the waitlist or chose product news.' : 'You set up Jobadabra with this address.';
   const frame = {title: spec.title(data), why, button: spec.button?.(data) || null, links};
   const headers = links ? {'List-Unsubscribe': `<${links.stop}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'} : undefined;
   return {subject: spec.subject(data), text: frameText({...frame, body: spec.text(data)}), html: frameHtml({...frame, body: spec.html(data), hero: spec.hero?.(data)}), headers};
@@ -78,7 +85,7 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
   if (env.MAIL !== 'on' || !env.EMAIL || !env.STATS) return {ok: false, reason: 'off'};
   let claimed = null;   // the marker of the mail_log row holding this call's room until the provider has answered
   try {
-    const verdict = await mailAllowed(env, to, spec.list, spec);
+    const verdict = await mailAllowed(env, to, spec.list, {...spec, test});
     const addr = await addrOf(to);
     if (!verdict.ok) { if (verdict.reason !== 'bad_address' && verdict.reason !== 'marketing_off') await record(env, now, addr, spec.list, logged, verdict.reason); return verdict; }
     // Why (jobadabra-web#431; 20 of 20 parallel sends went out in the review of #430): the room under both caps is CLAIMED in one statement before the provider is asked (D1 runs a statement alone,
