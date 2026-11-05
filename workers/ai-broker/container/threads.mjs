@@ -35,19 +35,17 @@ export function threadTable(now = Date.now) {
       map.set(key, {...entry, last: now()});
       const evicted = [];
       while (map.size > MAX_THREADS) {
-        const [oldest] = [...map].filter(([name]) => name !== key).sort((a, b) => a[1].last - b[1].last)[0];
-        evicted.push(map.get(oldest)); map.delete(oldest);
+        const idle = [...map].filter(([name, entry]) => name !== key && !entry.busy).sort((a, b) => a[1].last - b[1].last)[0];
+        if (!idle) break;   // every other one is mid-turn: the table is briefly over its size, never a running turn deleted
+        evicted.push(map.get(idle[0])); map.delete(idle[0]);
       }
       return evicted;
     },
     touch(key, patch = {}) { const entry = map.get(key); if (entry) Object.assign(entry, patch, {last: now()}); },
     /** Forgets one conversation; returns it (or undefined) for the caller to delete. */
     drop(key) { const entry = map.get(key); map.delete(key); return entry; },
-    /** Forgets every conversation idle past IDLE_MS; returns them. */
-    sweep() { const gone = []; for (const [key, entry] of map) if (now() - entry.last > IDLE_MS) { gone.push(entry); map.delete(key); } return gone; },
+    /** Forgets every conversation idle past IDLE_MS that is not in the middle of a turn; returns them. */
+    sweep() { const gone = []; for (const [key, entry] of map) if (!entry.busy && now() - entry.last > IDLE_MS) { gone.push(entry); map.delete(key); } return gone; },
     size: () => map.size,
   };
 }
-
-/** A failure that says nothing about the conversation itself (the model was busy, the plan ran out): the thread stays for the next call. Anything else drops it, and the next call starts a new one. */
-export const transient = text => /at capacity|overload|usage[ _-]?limit|rate[ _-]?limit|too many requests|\b429\b/i.test(String(text));

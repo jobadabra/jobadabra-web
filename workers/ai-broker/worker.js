@@ -15,7 +15,7 @@ import {chainOf, configured, recordOutcome, engineHealth, CHOICES} from './lib/e
 import {CLAUDE_MODELS} from './lib/tiers.mjs';
 import {demotedNow, recordPerf} from './lib/adapt.mjs';
 import {addCall, addJobCall, jobKey, recentDays, tokensOf, workflowKey, workflowOf} from './lib/tally.mjs';
-import {countedOf, keyedLock, planOf, sessionKey, sessionKeyOf, settle} from './lib/sessions.mjs';
+import {countedOf, keyedLock, markGap, planOf, sessionKey, sessionKeyOf, settle} from './lib/sessions.mjs';
 
 export {ContainerProxy} from '@cloudflare/containers';   // required by the outbound host list below: without it every start fails with "ctx.exports.ContainerProxy is undefined" (28 Oct 2026)
 
@@ -87,11 +87,19 @@ export class CodexBroker extends Container {
   async call(lane, body, workflow = 'unknown', job = '', session = '') {
     const started = Date.now();
     const reply = await this.answer(lane, body, session);
+    if (session) await this.noteGap(session, reply).catch(error => console.log(`sessions: ${String(error?.message || error).slice(0, 200)}`));
     await this.countCall(workflow, reply, Date.now() - started, job).catch(error => console.log(`tally: ${String(error?.message || error).slice(0, 200)}`));
     return reply;
   }
 
   // Reads the finished reply's own tokens, engine and time (a refusal has none and still counts as a call), then adds them to today's row in one transaction.
+  // Why ([bf] review, 5 Nov 2026): a conversation turn that Codex did not answer (another engine did, Codex was out or at capacity, it failed) is a turn the Codex thread never saw, or saw half of. The record says so and the next call restarts from the full prompt instead of resuming a thread with a hole.
+  async noteGap(session, reply) {
+    const engine = reply.ok ? String((await reply.clone().json().catch(() => ({}))).engine || '') : '';
+    if (engine === 'codex') return;
+    await this.ctx.storage.transaction(async storage => { const records = (await storage.get('sessions')) || {}; if (records[session]) await storage.put('sessions', markGap(records, session)); });
+  }
+
   async countCall(workflow, reply, elapsed, job = '') {
     const data = reply.ok ? await reply.clone().json().catch(() => ({})) : {};
     const outcome = {ok: reply.ok, tokens: tokensOf(data.tokens), ms: Number.isFinite(data.ms) ? data.ms : elapsed, engine: reply.ok ? String(data.engine || '') : ''};
@@ -185,8 +193,7 @@ export class CodexBroker extends Container {
       try {
         const delta = typeof body.delta === 'string' ? body.delta : '', now = Date.now();
         const plan = session ? planOf(((await this.ctx.storage.get('sessions')) || {})[session], {now, tier: body.tier ?? 'mid', delta}) : null;
-        // Why ([bf], 5 Nov 2026): `session`, `delta` and `endSession` are the caller's words and only count when the Worker verified a persona run (the key); the container gets them only inside `session`.
-        const sent = {...body, engine: undefined, only: undefined, session: undefined, delta: undefined, endSession: undefined, model, ...(session ? {session: {key: session, ...plan, delta, end: body.endSession === true}} : {})};
+        const sent = {prompt: body.prompt, schema: body.schema, images: body.images, search: body.search, effort: body.effort, model, ...(session ? {session: {key: session, ...plan, delta, end: body.endSession === true}} : {})};   // an allow-list, never the caller's body: nothing else of theirs reaches the container
         const reply = await this.containerFetch('http://c/call', {method: 'POST', body: JSON.stringify(sent)});
         const text = await reply.text();
         let answer;
@@ -202,7 +209,7 @@ export class CodexBroker extends Container {
         await this.ctx.storage.transaction(async storage => {
           const latest = (await storage.get('meter')) || newMeter(0);
           await storage.put('meter', record(latest, lane, used, Date.now() / 1000, answer.limits?.resetsAt));
-          if (session && answer.session?.mode) await storage.put('sessions', settle((await storage.get('sessions')) || {}, session, {now, tier: body.tier ?? 'mid', mode: answer.session.mode}));
+          if (session && answer.session?.mode) await storage.put('sessions', settle((await storage.get('sessions')) || {}, session, {now: Date.now(), tier: body.tier ?? 'mid', mode: answer.session.mode}));   // the clock after the turn: a slow one must not look idle
         });
         const refused = refuseReply(answer.reply);
         if (refused) return json(422, {why: refused});

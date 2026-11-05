@@ -10,8 +10,8 @@ import {EventEmitter} from 'node:events';
 import {day, body, harness, entry} from './harness.mjs';
 import {buildArgs} from '../../../../workers/ai-broker/lib/args.mjs';
 import {weeklyWindow} from '../../../../workers/ai-broker/container/weekly.mjs';
-import {readTurn, threadTable, transient, turnUsage, IDLE_MS as THREAD_IDLE_MS, MAX_THREADS} from '../../../../workers/ai-broker/container/threads.mjs';
-import {IDLE_MS, TURN_CAP, countedOf, keyedLock, planOf, sessionKey, sessionKeyOf, settle} from '../../../../workers/ai-broker/lib/sessions.mjs';
+import {readTurn, threadTable, turnUsage, IDLE_MS as THREAD_IDLE_MS, MAX_THREADS} from '../../../../workers/ai-broker/container/threads.mjs';
+import {IDLE_MS, TURN_CAP, countedOf, keyedLock, markGap, planOf, sessionKey, sessionKeyOf, settle} from '../../../../workers/ai-broker/lib/sessions.mjs';
 
 const ref = (repository, file) => `${repository}/.github/workflows/${file}@refs/heads/main`;
 const PERSONA = {repository: 'jobadabra/jobadabra', run_id: '987', run_attempt: '1', job_workflow_ref: ref('jobadabra/jobadabra', 'ai-user-agents.yml')};
@@ -40,6 +40,7 @@ test('what the next call of a conversation does: open, resume, or replace it fro
   assert.deepEqual(planOf(record, {now: 1000 + IDLE_MS, tier: 'mid', delta: 'x'}), {expect: 'warm'}, 'exactly 5 minutes is still warm');
   assert.deepEqual(planOf({...record, turns: TURN_CAP}, {now, tier: 'mid', delta: 'x'}), {expect: 'none', restart: 'turn-cap'});
   for (const delta of [undefined, '', 5, null]) assert.deepEqual(planOf(record, {now, tier: 'mid', delta}), {expect: 'none', restart: 'no-delta'});
+  assert.deepEqual(planOf(markGap({[KEY]: record}, KEY)[KEY], {now, tier: 'mid', delta: 'x'}), {expect: 'none', restart: 'gap'}, 'a turn Codex did not answer leaves a hole');
 });
 
 test('records: a turn opens, grows, restarts or ends a conversation; old and surplus ones are forgotten', () => {
@@ -84,17 +85,22 @@ test('the trap: five resumed turns whose running totals reach 92,581 are counted
   assert.deepEqual(turnUsage({input: 5, cached: 0, output: 1}, {input: 9, cached: 2, output: 1}), {input: 0, cached: 0, output: 0}, 'never negative');
 });
 
-test('the container keeps at most 8 conversations and drops the idle ones; only a busy model keeps a failed turn\'s conversation', () => {
+test('the container keeps at most 8 conversations, drops the idle ones, and never one that is in the middle of a turn', () => {
   let clock = 0; const table = threadTable(() => clock);
   for (let i = 0; i < MAX_THREADS; i++) { clock = i; assert.deepEqual(table.set(`k${i}`, {thread: `t${i}`, dir: `d${i}`}), []); }
   clock = 100; table.touch('k0');
   const evicted = table.set('k8', {thread: 't8', dir: 'd8'});
   assert.deepEqual(evicted.map(entry => entry.thread), ['t1'], 'the longest idle goes, not the one just used');
+  table.get('k2').busy = true;   // a turn is running on k2
   clock = 100 + THREAD_IDLE_MS + 1;
-  assert.equal(table.sweep().length, MAX_THREADS, 'all of them idle past 5 minutes');
-  assert.equal(table.size(), 0);
-  for (const text of ['Selected model is at capacity. Please try a different model.', 'usage_limit_reached', '429 Too Many Requests']) assert.equal(transient(text), true, text);
-  for (const text of ['no session found', 'codex-failed:1 boom', '']) assert.equal(transient(text), false, text);
+  const swept = table.sweep();
+  assert.equal(swept.length, MAX_THREADS - 1, 'every idle one but the busy one');
+  assert.ok(table.get('k2') && !swept.some(entry => entry.thread === 't2'), 'a slow turn is not swept from under itself');
+  table.get('k2').busy = false;
+  const busy = threadTable(() => 0);
+  for (let i = 0; i < MAX_THREADS; i++) { busy.set(`b${i}`, {thread: `t${i}`, dir: `d${i}`}); busy.get(`b${i}`).busy = true; }
+  assert.deepEqual(busy.set('b8', {thread: 't8', dir: 'd8'}), [], 'nothing idle to drop: the table is briefly over its size, no running turn is evicted');
+  assert.equal(busy.size(), MAX_THREADS + 1);
 });
 
 // The call server loaded offline with a stand-in Codex that prints the CLI's running totals (TOTALS) turn after turn on one thread.
@@ -121,7 +127,7 @@ async function serverWithCodex(t) {
   };
   vm.runInNewContext(fs.readFileSync(new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, ''), {
     http: {createServer(fn) { handler = fn; return {listen() {}}; }},
-    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, transient, turnUsage, Buffer, setTimeout, clearTimeout, setInterval,
+    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, turnUsage, Buffer, setTimeout, clearTimeout, setInterval,
     process: {env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: ''}},
   });
   const post = payload => new Promise(resolve => {
@@ -160,21 +166,22 @@ test('a conversation the container no longer has restarts from the full prompt a
   assert.equal(seen.at(-1).input, 'FULL 4');
 });
 
-test('a failed turn: a busy model keeps the conversation, anything else deletes it so the next call starts again', async t => {
+test('a failed turn deletes its conversation, whatever the cause, so the next call starts again; no folder or entry is left behind', async t => {
   const {dir, seen, state, post} = await serverWithCodex(t);
-  const open = () => post({prompt: 'FULL', model: 'gpt-6.1-sol', session: {key: KEY, expect: 'none'}});
-  await open();
-  state.fail = 'Selected model is at capacity. Please try a different model.';
-  assert.equal((await post({prompt: 'FULL', model: 'gpt-6.1-sol', session: {key: KEY, expect: 'warm', delta: 'NEW'}})).status, 500);
-  state.fail = null;
-  assert.equal((await post({prompt: 'FULL', model: 'gpt-6.1-sol', session: {key: KEY, expect: 'warm', delta: 'NEW'}})).body.session.mode, 'resumed', 'capacity left it alone');
-  state.fail = 'boom';
-  assert.equal((await post({prompt: 'FULL', model: 'gpt-6.1-sol', session: {key: KEY, expect: 'warm', delta: 'NEW'}})).status, 500);
-  state.fail = null;
-  assert.deepEqual((await post({prompt: 'FULL', model: 'gpt-6.1-sol', session: {key: KEY, expect: 'warm', delta: 'NEW'}})).body.session, {mode: 'restarted', reason: 'lost'});
+  const turn = (extra = {}) => post({prompt: 'FULL', model: 'gpt-6.1-sol', session: {key: KEY, expect: 'warm', delta: 'NEW'}, ...extra});
+  await post({prompt: 'FULL', model: 'gpt-6.1-sol', session: {key: KEY, expect: 'none'}});
+  for (const failure of ['Selected model is at capacity. Please try a different model.', 'boom']) {
+    state.fail = failure;
+    assert.equal((await turn()).status, 500, failure);
+    state.fail = null;
+    assert.deepEqual((await turn()).body.session, {mode: 'restarted', reason: 'lost'}, `after "${failure.slice(0, 20)}" the next call restarts from the full prompt`);
+  }
+  await post({prompt: 'FULL', model: 'gpt-6.1-sol', session: {key: KEY, expect: 'warm', delta: 'NEW'}, images: [{name: 'a.png'}]});   // no image data: the turn throws before Codex runs
+  assert.deepEqual((await turn()).body.session, {mode: 'restarted', reason: 'lost'}, 'a turn that threw before Codex ran is not trusted either');
   state.fail = 'boom';
   await post({prompt: 'FULL', model: 'gpt-6.1-sol', session: {key: 'other#1.1#x', expect: 'none'}});   // a conversation that never opened
-  assert.ok(seen.length >= 5 && fs.readdirSync(dir).filter(name => name.startsWith('thread-')).length === 1, 'only the one live conversation is on disk');
+  assert.equal(fs.readdirSync(dir).filter(name => name.startsWith('thread-')).length, 1, 'only the one live conversation is on disk');
+  assert.ok(seen.length >= 6);
 });
 
 test('a call with no session is what it always was: an ephemeral thread, tokens as printed, nothing kept', async t => {
@@ -253,16 +260,45 @@ test('a failed turn leaves the record alone, an ended one deletes it, and one co
   const good = broker.containerFetch;
   broker.containerFetch = async () => new Response(JSON.stringify({error: 'codex-failed:1 boom'}), {status: 500});
   assert.equal((await ask(broker, {prompt: 'B', delta: 'b'})).status, 502);
-  assert.equal((await storage.get('sessions'))[KEY].turns, 1, 'a failed turn is not a turn');
+  assert.deepEqual({...(await storage.get('sessions'))[KEY]}.turns, 1, 'a failed turn is not a turn');
+  assert.equal((await storage.get('sessions'))[KEY].stale, true, 'and it leaves a hole: the next call restarts from the full prompt');
   broker.containerFetch = good;
   await Promise.all([ask(broker, {prompt: 'C', delta: 'c'}), ask(broker, {prompt: 'D', delta: 'd'})]);
   assert.equal(seen.peak(), 1, 'the second turn waited for the first');
-  assert.equal((await storage.get('sessions'))[KEY].turns, 3);
+  assert.equal((await storage.get('sessions'))[KEY].turns, 2, 'C restarted the conversation (gap), D resumed it');
   await Promise.all([ask(broker, {prompt: 'E', delta: 'e'}, `${KEY.slice(0, -2)}g2`), ask(broker, {prompt: 'F', delta: 'f'})]);
   assert.equal(seen.peak(), 2, 'two goals of one run do not wait for each other');
   await ask(broker, {prompt: 'G', delta: 'g', endSession: true});
   assert.equal(seen.sent.at(-1).session.end, true);
   assert.equal((await storage.get('sessions'))[KEY], undefined, 'the last turn deleted the record');
+});
+
+test('a turn another engine answered leaves a hole: the next call restarts from the full prompt; one Codex answered does not', async t => {
+  t.mock.method(Date, 'now', () => day);
+  const {broker, storage} = harness(), seen = conversation(broker);
+  await ask(broker, {prompt: 'A'}); await ask(broker, {prompt: 'B', delta: 'b'});
+  const codex = broker.containerFetch;
+  broker.containerFetch = async () => new Response(JSON.stringify({reply: 'from claude', tokens: {input: 5, output: 5}, ms: 1, engine: 'claude'}));
+  broker.answer = async () => new Response(JSON.stringify({reply: 'from claude', engine: 'claude', tokens: {input: 5, output: 5}}));
+  await ask(broker, {prompt: 'C', delta: 'c'});
+  assert.equal((await storage.get('sessions'))[KEY].stale, true);
+  delete broker.answer; broker.containerFetch = codex;
+  await ask(broker, {prompt: 'D', delta: 'd'});
+  assert.deepEqual(seen.sent.at(-1).session, {key: KEY, expect: 'none', restart: 'gap', delta: 'd', end: false});
+  assert.equal((await storage.get('sessions'))[KEY].stale, undefined, 'the replacement is a clean conversation');
+});
+
+test('the idle clock starts when a turn ends, and the container only gets what the Worker chose to send', async t => {
+  let clock = day; t.mock.method(Date, 'now', () => clock);
+  const {broker, storage} = harness(), seen = conversation(broker), slow = broker.containerFetch;
+  broker.containerFetch = async (url, init) => { clock += 4 * 60_000; return slow(url, init); };   // a turn that takes 4 minutes
+  await ask(broker, {prompt: 'A'});
+  assert.equal((await storage.get('sessions'))[KEY].lastUsed, clock, 'stamped when the turn ended, not when it started');
+  clock += 90_000;
+  await ask(broker, {prompt: 'B', delta: 'b'});
+  assert.equal(seen.sent.at(-1).session.expect, 'warm', '90 seconds after the answer is warm, not idle');
+  await ask(broker, {prompt: 'C', delta: 'c', schema: {type: 'object'}, tier: 'mid', engine: 'codex', only: true, smuggled: 'x', tools: ['x']});
+  assert.deepEqual(Object.keys(seen.sent.at(-1)).sort(), ['model', 'prompt', 'schema', 'session'], 'an allow-list: nothing else of the caller\'s body reaches the container');
 });
 
 test('the Worker builds the conversation key from the verified token: persona runs get one, nobody else does, and a caller-sent header is never forwarded', async t => {

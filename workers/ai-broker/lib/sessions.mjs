@@ -31,6 +31,7 @@ export const sessionKey = value => (KEY.test(String(value || '')) ? String(value
  */
 export function planOf(record, {now, tier, delta}) {
   if (!record) return {expect: 'none'};
+  if (record.stale) return {expect: 'none', restart: 'gap'};   // a turn Codex did not answer: its thread has a hole
   if (record.tier !== tier) return {expect: 'none', restart: 'tier'};
   if (now - record.lastUsed > IDLE_MS) return {expect: 'none', restart: 'idle'};
   if (record.turns >= TURN_CAP) return {expect: 'none', restart: 'turn-cap'};
@@ -51,6 +52,9 @@ export function settle(records, key, {now, tier, mode}) {
   for (const [name] of Object.entries(next).sort((a, b) => b[1].lastUsed - a[1].lastUsed).slice(MAX_RECORDS)) delete next[name];
   return next;
 }
+
+/** The records with this conversation marked as having a gap: the next call restarts it from the full prompt. */
+export const markGap = (records, key) => ({...records, [key]: {...records[key], stale: true}});
 
 /**
  * What a Codex call counts against the week and the caller's cap: input minus cached plus output for a call that keeps a conversation (the cached part is the conversation's context paid once), input plus output for every other call.

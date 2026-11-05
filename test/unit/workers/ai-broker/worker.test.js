@@ -93,7 +93,7 @@ test('search keeps every tier, lane, queue priority and meter identical to ordin
       };
       broker.containerFetch = async (url, init) => {
         assert.equal(url, 'http://c/call');
-        assert.deepEqual(JSON.parse(init.body), {prompt: 'offline test', ...(tier === undefined ? {} : {tier}), ...option, lane: 'forged', model});
+        assert.deepEqual(JSON.parse(init.body), {prompt: 'offline test', ...option, model});   // [bf] 5 Nov 2026: the container gets an allow-list of the body, so a forged lane or tier no longer reaches it at all
         return success();
       };
       const response = await broker.call(lane, {...body, tier, ...option, lane: 'forged'});

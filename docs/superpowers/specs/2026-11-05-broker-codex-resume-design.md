@@ -42,13 +42,13 @@ These are "pong" turns with no page view. A real persona step adds its own text 
 |---|---|
 | first call of a session | `none` → `open`: a new thread that stays on disk, full prompt |
 | next call with a `delta` | `warm`: `codex exec resume`, only the `delta` is sent |
-| idle more than 5 minutes | restart from the full prompt (reason `idle`) |
+| idle more than 5 minutes (counted from the end of the last turn) | restart from the full prompt (reason `idle`) |
 | 120 turns | restart (`turn-cap`) |
 | another tier than the record | restart (`tier`); a call with no `delta`: restart (`no-delta`) |
 | `endSession: true` | answered, then deleted (`ended`) |
 | container sleep or redeploy | its table is empty: restart from the full prompt (`lost`), no error to the caller |
-| the turn fails | the record is untouched; a busy model (capacity, limit) keeps the thread, any other failure deletes it |
-| another engine answers (Codex at capacity or out) | answered from the full `prompt`; the conversation is left alone |
+| the turn fails, or another engine answers it (Codex at capacity or out) | the container deletes a failed turn's thread (any cause); the record is marked `stale`; the next call restarts from the full prompt (`gap`). A thread with a missing or half turn is never resumed. (Code review, 5 Nov 2026.) |
+| a turn is running | the container never sweeps or evicts that thread (`busy`) |
 | the run ends without `endSession` | idle drop (5 min in the container, 1 h in the record) |
 
 **One owner:** the Durable Object decides when a conversation lives (`lib/sessions.mjs`); the container only holds files and a table of "thread ids and running totals" in memory (`container/threads.mjs`). The caller never names a thread id.
@@ -60,7 +60,7 @@ These are "pong" turns with no page view. A real persona step adds its own text 
 ## Contract (agreed with ag-ai-user-agents-f1, 5 Nov 2026)
 
 Request fields (optional, persona only; `prompt` stays the full prompt): `session` (`[a-z0-9-]{1,40}`, one per goal), `delta` (text of only the newest user turn; none on the first call), `endSession` (only on a call known to be last).
-Reply: `tokens: {input, output, cached, counted}` (`input` is the turn's own, never the running total; `counted` is what the broker meters: input − cached + output for a conversation call, input + output for every other Codex call; Claude and Free AI answers carry no `counted`), and `session: {mode: opened|resumed|restarted|ended, reason?: lost|idle|turn-cap|tier|no-delta}` on a conversation call.
+Reply: `tokens: {input, output, cached, counted}` (`input` is the turn's own, never the running total; `counted` is what the broker meters: input − cached + output for a conversation call, input + output for every other Codex call; Claude and Free AI answers carry no `counted`), and `session: {mode: opened|resumed|restarted|ended, reason?: lost|idle|turn-cap|tier|no-delta|gap}` on a conversation call.
 
 ## What counts
 
@@ -78,6 +78,10 @@ Reply: `tokens: {input, output, cached, counted}` (`input` is the turn's own, ne
 </details>
 
 ## Risks and open questions
+
+- **A session id must be unique within a run.** The key has no job part because a run token carries none (no job id or matrix leg is signed). Two parallel jobs of one run that send the same id would share one thread; that is one run of one repo (one trust domain), and the contract says unique per run (ag: `agent-g<n>`, one session job). Not enforced in code.
+- **The cached discount applies to every call of a conversation**, including an opening turn that hit the model-side cache: the owner's rule is "count what a turn adds", and a cached prefix is not added. If the Codex week figure drifts, adjust `TOKENS_PER_PERCENT`.
+- **Sandbox on resume:** the thread opens with `-s read-only` and resumes with `-c sandbox_mode="read-only"`. The thread file of the 5 Nov measurement shows `sandbox_policy: read-only`, `approval_policy: never` and a read-only file system on all five resumed turns. A write-attempt positive control has not been run (it needs a model call).
 
 - **Open question (unexplained, measure after merge):** on the 5-turn run the turn's input grew +3.5k at turn 4 and +2.6k at turn 5 although each turn added a 30-token "pong". Not chased now. The first real persona run after this merges records per-turn `input`, `cached` and `counted` in the trace (ag's row `mode`, the broker's reply); read them for the same jump and decide then.
 - A warm thread keeps every earlier page view (the caller's full prompt drops old ones), so the context grows ~2.5k a step, mostly cached. The 120-turn cap stays below the model's 475k window.
