@@ -1,5 +1,6 @@
 // The mails we send, by name. shared/mail.js puts each through the frame (shared/mail-frame.js: logo, title, button, footer with the unsubscribe and settings links) and adds the headers. A template says its list
 // ('service' or 'marketing'), whether it is `essential` (a sign-in code: not stopped by an unsubscribe), and builds subject, title, content (text and html) and an optional one `button` from plain data. Guard: test/unit/shared/mail/mail.test.js.
+import {appButton} from './app-needs.js';
 import {purchaseCreditWords} from './credit-purchase-words.js';
 import {codeBox, esc, jobRows, jobText, link} from './mail-frame.js';
 import {LIGHT as C} from './mail-palette.js';
@@ -7,11 +8,11 @@ import {releaseHero, releaseHtml, releaseSubject, releaseText} from './mail-rele
 
 // A message the app or an Always on run would send on Telegram, in the same layout: data {subject, html, text, buttons: [{text, url}], confirmUrl} (html/text from api/mail-html.js).
 // The first button is the frame's one orange button; the others are links under the text.
-const moreHtml = (buttons = []) => buttons.slice(1).map(b => `<p>${link(b.url, b.text)}</p>`).join('');
-const moreText = (buttons = []) => buttons.slice(1).map(b => `${b.text}: ${b.url}`).join('\n');
+const moreHtml = (buttons = [], app) => buttons.slice(1).map(b => appButton(b, app)).map(b => `<p>${link(b.url, b.text)}</p>`).join('');
+const moreText = (buttons = [], app) => buttons.slice(1).map(b => appButton(b, app)).map(b => `${b.text}: ${b.url}`).join('\n');
 const confirmHtml = url => (url ? `<p>${link(url, 'Confirm your email')} to get every mail at once (until then, one a day).</p>` : '');
 const confirmText = url => (url ? `\nConfirm your email to get every mail at once (until then, one a day): ${url}` : '');
-const first = (buttons = []) => (buttons[0] ? {label: buttons[0].text, url: buttons[0].url} : null);
+const first = (buttons = [], app) => (buttons[0] ? appButton({label: buttons[0].text, url: buttons[0].url}, app) : null);
 
 const SITE = 'https://www.jobadabra.top';
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -21,9 +22,9 @@ export const TEMPLATES = {
   'message': {list: 'service',
     subject: ({subject}) => String(subject || 'Jobadabra').slice(0, 150),
     title: ({subject}) => String(subject || 'Jobadabra').slice(0, 150),
-    button: ({buttons}) => first(buttons),
-    text: ({text, buttons, confirmUrl}) => [text, moreText(buttons)].filter(Boolean).join('\n\n') + confirmText(confirmUrl),
-    html: ({html, buttons, confirmUrl}) => `${html}${moreHtml(buttons)}${confirmHtml(confirmUrl)}`},
+    button: ({buttons, appVersion}) => first(buttons, appVersion),
+    text: ({text, buttons, confirmUrl, appVersion}) => [text, moreText(buttons, appVersion)].filter(Boolean).join('\n\n') + confirmText(confirmUrl),
+    html: ({html, buttons, confirmUrl, appVersion}) => `${html}${moreHtml(buttons, appVersion)}${confirmHtml(confirmUrl)}`},
   // The first mail to a new or changed address (api/account-email.js, once per address ever; owner, 26 Oct 2026: "Can we send an welcome email?"). Data: {confirmUrl}.
   'welcome': {list: 'service',
     subject: () => 'Confirm your email for Jobadabra',
@@ -56,7 +57,7 @@ export const TEMPLATES = {
   'digest': {list: 'service',
     subject: ({total, matches = []}) => `${total ?? matches.length} new job match${(total ?? matches.length) === 1 ? '' : 'es'}`,
     title: ({total, matches = []}) => ((total ?? matches.length) === 1 ? '1 new match' : `${total ?? matches.length} new matches`),
-    button: ({openUrl}) => ({label: 'Open in Jobadabra', url: openUrl || `${SITE}/open?view=jobs`}),
+    button: ({openUrl, appVersion}) => appButton({label: 'Open in Jobadabra', url: openUrl || `${SITE}/open?view=jobs`}, appVersion),
     text: ({matches = []}) => jobText(matches),
     html: ({matches = [], total}) => `${(total ?? matches.length) > matches.length ? muted(`The top ${matches.length} of ${total}.`) : ''}${jobRows(matches)}`},
   // Trial reminders (admin/mail-lifecycle.js): service mails, facts only, no promotion. Data: {left} / {days}. Off unless env.TRIAL_REMINDERS = "on".
@@ -78,6 +79,12 @@ export const TEMPLATES = {
     button: ({reason, pricingUrl, pro}) => (reason !== 'inactive' && pro ? {label: 'Get Pro to keep it running', url: pricingUrl} : null),
     text: ({reason}) => (reason === 'inactive' ? "You haven't opened Jobadabra for 14 days, so the daily searches stopped. Open the app to resume." : 'Your free trial has ended, so the daily searches stopped.'),
     html: ({reason}) => (reason === 'inactive' ? "<p>You haven't opened Jobadabra for 14 days, so the daily searches stopped. Open the app to resume.</p>" : '<p>Your free trial has ended, so the daily searches stopped.</p>')},
+  // Always on's Test (api/hosted-test.js; owner, 5 Nov 2026: "The test should include also a notification test"): proves the alert channel reaches the person. No data.
+  'always-on-test': {list: 'service',
+    subject: () => 'Always on test: your alerts reach you',
+    title: () => 'Your alerts reach you',
+    text: () => 'You pressed Test on Always on. This e-mail is how we tell you about new jobs: when a search finds some, you get the best five, at most once every 4 hours.',
+    html: () => '<p>You pressed Test on Always on. This e-mail is how we tell you about new jobs: when a search finds some, you get the best five, at most once every 4 hours.</p>'},
   // The marketing list: sent by hand (admin/mail-lifecycle.js launch), only to opted-in addresses and only with env.MARKETING_MAIL = "on". Data: {pro, proAi, pricingUrl} (euro prices from shared/pro-packages.js).
   'pro-launch': {list: 'marketing',
     subject: () => 'Jobadabra Pro is out',

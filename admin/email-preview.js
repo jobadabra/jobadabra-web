@@ -17,6 +17,7 @@ export const SAMPLES = {
   'trial-left': {left: 5},
   'trial-ending': {days: 3, pricingUrl: PRICING},
   'always-on-paused': {reason: 'trial-over', pricingUrl: PRICING, pro: true},
+  'always-on-test': {},
   'pro-launch': {pro: OFFERS[0].price, proAi: OFFERS[1].price, pricingUrl: PRICING},
   'release': {name: 'Anna', version: '0.8.42', month: 'October 2026', headline: 'Apply to a job in two clicks, with your answers ready', updateUrl: `${SITE}/download`,
     sections: [{title: 'See why each job fits', text: 'Open a job in *Jobs* and the side panel says what matches your search and what is missing.', steps: ['Open *Jobs*.', 'Click any row to see *Why it fits*.']}, {title: 'Follow every application in one place', text: 'Everything in progress sits under *Applying*, with the next thing each one needs from you.'}]},
