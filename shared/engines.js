@@ -3,7 +3,7 @@
 // for every other metric (owner, 9 Oct 2026: a family's CLI and API run the same models, so metrics split by family; installs by engine to see
 // plan vs API). An install with no health report, or none naming an engine: 'unknown'. Nothing new is sent by the app. Guarded by
 // 'inhouse_trial' (our own relay on the trial) and 'inhouse_pro' (our relay after the Pro plan is bought; named for the AI, not the plan: a Pro user on their own key stays api) are their own engines since 25 Oct 2026 (owner: see them apart from real API keys); an app older than that still reports it as 'api'.
-// Its family stays 'claude' as before. test/shared/engines.test.js.
+// Its family stays 'claude' as before. test/unit/shared/engines.test.js.
 export const ENGINES = {inhouse_trial: 'Free · in-house AI', inhouse_pro: 'Pro · in-house AI', api: 'Anthropic API key', cli: 'Claude Code (Claude plan)', openai: 'OpenAI API key', codex: 'Codex (ChatGPT plan)'};
 export const FAMILIES = {claude: 'Claude', openai: 'OpenAI'};
 export const familyOf = engine => (engine === 'openai' || engine === 'codex' ? 'openai' : engine === 'api' || engine === 'cli' || engine === 'inhouse_trial' || engine === 'inhouse_pro' ? 'claude' : 'unknown');

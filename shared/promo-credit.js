@@ -1,6 +1,6 @@
 // AI-credit promo codes (owner, 26 Oct 2026): a code of kind 'credit' adds its euros of AI credit to the Pro install that redeems it (Pro only, owner 27 Oct 2026; shared/promo.js), once per install per code, up to
 // its people cap and end date; different credit codes stack. The plan stays as it was (owner's yes, 26 Oct 2026: "AI credit only"). The credit is the install's
-// (shared/install-credit.js), so no e-mail or account is needed. Redeemed through POST /api/pro/redeem (shared/promo.js). Guard: test/shared/promo-credit.test.js.
+// (shared/install-credit.js), so no e-mail or account is needed. Redeemed through POST /api/pro/redeem (shared/promo.js). Guard: test/unit/shared/promo-credit.test.js.
 import {addInstallCredit} from './install-credit.js';
 
 export const KINDS = ['pro', 'credit'];

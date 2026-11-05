@@ -1,5 +1,5 @@
 // /admin/ai/steps: the AI steps of the CI (owner, 3 Nov 2026): jobs where the AI answers a question and the code decides what happens (judges, drift, personas, learners, digests). One table from the registry
-// tools/ci-agents.json via the daily upload, with each job's engine, state, last runs and broker tokens. Only this repo's workflows carry runs; the web and lab repos' rows show their engine only. Test: test/admin/ai-section.test.js.
+// tools/ci-agents.json via the daily upload, with each job's engine, state, last runs and broker tokens. Only this repo's workflows carry runs; the web and lab repos' rows show their engine only. Test: test/unit/admin/ai-section.test.js.
 import {esc} from '../shared/html.js';
 import {shell, chip, engineChip, stateChip, dots, spendOf, spendRows, tokensWord, emptyCard} from './ai-section.js';
 

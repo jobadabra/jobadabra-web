@@ -1,7 +1,7 @@
 /* The site's motion layer (owner, 21 Oct 2026: "borrow the nice css effects on cards, the effect that follows the cursor as a magic wand"):
    the cursor glow on every card, the sparkles, the hero's warm glow and the serif accent word. site.js marks the cards (.glow, its CARDS list)
    and moves --mx/--my with a mouse or pen. Everything here stops with reduced motion, and the glow never runs on touch.
-   Guarded by test/web/effects.test.js. */
+   Guarded by test/unit/website/effects.test.js. */
 
 /* The cursor glow: a soft warm light under the pointer, and the card's edge lit where the pointer is near. */
 .glow { position: relative; isolation: isolate; }

@@ -1,5 +1,5 @@
 // The page of /admin/job-search/benchmark (owner, 20 Oct 2026): our job search against other tools on the same random role × city searches, read from ONE snapshot. Every tool, persona and job-system name is data;
-// none is written here. Colours are the shared rule (admin/applying-tiles.js). Guard: test/admin/benchmark-search.test.js.
+// none is written here. Colours are the shared rule (admin/applying-tiles.js). Guard: test/unit/admin/benchmark-search.test.js.
 import {esc} from '../shared/html.js';
 import {filterLinks} from './admin.js';
 import {CHIP_STYLE, chip} from './chip.js';

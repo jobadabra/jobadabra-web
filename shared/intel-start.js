@@ -3,7 +3,7 @@
 // integration-intel.yml had 0 schedule runs in its first 3 h (1 Nov 2026: the page read "No data yet"). Cloudflare's cron fires on time, so the Worker starts each workflow through the API;
 // GitHub's cron stays as the backup (the workflow's concurrency group queues a second start, it never runs two at once).
 // Same pattern as the public repo's app-core/src/scheduler.js (#2653). The Worker's account has no free cron trigger (5 of 5 used), so this shares the Worker's every-5-minutes trigger and
-// acts on one tick an hour per collector. A new collector is one row below plus the same `run-name` and `workflow_dispatch:` in its workflow; the test loops over this list. Guard: test/shared/intel-start.test.js.
+// acts on one tick an hour per collector. A new collector is one row below plus the same `run-name` and `workflow_dispatch:` in its workflow; the test loops over this list. Guard: test/unit/shared/intel-start.test.js.
 
 import {WEB_REPO} from './repos.js';
 

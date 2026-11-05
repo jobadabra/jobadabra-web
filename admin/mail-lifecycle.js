@@ -1,6 +1,6 @@
 // Trial and lifecycle mail (owner, 16 Oct 2026): "N applications left", "trial ends in 3 days", "Always on paused", and the Pro-launch mail to the marketing list (sent by hand, behind env.MAIL_LAUNCH).
 // Runs once a day from the Worker's cron (worker/index.js). Each mail goes out once (mail_log is the memory); shared/mail.js applies the lists, the opt-in, the 6-a-day limit and the unsubscribe.
-// The trial numbers are the ones GET /api/trial/status keeps in KV per install (shared/trial.js). Guard: test/admin/mail-lifecycle.test.js.
+// The trial numbers are the ones GET /api/trial/status keeps in KV per install (shared/trial.js). Guard: test/unit/admin/mail-lifecycle.test.js.
 import {digestOf} from '../shared/guard.js';
 import {addrOf, send} from '../shared/mail.js';
 import {FREE_APPLICATIONS, stand} from '../shared/trial.js';

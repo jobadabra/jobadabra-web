@@ -1,6 +1,6 @@
 // The Lab's fill videos (owner, 18 Oct 2026: "▶ Watch" on a pool row): CI's pool run uploads one short video of each row's fill (PUT /applying/video, Bearer REPLAYS_PUBLISH_KEY) into the
 // private R2 bucket LAB_FILLS; the newest replaces the row's old one, anything older than 14 days is dropped on the next upload (no bucket rule to create by hand), and only the owner streams
-// one (GET /admin/form-filling/lab/video?name=<row>, Range so the player scrubs; ?index lists name, time, length and size). A fake applicant on a held page, never Submit. Guard: test/admin/lab-video.test.js.
+// one (GET /admin/form-filling/lab/video?name=<row>, Range so the player scrubs; ?index lists name, time, length and size). A fake applicant on a held page, never Submit. Guard: test/unit/admin/lab-video.test.js.
 import {equal} from '../shared/guard.js';
 import {viewer} from '../shared/auth.js';
 

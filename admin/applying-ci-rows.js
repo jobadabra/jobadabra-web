@@ -1,6 +1,6 @@
 // PUT /applying/ci-rows: a CI recording run's row results reach /admin/form-filling/lab's pool table (owner, 14 Oct 2026: the CI pool workflow's one job is recording, so its rows must move the page).
 // Narrow key (Bearer REPLAYS_PUBLISH_KEY, a wrong or missing one is a 404 as the other publish routes), and ONLY a run on main: a branch's work in progress once showed main as broken (12 Oct),
-// so the body names its branch and anything but "main" is refused. Rows go through the same ingest as the Mac's uploads (admin/applying.js), stored as main's runs. Guard: test/admin/applying-ci-rows.test.js.
+// so the body names its branch and anything but "main" is refused. Rows go through the same ingest as the Mac's uploads (admin/applying.js), stored as main's runs. Guard: test/unit/admin/applying-ci-rows.test.js.
 import {ingest} from './applying.js';
 import {equal} from '../shared/guard.js';
 import {CI_BLOCKED, isRefusal} from './applying-status.js';

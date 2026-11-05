@@ -1,6 +1,6 @@
 // The Pro lane of Free AI (spec docs/superpowers/specs/2026-10-16-pro-plan.md §3): an install on a Pro account with credit runs in its own lane, immune to the
 // global Free AI daily stop and the per-install caps (only the rate limit applies), and each call's cost is taken from the account's credit.
-// Credit used up (past the small overdraft): no free fallback, the answer says top-up or own key. Own-key AI never reaches this route. Guard: test/shared/pro-credit.test.js.
+// Credit used up (past the small overdraft): no free fallback, the answer says top-up or own key. Own-key AI never reaches this route. Guard: test/unit/shared/pro-credit.test.js.
 import {OVERDRAFT_MICRO, accountOf, planOn, promoOn, spend} from './pro.js';
 import {installCredit, spendInstallCredit} from './install-credit.js';
 

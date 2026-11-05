@@ -1,7 +1,7 @@
 // Opens every /admin page (admin/admin.js PAGES) as a phone does (390 px, touch, the page's viewport tag honoured) through the real Worker on every demo seed,
 // and fails when a page is wider than the screen: a phone then zooms the whole page out (owner, 26 Oct 2026: "a horrible responsiveness in admin";
 // Lab Form Filling laid out at 495 px, Lab Job Search at 656 px). Names the outermost elements past the edge that no scrolling box holds.
-// Run: tools/site-run.sh node tools/admin-no-sideways.mjs [--width 390]. Exit 1 when a page is too wide, 2 when no browser is found. Test: test/admin/admin-no-sideways.test.js.
+// Run: tools/site-run.sh node tools/admin-no-sideways.mjs [--width 390]. Exit 1 when a page is too wide, 2 when no browser is found. Test: test/integration/admin-no-sideways.test.js.
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {eachPage, launchChromium, workerServer} from './worker-server.mjs';

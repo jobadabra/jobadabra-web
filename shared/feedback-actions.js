@@ -1,5 +1,5 @@
 // The ONE place a feedback's state changes (spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md). The table ACTIONS is the design: an action not listed for the current state
-// is refused (409). Every change is written with its log line; nothing else in the site updates `feedback.state` or `feedback.impact`. Guarded by test/shared/feedback-actions.test.js.
+// is refused (409). Every change is written with its log line; nothing else in the site updates `feedback.state` or `feedback.impact`. Guarded by test/unit/shared/feedback-actions.test.js.
 // Why (3 Nov 2026, owner: "offer some actions buttons for each feedback"): the list only grew; the owner needs to clear it, rate it and, later, answer the reporter.
 
 import {aiClosedColumns, aiColumns, aiEndColumns, aiGate, aiGuard, aiMergedColumns, aiPrColumns} from './feedback-ai.js';

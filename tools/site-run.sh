@@ -5,7 +5,7 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tree="$here/.overlay"
 # Called from another worktree of this repo, it would run THIS checkout's files, not the ones you edited (a new test "passed" without running, 26 Oct 2026;
-# "Could not find" again on 27 Oct). Refuse and name the right runner. Guard: test/tools/site-run-worktree.test.js. SITE_RUN_OTHER=1 runs it anyway.
+# "Could not find" again on 27 Oct). Refuse and name the right runner. Guard: test/tooling/site-run-worktree.test.js. SITE_RUN_OTHER=1 runs it anyway.
 top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$top" ] && [ "$(cd "$top" && pwd -P)" != "$(cd "$here" && pwd -P)" ] && [ -z "${SITE_RUN_OTHER:-}" ] \
   && [ "$(cd "$top" && cd "$(git rev-parse --git-common-dir)" && pwd -P)" = "$(cd "$here" && cd "$(git rev-parse --git-common-dir)" && pwd -P)" ]; then

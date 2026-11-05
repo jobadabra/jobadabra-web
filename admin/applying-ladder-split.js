@@ -1,5 +1,5 @@
 // How each rung's sites ended on the lab page's ladder chart: fine, a documented hold, or failed (owner, 15 Oct 2026: "72% stopped here" read as a problem when most were fine).
-// ladderSplit(pool) and SPLIT_KINDS are also sent to the page as source. Guard: test/admin/applying-ladder-split.test.js.
+// ladderSplit(pool) and SPLIT_KINDS are also sent to the page as source. Guard: test/unit/admin/applying-ladder-split.test.js.
 export const SPLIT_KINDS = [{key: 'fine', word: 'fine'}, {key: 'held', word: 'held'}, {key: 'failed', word: 'failed'}];
 
 // pool: the page's rows ({rung, status: {state}}), state from admin/applying-status.js rowStatus. works = fine, held = a documented hold,

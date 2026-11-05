@@ -1,6 +1,6 @@
 // /admin/growth/promo-codes (owner, 25 Oct 2026): make a Pro promo code (one per Make: random, or the owner's own text; with a cap of people and an end date), see every use per install, revoke or delete. Owner only (the usual 404 for anyone else).
 // A code is kept as a hash (to check redeems) and encrypted with PROMO_CODE_KEY (to show it in full here, owner only); never in plain text (shared/promo.js). Changes are POSTs from this page (same origin). A hidden action "import" (Bearer) loads a code given on stdin, so a code
-// the owner already holds goes in without being shown. Guard: test/admin/promo-codes.test.js.
+// the owner already holds goes in without being shown. Guard: test/unit/shared/promo-credit.test.js.
 import {digestOf} from '../shared/guard.js';
 import {isOwner} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
@@ -26,7 +26,7 @@ export function stateOf(code, used, now = Date.now()) {
   if (used >= code.cap) return {text: 'Used up', tone: 'warn'};
   return {text: 'Active', tone: 'good'};
 }
-// A value cell is a chip (owner, 27 Oct 2026: "displayed as chips"): Gives by kind; State green Active, amber Used up, grey Revoked/Expired. Guard: test/shared/promo.test.js.
+// A value cell is a chip (owner, 27 Oct 2026: "displayed as chips"): Gives by kind; State green Active, amber Used up, grey Revoked/Expired. Guard: test/unit/shared/promo.test.js.
 const STATE_CHIP = {good: 'good', warn: 'warn', bad: 'off'};
 export const stateChip = (code, used, now) => { const state = stateOf(code, used, now); return chip(state.text, STATE_CHIP[state.tone]); };
 export const givesChip = code => chip(gives(code), code.kind === 'credit' ? 'credit' : 'pro');

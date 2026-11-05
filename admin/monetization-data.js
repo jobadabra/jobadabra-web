@@ -1,6 +1,6 @@
 // What the Monetization page (admin/monetization.js) shows, computed from D1 and KV: the funnel of installs -> Pro, the conversion and its colour, the AI cost per free and per Pro user, and the money.
 // Reads: telemetry (first seen, setup done, the latest health line: licensed, applicationsUsed, allowanceEnded), ai_calls, and a6's Pro tables (pro_devices, pro_purchases; migration 0079_pro.sql, spec 2026-10-16-pro-plan.md §1).
-// Counts and install ids only: no e-mail is ever selected. Founders (licensed installs) are not trials. Guard: test/admin/monetization.test.js
+// Counts and install ids only: no e-mail is ever selected. Founders (licensed installs) are not trials. Guard: test/unit/admin/monetization.test.js
 import {digestOf} from '../shared/guard.js';
 import {monthStopUsd, trialUsd} from '../shared/free-ai.js';
 import {CONVERSION_GREEN, CONVERSION_YELLOW, FIXED_COSTS_YEAR, TRIAL_APPLICATIONS, TRIAL_MIN_FOR_VERDICT} from './monetization-config.js';

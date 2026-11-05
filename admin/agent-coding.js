@@ -1,7 +1,7 @@
 // /admin/agents/agent-coding: how our agent codes, ships and verifies (owner, 1 Nov 2026: "the way our agent is coding, is shipping and is verifying"). Report only: it never blocks anything.
 // Two uploads feed it, both PUT to /agent-coding/data with Bearer SELFHEAL_PUBLISH_KEY like the PR checks scorecard: kind "gate" (counts and seconds of the push gate, from the owner's Mac:
 // tools/gate-stats-upload.mjs, once a day from ship.sh) and kind "ci" (reds, fixes, areas and CI minutes, from GitHub: agent-coding-stats.yml). One row per kind and day; a repeat replaces it.
-// Only counts, seconds and short fixed labels are stored: never a branch, a path, commit text or a log. Guard: test/admin/agent-coding.test.js. Page drawing: admin/agent-coding-page.js.
+// Only counts, seconds and short fixed labels are stored: never a branch, a path, commit text or a log. Guard: test/unit/admin/agent-coding.test.js. Page drawing: admin/agent-coding-page.js.
 import {equal} from '../shared/guard.js';
 import {viewer, remember} from '../shared/auth.js';
 import {HOOKS, page} from './agent-coding-page.js';

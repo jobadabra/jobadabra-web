@@ -1,5 +1,5 @@
 // The look of "Why fields were left empty" (admin/left-empty.js): one stacked headline bar with a legend, each row of the two tables coloured by meaning with an inline share bar, reason words as pills.
-// Tones use the page's tokens only (--green filled, --violet left on purpose / held, --amber waiting for the person, --red gaps and controls, --muted other). Guard: test/admin/left-empty-view.test.js.
+// Tones use the page's tokens only (--green filled, --violet left on purpose / held, --amber waiting for the person, --red gaps and controls, --muted other). Guard: test/unit/admin/left-empty-view.test.js.
 import {esc} from '../shared/html.js';
 
 // group / bucket key -> tone. The tone decides the row's edge, bar and pill dot; `soft` is the red of a gap that is ours to close, `bad` the red of a control that failed or a question not read.

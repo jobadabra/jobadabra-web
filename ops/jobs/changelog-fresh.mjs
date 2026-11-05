@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Watchdog for the What's new page (owner, 24 Oct 2026: "outdated, why is it not updated on a new release?"): fails and tells the owner when the newest STABLE desktop release is missing from the page more than 2 hours
-// after it was published. Runs as a step of daily-digest.yml (its own hourly schedule, so it still fires when changelog-publish.yml's runs are dropped by GitHub). No AI, no cost. Guard: test/jobs/changelog-fresh.test.js.
+// after it was published. Runs as a step of daily-digest.yml (its own hourly schedule, so it still fires when changelog-publish.yml's runs are dropped by GitHub). No AI, no cost. Guard: test/unit/jobs/changelog-fresh.test.js.
 import {execFileSync} from 'node:child_process';
 import {zurichHour} from '../admin/build-digest.js';
 import {shouldTell, previousConclusion, tellOwner} from '../admin/ai-refusal.js';

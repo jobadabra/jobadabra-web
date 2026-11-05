@@ -1,5 +1,5 @@
 // /admin/ai/engines: who answers the CI's AI calls (owner, 3 Nov 2026): the broker's chain Codex, Claude, Free AI with what each answered, ran out on or failed today, from its public /health (admin/ai-broker-card.js).
-// Report only. Test: test/admin/ai-section.test.js.
+// Report only. Test: test/unit/admin/ai-section.test.js.
 import {shell, chip} from './ai-section.js';
 import {brokerCard} from './ai-broker-card.js';
 import {problem} from '../shared/ai-broker.js';

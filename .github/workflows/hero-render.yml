@@ -1,7 +1,7 @@
 # Renders the landing hero's clips on GitHub's Mac runners, by hand only (owner, 25 Oct 2026: "we can have a manually triggerable workflow";
 # Mac fonts, never Linux; free while the repo is public, a private repo needs private_cost_ok). One runner per clip runs tools/hero.sh on the demo persona (no AI, nothing of the owner's); each clip comes back as an
 # artifact (site files, contact sheets, the side-by-side, the log). With `branch` set, a last job places them there (hero.sh --place) and commits.
-# Guard: test/web/hero-render-workflow.test.js. Skill: .claude/skills/redo-site-hero-video.
+# Guard: test/unit/website/hero-render-workflow.test.js. Skill: .claude/skills/redo-site-hero-video.
 name: Hero render
 
 on:

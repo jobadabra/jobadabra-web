@@ -1,6 +1,6 @@
 // What the installs teach about the job search itself (Notion: "Knowledge as data"). Nothing identifying is kept: no title, no company, no text, no install.
 // The numbers: what is stored from POST /api/controls (store), tidied daily (tidy), read for the owner's page (report) and the hints the apps get (hints).
-// The page is admin/intelligence.js. Guarded by test/shared/intelligence.test.js.
+// The page is admin/intelligence.js. Guarded by test/unit/shared/intelligence.test.js.
 import {report as aiCost} from './aicost.js';
 import {REGIONS, ROLES} from './pool-labels.js';
 import {cleanLabel} from '../extension/alias-schema.js';

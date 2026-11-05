@@ -2,7 +2,7 @@
 // Why (owner, 1 Nov 2026: "doesn't show an Y axis, doesn't show tooltips. I cannot really see how many visitors per day"): the old columns were
 // CSS heights scaled to the busiest day, with no scale, no numbers and only a native `title` (about one second of hover, never on touch). Now: a drawn
 // Y axis from 0 with grid lines, the count above every column while there is room, and the page's one floating [data-tip] tooltip for each day.
-// Plain SVG string on the admin's dark surface (like shared/scoutingcharts.js); tests: test/admin/stats-chart.test.js.
+// Plain SVG string on the admin's dark surface (like shared/scoutingcharts.js); tests: test/unit/admin/stats-chart.test.js.
 import {esc} from '../shared/html.js';
 
 const W = 720, H = 230, M = {l: 40, r: 8, t: 14, b: 26};

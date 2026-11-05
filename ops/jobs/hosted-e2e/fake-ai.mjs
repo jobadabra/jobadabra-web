@@ -4,7 +4,7 @@
 // answer for the fixture's places (Zurich, Switzerland), "unknown"/"out" for the rest (26 Oct 2026: answered with [], no job was placed once places were the AI's first,
 // and no match reached the inbox). The title question (src/ai/title_triage.py: the numbers of the titles that fit) gets the titles holding one of the search's own
 // role words and none of its ruled-out words, read from the question. Other lists stay empty: the first allowed answer for each item made "zurich" the Geneva metro.
-// Test: test/jobs/hosted-fake-ai.test.js.
+// Test: test/unit/jobs/hosted-fake-ai.test.js.
 const ZURICH = {kind: 'city', cc: 'CH', lat: 47.37, lon: 8.54, r_km: 20, where: 'Zurich', country: 'Switzerland', nearest: 'zurich', km: 0, answer: 'best'};
 const SWISS = {kind: 'country', cc: 'CH', lat: 0, lon: 0, r_km: 0, where: '', country: 'Switzerland', nearest: 'zurich', km: -1, answer: 'inside'};
 const REMOTE = {kind: 'remote', cc: '', lat: 0, lon: 0, r_km: 0, where: '', country: '', nearest: 'none', km: -1, answer: 'out'};

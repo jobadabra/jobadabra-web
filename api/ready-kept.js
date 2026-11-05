@@ -3,7 +3,7 @@
 //  - handoff: what "Open in my browser" needs (the page, the site's cookies and storage, the filled values), so it works after the night's container is gone
 //             (owner, 18 Oct 2026: "Yes, sealed, 24 h max"; deploys and the container's sleep drop its held tabs).
 // The night's container PUTs each with its night token; only the owner reads it back; it is deleted with the form's data (Done, the 24-hour sweep, Delete everything)
-// and never kept past its kind's age, whatever else happens. Never logged. Guard: test/api/ready-to-send.test.js.
+// and never kept past its kind's age, whatever else happens. Never logged. Guard: test/unit/api/ready-to-send.test.js.
 import {open, seal} from './hosted-state.js';
 
 const DAY = 86400000;

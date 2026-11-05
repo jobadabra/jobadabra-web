@@ -30,7 +30,7 @@ export async function report(db, now = new Date()) {
   const brain = await rows(db, "SELECT substr(at, 1, 10) AS day, kind FROM brain_messages WHERE kind = 'recommendation' AND at >= ?", from);
   const weekly = list => list.map(row => ({...row}));
   const latest = (list, key) => (week => (week.length ? week.at(-1)[key] : null));
-  // Keyed by the page's address (27 Oct 2026: keyed by its old slug, the form-filling card had read nothing since its 14 Oct rename; test/admin/admin.test.js).
+  // Keyed by the page's address (27 Oct 2026: keyed by its old slug, the form-filling card had read nothing since its 14 Oct rename; test/unit/admin/admin.test.js).
   const cards = {
     '/admin/growth/website': [{label: 'visitors', values: byWeek(visits, now, list => new Set(list.map(row => `${row.day}|${row.visitor}`)).size)},
       {label: 'downloads', values: byWeek(downloads, now, list => list.length)}],

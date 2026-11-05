@@ -1,5 +1,5 @@
 // The "Random draws" tab of /admin/job-search/lab (owner, 18 Oct 2026): one report row per daily CI draw, newest first, and the trend of jobs in places per draw (red = weak).
-// Counts and seconds only (admin/search-lab-draws.js); every row says CI, so a Mac run is never compared with it. Guard: test/admin/search-lab-draws.test.js.
+// Counts and seconds only (admin/search-lab-draws.js); every row says CI, so a Mac run is never compared with it. Guard: test/unit/admin/search-lab-draws.test.js.
 import {esc} from '../shared/html.js';
 import {TIME_NAMES} from './search-lab-judge.js';
 import {judge} from './search-lab-draws.js';

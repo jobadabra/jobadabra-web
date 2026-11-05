@@ -1,6 +1,6 @@
 // Testing → Overview: reads the rows the other Testing pages already keep (one reader per table, each exported by its page's own module) and resolves every card of the
 // catalogue (admin/testing-overview-methods.js) to its lines (cadence, last run) and its "bugs caught". Nothing is typed by hand and nothing is computed here that a page
-// does not already show; a method with no stored data says why. No new table, no AI. Guard: test/admin/testing-overview.test.js.
+// does not already show; a method with no stored data says why. No new table, no AI. Guard: test/unit/admin/testing-overview.test.js.
 import {read as readSchedules} from './schedules.js';
 import {readSnapshot as readE2e} from './e2e-intel.js';
 import {readSnapshot as readIntegration} from './integration-intel.js';

@@ -1,5 +1,5 @@
 // The red line on /admin/testing/e2e and /admin/testing/integrations when the Worker's last on-time start of the page's collector failed (owner, 1 Nov 2026: "Red line on the page",
-// "collector not starting: <reason>"). The data is shared/intel-start.js (readStartProblem); this is only its HTML. Guard: test/admin/intel-start-line.test.js.
+// "collector not starting: <reason>"). The data is shared/intel-start.js (readStartProblem); this is only its HTML. Guard: test/unit/admin/intel-start-line.test.js.
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 

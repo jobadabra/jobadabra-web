@@ -1,6 +1,6 @@
 // "Needs a fix" by cause, in ONE place: the page embeds GROUPS_SOURCE (the function's own source) as its "By cause" tab and jobs/needs-fix-causes.mjs imports the function, so the page
 // and the command cannot disagree. needsFixGroups leans on needsFixOrder (admin/applying-order.js): the page defines that name before this source, the module imports it.
-// No backticks, template or backslash characters: the source is pasted into the page. Guard: test/needs-fix-causes.test.js.
+// No backticks, template or backslash characters: the source is pasted into the page. Guard: test/unit/jobs/needs-fix-causes.test.js.
 import {needsFixOrder} from './applying-order.js';
 
 // pool: the page's pool rows (name, shape, platform, at, version, claimed, cause: {cause} | null ...); fixedRows: the Fixed tab's rows ({site, fixes: [{extensionVersion, landedAt}]}).

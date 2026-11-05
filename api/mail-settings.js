@@ -1,5 +1,5 @@
 // The e-mail settings page a mail's footer links to (owner, 17 Oct 2026): service mail on/off, the digest daily or weekly, product news on/off. No sign-in: the signed link is the one the stop link uses
-// (tokenFor(address digest, 'unsub-service')). GET shows the form (a mail scanner opening the link changes nothing); POST saves. Product news shows off and locked while env.MARKETING_MAIL is not "on". Guard: test/api/mail-settings.test.js.
+// (tokenFor(address digest, 'unsub-service')). GET shows the form (a mail scanner opening the link changes nothing); POST saves. Product news shows off and locked while env.MARKETING_MAIL is not "on". Guard: test/unit/api/mail-settings.test.js.
 import {equal, tokenFor} from '../shared/guard.js';
 import {esc} from '../shared/mail-frame.js';
 import {CADENCES} from './mail-held.js';

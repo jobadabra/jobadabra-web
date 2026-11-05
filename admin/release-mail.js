@@ -1,7 +1,7 @@
 // The "What's new" mail at a stable release (spec docs/superpowers/specs/2026-10-28-release-mail-design.md). The stable promotion calls POST /release-mail/draft {version}
 // (Bearer SELFHEAL_PUBLISH_KEY): the site builds a draft from that version's What's new entry (changelog_entries) and keeps it in release_mail, once per version. The owner reviews it
 // (POST /admin/mail/release?version=X, Bearer: counts and shows the draft; &headline=... edits it; &send=1 sends it). It goes to every address we hold that has not turned product news off
-// (shared/mail.js mailAllowed does the check per address), and a version is claimed for sending once, so a second click or a second promotion mails nobody twice. Guard: test/admin/release-mail.test.js.
+// (shared/mail.js mailAllowed does the check per address), and a version is claimed for sending once, so a second click or a second promotion mails nobody twice. Guard: test/unit/admin/release-mail.test.js.
 import {equal} from '../shared/guard.js';
 import {isOwner} from '../shared/auth.js';
 import {send, validAddress, clean} from '../shared/mail.js';

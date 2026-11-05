@@ -1,5 +1,5 @@
 // The owner's /admin/growth/app page: the problems users hit, the setup funnel and the channels, from shared/telemetry.js.
-// Same key or cookie as /admin. Guarded by test/shared/telemetry.test.js.
+// Same key or cookie as /admin. Guarded by test/unit/shared/telemetry.test.js.
 import {filterLinks} from './admin.js';
 import {viewer} from '../shared/auth.js';
 import {trendChip} from './admin.js';

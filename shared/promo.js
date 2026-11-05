@@ -1,6 +1,6 @@
 // Pro promo codes (owner, 25 Oct 2026): POST /api/pro/redeem checks the typed code against the hashes of the codes made on /admin/growth/promo-codes, counts the use against that code's cap and end
 // date, and from then on /api/pro/status says Pro for that install while the code is neither revoked nor past its end date. No account, no e-mail, no AI credit; a code of kind 'credit' adds AI credit instead (shared/promo-credit.js). Only a hash of the code is checked; the code is also kept encrypted (PROMO_CODE_KEY) for the owner's page, never in plain text.
-// Hidden (404) while PRO_PLAN is off. Guards: test/shared/promo.test.js.
+// Hidden (404) while PRO_PLAN is off. Guards: test/unit/shared/promo.test.js.
 import {authorize, digestOf, equal, flag} from './guard.js';
 import {accountOf, promoOn} from './pro.js';
 import {redeemCredit} from './promo-credit.js';

@@ -1,6 +1,6 @@
 // The nightly report-only numbers, one summary for every page that shows them (owner, 1 Nov 2026: "Fold into the Overview", and "it should also be present in Schedules"): per job, last
 // night's key number and the last 14 nights against its bar. ONE module computes it from rows the site already keeps (the e2e snapshot row and agent_coding_days); the Testing Overview cards
-// and the Testing → Scheduled rows only draw it, so there is no second reader of either table. Report only: no verdict here blocks anything, no AI, no new table. Guard: test/admin/nightly-summary.test.js.
+// and the Testing → Scheduled rows only draw it, so there is no second reader of either table. Report only: no verdict here blocks anything, no AI, no new table. Guard: test/unit/admin/nightly-summary.test.js.
 //
 // A job = {id, title, value, sub, status: good|warn|bad|none, bar: {value, label}|null, series: [{day, value: number|null, ok: boolean|null}] (NIGHTS entries, oldest first), files: [workflow files it belongs to]}.
 // What has no number yet says so (value '–' and the reason in `sub`); nothing here invents a night.

@@ -1,5 +1,5 @@
 // The day's pool columns beside the scouting snapshot (migration 0102): jobs held by employers installs shared, and the cells they filled.
-// Written by api/employers.js when the list is published, drawn by admin/installsimpact.js. Guarded by test/admin/installsimpact.test.js.
+// Written by api/employers.js when the list is published, drawn by admin/installsimpact.js. Guarded by test/unit/admin/installsimpact.test.js.
 import {cellsOf} from './scoutingvisual.js';
 
 export const all = async (db, sql, ...args) => ((await db.prepare(sql).bind(...args).all().catch(() => ({results: []}))).results) || [];

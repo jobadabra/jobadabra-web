@@ -1,6 +1,6 @@
 // /admin/testing/synthetic-monitoring: the checks that test the live app on the clock, with no code change and no commit behind them (owner, 1 Nov 2026: "Add a separate tab on the Admin -> Testing,
 // to be called Synthetic Monitoring"). One table, one row per probe: what it checks, how often, the last result and the last 14 days. The Worker's own probe rounds (shared/synthetic.js) and the
-// scheduled workflows that look at something live (the Scheduled tab's snapshot). Both are read by the readers that already exist; no query of its own, no AI. Guard: test/admin/synthetic-monitoring.test.js.
+// scheduled workflows that look at something live (the Scheduled tab's snapshot). Both are read by the readers that already exist; no query of its own, no AI. Guard: test/unit/admin/synthetic-monitoring.test.js.
 import {viewer, remember} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {PROBES, ROUND_MINUTES, readCard, readDaysByProbe} from '../shared/synthetic.js';

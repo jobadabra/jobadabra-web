@@ -2,7 +2,7 @@
 // Signed in: the sign-in is carried over (cookies are per host): www.jobadabra.top/admin/hop with a 60-second, one-use token; that route
 // sets the same session cookie there and lands on the same page. Signed out: a plain 302 to the same path there. No key is ever shown.
 // Scripts, the pages' own fetches, signed report files and writes stay answered where they are. Anything wrong with a token is the usual 404.
-// Guards: test/shared/admin-hop.test.js, test/shared/old-hosts.test.js (every old host × every kind of request).
+// Guards: test/unit/shared/admin-hop.test.js, test/unit/shared/old-hosts.test.js (every old host × every kind of request).
 import {SESSION_COOKIE, SESSION_DAYS, same, sessionToken, sign, validSession} from './auth.js';
 import {MAIN_HOST, OLD_HOSTS} from './hosts.js';
 

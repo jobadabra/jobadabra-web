@@ -1,5 +1,5 @@
 // The Compare page's picker (owner, 24 Oct 2026: "All on desktop, one on phone"): from 1001px every tool shows in the table; up to 1000px Jobadabra sits
-// next to one tool, Simplify first, and "Compare with" switches it (or shows all). Without this script every tool shows. Guarded by test/web/compare-page.test.js.
+// next to one tool, Simplify first, and "Compare with" switches it (or shows all). Without this script every tool shows. Guarded by test/unit/website/compare-page.test.js.
 (() => {
   const box = document.getElementById('cmp');
   const select = document.getElementById('cmp-with');

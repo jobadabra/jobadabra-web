@@ -1,5 +1,5 @@
 // "Is this page styled?" for tools/page-shot.mjs (owner, 25 Oct 2026: jobadabra-web#92's PR images were the admin page as raw HTML).
-// Pure: takes what the browser saw and returns the reasons the shot must not be used (empty = styled). Guard: test/tools/page-shot-check.test.js.
+// Pure: takes what the browser saw and returns the reasons the shot must not be used (empty = styled). Guard: test/tooling/page-shot-check.test.js.
 const DEFAULT_SERIF = /times|^serif$/i;   // what a page with no font-family of its own computes to
 const BLANK = /^(rgba\(0, 0, 0, 0\)|transparent)$/;
 

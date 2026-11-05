@@ -1,7 +1,7 @@
 // The GTM readiness snapshot (owner, 1 Nov 2026: "how stable are they"): the collector (tools/ci-intel/jobs/gtm-readiness.mjs, a step of e2e-intel.yml) reads each run's per-step results from CI artifacts
 // (e2e-view-<suite>/steps.json, integration-results-<layer>) and sends the journey rows (PUT /gtm/data, Bearer SELFHEAL_PUBLISH_KEY). The site validates them and keeps ONE row (gtm_snapshot);
 // the page (admin/gtm-readiness.js) reads that row only. Why a table of its own: e2e_runs/e2e_fails keep reds only, no green and no step, so a journey's share could not be drawn from them.
-// Wire form of a Tier 1 row (compact, thousands of them): [runId, day, kind, os, journey, seen, failed, cut]. Guard: test/admin/gtm-readiness.test.js.
+// Wire form of a Tier 1 row (compact, thousands of them): [runId, day, kind, os, journey, seen, failed, cut]. Guard: test/unit/admin/gtm-readiness.test.js.
 import {equal} from '../shared/guard.js';
 
 export const KEEP_DAYS = 28;   // two 14-day windows: this one and the one before (the trend)

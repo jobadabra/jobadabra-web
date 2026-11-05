@@ -1,7 +1,7 @@
 /* The AI page (/intelligence), laid out like the owner's mockup 1473 (24 Oct 2026): a centred header, stage tabs with icons, then a grid of cards
    per stage. A card is an amber outline icon, a title, a two-line promise, a divider, and one foot row: "Data used" and its value at the left,
    "How it works ›" at the right (the long text opens under it). Every step is shown; none is folded away. Built from the site's own tokens
-   (styles.css, effects.css); only what they lack is here. Guarded by test/web/intelligence-page.test.js. */
+   (styles.css, effects.css); only what they lack is here. Guarded by test/unit/website/intelligence-page.test.js. */
 
 /* Header, centred. */
 .ai-hero { display: grid; justify-items: center; text-align: center; gap: 10px; padding-block: 40px 8px; }

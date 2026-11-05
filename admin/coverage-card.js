@@ -1,6 +1,6 @@
 // The "Test coverage" section of /admin/testing/integrations (owner via a8, 1 Nov 2026: "A card on Integrations"): line % per test layer, per folder, and which GTM journeys have a test at
 // which layer. Draws admin/coverage-intel.js's part of the snapshot only. REPORT ONLY: no target, no red/green on a number; "not measured" (a source was missing that night) is never 0%.
-// Built from the page's own pieces: .tiles/.card.tile, chip(), the table inside .scroll, <details>. Guard: test/admin/coverage-card.test.js.
+// Built from the page's own pieces: .tiles/.card.tile, chip(), the table inside .scroll, <details>. Guard: test/unit/admin/coverage-card.test.js.
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 

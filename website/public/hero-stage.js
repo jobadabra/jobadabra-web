@@ -5,7 +5,7 @@
 // (time passed), fade; reduced motion switches at once; its caption goes above the stage (a "later" clip leads it with a tag, never over the video) and its step's line fills as it plays. The steps jump to a clip, the pause button
 // (or a click on the picture, which then shows a play mark) holds it (as do a hidden tab and a stage scrolled out of view); the next clip is fetched while the current one plays. Phones (the 1080 copies, 4:3) get
 // their own posters, and the step's caption under the video (round 9, owner 24 Oct 2026: "move the subtitles/captions out of the video ... at least on
-// mobile, they hide some buttons"): the phone copy has none drawn on it; its WebVTT track (media/captions.mjs vttOf) gives the line. With reduced motion nothing plays by itself: the posters show, a step switches them, play starts a clip. Guarded by test/web/landing.test.js.
+// mobile, they hide some buttons"): the phone copy has none drawn on it; its WebVTT track (media/captions.mjs vttOf) gives the line. With reduced motion nothing plays by itself: the posters show, a step switches them, play starts a clip. Guarded by test/unit/website/landing.test.js.
 const root = document.getElementById('hero-stage');
 const clips = root ? [...root.querySelectorAll('video.slide')] : [];
 const steps = root ? [...root.querySelectorAll('.stage-steps button:not(.stage-pause)')] : [];

@@ -1,7 +1,7 @@
 // The app's update check (desktop/lib/updater.js) reads the releases here, not from api.github.com: GitHub allows 60 unsigned
 // calls an hour per IP, and an office network shares one (9 Oct 2026: a friend's Windows app got "GitHub answered 403").
 // Two fixed reads only, made with the site's GITHUB_TOKEN and kept 5 minutes at the edge for every install; the answer is the
-// GitHub shape, trimmed to the fields the updater reads. Guard: test/api/releases.test.js.
+// GitHub shape, trimmed to the fields the updater reads. Guard: test/unit/api/releases.test.js.
 import {PUBLIC_REPO} from '../shared/repos.js';
 
 const REPO = PUBLIC_REPO;

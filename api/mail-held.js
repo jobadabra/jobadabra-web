@@ -1,5 +1,5 @@
 // The e-mail digest of everything that is not a new-matches mail (owner, 17 Oct 2026): mail-check results, insights, finished jobs wait here, and the daily cron sends each account
-// ONE mail (weekly on Mondays for an account that chose weekly). New matches and interview notices never wait: api/account-email.js sends them at once. Guard: test/api/account-email.test.js.
+// ONE mail (weekly on Mondays for an account that chose weekly). New matches and interview notices never wait: api/account-email.js sends them at once. Guard: test/unit/api/account-email.test.js.
 import {addrOf, confirmLink, send} from '../shared/mail.js';
 
 const HOLD_MAX = 100;            // per account: a stuck mailbox cannot grow the table

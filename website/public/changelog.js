@@ -1,6 +1,6 @@
 // The What's new page: the versions from changelog.json (CI drafts them, the site stores them; src/changelog-store.js), newest first.
 // The newest is a full card, the next shows three highlights, older ones are compact rows that open on a click; long releases fold the rest
-// under "View all N changes". Text goes in as text, never as HTML. Guarded by test/web/changelog-page.test.js.
+// under "View all N changes". Text goes in as text, never as HTML. Guarded by test/unit/website/changelog-page.test.js.
 const KINDS = [['features', 'New'], ['improvements', 'Improved'], ['fixes', 'Fixed']];
 const CHANNELS = {stable: 'Stable', beta: 'Beta', start: 'Project start'};
 const HIGHLIGHTS = 3, FIRST_ROWS = 6, MORE_ROWS = 8;

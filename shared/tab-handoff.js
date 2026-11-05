@@ -1,5 +1,5 @@
 // The form tab the app opens and the extension must take (desktop/lib/tab-expect.js): the "tab" reports of installs, as a rate by OS and app version and the step each miss failed at.
-// Shown on /admin/growth/app next to the problems; a miss is also a problem row there, a taken tab is not. Guard: test/shared/telemetry.test.js.
+// Shown on /admin/growth/app next to the problems; a miss is also a problem row there, a taken tab is not. Guard: test/unit/shared/telemetry.test.js.
 import {esc} from './html.js';
 
 export const TAB_OUTCOMES = ['taken', 'extension_silent', 'tab_not_taken', 'join_empty', 'wake_failed'];   // = desktop/lib/tab-expect.js

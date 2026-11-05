@@ -43,7 +43,7 @@ export async function validSession(env, token, now = Date.now()) {
 }
 
 // Is this request the owner (or the owner's scripts)? Always awaited: a forgotten await would be a truthy Promise, and
-// test/shared/auth.test.js fails on any call site without one.
+// test/unit/shared/auth.test.js fails on any call site without one.
 export async function isOwner(request, env, now = Date.now()) {
   if (!env.STATS_KEY) return false;
   const auth = request.headers.get('Authorization') || '';

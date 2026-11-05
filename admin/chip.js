@@ -1,7 +1,7 @@
 // One chip for every value cell on the admin pages (owner, 27 Oct 2026: "this column values/cells should be displayed as chips"): the helper and its style are one copy in the public repo.
 // Why (2 Nov 2026, owner: the CI collectors move to the public repo, jobadabra#2989): the e2e weekly summary and the pages draw the same chips (tools/ci-intel/lib/chip.mjs); only the page list below is the site's.
 // chip(html, tone): html is already escaped by the caller; a page that uses it puts CHIP_STYLE in its own <style> (not in withNav: pages like build-log and schedules keep their own .chip).
-// Guard: test/shared/admin-chips.test.js (every page in CHIP_PAGES draws its value cells with it).
+// Guard: test/unit/shared/admin-chips.test.js (every page in CHIP_PAGES draws its value cells with it).
 export {CHIP_STYLE, chip} from '../tools/ci-intel/lib/chip.mjs';
 
 // The pages that draw value cells with chip(), or show a chip page's section (installsimpact: scouting's served table): the guard test checks each one.

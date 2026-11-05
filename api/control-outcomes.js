@@ -1,7 +1,7 @@
 // Operator outcomes per control fingerprint and where they came from (control_outcomes, migration 0070): stored from /api/controls, read by the canary, the digest and the proposer's target list.
 // 'user' = a real install; 'pool' (the owner's smoke pool) and 'replay' (offline replays) are lab data, sent with the owner's key. Promotion, halting and the digest count 'user' only;
 // the target list ranks user failures first and lab failures second, so the proposer works from real misses and falls back to lab ones while installs are few.
-// why = the latest fixed reason word of a failed attempt (extension/recipe-schema.js CONTROL_WHYS), never text. Guarded by test/api/control-outcomes.test.js.
+// why = the latest fixed reason word of a failed attempt (extension/recipe-schema.js CONTROL_WHYS), never text. Guarded by test/unit/api/control-outcomes.test.js.
 import {CONTROL_WHYS} from '../extension/recipe-schema.js';
 
 export const SOURCES = ['user', 'pool', 'replay'];

@@ -70,7 +70,7 @@
 .hero .downloads-note { font: 400 .76rem var(--mono); color: #8a97a6; }
 
 /* Windows download choice (owner, 31 Oct 2026): the Windows button stays the Store link; a caret beside it opens both ways to get the app. site.js builds the split from the `a.dl-exe`
-   link that follows every Windows button; without the script that link stays a small line under the button. Guarded by test/web/windows-choice.test.js. */
+   link that follows every Windows button; without the script that link stays a small line under the button. Guarded by test/unit/website/windows-choice.test.js. */
 .dl-exe { font: 500 .82rem var(--sans); color: var(--muted); }
 .downloads .dl-exe { grid-column: 1 / -1; flex-basis: 100%; }
 .dl-split { position: relative; display: inline-flex; max-width: 100%; }

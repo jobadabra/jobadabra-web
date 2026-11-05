@@ -1,7 +1,7 @@
 // The share of finished e2e runs that ended green, per day and run kind (owner, 31 Oct 2026: "Do we have such a graph that shows the trend of our e2e green/stability?"; the coordinator
 // had to measure main's green share from GitHub by hand). Built only from the snapshot rows the page already keeps (snapshot.days: day, kind, greens, reds); cancelled runs are not
 // finished runs, so they are in neither the numerator nor the denominator. The snapshot stores whole UTC days, never hours: "last 24 h" is read as today + yesterday.
-// Drawn by admin/e2e-page.js (greenCard). Guard: test/admin/e2e-green.test.js.
+// Drawn by admin/e2e-page.js (greenCard). Guard: test/unit/admin/e2e-green.test.js.
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {legend} from './day-bars.js';

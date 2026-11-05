@@ -5,7 +5,7 @@
 // starts from it (src/source_rank.py ranked_sources). Owner's rules (26 Oct 2026): a source is proven after 1 install (the next install's own
 // read checks it), dead after 3 installs read it fine and found no local job (nothing here depends on who asked); best = local jobs per
 // minute, fit 70+ as the tie-break. The kind is a value from the fixed list (shared/pool-labels.js ROLES), never a branch here, so a new kind
-// works unchanged; 'other' (any field) never makes a source dead. Counts and fixed ids only. Tests: test/api/source-ranking.test.js.
+// works unchanged; 'other' (any field) never makes a source dead. Counts and fixed ids only. Tests: test/unit/api/source-ranking.test.js.
 import {COUNTRIES} from '../shared/pool-tags.js';
 
 export const PROVEN_K = 1, DEAD_K = 3, MAX_PROVEN = 200, MAX_DEAD = 3000;

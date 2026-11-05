@@ -1,5 +1,5 @@
 // The old Signups page, merged into /admin/growth/email on 26 Oct 2026 (owner, 16 Oct 2026: "keep track of the signups... follow up on them"): trial accounts by what we can act on (confirmed, unconfirmed, product-news opt-in, Always on paused, converted to Pro)
-// and what our e-mail did in the last 7 days. Counts only, never an address. The Pro-launch mail is sent from here by hand: POST /admin/mail/launch (Bearer, admin/mail-lifecycle.js). Guard: test/admin/mail-lifecycle.test.js.
+// and what our e-mail did in the last 7 days. Counts only, never an address. The Pro-launch mail is sent from here by hand: POST /admin/mail/launch (Bearer, admin/mail-lifecycle.js). Guard: test/unit/admin/mail-lifecycle.test.js.
 import {viewer, isOwner} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {launch} from './mail-lifecycle.js';

@@ -59,7 +59,7 @@ After that, the daily `tools/media.sh` refresh re-records the hero pieces from o
 | Playback (order, cut on first frame, pause, steps) | `website/public/hero-stage.js` |
 | Look (frame, amber glow, 4:3 on phones, steps line) | `website/public/home.css` `.hero-stage` |
 | The side-by-side | `tools/hero-preview.mjs` |
-Tests: `desktop/test/media-{camera,persona,options,manifest}.test.js`, `test/web/landing.test.js`, `test/web/hero-redo.test.js`.
+Tests: `desktop/test/media-{camera,persona,options,manifest}.test.js`, `test/unit/website/landing.test.js`, `test/unit/website/hero-redo.test.js`.
 
 ## The toolbox: every way to tell a step, and when it fits (owner, 24 Oct 2026)
 Pick per moment, by what the viewer must understand; never one method everywhere. A method not built yet is built into the tool (with a test), not faked in a scene.
@@ -297,7 +297,7 @@ comes back at the next redo.
 - **Renders move to GitHub CI** (owner, 25 Oct 2026: "should we do the rendering on the Github CI? will it be faster?" / "we can have a manually triggerable workflow"; chose "after PR2"): the Mac is shared by ~10 sessions (load 100-312 on 8 cores), so local parallel renders only split the same CPU (PR3: ~25 -> ~20 min). Plan: a workflow_dispatch workflow, one macOS runner per clip (Mac fonts: never Linux), recording from public main with the demo persona, videos back as an artifact or a commit on the PR branch. Also: reuse the graded picture when only the caption or cursor changed (45% of run 29's 6,638 frames).
   **Built** (`.github/workflows/hero-render.yml`): `gh workflow run hero-render.yml -R GarryOne/jobadabra-web --ref <branch with the scenes> -f clips="hero-track" [-f branch=<PR branch>]`;
   each clip is an artifact `hero-<clip>` (site files, sheets, preview.png, hero.log); with `branch` a last job runs `hero.sh --place` and commits there.
-  macOS minutes are free only while the repo is public; it runs by hand only (guard: test/web/hero-render-workflow.test.js).
+  macOS minutes are free only while the repo is public; it runs by hand only (guard: test/unit/website/hero-render-workflow.test.js).
   **A workflow change runs once on its PR branch before the owner merges** (`gh workflow run hero-render.yml --ref <branch>`): #101 merged untested
   and run 1 stopped all 4 clips in 30 s (Homebrew's slim ffmpeg has no libwebp: #104 installs ffmpeg-full); run 2: two takes at once on the
   3-core runner stalled the capture and painted late after cuts (HERO_TAKES=1 there). A job's log exists only once the job ends (mid-run the logs

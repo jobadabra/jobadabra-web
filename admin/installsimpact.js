@@ -11,7 +11,7 @@ import {all, day, jobsOf, pooledKeys, isPooled} from '../shared/pool-snapshot.js
 // /admin/job-search/installs: what real installs add to the product, above all the central employer list (owner, 20 Oct 2026: "the impact of real
 // users/installation over our product growth ... especially on the scouting/job search"). Employers an install shared, the open jobs they
 // hold, the kind × country cells installs filled, steps installs skipped thanks to the pool (pool_served_day), boards and dead ends.
-// Counts and names only, never a job text. Tests: test/admin/installsimpact.test.js.
+// Counts and names only, never a job text. Tests: test/unit/admin/installsimpact.test.js.
 const parse = text => { try { return text ? JSON.parse(text) : null; } catch { return null; } };
 
 

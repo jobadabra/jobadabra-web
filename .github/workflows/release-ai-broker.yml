@@ -51,7 +51,7 @@ jobs:
           curl -fsS --max-time 30 https://jobadabra-ai-broker.jobpilotto.workers.dev/health | grep -q '"state":"ready"' || { echo "::error::The AI broker is not ready with a login: a deploy would not restore it: upload the Codex login first (BROKER_ADMIN_TOKEN, see the header of workers/ai-broker/wrangler.jsonc)."; exit 1; }
       - name: The broker's own tests first
         if: env.CLOUDFLARE_API_TOKEN != ''
-        run: node --test test/ai-broker/*.test.js
+        run: node --test test/unit/workers/ai-broker/*.test.js
       - name: Deploy the broker and its image
         if: env.CLOUDFLARE_API_TOKEN != ''
         working-directory: workers/ai-broker

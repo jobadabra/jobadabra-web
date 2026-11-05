@@ -1,7 +1,7 @@
 // What the fill ladder's control repairs did, counted per control fingerprint and verb (spec docs/superpowers/specs/2026-10-12-fill-ladder.md, PR D2): the batch's `repairs`
 // ([{fp, verb, ok, failed}], fixed values and integers only: desktop/lib/ladder/repair-kept.js counts() from an install, desktop/e2e/lib/ladder-moves.mjs from the CI pool and the replays),
 // stored per SOURCE like the ladder's moves (shared/ladder-moves.js): 'user' adds up per install, a test run's are written once. A fingerprint seen by >= 3 installs is a fixed row
-// (K_MIN); serving it to installs comes later. GET /api/ladder-moves (the owner) shows them. Guard: test/shared/repair-evidence.test.js.
+// (K_MIN); serving it to installs comes later. GET /api/ladder-moves (the owner) shows them. Guard: test/unit/shared/repair-evidence.test.js.
 export const SOURCES = ['user', 'ci', 'replay'];   // the same list as shared/ladder-moves.js (its guard checks them equal; no import, so that file can show these rows)
 export const K_MIN = 3;
 const MAX_ROWS = 200, FP = /^[a-z0-9]{6,16}$/, VERB = /^[a-z_]{2,24}$/;

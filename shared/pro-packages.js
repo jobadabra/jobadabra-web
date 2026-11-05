@@ -1,6 +1,6 @@
 // The Pro packages as data (private spec jobadabra-lab:docs/specs/2026-10-16-pro-plan.md, owner 24 Oct 2026: "I agree."): Pro €9 (no AI credit), Pro + AI €19 (€29 list price, €10 credit),
 // the €10 upgrade between them and the €5 / €10 / €20 top-ups. One place for what each purchase grants, shows and who may buy it; the checkout, the webhook and /api/pro/status read it.
-// Guards: test/shared/pro-packages.test.js, test/shared/pro-stripe.test.js.
+// Guards: test/unit/shared/pro-packages.test.js, test/unit/shared/pro-stripe.test.js.
 // Credit is in micro-credit-euros: €1 of credit = €1 at OUR AI prices = CREDIT_PER_COST × our raw cost (in euros) (owner, 24 Oct 2026: "€10 credit, but it still should worth the same $5").
 // Grants follow what people pay (top-up €5 → €5); the meter debits raw micro-USD × CREDIT_PER_COST (shared/pro.js spend). Shown to people as a bar, and as these euro amounts in the offers.
 export const CREDIT_PER_COST = 2;

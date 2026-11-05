@@ -1,5 +1,5 @@
 // The "Session checks" tab of /admin/job-search/lab (owner, 24 Oct 2026): the local search checks sessions ran, newest first, each with its numbers, the boards it read, what broke and the conclusion, so
-// the next session starts from them. Counts, seconds, board names and two sentences (admin/session-checks.js). Guard: test/admin/session-checks.test.js.
+// the next session starts from them. Counts, seconds, board names and two sentences (admin/session-checks.js). Guard: test/unit/admin/session-checks.test.js.
 import {esc} from '../shared/html.js';
 
 const num = value => (value == null ? '–' : Number(value).toLocaleString('en-US'));

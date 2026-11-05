@@ -1,6 +1,6 @@
 // Synthetic monitoring (spec docs/superpowers/specs/2026-11-01-synthetic-monitoring-design.md): every 15 minutes the Worker asks its own public services one question each and
 // checks that the answer says what a working service says, not only HTTP 200. One D1 row per probe per round; two reds in a row tell the owner once on the Sentry Telegram bot, the
-// first green tells "back". REPORT ONLY: nothing here blocks a merge, a beta or a request. Guard: test/shared/synthetic.test.js.
+// first green tells "back". REPORT ONLY: nothing here blocks a merge, a beta or a request. Guard: test/unit/shared/synthetic.test.js.
 // No secret beyond what the Worker holds, no user data: the probe is one fixed install whose tokens are computed here (tokenFor), so nothing is minted and no counter moves.
 import {tokenFor} from './guard.js';
 import {chainOf, fetchHealth, problem} from './ai-broker.js';

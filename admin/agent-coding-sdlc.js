@@ -1,6 +1,6 @@
 // The SDLC tab of /admin/agents/agent-coding (owner, 1 Nov 2026: "the entire harness/workflow of our development ... speccing, plan, build, maintain" and "what brings value and it's fast / value but slow /
 // slow and don't bring value / fast and brings no value"). Three cards: the path (hooks → push gate → PR checks → main → beta/nightly → bugs the owner saw), the four phases, and the Checks grid
-// (every check by cost and real catches). Pure: rows in, HTML out; report only, nothing here blocks. Data: kinds gate + ci + sdlc (admin/agent-coding.js). Test: test/admin/agent-coding-sdlc.test.js.
+// (every check by cost and real catches). Pure: rows in, HTML out; report only, nothing here blocks. Data: kinds gate + ci + sdlc (admin/agent-coding.js). Test: test/unit/admin/agent-coding-sdlc.test.js.
 import {esc} from '../shared/html.js';
 import {TIP_STYLE, TOOLTIP} from '../shared/scoutingcharts.js';
 import {HOOKS, STYLE, TABS_STYLE, tabs, weeksOf, weekWords, sum, pct, round1, bar, legend, chip, note, card} from './agent-coding-page.js';

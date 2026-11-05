@@ -1,6 +1,6 @@
 // GTM readiness numbers (owner, 1 Nov 2026: "how ready is GTM our app, from the critical journeys point of view. How stable are they"). Pure: the stored snapshot -> rows.
 // Snapshot (admin/gtm-readiness.js reads it; admin/gtm-intel.js validates it): {at, journeys: [{id, name, tier}], tier1: [[runId, day, kind, os, journey, seen, failed, cut]],
-// tier2: [{day, journey, tests, runs, red}]}. A Tier 1 row is one run on one OS for one journey; seen = registry steps found in the run's steps.json (0 with cut = 1: the suite died first). Guard: test/admin/gtm-readiness.test.js.
+// tier2: [{day, journey, tests, runs, red}]}. A Tier 1 row is one run on one OS for one journey; seen = registry steps found in the run's steps.json (0 with cut = 1: the suite died first). Guard: test/unit/admin/gtm-readiness.test.js.
 // Why (1 Nov 2026): a run is red for a journey when a registry step FAILED, or the suite died before a registry step ran (cut); the e2e store keeps reds only, so greens come from the runs' steps.json.
 const DAY = 86400000;
 export const STABLE_RUNS = 10;   // stable = green in the last 10 runs of the journey (all OSes pooled by run) AND no red in the last QUIET_DAYS days; the owner may change both

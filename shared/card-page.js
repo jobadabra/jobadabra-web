@@ -1,6 +1,6 @@
 // The site's one-card result page (mail confirm, unsubscribe, email settings, the Notion and LinkedIn sign-in returns): a centred card in the app's look,
 // the same as the app's Google sign-in page (public repo src/sources/google_page.py: logo, amber glow, two sparks), light or dark by the browser's setting.
-// Self-contained (no outside loads). Guard: test/shared/card-page.test.js (every page builder goes through it).
+// Self-contained (no outside loads). Guard: test/unit/shared/card-page.test.js (every page builder goes through it).
 const LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="56" height="56" role="img" aria-label="Jobadabra">
 <rect width="200" height="200" fill="#f5c542"/>
 <path d="M52 96 L36 150 Q100 198 164 150 L148 96 Z" fill="#15171c"/>

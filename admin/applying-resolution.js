@@ -3,7 +3,7 @@
 // branch's run never counts, migration 0061) and CI's pool runs on main
 // (PUT /applying/endings, the narrow REPLAYS_PUBLISH_KEY, one row of the last 600 records), the share resolved raw and weighted by real demand (the scorecard's match share, with the
 // rows each platform rests on), the rows held by the test apart (never measured), the unresolved rows first (the work list) and a weekly trend. A PR's run never counts here.
-// The client code admin/applying.js puts inside its page is in applying-resolution-view.js. Guard: test/admin/applying-resolution.test.js.
+// The client code admin/applying.js puts inside its page is in applying-resolution-view.js. Guard: test/unit/admin/applying-resolution.test.js.
 import {CAUSES, ENDINGS, WORST_FIRST, resolved} from '../extension/ladder/endings.js';
 import {equal} from '../shared/guard.js';
 import {dropSnapshot} from './applying-store.js';

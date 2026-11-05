@@ -1,6 +1,6 @@
 // The daily build digest ("what we built today", spec docs/superpowers/specs/2026-10-16-daily-digest.md): the pure parts. A day's merged PRs are cut down to a few lines each,
 // Haiku-tier (on the Codex broker) groups them by goal and answers a FIXED JSON shape, and this file validates that answer and writes the markdown (the intro and the PR numbers are code's, never the AI's).
-// Used by jobs/daily-digest.mjs (CI) and the admin page. Guard: test/admin/build-digest.test.js (a fixture of the 16 Oct 2026 PRs, no live AI).
+// Used by jobs/daily-digest.mjs (CI) and the admin page. Guard: test/unit/admin/build-digest.test.js (a fixture of the 16 Oct 2026 PRs, no live AI).
 import {AiRefused} from './ai-refusal.js';
 export const MODEL = 'claude-haiku-5-5';
 // The answer's room: 9 groups x 5 bullets x ~100 tokens is ~4,500 for a busy day (16 Oct 2026: ~50 PRs, 3,000 cut the JSON off: "not JSON" twice). A cut-off answer is retried once with MORE_TOKENS.

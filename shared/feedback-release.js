@@ -1,6 +1,6 @@
 // A release that includes a fix tells the people who reported it (spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md, PR 5/7). Owner, 3 Nov 2026: "when we release a new
 // beta/stable version which includes a feedback fix, we should automatically inform all the reporters". Called by admin/feedback-release.js (CI, publish key) at every beta and stable build.
-// Guarded by test/shared/feedback-release.test.js.
+// Guarded by test/unit/shared/feedback-release.test.js.
 import {TOLD_ERROR, releasePr, tellOnce} from './feedback-reply.js';
 
 const PAGE = 200, MAX_PAGES = 50;

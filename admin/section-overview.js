@@ -1,6 +1,6 @@
 // The Overview tab of an admin section (owner, 18 Oct 2026): each page of the section declares its 2-4 headline numbers in admin/headlines.js, this file draws them as tiles
 // (a number, what it counts, a weekly bar chart when there is one, a status dot, a link to the page). Same weekly series and bars as the /admin Overview (admin/admin.js).
-// A number that cannot be judged says so (few: true -> "Too few", with its counts underneath). No AI; each loader reads rows or one snapshot the page already has. Guard: test/admin/section-overview.test.js.
+// A number that cannot be judged says so (few: true -> "Too few", with its counts underneath). No AI; each loader reads rows or one snapshot the page already has. Guard: test/unit/admin/section-overview.test.js.
 import {PAGES, spark} from './admin.js';
 import {esc} from '../shared/html.js';
 import {remember} from '../shared/auth.js';

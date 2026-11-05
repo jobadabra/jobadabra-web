@@ -1,6 +1,6 @@
 // Usage-weighted pool growth (docs/superpowers/specs/2026-10-10-usage-weighted-pool.md): which sites real users' applications end on, as counts per install and day,
 // served only as an aggregate that >= 3 distinct installs used (k >= 3), with the countries of those installs the same way. Never an install, never a path or query.
-// Written by the card ingest (api/recipes.js), pruned with the other 90-day tables (api/pool.js), read by /admin/form-filling/lab "Next sites to add". Guard: test/shared/hostuse.test.js.
+// Written by the card ingest (api/recipes.js), pruned with the other 90-day tables (api/pool.js), read by /admin/form-filling/lab "Next sites to add". Guard: test/unit/shared/hostuse.test.js.
 export const MIN_INSTALLS = 3;
 export const KEEP_DAYS = 90;
 

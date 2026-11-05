@@ -189,7 +189,7 @@ section.block:nth-of-type(even)::before { content: ""; position: absolute; inset
   .topnav .news ~ .btn { margin-left: 0; white-space: nowrap; font-size: .82rem; padding: 9px 12px; }
   .topnav:has(.news) { gap: 10px; } .topnav:has(.news) .brand { font-size: .9rem; white-space: nowrap; } .topnav.on-dark .news { color: #9aa7b5; } }
 @media (max-width: 370px) { .topnav .news { display: none; } .topnav .news ~ .btn { margin-left: auto; } }   /* too narrow for brand, link and button: the footer link stays */
-/* The phone menu (site.js adds the button to every .topnav; the links drop below the bar). Guarded by test/web/mobile-menu.test.js. */
+/* The phone menu (site.js adds the button to every .topnav; the links drop below the bar). Guarded by test/unit/website/mobile-menu.test.js. */
 .topnav .menu-btn { display: none; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 999px; border: 1px solid var(--line-strong); background: transparent; color: inherit; font: 600 .82rem var(--sans); cursor: pointer; }
 .topnav .menu-btn i { width: 14px; height: 10px; border-block: 2px solid currentColor; position: relative; }
 .topnav .menu-btn i::after { content: ""; position: absolute; left: 0; right: 0; top: 2px; border-top: 2px solid currentColor; }

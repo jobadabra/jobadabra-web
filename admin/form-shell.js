@@ -1,4 +1,4 @@
-// The frame the form-filling pages share (Real Form Filling, Form Learning): head, styles, header with the period and the AI-family filter, and the owner-only view that reads the numbers once (admin/formlearning.js). Guard: test/web/form-pages.test.js.
+// The frame the form-filling pages share (Real Form Filling, Form Learning): head, styles, header with the period and the AI-family filter, and the owner-only view that reads the numbers once (admin/formlearning.js). Guard: test/unit/website/form-pages.test.js.
 import {FAMILIES, familyLinks, familyParam} from '../shared/engines.js';
 import {viewer} from '../shared/auth.js';   // admins (invited) read these pages too
 import {esc} from '../shared/html.js';

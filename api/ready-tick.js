@@ -1,6 +1,6 @@
 // Ready to send, the cron side (spec docs/superpowers/specs/2026-10-17-ready-to-send.md): on the existing 5-minute tick, a queued night whose fill time has come gets its night token and one message on the Queue `ready-runs`
 // (the runner Worker workers/ready-runner starts the container from it); a night still running past its end is finished (its unfilled jobs are "failed: timeout"), its cost reported and its tabs closed.
-// Nothing starts without the Queue binding (not created until the owner says so) or while READY_TO_SEND is off. Guard: test/api/ready-wiring.test.js.
+// Nothing starts without the Queue binding (not created until the owner says so) or while READY_TO_SEND is off. Guard: test/unit/api/ready-wiring.test.js.
 import {closeNight} from './ready-morning.js';
 import {LIVE} from './ready-line.js';
 import {readyOn, reportNight, start} from './ready.js';

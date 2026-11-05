@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Redo or improve the landing hero's four clips from a worktree, with its local edits (owner, 24 Oct 2026: "a repeatable way to redo/improve this hero
-# video ... the feedback mechanism permanently available"). Skill: .claude/skills/redo-site-hero-video. Guard: test/web/hero-redo.test.js.
+# video ... the feedback mechanism permanently available"). Skill: .claude/skills/redo-site-hero-video. Guard: test/unit/website/hero-redo.test.js.
 #   tools/hero.sh [pieces...]          record (default: all four), contact sheets, the in-hero side-by-side (today's live hero | this one), opened
 #   tools/hero.sh --words <set dir> [pieces...]  words only (captions, tags, cards): redraw that set's kept recordings, no new recording
 #   tools/hero.sh --place <set dir>    copy a set's hero files into website/public/media (after the owner's yes), with their sizes

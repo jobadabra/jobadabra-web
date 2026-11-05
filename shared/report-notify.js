@@ -1,6 +1,6 @@
 // The owner's Telegram message for each "Report this form" the Worker stores (docs/superpowers/specs/2026-10-15-report-this-form.md §6): counts only (the cause word, the number of page
 // responses, a short install digest, the time), never a host, page or value: the Worker has none. Same bot and chat as the feedback message (BRAIN_BOT_TOKEN, BRAIN_CHAT_ID, Worker secrets).
-// After 10 messages in a UTC day one "more reports today" line replaces the rest, so a burst is not a storm. A failure to tell never fails the upload. Guarded by test/shared/report-form.test.js.
+// After 10 messages in a UTC day one "more reports today" line replaces the rest, so a burst is not a storm. A failure to tell never fails the upload. Guarded by test/unit/shared/report-form.test.js.
 import {esc} from './html.js';
 
 export const TELL_PER_DAY = 10;

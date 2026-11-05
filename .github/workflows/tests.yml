@@ -50,8 +50,8 @@ jobs:
         run: |
           set -o pipefail
           files="$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename')" || files='ops/media/'
-          if printf '%s\n' "$files" | grep -qE '^(ops/media/|test/desktop/media-|tools/(hero|media|apt-install|site-guards)|\.github/workflows/tests\.yml$)'; then echo MEDIA_TOOLS=1; else echo MEDIA_TOOLS=0; fi | tee -a "$GITHUB_ENV"
-      - name: ffmpeg for the hero media tests   # #98: framesIn and the plan check make and read small videos (test/desktop/media-*.test.js, joined tree: desktop/test/); cut and retried, never a hang (web #122: 11m51s)
+          if printf '%s\n' "$files" | grep -qE '^(ops/media/|test/media/media-|tools/(hero|media|apt-install|site-guards)|\.github/workflows/tests\.yml$)'; then echo MEDIA_TOOLS=1; else echo MEDIA_TOOLS=0; fi | tee -a "$GITHUB_ENV"
+      - name: ffmpeg for the hero media tests   # #98: framesIn and the plan check make and read small videos (test/media/media-*.test.js, joined tree: desktop/test/); cut and retried, never a hang (web #122: 11m51s)
         if: github.event_name != 'pull_request' || env.MEDIA_TOOLS == '1'   # unset on a push reads as 0 here, so compare with '1' (red main 9908c69)
         timeout-minutes: 5
         run: .private/tools/apt-install.sh ffmpeg
@@ -67,7 +67,7 @@ jobs:
           # Why (4 Nov 2026, #3095): '' is falsy in a GitHub expression, so "&& '' ||" always gave the title and a bot's PR went red on the session tag. The PR's author, not the actor: a person may edit a bot's PR.
           PR_TITLE: ${{ github.event.pull_request.user.type != 'Bot' && github.event.pull_request.title || '' }}   # the "[xx] " session tag (public tools/pr-body-check.py)
         run: printf '%s' "$BODY" | python3 tools/pr-body-check.py   # the public repo's own check, from the joined tree: the same layout the owner reads in 2-5 seconds
-      - name: playwright-core for the phone checks   # test/admin/admin-no-sideways.test.js, test/web/no-sideways.test.js (390 px) and test/admin/palette-pages.test.js (⌘K) open pages in the runner's Google Chrome; without it they skip (26 Oct 2026, admin on a phone)
+      - name: playwright-core for the phone checks   # test/integration/admin-no-sideways.test.js, test/integration/no-sideways.test.js (390 px) and test/integration/palette-pages.test.js (⌘K) open pages in the runner's Google Chrome; without it they skip (26 Oct 2026, admin on a phone)
         timeout-minutes: 3
         run: |
           npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/pw" playwright-core@1.63.0

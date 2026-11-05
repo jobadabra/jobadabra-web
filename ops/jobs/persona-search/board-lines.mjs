@@ -1,7 +1,7 @@
 // The engine's "Job boards…" lines of each press, printed in the random draw's job log (.github/workflows/random-draw.yml), so a press's boards_read
 // (tools/persona-search/funnel.py: the boards with a "Job boards found: <name> N job(s), M relevant" line) can be explained: which boards were proposed,
 // skipped, read and what each gave (26 Oct 2026: a before/after pair went from 12 boards to 0 and no log said why).
-// Board names and counts only: the roles' search words are cut to a count, links are cut, no other line of the log is shown. Guard: test/jobs/board-lines.test.js.
+// Board names and counts only: the roles' search words are cut to a count, links are cut, no other line of the log is shown. Guard: test/unit/jobs/board-lines.test.js.
 // Usage: node jobs/persona-search/board-lines.mjs <draw folder with run-<press>.log>
 import fs from 'node:fs';
 import path from 'node:path';

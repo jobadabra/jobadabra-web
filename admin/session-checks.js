@@ -1,6 +1,6 @@
 // The "Session checks" tab's data (owner, 24 Oct 2026): what a session's local search check found (local jobs, boards read, what broke) and concluded, uploaded by the session
 // (PUT /search-lab/session-checks, Bearer SESSION_CHECKS_KEY: its own key, not the CI one) so other sessions read it. Checked on the way in: fixed shapes, counts and seconds, board names
-// with counts, two short sentences; no job titles, company names or CV text. Guard: test/admin/session-checks.test.js.
+// with counts, two short sentences; no job titles, company names or CV text. Guard: test/unit/admin/session-checks.test.js.
 import {equal} from '../shared/guard.js';
 
 export const KEEP_CHECKS = 300, MAX_ROWS = 5, MAX_BOARDS = 14;

@@ -1,5 +1,5 @@
 // Byte ranges for the site's videos: Workers static assets answer a Range request with the whole file (200), and Safari will not play a <video> that
-// is not answered with 206 + Content-Range. Serves /media and /images/app (the landing's clips and stills) through the worker. Guarded by test/workers/range.test.js.
+// is not answered with 206 + Content-Range. Serves /media and /images/app (the landing's clips and stills) through the worker. Guarded by test/unit/workers/www/range.test.js.
 
 // "bytes=0-99", "bytes=500-", "bytes=-200" -> {start, end} (end inclusive) | null (not a single satisfiable range). Pure.
 export function parseRange(header, size) {

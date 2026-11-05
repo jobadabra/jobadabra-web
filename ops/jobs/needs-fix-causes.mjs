@@ -4,7 +4,7 @@
 // Reads the owner page's data with the Keychain key jobadabra.site.api_key (never printed). Read-only: a saved copy of the page's data at most 15 minutes old (--refresh fetches it again).
 // Usage: node jobs/needs-fix-causes.mjs [--rows] [--json <file>] [--brief "<cause>" [--note "<one line>"]]   (--brief prints a ready fixer prompt for that cause: tools/fixer-brief.mjs; "Run first" refuses, exit 1)
 //   (--rows lists the shapes under each group; --json reads a saved copy of the page's ?json)
-// Columns: cause, rows, claimed (rows a session holds; the session itself is never on the site), oldest run. Guard: test/needs-fix-causes.test.js.
+// Columns: cause, rows, claimed (rows a session holds; the session itself is never on the site), oldest run. Guard: test/unit/jobs/needs-fix-causes.test.js.
 import fs from 'node:fs';
 import {recordVar} from '../tools/record-env.mjs';
 import {pageJson} from '../tools/applying-page-copy.mjs';

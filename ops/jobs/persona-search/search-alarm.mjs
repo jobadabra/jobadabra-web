@@ -2,7 +2,7 @@
 // sketch https://claude.ai/artifact/5PjZZy6TyTBNQZYB6PaofR): a search below its floor files a GitHub issue in the app repo, in the Finder's title style and labels
 // ("[auto-search] <role> · <place> · <path>: <what>", fp:<fingerprint>), with its funnel. One issue per field × place × path: a later sighting is a dated comment on it, a
 // later draw of the same three that passes closes it. Used by the daily draw (draw-alarm.mjs) and the real installs' check (real-alarm.mjs). Counts and fixed words only.
-// Guard: test/jobs/search-alarm.test.js.
+// Guard: test/unit/jobs/search-alarm.test.js.
 import {execFileSync} from 'node:child_process';
 import {PUBLIC_REPO} from '../../shared/repos.js';
 
