@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {PUBLIC_REPO, githubUrl} from '../../../../shared/repos.js';
 
-const MIGRATIONS = ['0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql', '0126_feedback_actions.sql', '0127_feedback_impact_ai.sql', '0128_feedback_replies.sql', '0129_feedback_ai.sql'];
+const MIGRATIONS = ['0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql', '0126_feedback_actions.sql', '0127_feedback_impact_ai.sql', '0128_feedback_replies.sql', '0129_feedback_ai.sql', '0134_feedback_receipt.sql'];
 export const REPO = PUBLIC_REPO;   // the owner's name is never typed in a test (shared/repos.js)
 export const prUrl = number => `${githubUrl(REPO)}/pull/${number}`;
 export const NOW = new Date('2026-11-03T12:00:00.000Z');

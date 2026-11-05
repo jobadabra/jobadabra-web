@@ -15,6 +15,16 @@ export const releasePr = url => Number(String(url || '').match(PUBLIC_PR)?.[1]) 
 const WHEN = ['now', 'release', 'never'];
 const FIXED_STATES = ['fixed', 'released'];   // both read as "fixed" to the reporter: Released only adds that the build shipped
 export const TOLD_ERROR = 'app, error: not confirmed';
+/** The receipt every report gets at once, before any person has read it (owner, 5 Nov 2026: "Within 24 hours"). Why: 1 of 8 reporters heard back within 24 h and 3 of 8 never did (D1, 5 Nov 2026), so the first thing a reporter sees must not wait for the owner. */
+export const RECEIVED = 'We got it. You will hear from us within 24 hours.';
+export const REPLY_HOURS = 24;
+const RECEIPT_DAYS = 14;
+/** Reports older than this are history, not a clock: no chip, no ping (the ping's SQL uses the same window). */
+export const CLOCK_DAYS = 7;
+/** The SQL of "nobody has answered this yet": not set aside (dismissed, false positive), not told in the app (told starts with app, or a release call is mid-way), and not marked "do not tell" (tell_mode never). The one rule behind the receipt, the clock and the ping. */
+export const UNANSWERED = "state NOT IN ('dismissed', 'false_positive') AND told NOT LIKE 'app%' AND told != 'telling' AND tell_mode != 'never'";
+const RECEIPT_PREFIX = 'r:';   // the receipt's ref in the replies list; closing it never touches the owner's later reply (seen_at)
+
 // Why (3/7 code review, 3 Nov 2026): one rule says when the app may show a reply, used by the list and by closing: the card is Fixed, Released or Deferred, it was told, and the person has not closed this telling.
 const VISIBLE = "state IN ('fixed', 'released', 'deferred') AND told LIKE 'app%' AND seen_at = '' AND ref != ''";
 
@@ -86,14 +96,36 @@ export async function tellOnce(env, ref, now, who) {
   }
 }
 
-/** The replies the app has not shown yet for this install, newest first, at most 5: {ref, on, excerpt, kind, fixedIn, message}. */
-export async function repliesFor(db, install) {
-  const rows = (await db.prepare(`SELECT ref, at, text, state, fixed_in, tell_message FROM feedback WHERE install = ? AND ${VISIBLE} ORDER BY told_at DESC LIMIT 5`).bind(install).all()).results || [];
-  return rows.map(row => ({ref: row.ref, on: String(row.at).slice(0, 10), excerpt: excerptOf(row.text), kind: FIXED_STATES.includes(row.state) ? 'fixed' : 'deferred', fixedIn: row.fixed_in, message: replyText(row)}));
+/**
+ * The 24 hour reply clock of one report, from its own columns: 'done' when the reporter was told in the app (told starts with "app", or a release call is mid-way), the owner set the report aside (dismissed, false positive) or chose not to tell (tell_mode never), or it is older than 7 days;
+ * else {status: 'due', hours: left} or {status: 'overdue', hours: late}, rounded to whole hours. The one rule the admin chip and the overdue ping share.
+ */
+export function replyClock(row, now = new Date()) {
+  if (['dismissed', 'false_positive'].includes(row.state) || /^(app|telling)/.test(String(row.told || '')) || row.tell_mode === 'never') return {status: 'done', hours: 0};
+  const age = (now.getTime() - Date.parse(row.at)) / 3600000;
+  if (age > CLOCK_DAYS * 24) return {status: 'done', hours: 0};   // history, not a clock
+  const left = REPLY_HOURS - age;
+  return left >= 0 ? {status: 'due', hours: Math.ceil(left)} : {status: 'overdue', hours: Math.floor(-left)};
 }
 
-/** The person closed a reply in the app. -> true when a row changed. */
+/**
+ * The replies the app has not shown yet for this install, at most 5: {ref, on, excerpt, kind, fixedIn, message}. The owner's answers first (newest first), then a receipt ("We got it") for each recent report
+ * that has no answer yet (also one the owner marked fixed for a release: the reporter still has heard nothing), with ref "r:<ref>" and kind "received". An app that does not know "received" shows it like a heard-it card with the same words.
+ */
+export async function repliesFor(db, install, now = new Date()) {
+  const rows = (await db.prepare(`SELECT ref, at, text, state, fixed_in, tell_message FROM feedback WHERE install = ? AND ${VISIBLE} ORDER BY told_at DESC LIMIT 5`).bind(install).all()).results || [];
+  const answers = rows.map(row => ({ref: row.ref, on: String(row.at).slice(0, 10), excerpt: excerptOf(row.text), kind: FIXED_STATES.includes(row.state) ? 'fixed' : 'deferred', fixedIn: row.fixed_in, message: replyText(row)}));
+  if (answers.length >= 5) return answers;
+  const since = new Date(now.getTime() - RECEIPT_DAYS * 86400000).toISOString();
+  const waiting = (await db.prepare(`SELECT ref, at, text FROM feedback WHERE install = ? AND ${UNANSWERED} AND receipt_seen_at = '' AND ref != '' AND at >= ? ORDER BY at DESC LIMIT ?`).bind(install, since, 5 - answers.length).all()).results || [];
+  return [...answers, ...waiting.map(row => ({ref: RECEIPT_PREFIX + row.ref, on: String(row.at).slice(0, 10), excerpt: excerptOf(row.text), kind: 'received', fixedIn: '', message: RECEIVED}))];
+}
+
+/** The person closed a reply in the app. A receipt ("r:<ref>") sets receipt_seen_at, an answer sets seen_at. -> true when a row changed. */
 export async function markSeen(db, install, ref, now = new Date()) {
-  const done = await db.prepare(`UPDATE feedback SET seen_at = ? WHERE install = ? AND ref = ? AND ${VISIBLE}`).bind(now.toISOString(), install, ref).run();
+  const receipt = String(ref).startsWith(RECEIPT_PREFIX);
+  const done = receipt
+    ? await db.prepare("UPDATE feedback SET receipt_seen_at = ? WHERE install = ? AND ref = ? AND receipt_seen_at = '' AND ref != ''").bind(now.toISOString(), install, String(ref).slice(RECEIPT_PREFIX.length)).run()
+    : await db.prepare(`UPDATE feedback SET seen_at = ? WHERE install = ? AND ref = ? AND ${VISIBLE}`).bind(now.toISOString(), install, ref).run();
   return (done?.meta?.changes ?? done?.changes ?? 0) > 0;
 }

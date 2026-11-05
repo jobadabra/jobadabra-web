@@ -13,7 +13,7 @@ import {DEFAULT_DEFER, defaultFixed, excerptOf, markSeen, repliesFor, replyText}
 const sql = name => readFileSync(new URL(`../../../../db/migrations/${name}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const name of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql', '0126_feedback_actions.sql', '0127_feedback_impact_ai.sql', '0128_feedback_replies.sql', '0129_feedback_ai.sql']) db.exec(sql(name));
+  for (const name of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0003_feedback.sql', '0124_feedback_files.sql', '0125_feedback_page_profile.sql', '0126_feedback_actions.sql', '0127_feedback_impact_ai.sql', '0128_feedback_replies.sql', '0129_feedback_ai.sql', '0134_feedback_receipt.sql']) db.exec(sql(name));
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values), run: async () => db.prepare(text).run(...args),
     all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
   return {db, prepare: text => statement(text), batch: async list => { const out = []; for (const item of list) out.push({meta: {changes: (await item.run()).changes}}); return out; }};
@@ -47,7 +47,8 @@ test('Fixed with no version waits for a release: not told yet, no reply, no mail
   const done = await run(e, {ref, action: 'fixed', pr_url: 'https://github.com/jobadabra/jobadabra/pull/3012', mail: true});
   assert.equal(done.told, undefined);
   assert.deepEqual([rowOf(e, ref).tell_mode, rowOf(e, ref).told, rowOf(e, ref).tell_mail], ['release', 'pending', 1]);
-  assert.equal(mails.length, 0); assert.deepEqual(await repliesFor(e.STATS, 'install-aaaa-bbbb'), []);
+  // Why (1/7 of the report-instead-of-leaving plan, 5 Nov 2026): no answer yet, but the reporter keeps the "We got it" receipt until the answer arrives: the list holds that and nothing of kind fixed.
+  assert.equal(mails.length, 0); assert.deepEqual((await repliesFor(e.STATS, 'install-aaaa-bbbb', new Date('2026-10-29T09:00:00Z'))).map(card => [card.ref, card.kind]), [[`r:${ref}`, 'received']]);
   await run(e, {ref, action: 'reopen'});
   assert.deepEqual([rowOf(e, ref).state, rowOf(e, ref).told], ['new', '']);
 });

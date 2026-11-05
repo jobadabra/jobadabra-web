@@ -90,6 +90,7 @@ import {replies as feedbackReplies} from '../../api/feedback-replies.js';
 import {view as feedbackView, file as feedbackFile, actRoute as feedbackAct} from '../../admin/feedback.js';
 import {purgeFiles as purgeFeedbackFiles} from '../../shared/feedback.js';
 import {retryImpact} from '../../shared/feedback-impact.js';
+import {pingOverdue} from '../../shared/feedback-overdue.js';
 import {reportForm} from '../../shared/report-form.js';
 import {view as reportsView} from '../../admin/report-view.js';
 import * as recipeLibrary from '../../api/recipes.js';
@@ -351,6 +352,7 @@ export default {
     }
     ctx.waitUntil(sentryAlert.purge(env).catch(error => console.error(`sentry alert purge: ${error.message}`)));
     ctx.waitUntil(retryImpact(env).catch(error => { console.error(`feedback impact retry: ${error.message}`); throw error; }));   // feedback the AI could not rate yet (shared/feedback-impact.js); rethrown so an outage makes this invocation fail, not only a log line (Gitar on #339)
+    ctx.waitUntil(pingOverdue(env).catch(error => console.error(`feedback overdue ping: ${error.message}`)));   // a report 24 h old with no reply: the owner is told once (shared/feedback-overdue.js)
     ctx.waitUntil(purgeFeedbackFiles(env).catch(error => console.error(`feedback files purge: ${error.message}`)));   // screenshots and logs older than 90 days (shared/feedback.js)
     ctx.waitUntil(synthetic.purge(env).catch(error => console.error(`synthetic purge: ${error.message}`)));
     // The day's totals first (kept for good), then the 90-day purge of raw rows.

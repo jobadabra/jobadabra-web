@@ -1,5 +1,6 @@
 // What users sent through POST /api/feedback (api/feedback.js), read for the owner's pages and the product brain's signals.
 // Guarded by test/unit/shared/feedback/feedback.test.js.
+import {replyClock} from './feedback-reply.js';
 
 // The text files a feedback may carry besides the screenshot: the body field, its R2 name, the row flag (0/1) it sets, its cap and its type. One table, read by the endpoint, the owner's file route
 // and the daily purge, so a new kind is one line. Why (2 Nov 2026, owner: "send the content/data from that page … and a snapshot of the entire profile"): `page` is the screen's own data,
@@ -14,7 +15,7 @@ export const TEXT_FILES = {
 export async function feedbackList(db, days = 30, now = new Date()) {
   const from = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
   return ((await db.prepare('SELECT at, version, platform, install, text, contact, ref, screen, shot, logs, page, profile, notified, state, state_at, state_note, impact, impact_ai, impact_why, fixed_in, pr_url, linear_url, tell_mode, tell_mail, told, seen_at, ai_run_url FROM feedback WHERE day >= ? ORDER BY at DESC LIMIT 200')
-    .bind(from).all()).results || []);
+    .bind(from).all()).results || []).map(row => ({...row, clock: replyClock(row, now)}));   // the 24 hour reply clock the card's chip draws (shared/feedback-reply.js)
 }
 
 // The last feedback, for the product brain's signals (api/signals.js): newest first, without what the owner dismissed or marked a false positive (3 Nov 2026: noise is not a signal).

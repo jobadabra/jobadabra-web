@@ -189,6 +189,9 @@ const make = row => {
   const card = el('div', 'card' + (OPEN.includes(row.state) ? '' : ' quiet')), top = el('div', 'top'), meta = el('div', 'meta'), text = el('div', 'text');
   const [label, tone] = stateChip(row);
   meta.append(el('span', 'chip ' + tone, label));
+  // Why (owner, 5 Nov 2026: "Within 24 hours"): the card says how long the reporter has waited, from the one clock rule (shared/feedback-reply.js replyClock): a reply in the app, dismiss or false positive ends it.
+  if (row.clock && row.clock.status === 'due') meta.append(el('span', 'chip waits', '⏰ reply due in ' + row.clock.hours + ' h'));
+  else if (row.clock && row.clock.status === 'overdue') meta.append(el('span', 'chip warn', '⏰ overdue by ' + row.clock.hours + ' h'));
   const parts = [String(row.at).slice(0, 16).replace('T', ' ') + ' UTC', row.version + ' · ' + row.platform, 'install ' + String(row.install).slice(0, 8)];
   for (const part of parts) meta.append(el('span', '', part));
   top.append(meta); if (canAct && row.actions.length) top.append(menuOf(row, card));
@@ -265,7 +268,7 @@ function paint() {
   if (sortBy === 'impact') shown = shown.slice().sort((a, b) => RANK[eff(a)] - RANK[eff(b)] || (a.at < b.at ? 1 : -1));
   const keyOf = row => row.ref || row.at + row.install, seen = new Set(known || []), first = known === null;
   list.replaceChildren(...(shown.length ? shown.map(row => {
-    const sig = [row.notified, row.shot, row.logs, row.page, row.profile, row.state, row.state_note, row.impact, row.impact_ai, row.impact_why, row.actions.join(), row.fixed_in, row.pr_url, row.ai_run_url, row.linear_url, row.told, row.seen_at, canAct].join('|'), kept = cards.get(keyOf(row));
+    const sig = [row.notified, row.shot, row.logs, row.page, row.profile, row.state, row.state_note, row.impact, row.impact_ai, row.impact_why, row.actions.join(), row.fixed_in, row.pr_url, row.ai_run_url, row.linear_url, row.told, row.seen_at, row.clock && row.clock.status, row.clock && row.clock.hours, canAct].join('|'), kept = cards.get(keyOf(row));
     let card = kept && kept.sig === sig ? kept.card : null;
     if (!card) { card = make(row); cards.set(keyOf(row), {sig, card}); }
     mark(card, !first && !seen.has(keyOf(row))); return card;

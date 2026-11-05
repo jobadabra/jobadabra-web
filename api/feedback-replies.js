@@ -28,5 +28,5 @@ export async function replies(request, env, now = new Date()) {
     const body = await request.json().catch(() => ({}));
     return json(200, {ok: await markSeen(env.STATS, install, String(body.ref || ''), now)});
   }
-  return json(200, {ok: true, replies: await repliesFor(env.STATS, install)});
+  return json(200, {ok: true, replies: await repliesFor(env.STATS, install, now)});
 }
