@@ -5,6 +5,8 @@ import {isOwner, remember} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {equal} from '../shared/guard.js';
 import {CHIP_STYLE, chip} from './chip.js';
+import {VIZ_STYLE} from './viz.js';
+import {finderFigure, resolutionFigure} from './selfheal-charts.js';
 import {changesSection, dayLabel, TREND_SCRIPT, TREND_STYLE, trendSection} from './trend.js';
 
 // 2-3 Oct 2026, from GitHub Actions logs. Fixer: claude-code-action's own total_cost_usd. Finder: estimated (the review then dropped usage).
@@ -45,7 +47,7 @@ export function causesSection(live) {
   if (!causes.length && !runs) return `<section class="card"><h2>🏷️ Why issues were closed</h2><p class="muted">No issue carries a resolution label yet: the loop sets one when it closes an issue (false positive by cause, fixed, stale, duplicate). Until it has some, the causes are only in the closing comments.</p></section>`;
   const dropped = Object.entries(runs?.dropped || {}).sort((a, b) => b[1] - a[1]);
   return `<section class="card"><h2>🏷️ Why issues were closed</h2><small class="muted">The label the loop (or a person) puts on a closed issue, counted since the cutoff</small>
-${causes.length ? `<div class="wrap"><table><tr><th>Resolution</th><th>Meaning</th><th>Issues</th></tr>${causes.map(([name, count]) => `<tr><td><code>${esc(name)}</code></td><td>${esc(RESOLUTION_WORDS[name] || '')}</td><td class="n">${count}</td></tr>`).join('')}</table></div>` : '<p class="muted">No closed issue has a resolution label yet.</p>'}
+${causes.length ? resolutionFigure(causes, RESOLUTION_WORDS, `<div class="wrap"><table><tr><th>Resolution</th><th>Meaning</th><th>Issues</th></tr>${causes.map(([name, count]) => `<tr><td><code>${esc(name)}</code></td><td>${esc(RESOLUTION_WORDS[name] || '')}</td><td class="n">${count}</td></tr>`).join('')}</table></div>`) : '<p class="muted">No closed issue has a resolution label yet.</p>'}
 ${runs?.paths?.suites ? `<p class="muted">Paths walked by the suites in those runs: <b>${num(runs.paths.suites)}</b> suite runs · ${num(runs.paths.fixed)} on the fixed path, ${num(runs.paths.seeded)} seeded · windows ${esc(Object.entries(runs.paths.windows || {}).map(([key, count]) => `${key} ×${count}`).join(', ') || 'not recorded')} · themes ${esc(Object.entries(runs.paths.themes || {}).map(([key, count]) => `${key} ×${count}`).join(', ') || 'not recorded')} · places ${esc(Object.entries(runs.paths.zones || {}).map(([key, count]) => `${key} ×${count}`).join(', ') || 'Zurich only')} · ${num(runs.paths.failedSteps)} of ${num(runs.paths.steps)} steps failed</p>` : ''}
 ${runs ? `<p class="muted">Producer runs recorded: <b>${num(runs.runs)}</b> · issues filed ${num(runs.filed)} · stale sightings not filed ${num(runs.stale)} · findings held for a recheck ${num(runs.held)} · runs with a suite that did not finish ${num(runs.incompleteRuns)} · furthest behind main ${num(runs.behindMax)} commits${dropped.length ? ` · dropped: ${dropped.map(([reason, count]) => `${esc(reason)} ${count}`).join(', ')}` : ''}</p>` : '<p class="muted">No producer run summary yet.</p>'}</section>`;
 }
@@ -93,9 +95,9 @@ export function periodsSection(live) {
     ];
     return `<div class="period" data-period="${key}"${key === 'all' ? '' : ' hidden'}><small class="muted">${esc(notes[key])}</small>
 <div class="tiles">${tiles.map(([label, value, note]) => `<div class="card tile"><span class="muted">${label}</span><b>${esc(value)}</b><small class="muted">${esc(note)}</small></div>`).join('')}</div>
-<div class="wrap"><table><tr><th>Detector</th>${heads.map(head => `<th>${head}</th>`).join('')}</tr>
+${finderFigure(p.byDetector || [], t, `<div class="wrap"><table><tr><th>Detector</th>${heads.map(head => `<th>${head}</th>`).join('')}</tr>
 ${(p.byDetector || []).map(row => `<tr><td>${esc(row.detector)}</td>${cols.map(col => `<td class="n">${num(row[col])}</td>`).join('')}</tr>`).join('')}
-<tr class="total"><td>Total</td>${cols.map(col => `<td class="n">${num(t[col])}</td>`).join('')}</tr></table></div></div>`;
+<tr class="total"><td>Total</td>${cols.map(col => `<td class="n">${num(t[col])}</td>`).join('')}</tr></table></div>`)}</div>`;
   };
   return `<section class="card"><h2>🔎 What the Finder found</h2><div class="seg" role="group" aria-label="Period">${PERIODS.map(([key, label]) => `<button type="button" data-period-btn="${key}" aria-pressed="${key === 'all'}">${label}</button>`).join('')}</div>
 ${PERIODS.map(block).join('\n')}
@@ -181,7 +183,7 @@ export async function snapshots(env) {
 export function page(_legacy, live = null, history = []) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>Self-healing · Admin</title><link rel="icon" href="/favicon-32.png">
-<style>${CHIP_STYLE}
+<style>${CHIP_STYLE}${VIZ_STYLE}
 :root{--bg:#0b0d10;--card:#14181d;--line:#262c33;--text:#f4efe3;--muted:#8d949c;--amber:#f5b54a;--teal:#5ec4b6;--s1:#3987e5;--s2:#d95926;--s3:#199e70}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,sans-serif}
 main{max-width:1040px;margin:0 auto;padding:24px 16px 48px}h1{margin:0;font-size:24px}h2{margin:0;font-size:15px}
