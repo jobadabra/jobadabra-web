@@ -46,9 +46,10 @@ jobs:
           node-version: '22'
       - name: Refuse unless the broker holds a login
         if: env.CLOUDFLARE_API_TOKEN != ''
+        # Why (#285, 5 Nov 2026): `starting` = a login is stored and the container has not answered yet (its sleep or a fresh start); this gate asks only for the login, so it accepts both.
         # Why (2 Nov 2026, ab): a block scalar. The one-line form held `: ` inside the echo text, which YAML reads as a second mapping key: GitHub refused the whole file ("workflow file issue") and marked every push to main red, 108 runs from 1 Nov 21:27 UTC.
         run: |
-          curl -fsS --max-time 30 https://jobadabra-ai-broker.jobpilotto.workers.dev/health | grep -q '"state":"ready"' || { echo "::error::The AI broker is not ready with a login: a deploy would not restore it: upload the Codex login first (BROKER_ADMIN_TOKEN, see the header of workers/ai-broker/wrangler.jsonc)."; exit 1; }
+          curl -fsS --max-time 30 https://jobadabra-ai-broker.jobpilotto.workers.dev/health | grep -Eq '"state":"(ready|starting)"' || { echo "::error::The AI broker is not ready with a login: a deploy would not restore it: upload the Codex login first (BROKER_ADMIN_TOKEN, see the header of workers/ai-broker/wrangler.jsonc)."; exit 1; }
       - name: The broker's own tests first
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: node --test test/unit/workers/ai-broker/*.test.js

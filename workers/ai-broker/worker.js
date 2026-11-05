@@ -48,7 +48,34 @@ export class CodexBroker extends Container {
   // Start (and every restart after a sleep): put the stored login back into CODEX_HOME.
   async onStart() {
     const login = await this.ctx.storage.get('login');
-    if (login) await this.containerFetch('http://c/auth', {method: 'POST', body: login});
+    // Why (#285, 5 Nov 2026, owner: "Fix readiness"): a new container has answered nothing yet, so /health stops saying `ready` until it has (markAnswered). The probe is handed to waitUntil, never awaited: this hook runs inside blockConcurrencyWhile and would hold /health and every call for the whole probe.
+    await this.ctx.storage.put('answered', false);
+    if (!login) return;
+    await this.containerFetch('http://c/auth', {method: 'POST', body: login});
+    this.ctx.waitUntil(this.startupProbe());
+  }
+
+  // The container's one start-up call: the smallest tier, one word. Once per container start, no retry and no timeout of its own (the container guards its own run): a failure leaves /health on `starting` with the reason, and the first real answer clears it.
+  // It is not a CI call: no admission, no meter, no tally, no queue slot. A rotated login it brings back is written through like a call's. Cost: one Codex call (gpt-6-luna, a few tokens) on the owner's plan, no API money.
+  async startupProbe() {
+    try {
+      const reply = await this.containerFetch('http://c/call', {method: 'POST', body: JSON.stringify({prompt: 'Reply with the single word: ok', model: modelOf('small'), effort: 'low'})});
+      const text = await reply.text();
+      let answer; try { answer = JSON.parse(text); } catch { answer = {error: `container: ${text}`}; }
+      if (answer.authFile) await this.ctx.storage.put('login', answer.authFile);
+      if (await this.markIfAnswered(reply, answer)) return;
+      const clean = String(answer.error || '').replace(/\s+/g, ' ').trim();
+      await this.ctx.storage.put('probe', {at: Date.now(), error: (refuseReply(clean) ? '(detail withheld: token-shaped)' : clean).slice(0, 200)});
+    } catch (error) { await this.ctx.storage.put('probe', {at: Date.now(), error: `call: ${String(error?.message || error).slice(0, 190)}`}).catch(() => {}); }
+  }
+
+  // "Answered" = Codex ran end to end in this container: a reply, or Codex's own "usage limit" / "at capacity" (it reached OpenAI and was told no). A start-up failure like "Transport channel closed" is not an answer.
+  async markIfAnswered(reply, answer) {
+    if (!(reply.ok || exhausted(answer?.error) || overloaded(answer?.error))) return false;
+    if (await this.ctx.storage.get('answered')) return true;   // one write per container start, not one per call
+    await this.ctx.storage.put('answered', true);
+    await this.ctx.storage.put('probe', null);
+    return true;
   }
 
   async fetch(request) {
@@ -73,7 +100,9 @@ export class CodexBroker extends Container {
   async health() {
     const meter = (await this.ctx.storage.get('meter')) || newMeter(0);
     // Daily counts describe today, even before the first call after UTC midnight.
-    return json(200, {state: (await this.ctx.storage.get('login')) ? ((await this.ctx.storage.get('lost')) ? 'login-lost' : 'ready') : 'no-login', limits: this.limits, own: meter.tokens, daily: {drift: callsToday(meter, 'drift')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
+    // `ready` = a login is stored AND this container has answered since it started; `starting` = login stored, nothing answered yet (readers: the release gate accepts it, nobody else reads this field). `probe` = why the start-up call failed, if it did.
+    const state = !(await this.ctx.storage.get('login')) ? 'no-login' : (await this.ctx.storage.get('lost')) ? 'login-lost' : (await this.ctx.storage.get('answered')) ? 'ready' : 'starting';
+    return json(200, {state, ...(state === 'starting' && (await this.ctx.storage.get('probe')) ? {probe: await this.ctx.storage.get('probe')} : {}), limits: this.limits, own: meter.tokens, daily: {drift: callsToday(meter, 'drift')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
   }
 
   // The owner-visible refusals of the Codex login: they stand when Codex is reached, another engine does not hide them.
@@ -199,6 +228,7 @@ export class CodexBroker extends Container {
         let answer;
         try { answer = JSON.parse(text); } catch { return json(502, {why: `container: ${text.slice(0, 300)}`}); }   // the platform's own error text (not our server's JSON): say it, never crash (a 1101 hid it, 28 Oct 2026)
         if (answer.authFile) await this.ctx.storage.put('login', answer.authFile);   // write-through BEFORE the reply goes out: a rotated token is never only in the container
+        await this.markIfAnswered(reply, answer);
         if (!reply.ok && exhausted(answer.error) && hasLater) return null;
         if (!reply.ok && overloaded(answer.error) && hasLater) return {passOn: 'overloaded', detail: codexMessage(answer.error).slice(0, 200), refusal: json(502, {why: answer.error})};   // counted as a failure (and for JOB-202's demotion), but a later engine answers
         if (!reply.ok) { if (answer.error === 'login-lost') await this.ctx.storage.put('lost', true); return json(reply.status === 500 && answer.error === 'login-lost' ? 503 : 502, {why: tokenShaped(answer.error) ? 'codex-failed (detail withheld: token-shaped)' : answer.error}); }

@@ -31,11 +31,13 @@ export function harness(meter, env = {}) {
       return next;
     },
   };
+  const background = [];   // what the Worker handed to ctx.waitUntil (the start-up probe); `settled()` waits for it
+  const ctx = {storage, waitUntil: promise => { background.push(promise); }};
   const restart = () => {
-    const broker = new CodexBroker({storage}, env);
+    const broker = new CodexBroker(ctx, env);
     broker.containerFetch = async () => success();
     return broker;
   };
-  return {broker: restart(), restart, storage};
+  return {broker: restart(), restart, storage, settled: () => Promise.all(background.splice(0))};
 }
 

@@ -28,7 +28,10 @@ test('only the AI broker audience is accepted: the old jobadabra-codex-broker na
 
 test('the one-time transfer folder is gone and the deploy workflow still refuses a broker without a login', () => {
   const workflow = readFileSync(new URL('../../../../.github/workflows/release-ai-broker.yml', import.meta.url), 'utf8');
-  assert.match(workflow, /"state":"ready"/);
+  const pattern = workflow.match(/grep -Eq '([^']+)'/)?.[1];   // the gate's own pattern, run on each state /health can say (#285: `starting` is a stored login whose container has not answered yet)
+  assert.ok(pattern, 'the gate greps /health for the state');
+  const passes = state => new RegExp(pattern).test(JSON.stringify({state, limits: null}));
+  assert.deepEqual(['ready', 'starting', 'no-login', 'login-lost'].map(passes), [true, true, false, false]);
   assert.throws(() => readFileSync(new URL('../../../../workers/ai-broker/transfer/alias.js', import.meta.url)), /ENOENT/);
 });
 
