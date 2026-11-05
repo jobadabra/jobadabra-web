@@ -1,4 +1,6 @@
 // Fictional feedback rows for the real Worker previews; no live data, account or AI call.
+import {reconcileRuns} from '../shared/feedback-runs.js';
+import {PUBLIC_REPO} from '../shared/repos.js';
 
 /** Seeds the feedback inbox with the existing fictional reports and workflow states. */
 export async function feedbackSeed({env}) {
@@ -49,4 +51,15 @@ export async function feedbackSeed({env}) {
       await env.STATS.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact, ref, notified, state, state_at, ai_run, ai_run_url, pr_url, state_note) VALUES (?, ?, ?, '0.5.70', 'darwin', ?, '', ?, 'sent', ?, ?, ?, ?, ?, ?)")
         .bind(at, at.slice(0, 10), `install-${ref.slice(0, 8)}`, text, ref, state, at, cols.ai_run || '', cols.ai_run_url || '', cols.pr_url || '', cols.state_note || '').run();
     }
+}
+
+/** Shows the same fictional card before and after a failed run is reconciled, with a stand-in GitHub response only. */
+export async function feedbackRunSeed(context, recovered = false) {
+  await feedbackSeed(context);
+  const now = new Date(), ref = 'a1b2c3d4e5f60718';
+  await context.env.STATS.prepare("UPDATE feedback SET state = 'ai_running', state_at = ?, ai_run = '', ai_run_url = '', state_note = '' WHERE ref = ?").bind(now.toISOString(), ref).run();
+  if (recovered) {
+    const run = {id: 9002, display_title: `AI fixer feedback ${ref}`, path: '.github/workflows/ai-fixer.yml', event: 'workflow_dispatch', head_branch: 'main', created_at: now.toISOString(), status: 'completed', conclusion: 'failure'};
+    await reconcileRuns({...context.env, TIMERS_REPO: PUBLIC_REPO, TIMERS_GITHUB_TOKEN: 'demo-token'}, now, async () => Response.json({workflow_runs: [run]}));
+  }
 }

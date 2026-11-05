@@ -1,6 +1,6 @@
 // Demo data for tools/page-shot.mjs: made-up rows only (codes, labels, people), never a real secret or the live site's data. Each seed gets {env, call}: call(path, init) goes through the real Worker as the owner.
 import {ACTIONS} from '../shared/aicost.js';
-import {feedbackSeed} from './page-shot-seed-feedback.mjs';
+import {feedbackSeed, feedbackRunSeed} from './page-shot-seed-feedback.mjs';
 import {LAB_REPO, PUBLIC_REPO, WEB_REPO, githubUrl} from '../shared/repos.js';
 import {aiPersona} from './page-shot-seed-ai-persona.mjs';
 import {aiCostFull} from './page-shot-seed-ai-cost.mjs';
@@ -9,6 +9,8 @@ const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/
 
 export const seeds = {
   feedback: feedbackSeed,
+  'feedback-stuck': context => feedbackRunSeed(context),
+  'feedback-recovered': context => feedbackRunSeed(context, true),
   website: async ({env}) => {   // made-up visitors and downloaders for /admin/growth/website (1 Nov 2026): 30 days, busiest 5 days ago, a quiet day after it; person ids are made up
     const week = [[8, 6], [6, 9], [8, 6], [17, 1], [5, 2], [7, 4], [8, 3]], rows = [];
     for (let back = 29; back >= 0; back--) {

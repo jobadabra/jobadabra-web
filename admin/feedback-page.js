@@ -50,7 +50,8 @@ let known = null, rows = [], canAct = false, stateFilter = location.hash.length 
 const STATE = {new: ['🆕 New', 'new'], dismissed: ['🙈 Dismissed', 'dismissed'], false_positive: ['🚫 False positive', 'false_positive'], deferred: ['⏳ Acknowledged · deferred', 'deferred'],
   ai_running: ['🤖 AI running', 'running'], ai_pr: ['🔀 PR open', 'pr'], fixed: ['✅ Fixed', 'fixed'], released: ['📦 Released', 'released']};
 // Why (owner, 3 Nov 2026): a Fixed card that waits for its release says so, and a Released one names the build.
-const stateChip = row => (row.state === 'fixed' && row.told === 'pending' ? ['⏳ Fixed · waiting for release', 'waits'] : row.state === 'released' && row.fixed_in ? ['📦 Released in ' + row.fixed_in, 'released'] : STATE[row.state] || STATE.new);
+const failedRun = row => row.state === 'new' && String(row.state_note || '').startsWith('🤖 failed:');
+const stateChip = row => failedRun(row) ? ['⚠️ AI failed', 'warn'] : (row.state === 'fixed' && row.told === 'pending' ? ['⏳ Fixed · waiting for release', 'waits'] : row.state === 'released' && row.fixed_in ? ['📦 Released in ' + row.fixed_in, 'released'] : STATE[row.state] || STATE.new);
 const OPEN = ['new', 'ai_running', 'ai_pr'];
 const STATE_FILTERS = [['open', 'Open', r => OPEN.includes(r.state)], ['all', 'All', () => true], ['deferred', '⏳ Acknowledged · deferred', r => r.state === 'deferred'], ['fixed', '✅ Fixed', r => r.state === 'fixed'], ['released', '📦 Released', r => r.state === 'released'],
   ['dismissed', '🙈 Dismissed', r => r.state === 'dismissed'], ['false_positive', '🚫 False positive', r => r.state === 'false_positive']];
@@ -89,7 +90,7 @@ function menuOf(row, card) {
     closeMenu();
     const pop = el('div', 'pop'); pop.setAttribute('role', 'menu');
     for (const action of row.actions) {
-      const item = el('button', action === 'delete' ? 'danger' : '', LABEL[action]); item.type = 'button'; item.setAttribute('role', 'menuitem');
+      const item = el('button', action === 'delete' ? 'danger' : '', action === 'ai' && failedRun(row) ? '🤖 Send to AI again…' : LABEL[action]); item.type = 'button'; item.setAttribute('role', 'menuitem');
       item.onclick = () => { closeMenu(); choose(row, action, card); };
       pop.append(item);
     }
