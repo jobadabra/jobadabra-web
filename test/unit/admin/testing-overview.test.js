@@ -95,7 +95,7 @@ test('the verdict counts live cards by their worst line; GTM readiness links onl
   const html = page(model, {now});
   assert.equal((html.match(/class="mcard planned"/g) || []).length, PLANNED.length);
   assert.doesNotMatch(html, /testing\/scheduled/);
-  assert.match(page(resolve(data(), {pages: ['/admin/testing/scheduled']}), {now}), /<a href="\/admin\/testing\/scheduled">Weekly Sun/);
+  assert.match(page(resolve(data(), {pages: ['/admin/operations/scheduled']}), {now}), /<a href="\/admin\/operations\/scheduled">Weekly Sun/);
   assert.match(html, /<title>Overview · Testing · Admin<\/title>/);
   assert.match(html, /red on the last run/);
   assert.doesNotMatch(html, /unit test(?!s are not listed)/i);

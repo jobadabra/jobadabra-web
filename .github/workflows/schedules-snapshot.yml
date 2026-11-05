@@ -1,6 +1,6 @@
 name: CI · Schedules snapshot
 run-name: Schedules snapshot · ${{ github.event_name == 'workflow_dispatch' && 'on time (Worker timer)' || 'GitHub schedule' }}
-# Every scheduled job we run, for https://www.jobpilotto.top/admin/schedules/all-jobs (owner, 20 Oct 2026): reads the workflow files and latest runs of the public, site and lab repos
+# Every scheduled job we run, for https://www.jobpilotto.top/admin/operations/scheduled (owner, 20 Oct 2026): reads the workflow files and latest runs of the public, site and lab repos
 # once an hour and publishes ONE snapshot (jobs/schedules-snapshot.mjs). Why a workflow and not the page asking GitHub: a page load would spend GitHub calls; here one write per hour.
 # Why (1 Nov 2026, mac-07): GitHub's own schedule ran this every 4-8 h, so the Scheduled pages were hours old; the site Worker starts it on time at :00 (shared/intel-start.js, INTEL_COLLECTORS) and this cron (:03) is the backup.
 # SCHEDULES_READ_TOKEN: a fine-grained read-only token the owner creates (Actions + Contents: read on the three repos); the default token reads only this repo.

@@ -3,7 +3,7 @@
 // its median), a dot for a green/red night; grey for a night with no result. Only draws; no reader, no table. Guard: test/unit/admin/nightly-summary.test.js.
 import {esc} from '../shared/html.js';
 
-// Own chip classes (nchip): /admin/testing/scheduled has its own .chip colours (shared/.. schedules.js CSS), the Overview uses admin/chip.js; this draws the same on both.
+// Own chip classes (nchip): /admin/operations/scheduled has its own .chip colours (shared/.. schedules.js CSS), the Overview uses admin/chip.js; this draws the same on both.
 const STATUS = {good: ['✓ ok', 'good'], warn: ['! watch', 'warn'], bad: ['✕ off', 'bad'], none: ['◷ no data', 'off']};
 const chip = (word, tone) => `<span class="nchip ${tone}">${esc(word)}</span>`;
 const UNIT = {'beta-clock': ' min', 'night-clock': ' min'};

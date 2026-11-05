@@ -8,7 +8,7 @@ import {findButton, PALETTE_SCRIPT, PALETTE_STYLE} from './palette.js';
 
 // Every page lives at /admin/{group}/{page} (owner, 27 Oct 2026: "normalize all the page urls"): the group's slug, then the menu name's; /admin itself is the home.
 // slug (when set) = the page's part when its menu name would spell it differently (E-mail → email). old = the page's earlier addresses, redirected (test/unit/admin/admin-urls.test.js fails a page off the pattern, or an old address that no longer answers).
-export const GROUPS = [['Overview', '🧭'], ['Growth', '📈'], ['Form filling', '📝'], ['Job search', '🔎'], ['Testing', '🧪'], ['Agent Coding', '🤖', 'agents'], ['AI', '🧠'], ['Schedules', '⏰'], ['Feedback', '💬']];
+export const GROUPS = [['Overview', '🧭'], ['Growth', '📈'], ['Form filling', '📝'], ['Job search', '🔎'], ['Testing', '🧪'], ['Agent Coding', '🤖', 'agents'], ['AI', '🧠'], ['Operations', '⚙️'], ['Feedback', '💬']];
 // A group's URL part: its name's, unless the entry says otherwise (owner, 1 Nov 2026: Agents became "Agent Coding" but its addresses stay /admin/agents/…, so no link breaks).
 export const groupSlug = ([name, , slug]) => slug || slugOf(name);
 export const slugOf = name => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -34,7 +34,7 @@ export const PAGES = [
   {path: '/admin/job-search/scouting', group: 'Job search', question: 'Is our central employer list growing, and where is it weak?', old: ['/admin/scouting'], name: 'Scouting', icon: '🛰️'},
   {path: '/admin/job-search/installs', group: 'Job search', question: 'How much do real installs grow and improve our employer list and job search?', old: ['/admin/installs'], name: 'Installs', icon: '🧲'},
   {path: '/admin/job-search/benchmark', group: 'Job search', question: 'How does our job search compare with other tools on the same random searches across Europe?', title: 'Benchmark Job Search', old: ['/admin/benchmark-job-search'], name: 'Benchmark', icon: '🏁'},
-  {path: '/admin/agents/overview', group: 'Agent Coding', question: 'How is engineering doing: build, self-healing, errors and AI cost at a glance, and where the time goes?', old: ['/admin/operations/overview', '/admin/operations'], name: 'Overview', icon: '⏱️', overview: true},
+  {path: '/admin/agents/overview', group: 'Agent Coding', question: 'How is engineering doing: build, self-healing, errors and AI cost at a glance, and where the time goes?', old: ['/admin/operations/overview'], name: 'Overview', icon: '⏱️', overview: true},
   {path: '/admin/agents/agent-coding', group: 'Agent Coding', question: 'How does our agent code, ship and verify, and where does it go in circles?', old: ['/admin/operations/agent-coding'], name: 'Agent coding', icon: '🧭'},
   {path: '/admin/agents/build-log', group: 'Agent Coding', question: 'What did we build each day, in plain words?', old: ['/admin/operations/build-log'], name: 'Build log', icon: '🗓️'},
   {path: '/admin/ai/agents', group: 'AI', question: 'Which AI jobs on the CI act by themselves, and are they running and green?', name: 'Agents', icon: '🤖'},
@@ -54,8 +54,9 @@ export const PAGES = [
   {path: '/admin/testing/self-healing', group: 'Testing', question: 'Do the automatic loops find and fix problems on their own?', old: ['/admin/self-healing', '/self-heal', '/admin/operations/self-healing'], name: 'Self-healing', icon: '🔁'},
   {path: '/admin/testing/red-main', group: 'Testing', question: 'Which main e2e suites are red now, and which PR broke them?', name: 'Red main', icon: '🚨'},
   {path: '/admin/testing/sentry', group: 'Testing', question: 'What errors do the apps report to Sentry, and did the fixer handle them?', old: ['/admin/sentry', '/admin/operations/sentry'], name: 'Sentry', icon: '🐞'},
-  {path: '/admin/testing/scheduled', group: 'Testing', question: 'Are the scheduled jobs that test and heal our code running on time and green?', name: 'Scheduled', icon: '⏰'},
-  {path: '/admin/schedules/all-jobs', group: 'Schedules', question: 'Are all our scheduled jobs running on time and green, in every area?', old: ['/admin/agents/schedules', '/admin/operations/schedules'], name: 'All jobs', icon: '⏰'},
+  // Why (5 Nov 2026, owner: "add again Operations as top level … put there Scheduled and Notifications"): the Schedules group became Operations; the Testing → Scheduled tab was the same page filtered to Testing, so it went (the Area filter does that).
+  {path: '/admin/operations/scheduled', group: 'Operations', question: 'Are all our scheduled jobs running on time and green, and which of them tell me?', old: ['/admin/agents/schedules', '/admin/operations/schedules', '/admin/schedules/all-jobs', '/admin/schedules', '/admin/testing/scheduled'], name: 'Scheduled', icon: '⏰'},
+  {path: '/admin/operations/notifications', group: 'Operations', question: 'What reaches me on Telegram, through which bot, and what do I want to be told?', name: 'Notifications', icon: '🔔'},
   {path: '/admin/agents/access', group: 'Agent Coding', question: 'Who can open these admin pages?', old: ['/admin/access', '/admin/operations/access'], name: 'Access', icon: '🔐', superadmin: true},
   {path: '/admin/feedback/inbox', group: 'Feedback', question: 'What are users telling us?', old: ['/admin/growth/feedback', '/feedback'], slug: 'inbox', name: 'Feedback', icon: '💬'},
 ];
