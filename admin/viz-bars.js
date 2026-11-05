@@ -33,12 +33,14 @@ export function meters(items) {
 /**
  * One stacked bar per row: each row splits into parts of one tone each. rows: [{label, text, sub?, parts: [{value, tone}], tip}], tone one of good|warn|bad|s1…s6.
  * `legend`: [[tone, words]…] printed once under the rows (a status always has an icon and a word, never colour alone).
+ * `scale`: bars are sized against the largest row's total (rows of different sizes stay comparable); else every bar fills its track and shows only the split.
  */
-export function stacks(rows, legend = []) {
+export function stacks(rows, legend = [], {scale = false} = {}) {
   if (!rows.length) return '';
+  const sum = row => row.parts.reduce((total, part) => total + Math.max(0, part.value), 0), top = scale ? Math.max(1, ...rows.map(sum)) : 0;
   return `<div class="vz-bars">${rows.map(row => `<div class="vz-row"${tipOf(row.tip)}><span class="vz-label">${esc(row.label)}</span>`
     + (row.parts.some(part => part.value > 0)   // an engine with no call today: the empty track, not a blank that looks broken
-      ? `<span class="vz-track stack">${row.parts.filter(part => part.value > 0).map(part => `<span class="vz-part" style="flex:${part.value};background:var(--${part.tone})"></span>`).join('')}</span>`
+      ? `<span class="vz-track stack">${scale ? `<span class="vz-fill" style="width:${(100 * sum(row) / top).toFixed(1)}%">` : ''}${row.parts.filter(part => part.value > 0).map(part => `<span class="vz-part" style="flex:${part.value};background:var(--${part.tone})"></span>`).join('')}${scale ? '</span>' : ''}</span>`
       : '<span class="vz-track"></span>')
     + `<span class="vz-val">${esc(row.text)}${row.sub ? `<small>${esc(row.sub)}</small>` : ''}</span></div>`).join('')}</div>`
     + (legend.length ? `<div class="vz-legend">${legend.map(([tone, words]) => `<span><i style="background:var(--${tone})"></i>${esc(words)}</span>`).join('')}</div>` : '');

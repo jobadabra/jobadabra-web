@@ -42,7 +42,8 @@ export const VIZ_STYLE = `${CHIP_STYLE}${TIP_STYLE}
 .vz-bar{position:absolute;left:0;top:0;bottom:0;min-width:2px;border-radius:0 4px 4px 0;background:var(--s1)}
 .vz-val{font-variant-numeric:tabular-nums;font-size:13.5px;text-align:right;white-space:nowrap;display:flex;flex-direction:column}.vz-val small{font-size:11px;color:var(--vz-muted)}
 .vz-two{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-items:center}.vz-cap{font-size:10.5px;color:var(--vz-muted)}
-.vz-track.stack{display:flex;gap:2px;background:none;height:14px}.vz-part{height:100%;min-width:4px;border-radius:3px}
+.vz-track.stack{display:flex;gap:2px;background:none;height:14px}.vz-fill{display:flex;gap:2px;height:100%}
+.vz-part{height:100%;min-width:4px;border-radius:3px}
 .vz-split{display:flex;gap:2px;border-radius:8px;overflow:hidden}.vz-split.tall{height:64px}.vz-split:not(.tall){height:14px}
 .vz-seg{display:flex;flex-direction:column;justify-content:center;padding:0 8px;min-width:6px;overflow:hidden;color:var(--vz-ink);font-size:12px;line-height:1.25;border-radius:4px}.vz-seg i{font-style:normal;font-variant-numeric:tabular-nums}.vz-seg:focus{outline:2px solid var(--vz-text)}
 .vz-legend{display:flex;gap:6px 16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--vz-muted)}.vz-legend span{display:inline-flex;align-items:center;gap:6px}.vz-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}.vz-legend i.dash{background:none;border:1.5px dashed var(--s2)}.vz-legend b{color:var(--vz-text);font-weight:600}

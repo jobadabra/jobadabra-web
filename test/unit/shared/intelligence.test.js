@@ -157,3 +157,15 @@ test('the owner page is not shadowed by the public one: /intel (now /admin/growt
   const index = fs.readFileSync(new URL('../../../workers/www/index.js', import.meta.url), 'utf8');
   assert.match(index, /'\/admin\/growth\/insights': intelligenceView/);   // the owner page, under /admin since 6 Oct 2026
 });
+
+test('what the AI costs us: the steps are bars with the table behind "Show table"; no relay calls leaves the message', async () => {
+  const {page} = await import('../../../admin/intelligence.js');
+  const data = await report(env().STATS, 30, now);
+  const cost = {users: 2, total: 3.6, perUserDay: {mean: 0.1, median: 0.1, p95: 0.2, max: 0.3}, monthPerActiveUser: 3};
+  const full = page({...data, cost: {...cost, steps: [{action: 'fill', calls: 12, usd: 3.5, perCall: 0.29}, {action: 'score', calls: 10, usd: 0.1, perCall: 0.01}]}});
+  assert.match(full, /What the AI costs us[\s\S]*class="vz-bars"[\s\S]*fill[\s\S]*Show table[\s\S]*<th>Step<\/th>/);
+  assert.equal((full.match(/id="tip"/g) || []).length, 1);
+  const empty = page({...data, cost: {...cost, steps: []}});
+  assert.match(empty, /No relay calls yet/);
+  assert.doesNotMatch(empty, /Show table/);
+});
