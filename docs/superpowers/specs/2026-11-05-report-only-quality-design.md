@@ -15,17 +15,19 @@ Sketch, approved 5 Nov 2026: https://claude.ai/artifact/SLMgWyo25odDed92yc6qBx. 
 ## The five areas and where each number comes from
 | Area | Number | Source (existing) | Bar |
 |---|---|---|---|
-| Form filling | required fields real users got filled, 7 days | `fill_cards` (source user); benchmark and Lab lines from `headlines-form.js` | none |
+| Form filling | required fields real users got filled, 7 days | `fill_cards` (source user); the benchmark line from `headlines-form.js` | none |
 | AI quality | same score twice, within 8 (nightly pairs) | nightly summary `quality-ai`; prompt cases; `form_answers` kept rate | ≥ 80% |
 | Speed | median seconds to the first job, real searches | `telemetry` kind `search` (`first_s`); AI call median; live probe ms | none (lower is better) |
 | Reliability | share of live check results that passed, 7 days (the line shows 30) | `synthetic_probes`; `telemetry` crashes; Sentry open issues | ≥ 99% |
 | Bugs | found (tests that caught a product bug + finders' 7 days) vs escaped (new problems real users reported) | e2e snapshot `caught`; self-healing snapshots; `telemetry` first-seen fingerprints | none |
 
+Left out of the sketch (5 Nov 2026): "recorded sites reaching the form" under Form filling: its Lab loader is 32 D1 queries a view (the whole board is ~15); parked in the Backlog.
+
 Not collected (proposals, nothing built): app speed a user feels (click → screen); AI quality per prompt (prompt cases are stored as one total per night).
 
-## Plan (3 PRs)
+## Plan (3 PRs; regrouped 5 Nov 2026 so each one shows something: the PR checker refuses a change under `admin/` without before/after images)
 | PR | What | State |
 |---|---|---|
-| 1/3 | The reader and the rules: five areas from the existing sources, "not measured", "Too few installs (n)", tests on a real SQLite | in review |
-| 2/3 | The page opens with the verdict and the five area cards (line and column charts from `admin/viz*.js`), phone width, light + dark | next |
+| 1/3 | The reader and the rules, and the page opens with the verdict and the five area numbers (no charts yet), "not measured" and "Too few installs (n)" | in review |
+| 2/3 | A 30-day line (columns for Bugs) in each area card from `admin/viz*.js`, hover tips, light + dark | next |
 | 3/3 | The current 13 cards move under a "Plumbing: did the nightly jobs run" toggle; the page header and the Testing links say what it is now | after 2/3 |

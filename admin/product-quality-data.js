@@ -1,6 +1,6 @@
 // The ONE reader of the product-quality board (admin/product-quality.js judges what it returns): it composes readers the site already has, each failing to null so one broken source says "not measured"
 // on its own area and never takes the page down. No new table, job or collector (owner, 5 Nov 2026: the sketch). Tables read: fill_cards, telemetry (search, crash, run_failed), synthetic_probes,
-// plus the nightly summary, the self-healing snapshots, the e2e snapshot row, the answer counts and Sentry. Guard: test/unit/admin/report/product-quality.test.js.
+// plus the nightly summary, the self-healing snapshots, the e2e snapshot row, the answer counts and Sentry: about 15 D1 queries a view (Why (5 Nov 2026): the Lab's "sites reaching the form" headline alone was 32, so it is not read here). Guard: test/unit/admin/report/product-quality.test.js.
 import {since} from './admin.js';
 import {answersByFamily} from './answer-metrics.js';
 import {readSnapshot} from './e2e-intel.js';
@@ -28,7 +28,7 @@ export async function loadInputs(env, now = new Date()) {
     db ? safe(async () => ({
       rows: await rowsOf(db, "SELECT day, SUM(filled) AS filled, SUM(required) AS required FROM fill_cards WHERE source = 'user' AND day >= ? GROUP BY day", from),
       sample: sampleOf(await rowsOf(db, "SELECT install FROM fill_cards WHERE source = 'user' AND day >= ?", fortnight)),
-      benchmark: (await real('/admin/form-filling/benchmark', now))?.[0] || null, lab: (await real('/admin/form-filling/lab', now))?.[0] || null})) : null,
+      benchmark: (await real('/admin/form-filling/benchmark', now))?.[0] || null})) : null,
     safe(() => loadNightlySummary(env, now, WINDOW)),
     db ? safe(() => answersByFamily(db, week, since(now, 2))) : null,
     db ? safe(async () => ({rows: (await rowsOf(db, "SELECT day, install, CAST(json_extract(data, '$.first_s') AS REAL) AS s FROM telemetry WHERE kind = 'search' AND day >= ? AND json_extract(data, '$.first_s') IS NOT NULL ORDER BY day DESC LIMIT 20000", from)).filter(row => Number.isFinite(row.s))})) : null,

@@ -2,7 +2,7 @@
 // gives "not measured" with its reason; real-user numbers under 3 installs give "Too few installs (n)". Guard: test/unit/admin/report/product-quality.test.js.
 //
 // inputs = {days: 'YYYY-MM-DD'[] (oldest first, 30), fill, nightly, answers, searches, probes, crashes, sentry, newProblems, snapshot, finders}; each is null when its source could not be read.
-import {judge, median, notMeasured, round, toneOf, deltaText, weeks, WEEK, WORDS} from './product-quality.js';
+import {judge, median, notMeasured, round, toneOf, deltaText, verdictOf, weeks, WEEK, WORDS} from './product-quality.js';
 import {MIN_INSTALLS} from '../shared/thin-data.js';
 
 const isNum = value => typeof value === 'number' && Number.isFinite(value);
@@ -17,12 +17,11 @@ function finish(base, {value, unit, label, now, before, tolerance = 0, higherIsB
   return {...base, value: String(round(value, digits)), unit, label, trend, word: WORDS[trend], tone: toneOf(trend, value, {bar, higherIsBetter, big}), delta: deltaText(now, before, unit.trim() === '%' ? ' pts' : unit, digits), bar, series, subs, src: src || base.src};
 }
 
-/** Form filling: the share of required fields real users' forms got filled, per day; benchmark and the recorded sites as the lines beneath. */
+/** Form filling: the share of required fields real users' forms got filled, per day; the benchmark as the line beneath. */
 export function formFilling({days, fill}) {
-  const base = {id: 'form', area: 'Form filling', question: 'Does it fill what the form asks?', kind: 'line', subs: [], src: 'real users (fill cards), the benchmark, the Lab'};
+  const base = {id: 'form', area: 'Form filling', question: 'Does it fill what the form asks?', kind: 'line', subs: [], src: 'real users (fill cards), the benchmark'};
   if (!fill) return notMeasured(base, 'fill cards could not be read');
-  const subs = [fill.benchmark && !['No data', '–'].includes(fill.benchmark.value) && `Benchmark, ours vs best other tool: ${fill.benchmark.value}`,
-    fill.lab && fill.lab.value !== '–' && `Recorded sites reaching the form: ${fill.lab.value}${fill.lab.sub ? ` (${fill.lab.sub})` : ''}`].filter(Boolean);
+  const subs = [fill.benchmark && !['No data', '–'].includes(fill.benchmark.value) && `Benchmark, ours vs best other tool: ${fill.benchmark.value}`].filter(Boolean);
   if (!fill.rows.length) return notMeasured({...base, subs}, 'no real fill reported in the last 30 days');
   if (!fill.rows.some(row => fortnight(days).has(row.day))) return notMeasured({...base, subs}, 'no real fill in the last 14 days');   // before the thin check: no recent data is not "too few installs (0)"
   if (fill.sample && fill.sample.enough === false) return thin({...base, subs}, fill.sample.installs, fill.sample.forms);
@@ -30,7 +29,7 @@ export function formFilling({days, fill}) {
   const series = daily(days, byDay), {now, before} = weeks(series);
   if (now == null) return notMeasured({...base, subs}, 'no real fill in the last 7 days');
   const sample = fill.sample ? `${plural(fill.sample.forms, 'form')} from ${plural(fill.sample.installs, 'install')}, last 14 days` : '';
-  return finish({...base, subs}, {value: now, unit: '%', label: 'required fields filled by real users (last 7 days)', now, before, tolerance: 1, series, subs, src: `real users${sample ? ` · ${sample}` : ''} · fill cards, benchmark, Lab`});
+  return finish({...base, subs}, {value: now, unit: '%', label: 'required fields filled by real users (last 7 days)', now, before, tolerance: 1, series, subs, src: `real users${sample ? ` · ${sample}` : ''} · fill cards, benchmark`});
 }
 
 /** AI quality: how often the AI gives the same score twice (the nightly pairs), with the fixed prompt cases and the answers real users kept beneath. */
@@ -107,7 +106,7 @@ export function bugs({days, snapshot, newProblems, finders}) {
   const sum = (key, from, to) => series.slice(from, to).reduce((total, point) => total + point[key], 0);
   const caught = sum('found', -WEEK), out = sum('escaped', -WEEK), outBefore = sum('escaped', -2 * WEEK, -WEEK), total = caught + (finders || 0);
   const trend = judge(out, outBefore, {higherIsBetter: false}), tone = out > total ? 'bad' : out > 0 ? 'warn' : 'good';
-  return {...base, value: String(total), unit: ' found', label: `found in the last 7 days · ${out} reached a user`, trend, word: WORDS[trend], tone, bar: null, series,
+  return {...base, value: String(total), unit: ' found', label: `in the last 7 days · ${out} reached a user`, trend, word: WORDS[trend], tone, bar: null, series,
     delta: `${out} reached a user vs ${outBefore} the week before`, subs: [`Tests caught ${caught} · finders filed ${finders == null ? 'not measured' : finders} (a rolling 7 days, not per day)`]};
 }
 
@@ -119,3 +118,9 @@ export const GAPS = [
 
 /** The five areas, in page order. */
 export const areasOf = inputs => [formFilling(inputs), aiQuality(inputs), speed(inputs), reliability(inputs), bugs(inputs)];
+
+/** What the page draws: the areas, the verdict over them, the two things nothing collects yet. */
+export function qualityModel(inputs) {
+  const areas = areasOf(inputs);
+  return {areas, verdict: verdictOf(areas), gaps: GAPS};
+}

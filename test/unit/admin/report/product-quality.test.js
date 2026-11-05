@@ -23,13 +23,13 @@ test('helpers: pooled weighs by n, a missing day is not a zero, judge needs both
   assert.deepEqual(weeks(series), {now: 10, before: 4});
 });
 
-test('form filling: the last 7 days against the 7 before, from required fields filled; the benchmark and the Lab sit beneath', () => {
+test('form filling: the last 7 days against the 7 before, from required fields filled; the benchmark sits beneath', () => {
   const rows = entries({...upTo(13, 7, () => ({filled: 80, required: 100})), ...upTo(6, 0, () => ({filled: 90, required: 100}))});
-  const area = formFilling({days, fill: {rows, sample: {forms: 20, installs: 5, min: 3, enough: true}, benchmark: {value: '74% vs 68%'}, lab: {value: '92%', sub: '118 sites in the pool'}}});
+  const area = formFilling({days, fill: {rows, sample: {forms: 20, installs: 5, min: 3, enough: true}, benchmark: {value: '74% vs 68%'}}});
   assert.deepEqual([area.value, area.unit, area.trend, area.tone, area.delta], ['90', '%', 'better', 'good', '+10 pts vs last 7 days']);
   assert.equal(area.series.length, 30);
   assert.equal(area.series.filter(point => point.value == null).length, 16, 'a day with no fill is a gap, never a 0');
-  assert.deepEqual(area.subs, ['Benchmark, ours vs best other tool: 74% vs 68%', 'Recorded sites reaching the form: 92% (118 sites in the pool)']);
+  assert.deepEqual(area.subs, ['Benchmark, ours vs best other tool: 74% vs 68%']);
   const first = formFilling({days, fill: {rows: entries(upTo(6, 0, () => ({filled: 9, required: 10}))), sample: {forms: 9, installs: 3, min: 3, enough: true}}});
   assert.deepEqual([first.value, first.trend, first.word, first.delta], ['90', 'new', '• first week', 'no earlier week to compare with']);
 });
@@ -86,7 +86,7 @@ test('reliability: the share of check rounds that were up, against 99%; crashes 
 test('bugs: found (tests + finders) against escaped (new problems real users reported); an escape makes it "to watch", more escaped than found makes it bad', () => {
   const snapshot = {caught: [{day: DAYS(1), runId: 1, line: 'a'}, {day: DAYS(1), runId: 2, line: 'b'}, {day: DAYS(1), runId: 2, line: 'b'}, {day: DAYS(9), runId: 3, line: 'c'}, {day: DAYS(0), runId: 4, line: 'd'}]};
   const area = bugs({days, snapshot, newProblems: [{day: DAYS(2), n: 1}], finders: 2});
-  assert.deepEqual([area.kind, area.value, area.tone, area.trend, area.label, area.delta], ['columns', '5', 'warn', 'worse', 'found in the last 7 days · 1 reached a user', '1 reached a user vs 0 the week before']);
+  assert.deepEqual([area.kind, area.value, area.tone, area.trend, area.label, area.delta], ['columns', '5', 'warn', 'worse', 'in the last 7 days · 1 reached a user', '1 reached a user vs 0 the week before']);
   assert.deepEqual(area.series.at(-2), {day: DAYS(1), found: 2, escaped: 0});
   assert.equal(bugs({days, snapshot, newProblems: [], finders: null}).tone, 'good');
   assert.equal(bugs({days, snapshot: {caught: []}, newProblems: [{day: DAYS(1), n: 2}], finders: null}).tone, 'bad');
