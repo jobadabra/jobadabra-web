@@ -1,6 +1,7 @@
 // Our e-mail sender (Cloudflare Email Sending, binding EMAIL): send(env, template, to, data) is the one way any code mails a person. It refuses (never throws) on a bad address,
 // a bounce/complaint, an unsubscribe from the template's list, marketing without an opt-in, or more than 6 mails a day to one address; it adds the footer, the one-click
 // unsubscribe link and headers, and logs the mail (hash of the address, never the body) in mail_log. Switch: env.MAIL = "on" (anything else sends nothing). Guard: test/unit/shared/mail/mail.test.js.
+import {appVersionOf} from './app-needs.js';
 import {digestOf, tokenFor} from './guard.js';
 import {frameHtml, frameText, SITE} from './mail-frame.js';
 import {TEMPLATES} from './mail-templates.js';
@@ -51,6 +52,7 @@ async function record(env, now, addr, list, template, status, id = null) {
 }
 
 // The subject, text, html and headers of a mail: the template's content inside the frame. `links` = {stop, settings} (none for an essential mail). Also what /admin/growth/email shows (admin/email-preview.js).
+// `data.appVersion` (set by send(): the app version the address's installs last reported, or absent) lets a template swap an "Open in Jobadabra" button for "Update Jobadabra" (shared/app-needs.js).
 export function compose(template, data = {}, links = null) {
   const spec = TEMPLATES[template];
   const why = spec.essential ? 'A security email: sent even if you stopped other emails.'
@@ -72,8 +74,9 @@ export async function send(env, template, to, data = {}, {now = new Date()} = {}
     const mine = await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE addr = ? AND status = 'sent' AND at >= ?").bind(addr, since).first();
     const all = await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'sent' AND at >= ?").bind(since).first();
     if (mine.n >= DAILY_MAX || all.n >= Number(env.MAIL_DAY_MAX || GLOBAL_DAY_MAX)) { await record(env, now, addr, spec.list, template, 'rate'); return {ok: false, reason: 'rate'}; }
+    const appVersion = await appVersionOf(env, addr);
     const stop = spec.essential ? null : await stopLink(env, to, spec.list);
-    const {subject, text, html, headers} = compose(template, data, stop && {stop, settings: await settingsLink(env, to)});
+    const {subject, text, html, headers} = compose(template, {...data, appVersion}, stop && {stop, settings: await settingsLink(env, to)});
     const result = await env.EMAIL.send({from: FROM[spec.list], to: clean(to), subject, text, html, ...(headers && {headers})});
     await record(env, now, addr, spec.list, template, 'sent', result?.messageId || null);
     return {ok: true, id: result?.messageId || null};
