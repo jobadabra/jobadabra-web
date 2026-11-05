@@ -41,6 +41,21 @@ test('each failure counts before dispatch and survives an eviction or rerun', as
   assert.equal((await (await resumed.health()).json()).daily.drift, 24);
 });
 
+test('a container leg that throws or answers with text still leaves its timeline line (the deploy-swap and 1101 shapes)', async t => {
+  t.mock.method(Date, 'now', () => day);
+  const lines = [];
+  t.mock.method(console, 'log', line => { lines.push(String(line)); });
+  const {broker} = harness();
+  broker.containerFetch = async () => { throw new Error('connection reset'); };
+  await assert.rejects(() => broker.call('drift', body), /connection reset/);
+  broker.containerFetch = async () => new Response('error code: 1101', {status: 502});
+  const reply = await broker.call('drift', body);
+  const logged = lines.map(line => JSON.parse(line)).filter(line => line.codexCall);
+  assert.deepEqual(logged.map(line => line.status), ['threw', 502]);
+  assert.equal(logged[0].error, 'connection reset');
+  assert.equal((await reply.json()).timeline.note, 'not JSON');
+});
+
 test('health and admission reset on the next UTC day, even with an old stored meter', async t => {
   let now = day;
   t.mock.method(Date, 'now', () => now);

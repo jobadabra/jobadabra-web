@@ -231,13 +231,17 @@ export class CodexBroker extends Container {
         const plan = session ? planOf(((await this.ctx.storage.get('sessions')) || {})[session], {now, tier: body.tier ?? 'mid', delta}) : null;
         const sent = {prompt: body.prompt, schema: body.schema, images: body.images, search: body.search, effort: body.effort, model, ...(session ? {session: {key: session, ...plan, delta, end: body.endSession === true}} : {})};   // an allow-list, never the caller's body: nothing else of theirs reaches the container
         const sentAt = Date.now();
-        const reply = await this.containerFetch('http://c/call', {method: 'POST', body: JSON.stringify(sent)});
-        const text = await reply.text();
+        // Why (5 Nov 2026, a8, owner via mac-32: "ONE timeline with timestamps on all 3 hops"; Gitar on #428: a throw or a non-JSON body left no line): what this Worker spent before the container (the conversation's lock, the gate slot, the session read), what the container leg took and what the container saw codex do. It is written to this Worker's log on EVERY exit of the container leg (a throw too, the deploy-swap signature) and returned in the 200 and 502 bodies. Logging only.
+        const mark = (status, extra = {}) => {
+          const line = {waitMs: sentAt - entered, containerMs: Date.now() - sentAt, status, model, effort: body.effort ?? 'default', ...extra};
+          console.log(JSON.stringify({codexCall: lane, session: session ? 'conversation' : 'single', ...line}));
+          return line;
+        };
+        let reply, text;
+        try { reply = await this.containerFetch('http://c/call', {method: 'POST', body: JSON.stringify(sent)}); text = await reply.text(); } catch (error) { mark('threw', {error: String(error?.message || error).slice(0, 80)}); throw error; }
         let answer;
-        try { answer = JSON.parse(text); } catch { return json(502, {why: `container: ${text.slice(0, 300)}`}); }   // the platform's own error text (not our server's JSON): say it, never crash (a 1101 hid it, 28 Oct 2026)
-        // Why (5 Nov 2026, a8, owner via mac-32: "ONE timeline with timestamps on all 3 hops"): what this Worker spent before the container (the conversation's lock, the gate slot, the session read), what the container leg took and what the container saw codex do; returned to the caller and written to this Worker's log (queryable by the time of the call). Logging only.
-        const timeline = {waitMs: sentAt - entered, containerMs: Date.now() - sentAt, status: reply.status, model, effort: body.effort ?? 'default', ...(typeof answer.trace === 'string' ? {codex: answer.trace} : {})};
-        console.log(JSON.stringify({codexCall: lane, session: session ? 'conversation' : 'single', ...timeline}));
+        try { answer = JSON.parse(text); } catch { return json(502, {why: `container: ${text.slice(0, 300)}`, timeline: mark(reply.status, {note: 'not JSON'})}); }   // the platform's own error text (not our server's JSON): say it, never crash (a 1101 hid it, 28 Oct 2026)
+        const timeline = mark(reply.status, typeof answer.trace === 'string' ? {codex: answer.trace} : {});
         if (answer.authFile) await this.ctx.storage.put('login', answer.authFile);   // write-through BEFORE the reply goes out: a rotated token is never only in the container
         await this.markIfAnswered(reply, answer);
         if (!reply.ok && exhausted(answer.error) && hasLater) return null;
