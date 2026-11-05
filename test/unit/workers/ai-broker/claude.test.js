@@ -33,10 +33,10 @@ test('the prompt and images are one stream-json line; an image the CLI cannot ta
   assert.throws(() => claudeInput({prompt: 'x', images: [{name: 'a.png'}]}), /unsupported image/);
 });
 
-test('a good answer gives the text, the tokens (cache counted as input) and the subscription windows', () => {
+test('a good answer gives the text, the tokens (cache counted as input, and told apart) and the subscription windows', () => {
   const read = readClaude(line({type: 'system', subtype: 'init'}) + line(allowed) + line({...ok, usage: {...ok.usage, cache_creation_input_tokens: 100, cache_read_input_tokens: 20}}));
   assert.equal(read.reply, 'pong');
-  assert.deepEqual(read.tokens, {input: 504, output: 4});
+  assert.deepEqual(read.tokens, {input: 504, cached: 20, cacheWritten: 100, output: 4});   // `input` still folds the cache in (the meter reads it); `cached` is the part read from the cache, as Codex's `cached`
   assert.deepEqual(read.limits, {status: 'allowed', fiveHour: allowed.rate_limit_info.unifiedWindows.five_hour, sevenDay: allowed.rate_limit_info.unifiedWindows.seven_day});
 });
 
