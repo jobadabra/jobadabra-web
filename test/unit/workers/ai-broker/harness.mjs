@@ -18,7 +18,7 @@ export const body = {prompt: 'offline test', tier: 'small'};
 export const success = () => new Response(JSON.stringify({reply: 'ok', tokens: {input: 2, output: 3}, ms: 1}));
 
 export function harness(meter, env = {}) {
-  const values = new Map([['login', 'test login']]);
+  const values = new Map([['login', 'test login'], ['answered', true]]);   // a broker whose container has answered: a Codex failure is a failure. startup.test.js starts a container with onStart() to play the first minutes (#285)
   if (meter) values.set('meter', structuredClone(meter));
   let pending = Promise.resolve();
   const storage = {
@@ -32,13 +32,11 @@ export function harness(meter, env = {}) {
       return next;
     },
   };
-  const background = [];   // what the Worker handed to ctx.waitUntil (the start-up probe); `settled()` waits for it
-  const ctx = {storage, waitUntil: promise => { background.push(promise); }};
   const restart = () => {
-    const broker = new CodexBroker(ctx, env);
+    const broker = new CodexBroker({storage}, env);
     broker.containerFetch = async () => success();
     return broker;
   };
-  return {broker: restart(), restart, storage, settled: () => Promise.all(background.splice(0))};
+  return {broker: restart(), restart, storage};
 }
 
