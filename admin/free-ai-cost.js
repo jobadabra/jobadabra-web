@@ -2,6 +2,7 @@
 // jobs' Claude and OpenAI spend: it is not billed by Anthropic, so it stays out of their total. Counts and money only, per step.
 import {FREE_NEURONS_PER_DAY, neuronsOf} from '../shared/free-ai-models.js';
 import {LIMITS} from '../shared/free-ai.js';
+import {installsFigure, freeStepsFigure} from './jobcost-charts.js';
 const millions = n => `${(n / 1e6).toFixed(n < 1e6 ? 2 : 1)}M`;
 const esc = text => String(text).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 const money = n => `$${(Number(n) || 0).toFixed(n && n < 0.1 ? 4 : 2)}`;
@@ -39,10 +40,13 @@ export async function trialUse(kv, budgetUsd = LIMITS.trialUsd) {
 // lines: the limits in force (shared/free-ai.js limitsOf(env)): an install's day ends at whichever of its two day lines (money, tokens) it reaches first.
 export function freeSection(summary, label, accountNeurons = null, trial = null, lines = LIMITS) {
   const rows = summary.steps.map(step => `<tr><td>${esc(step.action)}</td><td class="n">${step.calls}</td><td class="n">${step.tokensIn + step.tokensOut}</td><td class="n">${money(step.usd)}</td><td class="n">${money(step.calls ? step.usd / step.calls : 0)}</td></tr>`).join('');
+  // The tables the section drew before the charts (5 Nov 2026), kept behind each chart's "Show table".
+  const installTable = `<div class="wrap"><table><tr><th>Install</th><th>Today</th><th>of $${lines.installDayUsd}</th><th>Tokens today</th><th>of ${millions(lines.tokensPerDay)}</th><th>This month</th><th>of $${lines.installMonthUsd}</th></tr>${summary.perInstall.slice(0, 30).map(row => `<tr><td>${esc(row.who)}</td><td class="n">${money(row.day)}</td><td class="n">${Math.round(100 * row.day / lines.installDayUsd)}%</td><td class="n">${millions(row.tokens || 0)}</td><td class="n">${Math.round(100 * (row.tokens || 0) / lines.tokensPerDay)}%</td><td class="n">${money(row.month)}</td><td class="n">${Math.round(100 * row.month / lines.installMonthUsd)}%</td></tr>`).join('')}</table></div>`;
+  const stepTable = `<div class="wrap"><table><tr><th>Step</th><th>Calls · ${esc(label.toLowerCase())}</th><th>Tokens</th><th>Cost</th><th>Per call</th></tr>${rows}
+<tr class="total"><td>Total</td><td class="n">${summary.calls}</td><td class="n">${summary.steps.reduce((n, s) => n + s.tokensIn + s.tokensOut, 0)}</td><td class="n">${money(summary.usd)}</td><td class="n">${money(summary.calls ? summary.usd / summary.calls : 0)}</td></tr></table></div>`;
   return `<section class="card"><h2>🆓 Free AI (Workers AI)</h2><small class="muted">Not billed by Anthropic: counted by the site's relay, per step. Today ${summary.todayNeurons} of ${FREE_NEURONS_PER_DAY} neurons (${summary.allowancePct}%) of the free plan · ${money(summary.todayUsd)} · ${summary.todayCalls} calls · ${summary.todayInstalls} installs (${money(summary.perInstallToday)} each)${accountNeurons == null ? '' : ` · Account today: ${Math.round(accountNeurons)} neurons (from Cloudflare)`}</small>
 ${trial ? `<p class="muted">Trial budget $${trial.budgetUsd} per install, for life: ${trial.at} at it, ${trial.near} near it (80%+), of ${trial.installs} with use</p>` : ''}
 <p class="muted">This month ${money(summary.monthUsd)} of $${lines.monthStopUsd} (alert at $${lines.monthAlertUsd}) · per install: $${lines.installDayUsd} or ${millions(lines.tokensPerDay)} tokens a day, $${lines.installMonthUsd} a month</p>
-${summary.perInstall.length ? `<div class="wrap"><table><tr><th>Install</th><th>Today</th><th>of $${lines.installDayUsd}</th><th>Tokens today</th><th>of ${millions(lines.tokensPerDay)}</th><th>This month</th><th>of $${lines.installMonthUsd}</th></tr>${summary.perInstall.slice(0, 30).map(row => `<tr><td>${esc(row.who)}</td><td class="n">${money(row.day)}</td><td class="n">${Math.round(100 * row.day / lines.installDayUsd)}%</td><td class="n">${millions(row.tokens || 0)}</td><td class="n">${Math.round(100 * (row.tokens || 0) / lines.tokensPerDay)}%</td><td class="n">${money(row.month)}</td><td class="n">${Math.round(100 * row.month / lines.installMonthUsd)}%</td></tr>`).join('')}</table></div>` : ''}
-${summary.calls ? `<div class="wrap"><table><tr><th>Step</th><th>Calls · ${esc(label.toLowerCase())}</th><th>Tokens</th><th>Cost</th><th>Per call</th></tr>${rows}
-<tr class="total"><td>Total</td><td class="n">${summary.calls}</td><td class="n">${summary.steps.reduce((n, s) => n + s.tokensIn + s.tokensOut, 0)}</td><td class="n">${money(summary.usd)}</td><td class="n">${money(summary.calls ? summary.usd / summary.calls : 0)}</td></tr></table></div>` : '<p class="muted">No Free AI calls yet.</p>'}</section>`;
+${summary.perInstall.length ? installsFigure(summary.perInstall, lines, installTable) : ''}
+${summary.calls ? freeStepsFigure(summary.steps, stepTable) : '<p class="muted">No Free AI calls yet.</p>'}</section>`;
 }

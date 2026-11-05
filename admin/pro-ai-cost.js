@@ -1,6 +1,7 @@
 // The owner’s Pro AI cost section: actual charged calls from the credit ledger, with raw cost estimated at the current credit conversion.
 import {CREDIT_PER_COST, USD_PER_EUR} from '../shared/pro-packages.js';
 import {esc} from '../shared/html.js';
+import {proFigure} from './jobcost-charts.js';
 const money = (value, currency = '$') => `${currency}${Number(value || 0).toFixed(2)}`;
 const rawUsd = creditEur => creditEur / CREDIT_PER_COST * USD_PER_EUR;
 
@@ -29,7 +30,7 @@ export function proSection(summary, label) {
   return `<section class="card" id="pro-ai-cost"><h2>✨ Pro AI</h2>
 <p class="muted">Last ${esc(label)} · ${summary.calls} calls · ${summary.accounts} accounts · ${money(summary.creditEur, '€')} of credit used</p>
 <p class="muted">Estimated raw cost: ${money(summary.estimatedUsd)}. Converted from charged credit at the current rate (€1 credit = €${1 / CREDIT_PER_COST} raw cost; €1 = $${USD_PER_EUR}). These are Pro credit charges, including Workers AI fallback calls. Free AI and scheduled-job totals are separate.</p>
-${summary.calls ? `<div class="wrap"><table><tr><th>Step</th><th>Calls</th><th>Credit used</th><th>Estimated raw cost</th><th>Per call</th></tr>
+${summary.calls ? proFigure(summary.steps, `<div class="wrap"><table><tr><th>Step</th><th>Calls</th><th>Credit used</th><th>Estimated raw cost</th><th>Per call</th></tr>
 ${summary.steps.map(row => `<tr><td>${esc(row.action)}</td><td class="n">${row.calls}</td><td class="n">${money(row.creditEur, '€')}</td><td class="n">${money(row.estimatedUsd)}</td><td class="n">$${(row.estimatedUsd / row.calls).toFixed(4)}</td></tr>`).join('')}
-<tr class="total"><td>Total</td><td class="n">${summary.calls}</td><td class="n">${money(summary.creditEur, '€')}</td><td class="n">${money(summary.estimatedUsd)}</td><td class="n">$${(summary.estimatedUsd / summary.calls).toFixed(4)}</td></tr></table></div>` : '<p class="muted">No charged Pro AI calls in this period.</p>'}</section>`;
+<tr class="total"><td>Total</td><td class="n">${summary.calls}</td><td class="n">${money(summary.creditEur, '€')}</td><td class="n">${money(summary.estimatedUsd)}</td><td class="n">$${(summary.estimatedUsd / summary.calls).toFixed(4)}</td></tr></table></div>`) : '<p class="muted">No charged Pro AI calls in this period.</p>'}</section>`;
 }

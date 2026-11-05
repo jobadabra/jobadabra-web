@@ -2,6 +2,7 @@
 import {ACTIONS} from '../shared/aicost.js';
 import {LAB_REPO, PUBLIC_REPO, WEB_REPO, githubUrl} from '../shared/repos.js';
 import {aiPersona} from './page-shot-seed-ai-persona.mjs';
+import {aiCostFull} from './page-shot-seed-ai-cost.mjs';
 const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields)});
 
 export const seeds = {
@@ -512,4 +513,5 @@ export const seeds = {
     }
   },
   'ai-persona': aiPersona,
+  'ai-cost-full': context => aiCostFull(context, seeds),   // /admin/ai/costs with every section filled (5 Nov 2026, admin charts)
 };
