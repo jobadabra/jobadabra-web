@@ -5,10 +5,10 @@ import {shell, chip} from './ai-section.js';
 
 // Why (5 Nov 2026, owner: "why it shows that PostHog is green when you say is not connected"): the chip said "built" in green for a fetcher whose key was never created. Now the word names
 // both facts: the code is in the repo, and a read-only key is stored or not. `key` comes from a trusted CI step that only tests whether the secret is set ('' = the sender did not say).
-// Neither fact proves a live read worked, and the title says so.
+// Neither fact proves a live read worked, and the title says so. A card stored before this field existed is rendered raw (cleanHarness runs on write only), so a missing key reads as ''.
 const KEY_WORDS = {set: ['good', '✅ code built · key set'], missing: ['warn', '⚠️ code built · no key yet'], '': ['wait', '🔧 code built · key not reported']};
 const sourceChip = source => {
-  const [kind, text] = source.built ? KEY_WORDS[source.key] : ['wait', '⬜ not built'];
+  const [kind, text] = source.built ? KEY_WORDS[source.key] || KEY_WORDS[''] : ['wait', '⬜ not built'];
   return chip(kind, `${text} · ${source.name}`, 'code built = the fetcher file is in the repo; key = a read-only key is stored for the CI fixer. Neither proves a live read worked.');
 };
 

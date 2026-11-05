@@ -38,6 +38,12 @@ test('Agent harness shows only context layers and sources, without run outcomes 
   assert.doesNotMatch(html, /Needs a human|Fixer chain|Plan and spec|Last run:|hn-run\"/);
 });
 
+test('a card stored before the key field existed (raw, never cleaned on read) still renders: "key not reported", no throw', () => {
+  const html = harnessPage({layers: [], sources: [{name: 'Linear', built: true}, {name: 'Notion', built: false}]}, now);
+  assert.match(html, /🔧 code built · key not reported · Linear/);
+  assert.match(html, /⬜ not built · Notion/);
+});
+
 test('Agent runs is a separate protected tab with an empty state', async () => {
   const e = env();
   assert.equal((await call(e, '/admin/ai/runs')).status, 404);
