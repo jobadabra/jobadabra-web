@@ -37,7 +37,7 @@ test('the graph shows a bar and a timeline: one row per running job, glyphs on t
   assert.equal((html.match(/class="t t-green" style=/g) || []).length, 24, 'one tick per hourly start');
 });
 
-test('only Testing → Scheduled carries the graph', () => {
-  assert.match(page(snapshot, {only: 'testing', now}), /Next 24 hours · when each job starts/);
+test('only the Testing area of Scheduled carries the graph', () => {
+  assert.match(page(snapshot, {area: 'testing', now}), /Next 24 hours · when each job starts/);
   assert.ok(!page(snapshot, {now}).includes('Next 24 hours'), 'the aggregate keeps its area tiles');
 });

@@ -137,7 +137,7 @@ test('Testing → Scheduled: the column has its header and one cell in every row
     {repo: 'GarryOne/jobadabra', file: 'e2e.yml', name: 'CI · E2E', about: '', crons: ['0 2 * * *'], recent: []},
     {repo: 'GarryOne/jobadabra', file: 'mutation.yml', name: 'CI · Mutation', about: '', crons: ['0 3 * * 1'], recent: []}]};
   const summary = nightlySummary({snapshot: {quality: [night(30, D(0), 9, 8)]}}, now);
-  const html = page(snapshot, {only: 'testing', now, summary});
+  const html = page(snapshot, {area: 'testing', now, summary});
   const header = html.match(/<tr><th>Job<\/th>.*?<\/tr>/s)[0], rows = [...html.matchAll(/<tr class="[^"]*"?><td><b><a/g)].length;
   assert.match(header, /<th>Last night<\/th>/);
   const cells = row => (row.match(/<td[ >]/g) || []).length, bodies = [...html.matchAll(/<tr class=""><td>.*?<\/tr>/gs)].map(match => match[0]);
@@ -154,7 +154,7 @@ test('Testing → Scheduled: the column has its header and one cell in every row
   assert.match(detail[3], /class="nt"/);
   assert.match(detail[3], /href="\/admin\/testing\/report-only">All measurements → Report only/);
   assert.equal((html.match(/class="ndetail"/g) || []).length, 1, 'no detail row for a workflow without a summary');
-  assert.match(page(snapshot, {only: 'testing', now}), /<th>Last night<\/th>/, 'a page with no summary still draws the column, empty');
+  assert.match(page(snapshot, {area: 'testing', now}), /<th>Last night<\/th>/, 'a page with no summary still draws the column, empty');
 });
 
 test('Testing → Overview: the cards of e2e, interactions, wander and quality-ai carry their trends, every other card none', () => {
@@ -197,7 +197,7 @@ test('two cards a row on a desktop, one on a phone, in the one stylesheet both p
 
 test('two repos that schedule the same file name get two different detail ids, so each Details button opens its own row (Gitar on #330)', () => {
   const job = repo => ({repo, file: 'e2e.yml', name: 'CI · E2E', about: '', crons: ['0 2 * * *'], recent: []});
-  const html = page({at: now.toISOString(), repos: [], jobs: [job('GarryOne/jobadabra'), job('GarryOne/jobadabra-lab')]}, {only: 'testing', now, summary: nightlySummary({}, now)});
+  const html = page({at: now.toISOString(), repos: [], jobs: [job('GarryOne/jobadabra'), job('GarryOne/jobadabra-lab')]}, {area: 'testing', now, summary: nightlySummary({}, now)});
   const ids = [...html.matchAll(/<tr class="ndetail" id="([^"]+)"/g)].map(match => match[1]);
   assert.equal(ids.length, 2);
   assert.equal(new Set(ids).size, 2, ids.join(' '));
