@@ -41,5 +41,7 @@ test('page-shot --clip shoots only the named section, and refuses a selector tha
     assert.ok(!fs.existsSync(path.join(out, 'none-1440.png')));
     assert.throws(() => execFileSync('node', [...base, '--name', 'many', '--clip', 'a'], {stdio: 'pipe'}), /status 1|Command failed/);   // several matches: which one is the changed card?
     assert.ok(!fs.existsSync(path.join(out, 'many-1440.png')));
+    assert.throws(() => execFileSync('node', [...base, '--width', '1440,390', '--name', 'hid', '--clip', 'title'], {stdio: 'pipe', timeout: 20000}), /status 1|Command failed/);   // one match that is not visible (Gitar, #421): the clear refusal, not a 30 s Playwright timeout
+    assert.ok(!fs.existsSync(path.join(out, 'hid-1440.png')));
   } finally { fs.rmSync(out, {recursive: true, force: true}); }
 });

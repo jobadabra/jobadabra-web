@@ -43,8 +43,8 @@ try {
       if (args.clip) {   // Why (5 Nov 2026, owner: "the screenshots on the PRs … has nothing to do with the changes"): the PR's shot is the changed section, readable in a table cell; a selector that matches nothing fails, never a full-page fallback
         const sections = page.locator(String(args.clip));
         await sections.first().waitFor({state: 'visible', timeout: 3000}).catch(() => {});
-        const found = await sections.count();
-        if (found !== 1) { failed = true; console.error(`${found ? 'AMBIGUOUS SECTION' : 'NO SECTION'} ${pagePath} at ${width}px ${theme}: --clip '${args.clip}' matches ${found}; it must match exactly one element (the changed card), never the first of several`); await context.close(); continue; }
+        const found = await sections.count(), visible = found === 1 && await sections.isVisible();
+        if (!visible) { failed = true; console.error(`${found > 1 ? 'AMBIGUOUS SECTION' : found ? 'HIDDEN SECTION' : 'NO SECTION'} ${pagePath} at ${width}px ${theme}: --clip '${args.clip}' matches ${found}${found === 1 ? ' (not visible)' : ''}; it must match exactly one visible element (the changed card), never the first of several`); await context.close(); continue; }
         await sections.screenshot({path: file});   // a popover opened by --click that sits outside this element is not in the image: clip its container
       } else await page.screenshot({path: file, fullPage: !!args.full});
       console.log(file);
