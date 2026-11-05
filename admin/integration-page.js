@@ -13,6 +13,7 @@ import {COVERAGE_CSS, coverageCard} from './coverage-card.js';
 import {readStartProblem} from '../shared/intel-start.js';
 import {startLine} from './intel-start-line.js';
 import {PUBLIC_REPO} from '../shared/repos.js';
+import {VIZ_STYLE, VIZ_TOOLTIP, bars, figure} from './viz.js';
 
 const DAY = 86400000;
 export const RANGES = {'7d': {name: 'Last 7 days', days: 7}, '30d': {name: 'Last 30 days', days: 30}};
@@ -80,9 +81,12 @@ ${rows ? `<div class="scroll"><table><tr><th>Test</th><th>Layer</th><th>Seen as<
 }
 
 function slowCard(snapshot) {
-  const rows = (snapshot.slowest || []).slice().sort((a, b) => b.ms - a.ms).slice(0, 10).map((row, i) => `<tr><td class="num">${i + 1}</td><td><code>${esc(row.test)}</code><div class="muted">${esc(row.file)}</div></td><td>${chip(esc(LAYER_NAMES[row.layer]))}</td><td class="num">${row.ms > SLOW_MS ? chip(seconds(row.ms), 'warn') : seconds(row.ms)}</td></tr>`).join('');
+  const slow = (snapshot.slowest || []).slice().sort((a, b) => b.ms - a.ms).slice(0, 10);
+  const rows = slow.map((row, i) => `<tr><td class="num">${i + 1}</td><td><code>${esc(row.test)}</code><div class="muted">${esc(row.file)}</div></td><td>${chip(esc(LAYER_NAMES[row.layer]))}</td><td class="num">${row.ms > SLOW_MS ? chip(seconds(row.ms), 'warn') : seconds(row.ms)}</td></tr>`).join('');
   return `<section class="card"><h2>Slowest 10 tests</h2><p class="muted">Integration tests are meant to be seconds: over ${SLOW_MS / 1000} s is flagged. Newest main run of each layer.</p>
-${rows ? `<div class="scroll"><table><tr><th class="num">#</th><th>Test</th><th>Layer</th><th class="num">Time</th></tr>${rows}</table></div>` : '<p class="muted">No test timings stored yet.</p>'}</section>`;
+${rows ? figure({lead: slow.some(row => row.ms > SLOW_MS) ? [[`${slow.filter(row => row.ms > SLOW_MS).length} over ${SLOW_MS / 1000} s`, 'warn']] : [[`all within ${SLOW_MS / 1000} s`, 'good']],
+    chart: bars(slow.map(row => ({label: row.test, hint: `${LAYER_NAMES[row.layer]} · ${row.file}`, value: row.ms, text: seconds(row.ms), tip: `${row.test} · ${LAYER_NAMES[row.layer]} · ${row.file} · ${seconds(row.ms)}`})), {max: Math.max(SLOW_MS, ...slow.map(row => row.ms))}),
+    table: `<div class="scroll"><table><tr><th class="num">#</th><th>Test</th><th>Layer</th><th class="num">Time</th></tr>${rows}</table></div>`}) : '<p class="muted">No test timings stored yet.</p>'}</section>`;
 }
 
 /** The move: e2e steps left against the integration tests, from the newest stored day. */
@@ -107,7 +111,7 @@ function moveCard(snapshot) {
 }
 
 const CSS = `.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}.tile b{display:block;font-size:28px;margin:4px 0}${CHIP_STYLE}${GREEN_CSS}.sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px}
-.filters{margin:8px 0 10px}h2{margin:0 0 8px}.scroll{overflow-x:auto}.verdict{font-size:17px;margin:0 0 10px}${BARS_CSS}${COVERAGE_CSS}${CLOCK_CSS}`;
+.filters{margin:8px 0 10px}h2{margin:0 0 8px}.scroll{overflow-x:auto}.verdict{font-size:17px;margin:0 0 10px}${BARS_CSS}${COVERAGE_CSS}${CLOCK_CSS}${VIZ_STYLE}`;
 
 export function page(snapshot, {range = '7d', repo = PUBLIC_REPO, now = new Date(), problem = null} = {}) {
   range = rangeOf(range);
@@ -118,7 +122,7 @@ export function page(snapshot, {range = '7d', repo = PUBLIC_REPO, now = new Date
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Integration · Testing · Admin</title>
 <link rel="icon" href="/favicon-32.png"><style>${CSS}</style></head><body><main>
 <header><h1>🧩 Integration tests</h1><span class="muted">${snapshot ? `as of ${esc(snapshot.at.slice(0, 16).replace('T', ' '))} UTC · extension, app and store layers, runs of “CI · Integration tests”` : ''}</span></header>
-${startLine(problem)}${body}</main></body></html>`;
+${startLine(problem)}${body}${VIZ_TOOLTIP}</main></body></html>`;
 }
 
 export async function view(request, env) {

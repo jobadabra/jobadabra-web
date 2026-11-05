@@ -1,5 +1,7 @@
 # Admin tables become charts
 
+> **Rule (owner, 5 Nov 2026, after PR 1 and 2 were built):** only PLAIN tables of raw numbers become charts. A table whose value cells already carry colour (chips, bars, dots, strips) stays: "these 2 tables were not that bad. They were giving some visual feedback (colors)… only this type of tables should be the target right now" (shown: Speed and Scorecard stay; "Main's green share per day", a colourless table, is the target). The inventory below was triaged before this rule: PRs 3–7 re-triage each row by it; a row marked 📊 whose table is colour-coded becomes 📋 stays.
+
 > **Verdict:** 143 sections on 8 admin groups were checked. **94 are summaries and become charts**, 41 are lookups and stay tables, 8 are already visual and stay. One shared chart module draws all of them, and the exact numbers stay one click away ("Show table"). Seven PRs, AI → Costs first.
 
 Owner (5 Nov 2026): "Please find all the sections/tables like this in the entire Admin UI and transform them into a more visual representation. Preferably graphs. Something that is easy to digest. Nobody reads tables and raw data. There can be exceptions where…" — his pick for the exceptions: **"Lookup tables stay."** A list you search for one row in stays a table (a run log, feedback, a key you look up). Summaries become charts.
@@ -239,8 +241,8 @@ Owner (5 Nov 2026): "Please find all the sections/tables like this in the entire
 
 | Section | Answers | | Chart, or why it stays |
 |---|---|---|---|
-| Numbers per day (by kind) | How often is e2e green, by kind? | 📊 chart · PR 2 | line: green % per kind, 14 days |
-| Top causes | Why do suites go red? | 📊 chart · PR 2 | bars |
+| Numbers per day (by kind) | How often is e2e green, by kind? | ✅ already a line chart (`admin/e2e-green.js`), numbers in a toggle | line: green % per kind |
+| Top causes | Why do suites go red? | ✅ already bar rows (public `e2e-top.mjs`) | bars |
 | PR e2e: cost vs catch | Is e2e on PRs worth its minutes? | 📊 chart · PR 2 | columns: minutes; line: green % (two charts, no second axis) |
 | How steady the AI is | Does the AI judge the same every night? | 📊 chart · PR 2 | split per night: within 8 | over 20 | invented |
 | Grey suites | Which suite is grey and when does it return? | 📋 stays | a work list with dates |
@@ -393,8 +395,8 @@ AI → Costs was shared with session `ca`; its per-job PR (#379) is merged, so t
 - [x] Inventory (41 pages, 114 tables on demo data, 28 more found in source)
 - [x] Spec
 - [x] Sketch and the owner's yes (5 Nov 2026: "Yes, as sketched"; https://claude.ai/artifact/GdfzfegP7Xz1H93f5ffKv5)
-- [ ] 1/7 Module + AI → Costs
-- [ ] 2/7 Testing: E2E, Integrations, PR checks
+- [x] 1/7 Module + AI → Costs (#384, merged 5 Nov 2026)
+- [x] 2/7 Testing: E2E, Integrations, PR checks (rescoped by the rule above: 4 charts; Speed, Scorecard, AI steadiness, suite cost and layers stay tables)
 - [ ] 3/7 Testing: Overview, Synthetics, GTM, Self-healing
 - [ ] 4/7 Agent Coding
 - [ ] 5/7 Growth

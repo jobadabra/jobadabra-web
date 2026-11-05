@@ -20,6 +20,9 @@ import {GREEN_CSS, greenCard} from './e2e-green.js';
 import {BETA_CSS, betaCard} from './e2e-beta.js';
 import {PR_JOB_BUDGET_SECONDS, PR_SPLIT_SECONDS, speedSummary, speedTime} from './e2e-speed.js';
 import {PUBLIC_REPO} from '../shared/repos.js';
+import {VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
+import {filesChart, prCostChart, swapTable} from './testing-charts.js';
+import {summary as topSummary} from './e2e-top.js';
 
 const DAY = 86400000;
 export const RANGES = {'7d': {name: 'Last 7 days', days: 7}, '30d': {name: 'Last 30 days', days: 30}};
@@ -99,7 +102,7 @@ const promptTile = prompt => {
 export function qualityCard(nights = [], repo = PUBLIC_REPO) {
   if (!nights.length) return '<section class="card"><h2>How steady the AI is · quality suite</h2><p class="muted">No live quality night yet: the night\'s fresh quality run scores the golden jobs twice.</p></section>';
   const rate = rateOf(nights), tone = ok => (ok ? 'good' : 'bad');
-  return `<section class="card"><h2>How steady the AI is · last ${rate.pairs} score pairs (${rate.nights} ${rate.nights === 1 ? 'night' : 'nights'})</h2>
+  const html = `<section class="card"><h2>How steady the AI is · last ${rate.pairs} score pairs (${rate.nights} ${rate.nights === 1 ? 'night' : 'nights'})</h2>
 <div class="tiles"><section class="card tile"><span class="muted">Same score twice (within ${BARS.within})</span><b>${rate1(rate.agree)}</b>${chip(`bar ≥ ${BARS.agree * 100}%`, tone(rate.agreeOk))}</section>
 <section class="card tile"><span class="muted">Big jumps (over ${BARS.jump} apart)</span><b>${rate1(rate.jumps)}</b>${chip(`bar ≤ ${BARS.jumps * 100}%`, tone(rate.jumpsOk))}</section>
 <section class="card tile"><span class="muted">Facts exact</span><b>${rate1(rate.factsTotal ? rate.factsExact / rate.factsTotal : null)}</b><span class="muted">${rate.factsExact} of ${rate.factsTotal}</span></section>
@@ -107,6 +110,7 @@ export function qualityCard(nights = [], repo = PUBLIC_REPO) {
 ${promptTile(nights.find(night => night.promptCases)?.promptCases)}</div>
 <div class="scroll"><table><tr><th>Night</th><th>Run</th><th class="num">Pairs</th><th class="num">Within ${BARS.within}</th><th class="num">Over ${BARS.jump}</th><th class="num">Facts exact</th><th class="num">Invented</th><th class="num">Prompt cases</th></tr>${nights.slice(0, 14).map(night =>
   `<tr><td>${esc(night.day)}</td><td><a href="https://github.com/${esc(repo)}/actions/runs/${Number(night.runId)}">#${Number(night.runId)}</a></td><td class="num">${night.pairs}</td><td class="num">${chip(`${night.within8}`, night.within8 / night.pairs >= BARS.agree ? 'good' : 'warn')}</td><td class="num">${night.over20 ? chip(`${night.over20}`, 'bad') : chip('0', 'good')}</td><td class="num">${night.factsExact}/${night.factsTotal}</td><td class="num">${night.invented}/${night.judged}</td><td class="num">${chip(esc(promptWords(night.promptCases).text), promptWords(night.promptCases).tone)}</td></tr>`).join('')}</table></div></section>`;
+  return html;
 }
 
 function greyCard(snapshot, now, repo) {
@@ -137,20 +141,25 @@ ${speed.slowPr.length ? `<ul>${speed.slowPr.map(row => `<li><code>${esc(row.suit
     : `<p class="muted">${speed.prRead ? `PR suites over ${PR_SPLIT_SECONDS / 60} min: none.` : 'Not enough PR runs for a median yet.'}</p>`}</section>`;
 }
 
+// The public cards (admin/e2e-top.js, e2e-scorecard.js) draw their tables; these put a chart in front (admin/testing-charts.js swapTable).
+const withPrChart = (html, w) => swapTable(html, '<div class="scroll"><table><tr><th>Day</th><th class="num">Full runs green</th>', prCostChart(topSummary(w).green));
+const withFilesChart = (html, snapshot, now) => swapTable(html, '<div class="scroll"><table><tr><th>File</th><th class="num">Commits</th>',
+  filesChart((snapshot.workFiles || []).filter(row => row.week === weekOf(now.toISOString().slice(0, 10))).slice(0, 6)));
+
 export function page(snapshot, {range = '7d', kind = 'all', repo = PUBLIC_REPO, now = new Date(), problem = null} = {}) {
   range = rangeOf(range); kind = kindFilter(kind);
   const filters = filterLinks(Object.entries(RANGES).map(([value, {name}]) => [value, name, `?range=${value}${kind === 'all' ? '' : `&kind=${kind}`}`]), range)
     + filterLinks(Object.entries(KIND_NAMES).map(([value, text]) => [value, text, `?range=${range}${value === 'all' ? '' : `&kind=${value}`}`]), kind);
   const w = windowOf(snapshot, range, now, kind), name = `${RANGES[range].name}${kind === 'all' ? '' : ` · ${KIND_NAMES[kind]}`}`;
   const body = !snapshot ? `<section class="card"><h2>No data yet</h2><p class="muted">The workflow <code>e2e-intel.yml</code> publishes every finished e2e run hourly; the first run fills this page.</p></section>`
-    : `${filters}${greenCard(snapshot, {kind, days: RANGES[range].days, now, kindName: id => KIND_NAMES[id] || id, scopeName: name})}${['all', 'beta'].includes(kind) ? betaCard(snapshot, {days: RANGES[range].days, now, repo, scopeName: RANGES[range].name}) : ''}${top(w, {repo})}${tiles(w)}
+    : `${filters}${greenCard(snapshot, {kind, days: RANGES[range].days, now, kindName: id => KIND_NAMES[id] || id, scopeName: name})}${['all', 'beta'].includes(kind) ? betaCard(snapshot, {days: RANGES[range].days, now, repo, scopeName: RANGES[range].name}) : ''}${withPrChart(top(w, {repo}), w)}${tiles(w)}
 ${qualityCard(snapshot.quality || [], repo)}
 ${greyCard(snapshot, now, repo)}
 ${speedCard(snapshot, now)}
 <section class="card"><h2>Red suites per day, by cause · ${esc(name)}</h2>${w.reds ? bars(w) : '<p class="muted">No red suites in this range.</p>'}</section>
 <section class="card"><h2>Which suites cost the most · ${esc(name)}</h2>${suiteTable(w)}</section>
 ${scorecardCard(w, name, {now, repo})}
-${workCard(snapshot, now)}
+${withFilesChart(workCard(snapshot, now), snapshot, now)}
 <section class="card"><h2>What each cause means</h2><table>${CAUSES.map(cause => `<tr><td class="nowrap">${swatch(cause.id)}${esc(cause.label)}</td><td class="muted">${esc(cause.hint)}</td></tr>`).join('')}</table></section>
 <section class="card"><h2>Latest ${(snapshot.latest || []).length} runs</h2><div class="scroll"><table><tr><th>Run</th><th>Day</th><th>Kind</th><th>Result</th><th class="num">Minutes</th></tr>${(snapshot.latest || []).map(run =>
   `<tr><td><a href="https://github.com/${esc(repo)}/actions/runs/${Number(run.runId)}">#${Number(run.runId)}</a></td><td>${esc(run.day)}</td><td>${chip(esc(run.kind || 'beta'))}</td><td>${run.conclusion === 'failure' ? chip('red', 'bad') : run.conclusion === 'cancelled' ? chip('cancelled', 'off') : chip('green', 'good')}</td><td class="num">${num(run.minutes)}</td></tr>`).join('')
@@ -158,9 +167,9 @@ ${workCard(snapshot, now)}
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>E2E · Testing · Admin</title>
 <link rel="icon" href="/favicon-32.png"><style>.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}.tile b{display:block;font-size:28px;margin:4px 0}
 .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px}${CHIP_STYLE}
-.filters{margin:8px 0 10px}${TOP_CSS}h2{margin:0 0 8px}.scroll{overflow-x:auto}.nights .night span.muted{white-space:nowrap}${BARS_CSS}${SCORECARD_CSS}${GREEN_CSS}${BETA_CSS}</style></head><body><main>
+.filters{margin:8px 0 10px}${TOP_CSS}h2{margin:0 0 8px}.scroll{overflow-x:auto}.nights .night span.muted{white-space:nowrap}${BARS_CSS}${SCORECARD_CSS}${GREEN_CSS}${BETA_CSS}${VIZ_STYLE}</style></head><body><main>
 <header><h1>🧪 Why e2e goes red</h1><span class="muted">${snapshot ? `as of ${esc(snapshot.at.slice(0, 16).replace('T', ' '))} UTC · every e2e run: beta, nightly, main after merge, scheduled, soak, PR, harness` : ''}</span></header>
-${startLine(problem)}${body}</main></body></html>`;
+${startLine(problem)}${body}${VIZ_TOOLTIP}</main></body></html>`;
 }
 
 export async function view(request, env) {
