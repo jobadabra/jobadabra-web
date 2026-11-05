@@ -20,6 +20,10 @@ export const seeds = {
     await env.STATS.prepare('INSERT INTO changelog_entries (version,date,channel,hidden,body,at) VALUES (?,?,?,?,?,?)').bind('0.9.6', '2026-11-03', 'stable', 1, '[]', 'x').run();
     await env.STATS.prepare('INSERT INTO changelog_entries (version,date,channel,hidden,body,at) VALUES (?,?,?,?,?,?)').bind('0.9.9', '2026-11-05', 'stable', 0, JSON.stringify(groups), 'x').run();
   },
+  'release-mail-pending': async context => {
+    if (!await context.env.STATS.prepare("SELECT 1 AS x FROM release_mail WHERE version='0.9.9'").first()) await seeds['release-mail'](context);
+    await context.env.STATS.prepare("DELETE FROM release_mail WHERE version='0.9.9'").run();
+  },
   feedback: feedbackSeed,
   'feedback-stuck': context => feedbackRunSeed(context),
   'feedback-recovered': context => feedbackRunSeed(context, true),

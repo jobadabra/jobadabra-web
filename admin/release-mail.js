@@ -13,6 +13,7 @@ const VERSION = /^\d+\.\d+\.\d+$/;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 // Why (5 Nov 2026, owner): release emails mirror the changelog, including fixes.
 const KINDS = ['features', 'improvements', 'fixes'];
+const monthOf = date => { const [year, month] = String(date || '').split('-').map(Number); return `${MONTHS[(month || 1) - 1]} ${year}`; };
 const json = (body, status = 200) => Response.json(body, {status, headers: {'Cache-Control': 'no-store'}});
 const notFound = () => new Response('Not found', {status: 404});
 
@@ -20,14 +21,13 @@ const notFound = () => new Response('Not found', {status: 404});
 export function dataFrom({version, date, groups = []}) {
   const items = KINDS.flatMap(kind => groups.filter(group => group.kind === kind).flatMap(group => (group.items || []).map(item => ({...item, kind}))));
   if (!items.length) return null;
-  const [year, month] = String(date || '').split('-').map(Number);
-  return {version, month: `${MONTHS[(month || 1) - 1]} ${year}`, headline: items[0].text.replace(/\.$/, ''), sections: items.map(item => ({kind: item.kind, title: item.lead, text: item.text})), updateUrl: `${SITE}/download`};
+  return {version, month: monthOf(date), headline: items[0].text.replace(/\.$/, ''), sections: items.map(item => ({kind: item.kind, title: item.lead, text: item.text})), updateUrl: `${SITE}/download`};
 }
 
 /** Selects the latest published stable changelog version using numeric version order. */
 export async function latestStableVersion(env) {
   const {results = []} = await env.STATS.prepare("SELECT version FROM changelog_entries WHERE channel = 'stable'").all();
-  return newestFirst(results)[0]?.version || null;
+  return newestFirst(results.filter(row => VERSION.test(row.version)))[0]?.version || null;
 }
 
 /** Builds a stable-to-stable window; hidden stable releases still bound the interval. */
@@ -56,7 +56,7 @@ export async function releaseData(env, data, {status = 'draft'} = {}) {
   if (!window) return null;
   if (status === 'sending' || status === 'sent') return data;
   const fresh = dataFrom(window);
-  return {...data, ...fresh, version: window.version, previousStable: window.previousStable,
+  return {...data, ...fresh, version: window.version, month: fresh?.month || monthOf(window.date), previousStable: window.previousStable,
     sections: (fresh?.sections || []).map(section => ({...data.sections?.find(saved => saved.title === section.title && saved.text === section.text), ...section}))};
 }
 

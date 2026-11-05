@@ -26,10 +26,10 @@ const TEMPLATE_STYLE = `.tpl{min-width:0;scroll-margin-top:24px}.tpl h2 a{color:
 const templateCard = (mail, sent, notice = null, detail = false) => `<section class="card tpl${detail ? ' template-detail' : ''}" id="template-${esc(mail.name)}">
 ${detail ? '' : `<h2><a href="/admin/growth/email?template=${esc(mail.name)}">${esc(mail.name)}</a></h2>`}
 <p class="muted">${esc(mail.list)}${mail.essential ? ' · essential' : ''}${detail ? '' : ` · sent ${n(sent)} in the window`} · ${mail.real ? (mail.version ? `Latest stable release ${esc(mail.version)}` : 'Real release preview') : 'Sample data'}</p>
-${mail.error ? `<p>Cannot render: ${esc(mail.error)}</p>` : `<p><b>${esc(mail.subject)}</b></p><iframe sandbox title="${esc(mail.name)}" srcdoc="${esc(mail.html)}"></iframe>
+${mail.error ? `<p>Cannot render: ${esc(mail.error)}</p>` : `${mail.pendingMessage ? `<p role="status">${esc(mail.pendingMessage)}</p>` : ''}<p><b>${esc(mail.subject)}</b></p><iframe sandbox title="${esc(mail.name)}" srcdoc="${esc(mail.html)}"></iframe>
 ${notice?.template === mail.name ? notice.html : ''}
-<form method="post" action="/admin/growth/email"><input type="hidden" name="template" value="${esc(mail.name)}">${mail.real ? `<input type="hidden" name="release" value="${esc(mail.version)}">` : ''}${detail ? '<input type="hidden" name="detail" value="1">' : ''}<button type="submit">Send to test inbox</button></form>
-<form class="personal-test" method="post" action="/admin/growth/email"><input type="hidden" name="template" value="${esc(mail.name)}"><input type="hidden" name="mine" value="1">${mail.real ? `<input type="hidden" name="release" value="${esc(mail.version)}">` : ''}${detail ? '<input type="hidden" name="detail" value="1">' : ''}<div class="test-address"><label for="test-address-${esc(mail.name)}">Your email address</label><input id="test-address-${esc(mail.name)}" type="email" name="to" placeholder="you@example.com" autocomplete="email" required></div><button type="submit">Send to my email</button></form>`}</section>`;
+${mail.noDraft ? '' : `<form method="post" action="/admin/growth/email"><input type="hidden" name="template" value="${esc(mail.name)}">${mail.real ? `<input type="hidden" name="release" value="${esc(mail.version)}">` : ''}${detail ? '<input type="hidden" name="detail" value="1">' : ''}<button type="submit">Send to test inbox</button></form>
+<form class="personal-test" method="post" action="/admin/growth/email"><input type="hidden" name="template" value="${esc(mail.name)}"><input type="hidden" name="mine" value="1">${mail.real ? `<input type="hidden" name="release" value="${esc(mail.version)}">` : ''}${detail ? '<input type="hidden" name="detail" value="1">' : ''}<div class="test-address"><label for="test-address-${esc(mail.name)}">Your email address</label><input id="test-address-${esc(mail.name)}" type="email" name="to" placeholder="you@example.com" autocomplete="email" required></div><button type="submit">Send to my email</button></form>`}`}</section>`;
 
 const REASONS = {off: 'Email sending is switched off or its sender is unavailable.', marketing_off: 'Product news sending is switched off.', rate: 'The daily sending limit was reached. Try again tomorrow.', unsubscribed: 'This address has unsubscribed from this kind of email.', suppressed: 'This address is blocked after a bounce or complaint.', failed: 'The email provider could not send this message. Check the failure log and try again.', bad_address: 'Enter a valid email address.', no_release: 'No stable release draft is available yet.'};
 
@@ -45,15 +45,16 @@ const noticeOf = (value, destination) => {
 const realRelease = async env => {
   const version = await latestStableVersion(env);
   const row = version && await env.STATS.prepare('SELECT data,status FROM release_mail WHERE version = ?').bind(version).first();
-  const data = row && await releaseData(env, {...JSON.parse(row.data), version}, {status: row.status});
-  return data ? {name: 'release', list: 'marketing', real: true, version, ...compose('release', data, {stop: '#', settings: '#'})}
+  const data = version && await releaseData(env, {...(row ? JSON.parse(row.data) : {}), version}, {status: row?.status});
+  return data ? {name: 'release', list: 'marketing', real: true, version, noDraft: !row,
+    pendingMessage: row ? '' : (data.sections.length ? 'The release email draft is not ready yet. This is the real changelog for the latest stable; sending is unavailable until its draft is prepared.' : 'No user-visible changes since the previous stable. No release email has been prepared.'), ...compose('release', data, {stop: '#', settings: '#'})}
     : {name: 'release', list: 'marketing', real: true, error: 'No stable release draft is available yet.'};
 };
 
 const releasesOf = async env => newestFirst((await env.STATS.prepare("SELECT r.version,r.status FROM release_mail r JOIN changelog_entries c ON c.version=r.version WHERE c.channel='stable'").all()).results || []);
 const releaseLinks = releases => `<section class="card"><h2>Release emails</h2><p><a href="/admin/growth/email?template=release">Review latest stable email</a></p><p class="muted">Stable releases only. Open a draft to review, test and send changes since the previous stable.</p>${releases.length ? `<ul class="release-list">${releases.map(row => `<li><a href="/admin/growth/email?release=${esc(row.version)}">Version ${esc(row.version)}</a> <span class="muted">· ${esc(row.status)}</span></li>`).join('')}</ul>` : '<p class="muted">No stable release drafts yet.</p>'}</section>`;
 
-const templatePage = (mail, notice) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(mail.name)} email template · Admin</title><style>${TEMPLATE_STYLE}.tpl iframe{display:block;width:100%;box-sizing:border-box;border:1px solid #2c3340;border-radius:8px;background:#fff}.tpl button{cursor:pointer;border:1px solid #f5b54a;background:#1b2027;color:#f5b54a}</style></head><body><main><header><div><a href="/admin/growth/email">← All email</a><h1>${esc(mail.name)} email template</h1><p class="muted">Sample preview. For a real release draft, return to Release emails.</p></div></header>${templateCard(mail, 0, notice, true)}</main></body></html>`;
+const templatePage = (mail, notice) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(mail.name)} email template · Admin</title><style>${TEMPLATE_STYLE}.tpl iframe{display:block;width:100%;box-sizing:border-box;border:1px solid #2c3340;border-radius:8px;background:#fff}.tpl button{cursor:pointer;border:1px solid #f5b54a;background:#1b2027;color:#f5b54a}</style></head><body><main><header><div><a href="/admin/growth/email">← All email</a><h1>${mail.real ? `Release email · ${esc(mail.version)}` : `${esc(mail.name)} email template`}</h1><p class="muted">${mail.real ? 'Latest stable changelog. No message is sent by viewing this page.' : 'Sample preview. For a real release draft, return to Release emails.'}</p></div></header>${templateCard(mail, 0, notice, true)}</main></body></html>`;
 
 export function page(data, accounts = null, notice = null, audience = null, releases = [], releaseMail) {
   const tile = (label, value, note) => `<section class="card tile"><span class="muted">${label}</span><b>${n(value)}</b><span class="muted">${note}</span></section>`;
@@ -89,7 +90,9 @@ export async function view(request, env) {
   const headers = {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'};
   if (url.searchParams.get('template') === 'release') {
     const version = await latestStableVersion(env);
-    return version ? new Response(null, {status: 302, headers: {Location: `/admin/growth/email?release=${version}`, 'Cache-Control': 'no-store'}}) : new Response('No stable release draft is available yet.', {status: 404});
+    if (!version) return new Response('No stable release draft is available yet.', {status: 404});
+    const row = await env.STATS.prepare('SELECT 1 AS x FROM release_mail WHERE version = ?').bind(version).first();
+    return row ? new Response(null, {status: 302, headers: {Location: `/admin/growth/email?release=${version}`, 'Cache-Control': 'no-store'}}) : new Response(templatePage(await realRelease(env), notice), {headers});
   }
   if (url.searchParams.has('template')) {
     const mail = previews().find(mail => mail.name === url.searchParams.get('template'));

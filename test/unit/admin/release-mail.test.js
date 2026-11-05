@@ -408,3 +408,23 @@ test('a release test from an already open template page returns visible feedback
   const html = await (await emailView(new Request(destination, {headers}), e)).text();
   assert.match(html, /Test of release 0\.8\.42 sent to reviewer@example\.com/);
 });
+
+test('latest stable without a draft shows its real changelog as pending instead of an older draft or 404', async () => {
+  const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
+  await draft(e, '0.8.42', now);
+  e.STATS.db.prepare('INSERT INTO changelog_entries (version,date,channel,hidden,body,at) VALUES (?,?,?,?,?,?)').run('0.8.43', '2026-11-05', 'stable', 0, JSON.stringify([{kind: 'fixes', items: [{lead: 'Newest real change', text: 'The newest stable works.'}]}]), 'x');
+  const response = await emailView(new Request('https://www.jobadabra.top/admin/growth/email?template=release', {headers: {Authorization: 'Bearer owner-key'}}), e);
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /0\.8\.43/); assert.match(html, /Newest real change/);
+  assert.match(html, /draft is not ready yet/i);
+  assert.doesNotMatch(html, /<form|Sample preview|See why each job fits/);
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) n FROM release_mail WHERE version='0.8.43'").get().n, 0, 'view never creates a draft');
+  assert.equal(sent.length, 0);
+  e.STATS.db.prepare("UPDATE changelog_entries SET hidden=1, body='[]' WHERE version='0.8.43'").run();
+  const empty = await (await emailView(new Request('https://www.jobadabra.top/admin/growth/email?template=release', {headers: {Authorization: 'Bearer owner-key'}}), e)).text();
+  assert.match(empty, /No user-visible changes since the previous stable/);
+  assert.match(empty, /November 2026/);
+  assert.doesNotMatch(empty, /<form/);
+
+});
