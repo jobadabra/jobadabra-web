@@ -26,8 +26,11 @@ export function workflowOf(claims) {
 /** Takes the header the Worker set (internal, built fresh from the claims); returns a name the tally may key on, else "unknown". "admin" is the owner's smoke call. */
 export const workflowKey = value => (/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\.ya?ml$/.test(String(value || '')) || value === 'admin' ? String(value) : 'unknown');
 
-/** Takes an answer's `tokens` ({input, output}); returns their sum, 0 when the engine reported none. */
-export const tokensOf = tokens => (Number.isFinite(tokens?.input) ? tokens.input : 0) + (Number.isFinite(tokens?.output) ? tokens.output : 0);
+/**
+ * Takes an answer's `tokens` ({input, output, counted?}); returns what the broker counted for it: `counted` when the answer names it (a Codex call: input plus output, or for a kept conversation input minus cached plus output; lib/sessions.mjs), else input plus output; 0 when the engine reported none.
+ * Why ([bf], 5 Nov 2026): the workflow and job rows must show the number the week meter used, not the conversation's cached context again.
+ */
+export const tokensOf = tokens => (Number.isFinite(tokens?.counted) ? tokens.counted : (Number.isFinite(tokens?.input) ? tokens.input : 0) + (Number.isFinite(tokens?.output) ? tokens.output : 0));
 
 /**
  * Adds one call to the tally and returns the new tally {days: {<YYYY-MM-DD>: {<workflow>: {calls, ok, tokens, ms, engines: {<engine>: n}}}}}; days older than KEEP_DAYS are dropped.

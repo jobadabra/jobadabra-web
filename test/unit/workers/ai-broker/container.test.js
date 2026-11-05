@@ -10,6 +10,7 @@ import {spawn as spawnProcess} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {buildArgs} from '../../../../workers/ai-broker/lib/args.mjs';
 import {weeklyWindow} from '../../../../workers/ai-broker/container/weekly.mjs';
+import {readTurn, threadTable, transient, turnUsage} from '../../../../workers/ai-broker/container/threads.mjs';
 
 test('a multi-megabyte fixer prompt reaches the child intact without entering argv', async t => {
   const dir = fs.mkdtempSync(path.join((await import('node:os')).tmpdir(), 'broker-stdin-'));
@@ -38,7 +39,7 @@ test('a multi-megabyte fixer prompt reaches the child intact without entering ar
   };
   vm.runInNewContext(fs.readFileSync(new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, ''), {
     http: {createServer(fn) { handler = fn; return {listen() {}}; }},
-    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, Buffer, setTimeout, clearTimeout,
+    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, transient, turnUsage, Buffer, setTimeout, clearTimeout, setInterval,
     process: {env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: ''}},
   });
   const prompt = '--private fixture\n' + 'é'.repeat(2 * 1024 * 1024);
@@ -85,7 +86,7 @@ test('the container passes search through to Codex and preserves ordinary replie
   const source = fs.readFileSync(new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url), 'utf8');
   vm.runInNewContext(source.replace(/^import .*;\n/gm, ''), {
     http: {createServer(fn) { handler = fn; return {listen() {}}; }},
-    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, Buffer, setTimeout, clearTimeout,
+    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, transient, turnUsage, Buffer, setTimeout, clearTimeout, setInterval,
     process: {env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: ''}},
   });
   for (const option of [{}, {search: false}, {search: true}]) {
@@ -98,7 +99,7 @@ test('the container passes search through to Codex and preserves ordinary replie
     request.emit('end');
     const {status, body} = await result;
     assert.equal(status, 200);
-    assert.deepEqual(body, {reply: 'offline reply', tokens: {input: 2, output: 3}, ms: body.ms, limits: null, authFile: ''});
+    assert.deepEqual(body, {reply: 'offline reply', tokens: {input: 2, cached: 0, output: 3}, ms: body.ms, limits: null, authFile: ''});
     assert.deepEqual(calls.at(-1), ['exec', '--skip-git-repo-check', '--ignore-user-config', '--ephemeral', '-s', 'read-only', '--disable', 'shell_tool', '--json', '-o', 'out.txt', '-m', 'gpt-6.1-sol', '--output-schema', 'schema.json', '-i', 'img0.png', ...(option.search ? ['-c', 'web_search="live"'] : []), '--', '-']);
     assert.deepEqual(fs.readdirSync(dir), ['home'], 'call files are removed after every call');
   }
@@ -144,7 +145,7 @@ test('the Codex week figure is read once, then served from memory and refreshed 
   };
   const load = ttl => vm.runInNewContext(fs.readFileSync(new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, ''), {
     http: {createServer(fn) { handler = fn; return {listen() {}}; }},
-    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, Buffer, setTimeout, clearTimeout,
+    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, transient, turnUsage, Buffer, setTimeout, clearTimeout, setInterval,
     process: {env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: '', LIMITS_TTL_MS: String(ttl)}},
   });
   const call = () => new Promise(resolve => {
