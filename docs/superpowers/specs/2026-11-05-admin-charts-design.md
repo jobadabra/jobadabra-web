@@ -377,28 +377,33 @@ Rules that hold for all seven:
 - Lookup tables are not restyled (the table tools stay as they are).
 - No new gate, guard or CI check (owner rule: a gate only if it pays).
 
-## PR plan (title `[ac] n/7 …`)
+## Re-triage by the owner's rule (5 Nov 2026)
+Measured, not guessed: `tools/site-run.sh` over every admin page on demo data, 115 tables on 41 pages; per table the share of body cells that carry colour (a chip, bar, dot, strip, swatch, coloured text, a status icon) and the share that are plain numbers. A table is a target only if NO body cell carries colour or an icon, at least 30% of its cells are plain numbers and it has 3+ rows.
+
+| Result | Tables |
+|---|---|
+| Plain tables of numbers (the target) | 27, of which 12 are done or need nothing: AI → Costs 9 (#384), E2E 2 (#386), Self-healing Trend 1 (already the table view of line charts) |
+| Still to do | **13** charts (15 tables: the Finder table repeats for 3 periods): Self-healing 2, Growth 5, Job search 5, Agent coding 1 |
+| Stay tables: colour or icons on their cells (Speed, Scorecard, AI steadiness, suite cost, layers, GTM Tier 2, Synthetics, the health map…), lookups, logs, lists, tables under 3 rows | 88 |
+
+The first inventory (143 sections, 94 charts) counted a table by what it answers; the rule counts it by what its cells look like, so the chart count falls from 94 to the 27 plain tables above. Not rendered on demo data (empty or in a state the seeds do not reach) are not counted; a PR that meets one applies the same test.
+
+## PR plan (re-planned 5 Nov 2026; titles `[ac] n/7` for #384 and #386, `[ac] n/5` from PR 3)
 | PR | Scope | Charts |
 |---|---|---|
-| 1/7 | The module + AI → Costs and Engines (the owner's 7 sections first) | 11 |
-| 2/7 | Testing: E2E, Integrations, PR checks | 12 |
-| 3/7 | Testing: Overview, Synthetics, GTM Tier 2, Self-healing | 6 |
-| 4/7 | Agent Coding: Agent coding, Overview | 6 |
-| 5/7 | Growth: App, E-mail, Insights, Monetization | 21 |
-| 6/7 | Form filling: Real users, Learning, Lab, Benchmark | 19 |
-| 7/7 | Job search: Lab, Scouting, Installs, Benchmark | 19 |
+| 1/7 (#384, merged) | The module + AI → Costs and Engines | 11 |
+| 2/7 (#386) | Testing: PR e2e cost vs catch, Changed files, Slowest 10 tests, PR checks (rescoped by the rule) | 4 |
+| 3/5 | Self-healing: Finder per detector, closing labels | 2 |
+| 4/5 | Growth: E-mail (4 tables), Insights (What the AI costs us) | 5 |
+| 5/5 | Job search: Benchmark, Scouting (4 tables); Agent coding: CI minutes per push | 6 |
 
-PRs 5–7 hold 19–21 charts each; if one grows past what a reviewer reads in a sitting, it splits by page (5a/5b…), the numbering updates here.
 AI → Costs was shared with session `ca`; its per-job PR (#379) is merged, so the Costs files are free and ca edits none unless asked. Kept as ca built them: the workflow card's per-job sub-rows (`/health` `jobs`, "|other" is the shared overflow key) and the rings card above "Who answered today".
 
 ## Progress
-- [x] Inventory (41 pages, 114 tables on demo data, 28 more found in source)
-- [x] Spec
-- [x] Sketch and the owner's yes (5 Nov 2026: "Yes, as sketched"; https://claude.ai/artifact/GdfzfegP7Xz1H93f5ffKv5)
-- [x] 1/7 Module + AI → Costs (#384, merged 5 Nov 2026)
-- [x] 2/7 Testing: E2E, Integrations, PR checks (rescoped by the rule above: 4 charts; Speed, Scorecard, AI steadiness, suite cost and layers stay tables)
-- [ ] 3/7 Testing: Overview, Synthetics, GTM, Self-healing
-- [ ] 4/7 Agent Coding
-- [ ] 5/7 Growth
-- [ ] 6/7 Form filling
-- [ ] 7/7 Job search
+- [x] Inventory, spec, sketch and the owner's yes
+- [x] Rule from the owner: only plain colourless number tables become charts (re-triage above)
+- [x] 1/7 Module + AI → Costs (#384, merged)
+- [ ] 2/7 Testing: four plain tables (#386, ready, kept as rescoped)
+- [ ] 3/5 Self-healing (2)
+- [ ] 4/5 Growth (5)
+- [ ] 5/5 Job search + Agent coding (6)
