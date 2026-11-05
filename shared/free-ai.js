@@ -91,9 +91,12 @@ export async function freeAi(request, env, now = new Date(), ctx = null, fetcher
   let body;
   try { body = await request.json(); } catch { return error(400, 'Bad request.', 'invalid_request_error'); }
   const routed = pro?.account ? proRoute(request.headers.get('x-jp-action'), env) : null;   // a Pro account with credit, on a step with a measured Claude gain (shared/pro-claude.js); Free never
+  const began = Date.now();   // before a Pro step's Claude try (up to 50 s, shared/pro-claude.js), so a 502's ms= counts it (Gitar on #414)
   const claude = routed ? await claudeCall(env, routed, body, fetcher) : null;   // null on any failure: Workers AI answers below
   const model = claude ? routed : modelFor(request.headers.get('x-jp-action'), env);
   let result;
+  // Why (5 Nov 2026, the first production hosted run: two 502s after 163 s and 173 s with no reason logged): a 502 names its cause.
+  const failed = cause => { console.error(`free-ai 502: ${cause} model=${model}${routed ? ` claude=${routed} failed` : ''} action=${request.headers.get('x-jp-action') || '-'} ms=${Date.now() - began}`); return error(502, 'Free AI could not answer just now.'); };
   if (!claude) try {
     const readPdf = async base64 => {
       const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
@@ -105,13 +108,13 @@ export async function freeAi(request, env, now = new Date(), ctx = null, fetcher
     // Live (16 Oct 2026, 1 of 30): the model looped on whitespace to the token limit. A structured ask gets one more try, and both attempts are paid for.
     if (input.response_format && !isJson(fromWorkersAi(result, model).content[0].text)) {
       const first = fromWorkersAi(result, model).usage, again = await env.AI.run(model, {...input, temperature: body.temperature ?? 0.3});
-      if (!isJson(fromWorkersAi(again, model).content[0].text)) return error(502, 'Free AI could not answer just now.');
+      if (!isJson(fromWorkersAi(again, model).content[0].text)) return failed('two bad JSON replies');
       result = {...again, usage: {prompt_tokens: (again.usage?.prompt_tokens || 0) + first.input_tokens, completion_tokens: (again.usage?.completion_tokens || 0) + first.output_tokens}};
     }
   } catch (caught) {
     if (/daily free allocation|4006/i.test(String(caught?.message))) return error(503, BUSY);
     if (caught instanceof Unsupported) return error(422, `${caught.message} Add your own key in Settings → Connections → AI for this step.`, 'invalid_request_error');
-    return error(502, 'Free AI could not answer just now.');
+    return failed(`Workers AI failed: ${String(caught?.message || caught).slice(0, 200)}`);
   }
   const message = claude ? claude.message : fromWorkersAi(result, model);
   const used = message.usage.input_tokens + message.usage.output_tokens, usd = claude ? claude.usd : costUsd(model, message.usage);

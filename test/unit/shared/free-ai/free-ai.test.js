@@ -205,6 +205,20 @@ test('a second bad reply is a clear 502, never invalid text passed on as an answ
   assert.equal(e.seen.length, 2);
 });
 
+test('every 502 says in the log which path failed, on which model and step, after how long', async t => {
+  // Why (5 Nov 2026, the first production hosted run): two calls answered 502 after 163 s and 173 s and the log held no reason.
+  const lines = [];
+  t.mock.method(console, 'error', (...args) => lines.push(args.join(' ')));
+  const e = env();
+  e.AI.run = async (model, input) => { e.seen.push({model, input}); return runaway; };
+  await call(e, await key(), schemaBody, {'x-jp-action': 'places'});
+  e.AI.run = async () => { throw new Error('upstream timed out (3040)'); };
+  await call(e, await key(), schemaBody, {'x-jp-action': 'roles'});
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /free-ai 502: two bad JSON replies .*model=\S+ .*action=places .*ms=\d+/);
+  assert.match(lines[1], /free-ai 502: Workers AI failed: upstream timed out \(3040\) .*action=roles .*ms=\d+/);
+});
+
 test('a plain-text ask is never retried', async () => {
   const e = env();
   await call(e, await key());
