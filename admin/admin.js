@@ -48,7 +48,7 @@ export const PAGES = [
   {path: '/admin/testing/ai-persona', group: 'Testing', question: 'What did the AI persona do in each run, which bugs did it argue, and can I watch it?', name: 'AI persona', slug: 'ai-persona', icon: '🤖'},
   {path: '/admin/testing/e2e', group: 'Testing', question: 'Where does our e2e fixing time go: which suites go red, and why?', old: ['/admin/operations/e2e'], name: 'E2E', icon: '🧪'},
   {path: '/admin/testing/gtm-readiness', group: 'Testing', question: 'How ready is the app for go-to-market: how stable is each critical journey?', old: [], name: 'GTM', slug: 'gtm-readiness', icon: '🚦'},
-  {path: '/admin/testing/report-only', group: 'Testing', question: 'What do the nightly measurements say: AI quality, wall clock, explorers, finders, planted bugs?', name: 'Report only', icon: '📊'},
+  {path: '/admin/testing/report-only', group: 'Testing', question: 'How are we doing: form filling, AI quality, speed, reliability, bugs?', name: 'Report only', icon: '📊'},
   {path: '/admin/testing/integrations', group: 'Testing', question: 'Are the integration tests green, quick and steady, and how much of e2e has moved to them?', old: ['/admin/operations/integrations'], name: 'Integrations', icon: '🧩'},
   {path: '/admin/testing/pr-checks', group: 'Testing', question: 'Do our PR checks catch real bugs, and how long do they make us wait?', old: ['/admin/operations/pr-checks'], name: 'PR checks', icon: '✅'},
   {path: '/admin/testing/self-healing', group: 'Testing', question: 'Do the automatic loops find and fix problems on their own?', old: ['/admin/self-healing', '/self-heal', '/admin/operations/self-healing'], name: 'Self-healing', icon: '🔁'},

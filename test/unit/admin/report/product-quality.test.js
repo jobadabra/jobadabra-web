@@ -195,7 +195,7 @@ test('the page never goes down with the board: a failing board is null, the page
   const response = await worker.fetch(new Request('https://www.jobpilotto.top/admin/testing/report-only', {headers: {Cookie: 'jp_stats=k3y'}}), env, {});
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Did the nightly jobs run/);
+  assert.match(html, /Plumbing: did the nightly jobs run/);
   assert.match(html, /0 of 5 areas on target/);
   assert.ok(errors.mock.calls.some(call => /fill cards unreadable: boom/.test(String(call.arguments[0]))), 'the broken source is named in the log');
 });
