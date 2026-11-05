@@ -4,6 +4,7 @@
 import {esc} from '../shared/html.js';
 import {chip, CHIP_STYLE} from './chip.js';
 import {verdictBand} from './verdict-band.js';
+import {chartOf} from './product-quality-charts.js';
 
 const ICON = {good: '✓', warn: '!', bad: '✕', none: '–'};
 const TONE = {good: 'good', warn: 'warn', bad: 'bad', none: 'off'};
@@ -15,6 +16,7 @@ export const QUALITY_STYLE = `${CHIP_STYLE}
 .qc .num{font-size:32px;font-weight:600;line-height:1.05;font-variant-numeric:tabular-nums}.qc .num small{font-size:14px;font-weight:400;color:#8d949c}.qc .lbl{font-size:13px;color:#8d949c}
 .qc .sub{font-size:12.5px;color:#8d949c;display:grid;gap:2px}.qc .sub b{color:inherit;font-weight:600}.qc .src{font-size:11.5px;color:#6b7580}
 .qc.nm{border-style:dashed;background:transparent}.qc.nm .num{font-size:20px;color:#8d949c}
+.qc .vz{margin:2px 0}.qc .vz-more table{width:100%;border-collapse:collapse;font-size:12.5px}.qc .vz-more th,.qc .vz-more td{text-align:left;padding:3px 8px;border-bottom:1px solid #262c33}.qc .vz-more .tw{max-height:260px;overflow:auto}
 .qhead{margin:26px 0 8px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8d949c}.qhead .muted{text-transform:none;letter-spacing:0;font-weight:400}`;
 
 const iconOf = tone => ICON[tone] ?? ICON.none, toneOf = tone => TONE[tone] ?? TONE.none;
@@ -33,10 +35,10 @@ export function areaCard(area, chart = '') {
 // What the owner asked for that nothing collects yet: a dashed card each, with where it could come from.
 const gapCard = gap => `<section class="card qc nm"><div class="hd"><span class="area">${esc(gap.area)}</span>${chip('– not measured', 'off')}</div><div class="q">${esc(gap.question)}</div><div class="num">not collected yet</div><div class="sub"><span>${esc(gap.why)}</span></div></section>`;
 
-/** The board: the verdict band, the five area cards, the two "not collected yet" cards. `quality` = qualityModel(inputs); `charts` = {areaId: html} (2/3). */
-export function board(quality, charts = {}) {
+/** The board: the verdict band, the five area cards (each with its chart), the two "not collected yet" cards. `quality` = qualityModel(inputs). */
+export function board(quality) {
   const {verdict, areas, gaps} = quality;
   const band = verdictBand({icon: verdict.icon, headline: verdict.headline, chips: verdict.chips.map(item => ({label: `${iconOf(item.tone)} ${item.area} · ${item.word}`, tone: toneOf(item.tone)})),
     note: 'Last 7 days against the 7 before. Every number is collected data; a source with none says "not measured", never 0.'});
-  return `<div class="qhead">📈 How are we doing <span class="muted">· what a job seeker feels, one number per area</span></div>${band}<div class="qgrid">${areas.map(area => areaCard(area, charts[area.id] || '')).join('')}${gaps.map(gapCard).join('')}</div>`;
+  return `<div class="qhead">📈 How are we doing <span class="muted">· what a job seeker feels, one number per area</span></div>${band}<div class="qgrid">${areas.map(area => areaCard(area, chartOf(area))).join('')}${gaps.map(gapCard).join('')}</div>`;
 }
