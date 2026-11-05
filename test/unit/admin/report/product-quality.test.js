@@ -154,6 +154,12 @@ test('the reader: one pass over the site tables gives the inputs; a broken sourc
   assert.deepEqual(inputs.newProblems.map(row => [row.day, row.n]).sort(), [[DAYS(9), 1], [DAYS(3), 1]]);
   assert.equal(inputs.sentry, null, 'no Sentry token: not measured');
   assert.equal(inputs.finders, null, 'no self-healing snapshot: not measured');
+  const heal = (back, fixed) => db.prepare('INSERT INTO selfheal_snapshots (day, at, body) VALUES (?, ?, ?)').run(DAYS(back), `${DAYS(back)}T04:00:00Z`, JSON.stringify({periods: {last7: {byDetector: [{detector: 'Layout and DOM checks', fixed, queued: 1}]}}}));
+  heal(20, 9);
+  assert.equal((await loadInputs(env, now)).finders, null, 'a snapshot three weeks old is not this week: a stopped job is not measured, never a stale count');
+  heal(2, 3);
+  assert.equal((await loadInputs(env, now)).finders, 4, 'a snapshot of the last 7 days counts (fixed + queued)');
+  db.exec('DELETE FROM selfheal_snapshots');
   const areas = areasOf(inputs);
   assert.deepEqual(areas.map(area => [area.id, area.trend]), [['form', 'new'], ['ai', 'none'], ['speed', 'thin'], ['reliability', 'new'], ['bugs', 'none']]);
   assert.equal(areas[0].value, '70', '28 of 40 required fields filled in the last 7 days');
