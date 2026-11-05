@@ -20,10 +20,11 @@ test('the Hosted data is staging\'s own: D1, KV, bucket and queue', () => {
   for (const production of ['61f8d0f7-82c2-4afe-a6e5-508aaaf2cfa0', 'a871d4644b614266b5bfa7f1b5e811c1', 'bucket_name = "hosted-state"', 'queue = "hosted-runs"']) assert.ok(!staging.includes(production), `production's ${production} is gone`);
 });
 
-test('Always on is on in staging, and its runs call staging back, while production stays off', () => {
+test('Always on is on in staging and production, and only staging\'s runs call staging back', () => {
   assert.match(staging, /^HOSTED_ALWAYS_ON = "on"/m);
   assert.match(staging, /^HOSTED_SITE = "https:\/\/www-staging\.jobpilotto\.workers\.dev"/m);
-  assert.match(toml, /^HOSTED_ALWAYS_ON = "off"/m, 'the committed config is production and stays off: the flip is the owner\'s');
+  // Why (5 Nov 2026, owner: "let's make it production ready", "go ahead with everything"): the owner's flip; "off" again is the rollback (every hosted route answers 404).
+  assert.match(toml, /^HOSTED_ALWAYS_ON = "on"/m, 'production is on since the owner\'s flip (5 Nov 2026)');
   assert.ok(!/^HOSTED_SITE/m.test(toml));
 });
 

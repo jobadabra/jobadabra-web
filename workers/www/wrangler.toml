@@ -89,7 +89,8 @@ STRIPE_PRICE_TOPUP5 = ""
 STRIPE_PRICE_TOPUP10 = ""
 STRIPE_PRICE_TOPUP20 = ""
 # Hosted Always on (shared/hosted.js, spec docs/superpowers/specs/2026-10-16-hosted-always-on.md): "off" = every route answers 404, "on" = the owner flips it after the end-to-end test.
-HOSTED_ALWAYS_ON = "off"
+# Why (5 Nov 2026, owner: "let's make it production ready", "go ahead with everything"): on after the staging proof (44 jobs, mail sent), with HOSTED_KEK set and the production runner deployed.
+HOSTED_ALWAYS_ON = "on"
 HOSTED_MAX_RUNS_DAY = "2000"         # global cap of hosted runs a day (api/hosted-tick.js); trial runs are capped first by HOSTED_TRIAL_MAX_RUNS_DAY
 HOSTED_TRIAL_MAX_RUNS_DAY = "1500"
 HOSTED_RUN_MICRO = "11000"   # compute debited per finished run, micro-USD: 2x the $0.0055 measured in a container (owner, 17 Oct 2026: "$0.011, keep 2x")

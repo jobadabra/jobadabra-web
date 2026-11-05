@@ -24,10 +24,10 @@ export function stagingToml(toml, name = 'www-staging') {
       .replace(`id = "${PRODUCTION.kvId}"`, `id = "${STAGING_DATA.kv.id}"`)
       .replace(`bucket_name = "${PRODUCTION.bucket}"`, `bucket_name = "${STAGING_DATA.hostedBucket}"`)
       .replace(`queue = "${PRODUCTION.queue}"`, `queue = "${STAGING_DATA.hostedQueue}"`)
-      .replace(/^HOSTED_ALWAYS_ON = "off"/m, `HOSTED_ALWAYS_ON = "on"\nHOSTED_SITE = "https://${name}.jobpilotto.workers.dev"`);
+      .replace(/^HOSTED_ALWAYS_ON = "(off|on)"/m, `HOSTED_ALWAYS_ON = "on"\nHOSTED_SITE = "https://${name}.jobpilotto.workers.dev"`);   // Why (5 Nov 2026, hr flip): production is "on" now; matching "off" only dropped HOSTED_SITE, so staging's runs would call production
     // Each rewrite must have landed: a binding the file no longer has in the shape the replace expects would otherwise leave production's data in place without a word.
     for (const [what, landed] of [['D1', toml.includes(`database_id = "${STAGING_DATA.d1.id}"`) && !toml.includes(PRODUCTION.d1Id)], ['KV', toml.includes(`id = "${STAGING_DATA.kv.id}"`) && !toml.includes(PRODUCTION.kvId)],
-      ['bucket', toml.includes(`bucket_name = "${STAGING_DATA.hostedBucket}"`)], ['queue', toml.includes(`queue = "${STAGING_DATA.hostedQueue}"`)], ['switch', /^HOSTED_ALWAYS_ON = "on"/m.test(toml)]]) if (!landed) throw new Error(`staging config: the ${what} was not switched to staging's own`);
+      ['bucket', toml.includes(`bucket_name = "${STAGING_DATA.hostedBucket}"`)], ['queue', toml.includes(`queue = "${STAGING_DATA.hostedQueue}"`)], ['switch', /^HOSTED_ALWAYS_ON = "on"/m.test(toml) && toml.includes(`HOSTED_SITE = "https://${name}.jobpilotto.workers.dev"`)]]) if (!landed) throw new Error(`staging config: the ${what} was not switched to staging's own`);
   }
   if (/custom_domain/.test(toml) || !new RegExp(`^name = "${name}"`, 'm').test(toml) || /crons = \["/.test(toml)) throw new Error('staging config still has production routes, cron or name');
   return toml;
