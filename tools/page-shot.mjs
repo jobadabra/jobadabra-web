@@ -41,9 +41,11 @@ try {
       if (args.click) { await page.locator(String(args.click)).first().click(); await page.waitForTimeout(300); }
       if (args.then) { await page.locator(String(args.then)).first().click(); await page.waitForTimeout(300); }   // --then '<selector>': a second press after --click (a menu item, then its form; 3 Nov 2026)   // --click '<selector>': press it before the shot (an open dropdown); after --scroll
       if (args.clip) {   // Why (5 Nov 2026, owner: "the screenshots on the PRs … has nothing to do with the changes"): the PR's shot is the changed section, readable in a table cell; a selector that matches nothing fails, never a full-page fallback
-        const section = page.locator(String(args.clip)).first();
-        try { await section.waitFor({state: 'visible', timeout: 3000}); } catch { failed = true; console.error(`NO SECTION ${pagePath} at ${width}px ${theme}: --clip '${args.clip}' matches nothing visible`); await context.close(); continue; }
-        await section.screenshot({path: file});
+        const sections = page.locator(String(args.clip));
+        await sections.first().waitFor({state: 'visible', timeout: 3000}).catch(() => {});
+        const found = await sections.count();
+        if (found !== 1) { failed = true; console.error(`${found ? 'AMBIGUOUS SECTION' : 'NO SECTION'} ${pagePath} at ${width}px ${theme}: --clip '${args.clip}' matches ${found}; it must match exactly one element (the changed card), never the first of several`); await context.close(); continue; }
+        await sections.screenshot({path: file});   // a popover opened by --click that sits outside this element is not in the image: clip its container
       } else await page.screenshot({path: file, fullPage: !!args.full});
       console.log(file);
     }

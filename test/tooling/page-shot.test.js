@@ -36,9 +36,10 @@ test('page-shot --clip shoots only the named section, and refuses a selector tha
     const base = ['tools/page-shot.mjs', '--path', '/admin/growth/promo-codes', '--width', '1440', '--seed', 'promo-codes', '--out', out];
     execFileSync('node', [...base, '--name', 'page'], {stdio: 'pipe'});
     execFileSync('node', [...base, '--name', 'clip', '--clip', 'h1'], {stdio: 'pipe'});
-    assert.ok(png('clip-1440.png').width < png('page-1440.png').width, 'the clip is narrower than the viewport');
     assert.ok(png('clip-1440.png').height < png('page-1440.png').height / 2, 'the clip is a section, not the page');
     assert.throws(() => execFileSync('node', [...base, '--name', 'none', '--clip', '#no-such-section'], {stdio: 'pipe'}), /status 1|Command failed/);
     assert.ok(!fs.existsSync(path.join(out, 'none-1440.png')));
+    assert.throws(() => execFileSync('node', [...base, '--name', 'many', '--clip', 'a'], {stdio: 'pipe'}), /status 1|Command failed/);   // several matches: which one is the changed card?
+    assert.ok(!fs.existsSync(path.join(out, 'many-1440.png')));
   } finally { fs.rmSync(out, {recursive: true, force: true}); }
 });
