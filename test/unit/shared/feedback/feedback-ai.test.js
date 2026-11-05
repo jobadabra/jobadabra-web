@@ -88,10 +88,10 @@ test('when the run cannot be started the card goes straight back to new with the
   assert.deepEqual(log(e, ref).map(l => l.action), ['ai', 'ai_failed']);
 });
 
-test('startRun dispatches feedback-ai.yml with the timers\' token on the public repo, never the site\'s token; missing settings throw', async () => {
+test('startRun dispatches ai-fixer.yml (source feedback) with the timers\' token on the public repo, never the site\'s token; missing settings throw', async () => {
   const calls = [];
   await startRun({TIMERS_GITHUB_TOKEN: 't', TIMERS_REPO: REPO, GITHUB_TOKEN: 'site-token'}, 'abc', async (...args) => { calls.push(args); });
-  assert.deepEqual(calls.map(([e, inputs, workflow]) => [e.GITHUB_REPO, e.GITHUB_TOKEN, inputs, workflow]), [[REPO, 't', {ref: 'abc'}, 'feedback-ai.yml']]);
+  assert.deepEqual(calls.map(([e, inputs, workflow]) => [e.GITHUB_REPO, e.GITHUB_TOKEN, inputs, workflow]), [[REPO, 't', {source: 'feedback', ref: 'abc'}, 'ai-fixer.yml']]);
   await assert.rejects(() => startRun({TIMERS_REPO: 'x'}, 'abc', async () => {}), /TIMERS_GITHUB_TOKEN/);
   await assert.rejects(() => startRun({TIMERS_GITHUB_TOKEN: 'x'}, 'abc', async () => {}), /TIMERS_REPO/);
 });
