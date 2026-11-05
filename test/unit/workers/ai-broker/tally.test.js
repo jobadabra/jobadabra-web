@@ -24,6 +24,7 @@ test('tokens are input plus output; a missing or odd count is zero', () => {
   assert.equal(tokensOf({input: 2, output: 3}), 5);
   for (const tokens of [undefined, null, {}, {input: 'x', output: NaN}, 7]) assert.equal(tokensOf(tokens), 0);
   assert.equal(tokensOf({input: 4}), 4);
+  assert.equal(tokensOf({input: 504, cached: 20, cacheWritten: 100, output: 4}), 508, "a Claude answer's cache split is only shown: the tally counts input plus output, as before");
 });
 
 test('a call adds to its workflow and day; a refusal counts as a call with no tokens; engines are counted', () => {

@@ -39,7 +39,7 @@ const AUTH = /not logged in|please run \/login|invalid (x-api-key|api key|token|
 const LIMIT = /usage limit|limit reached|hit your .{0,30}limit|out of (extra )?usage|rate[ _-]?limit|too many requests|\b429\b/i;
 
 /**
- * Reads the CLI's stream-json output. Returns {reply, tokens: {input, output}, limits} on success, or {error: 'claude-auth' | 'claude-limit' | 'claude-failed:<code> <tail>', resetsAt?}.
+ * Reads the CLI's stream-json output. Returns {reply, tokens: {input, cached, cacheWritten, output}, limits} on success (`input` includes both cache parts), or {error: 'claude-auth' | 'claude-limit' | 'claude-failed:<code> <tail>', resetsAt?}.
  * "Ran out" is read from the stream's own rate_limit_event when it says the window is not allowed, else (only when no status was seen) from the error text; anything unknown is a plain failure (never guessed as "ran out").
  */
 export function readClaude(stdout, stderr = '', code = 0, timedOut = false) {
@@ -53,7 +53,9 @@ export function readClaude(stdout, stderr = '', code = 0, timedOut = false) {
   const limits = info ? {status: info.status, fiveHour: windows.five_hour ?? null, sevenDay: windows.seven_day ?? null} : null;
   if (result && !result.is_error && typeof result.result === 'string' && result.result.trim()) {
     const usage = result.usage || {};
-    return {reply: result.result, tokens: {input: (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0), output: usage.output_tokens || 0}, limits};
+    // Why (5 Nov 2026, a8, owner: "yes. Let's do" on measuring Claude's caching): `input` keeps folding both cache parts in (the week meter and the tally read it, unchanged); `cached` (read from the cache, Codex's meaning) and `cacheWritten` (stored in it) are only exposed, so a run's real cached share can be read.
+    const read = usage.cache_read_input_tokens || 0, written = usage.cache_creation_input_tokens || 0;
+    return {reply: result.result, tokens: {input: (usage.input_tokens || 0) + written + read, cached: read, cacheWritten: written, output: usage.output_tokens || 0}, limits};
   }
   if (timedOut) return {error: `claude-failed:timeout after ${CLAUDE_TIMEOUT_MS / 1000} s`, limits};   // killed by our timer: say so, not the tail of its stream
   const text = String(result?.result || stderr || stdout).replace(/\s+/g, ' ');
