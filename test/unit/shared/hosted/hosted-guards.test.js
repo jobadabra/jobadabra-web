@@ -119,6 +119,19 @@ test('the consumer starts one container per message, acknowledges all, and survi
   assert.deepEqual(posts[0], ['a1', {token: 'HR1.r1.t', site: 'https://s.test'}]);
 });
 
+test('the consumer logs the container\'s status and the reason it gave, never the run token', async () => {
+  // Why (5 Nov 2026, hr 6/6 try 3): the log said "POST http://container/run" and nothing about why the container answered 500.
+  const lines = [];
+  const msg = n => ({body: {run: `r${n}`, token: `HR1.r${n}.secret`, site: 'https://s.test', account: `a${n}`}, ack: () => {}});
+  const runner = () => ({fetch: async () => new Response(JSON.stringify({ok: false, error: 'URLError: name resolution HR1.r1.secret'}), {status: 500})});
+  const done = await consume({messages: [msg(1)]}, runner, {error: line => lines.push(line)});
+  assert.deepEqual(done, {ok: 0, failed: 1});
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /hosted run r1: container answered 500/);
+  assert.match(lines[0], /URLError: name resolution/);
+  assert.doesNotMatch(lines[0], /HR1\./);
+});
+
 test('wrangler.toml binds the state bucket and the queue, and the runner config consumes that queue', () => {
   const toml = readFileSync(new URL('../../../../workers/www/wrangler.toml', import.meta.url), 'utf8'), runner = readFileSync(new URL('../../../../workers/hosted-runner/wrangler.jsonc', import.meta.url), 'utf8');
   assert.match(toml, /binding = "HOSTED_STATE"\nbucket_name = "hosted-state"/);

@@ -10,7 +10,13 @@ export async function consume(batch, runner, log = console) {
     const {token, site, account} = message.body || {};
     try {
       const reply = await runner(account).fetch(new Request('http://container/run', {method: 'POST', body: JSON.stringify({token, site}), signal: AbortSignal.timeout(RUN_TIMEOUT_MS)}));
-      reply.ok ? done.ok++ : done.failed++;
+      if (reply.ok) done.ok++;
+      else {
+        done.failed++;
+        // Why (5 Nov 2026, hr 6/6 try 3): a container that answered 500 left only "POST http://container/run"; its status and the reason it gave say what to fix. The token never goes in a log.
+        const said = (await reply.text().catch(() => '')).replaceAll(token || '\u0000', '[run token]').slice(0, 400);
+        log.error(`hosted run ${message.body?.run}: container answered ${reply.status} ${said}`);
+      }
     } catch (error) {
       done.failed++;
       log.error(`hosted run ${message.body?.run}: ${error.message}`);
