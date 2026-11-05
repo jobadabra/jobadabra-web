@@ -6,6 +6,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {CODE_MINUTES, MAX_TRIES, start, verify} from '../../../api/pro-signin.js';
 import {digestOf, tokenFor} from '../../../shared/guard.js';
+import {DAILY_MAX} from '../../../shared/mail.js';
 import {createAccount, link} from '../../../shared/pro.js';
 
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
@@ -102,11 +103,11 @@ test('a trial account is not Pro: no code, and a refunded Pro account gets none'
   assert.equal(sent.length, 0);
 });
 
-test('the sixth code in a day is not mailed (the sender\'s limit), and the old code stays the live one', async () => {
+test('a code past the sender\'s daily limit is not mailed, and the old code stays the live one', async () => {
   const {e, sent} = setup();
   await proAccount(e);
-  for (let i = 0; i < 7; i++) await post(start, e, 'install-work', {email: 'pro@example.com'});
-  assert.equal(sent.length, 6);
+  for (let i = 0; i < DAILY_MAX + 1; i++) await post(start, e, 'install-work', {email: 'pro@example.com'});
+  assert.equal(sent.length, DAILY_MAX);
   assert.equal((await post(verify, e, 'install-work', {email: 'pro@example.com', code: codeIn(sent)})).ok, true);
 });
 

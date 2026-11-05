@@ -58,7 +58,7 @@ export function deferColumns(input) {
 
 /**
  * Makes the reply visible to the app and sends the e-mail when the owner ticked it and the contact is an address. -> the `told` value written.
- * The mail goes through send(): it refuses (never throws) an unsubscribed or bounced address, mail switched off or the 6-a-day limit; that refusal is written on the card, the app reply still shows.
+ * The mail goes through send(): it refuses (never throws) an unsubscribed or bounced address, mail switched off or the per-address limit; that refusal is written on the card, the app reply still shows.
  */
 export async function tellReporter(env, ref, now = new Date(), who = 'owner (told)') {
   const row = await env.STATS.prepare('SELECT at, text, contact, state, fixed_in, tell_message, tell_mail FROM feedback WHERE ref = ?').bind(ref).first();

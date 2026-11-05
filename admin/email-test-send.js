@@ -1,6 +1,6 @@
 // "Send to test inbox" on /admin/growth/email (owner, 26 Oct 2026: a button that sends a template to a test inbox). POST /admin/growth/email, owner only, from the page (same origin).
 // The default is a test-account-*@jobpilotto.top inbox; the owner may enter a personal address. Release tests use the real pinned stable draft, other templates use samples. All go through the real
-// send() (list rules, 6 a day, the log), so it counts in the caps like any mail. The copy that arrives is listed on the page from test_mail. Guard: test/unit/admin/email.test.js.
+// send() as a test (list rules, the log as test:<template>, outside the per-address cap: owner, 5 Nov 2026, "test emmail are aside of this cap"; the 3,000 a day still counts it). The copy that arrives is listed on the page from test_mail. Guard: test/unit/admin/email.test.js.
 import {isOwner} from '../shared/auth.js';
 import {send, validAddress} from '../shared/mail.js';
 import {TEMPLATES} from '../shared/mail-templates.js';
@@ -29,7 +29,7 @@ export async function testSend(request, env) {
     data = row && await releaseData(env, {...JSON.parse(row.data), version}, {status: row.status});
     if (data) data = {...data, name: '', test: true};
   }
-  const result = data ? await send(env, template, to, data) : {ok: false, reason: 'no_release'};
+  const result = data ? await send(env, template, to, data, {test: true}) : {ok: false, reason: 'no_release'};
   if (template === 'release' && data && form.get('detail') === '1') {
     const done = result.ok ? `Test of release ${data.version} sent to ${to}. The broadcast is unchanged.` : `Test of release ${data.version} not sent (${result.reason}).`;
     return new Response(null, {status: 303, headers: {Location: `/admin/growth/email?${new URLSearchParams({release: data.version, done})}`, 'Cache-Control': 'no-store'}});

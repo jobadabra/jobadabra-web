@@ -1,14 +1,17 @@
 // Our e-mail sender (Cloudflare Email Sending, binding EMAIL): send(env, template, to, data) is the one way any code mails a person. It refuses (never throws) on a bad address,
-// a bounce/complaint, an unsubscribe from the template's list, marketing without an opt-in, or more than 6 mails a day to one address; it adds the footer, the one-click
+// a bounce/complaint, an unsubscribe from the template's list, marketing without an opt-in, or more than DAILY_MAX mails a day to one address; it adds the footer, the one-click
 // unsubscribe link and headers, and logs the mail (hash of the address, never the body) in mail_log. Switch: env.MAIL = "on" (anything else sends nothing). Guard: test/unit/shared/mail/mail.test.js.
 import {appVersionOf} from './app-needs.js';
 import {digestOf, tokenFor} from './guard.js';
 import {frameHtml, frameText, REPLY_TO, SITE} from './mail-frame.js';
 import {TEMPLATES} from './mail-templates.js';
 
-export const DAILY_MAX = 6;                 // per address, per rolling 24 h (spec §4c "Abuse")
+// Per address, per rolling 24 h, every template together: a safety net so a bug of ours (a loop, a schedule firing too often) cannot flood one person into
+// pressing "Report spam", which sends everyone's mail to spam. Why (owner, 5 Nov 2026, "10 a day"; was 6 since 16 Oct): the digest alone sends up to 6
+// (once every 4 hours), so 6 refused the trial-ending, paused and Test mails on a digest day; 10 sits just above normal use.
+export const DAILY_MAX = 10;
 const GLOBAL_DAY_MAX = 3000;                // a safety net over every address; env.MAIL_DAY_MAX overrides
-const DAY = 24 * 60 * 60 * 1000;
+const DAY = 24 * 60 * 60 * 1000, CLAIM_MS = 2 * 60 * 1000;
 const ADDRESS = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/;
 const FROM = {service: 'Jobadabra <no-reply@jobadabra.top>', marketing: 'Igor from Jobadabra <no-reply@jobadabra.top>'};   // owner, 26 Oct 2026: "The sender email address should be no-reply@jobadabra.top"; 28 Oct 2026: product news come from "Igor from Jobadabra"
 
@@ -62,27 +65,67 @@ export function compose(template, data = {}, links = null) {
   return {subject: spec.subject(data), text: frameText({...frame, body: spec.text(data)}), html: frameHtml({...frame, body: spec.html(data), hero: spec.hero?.(data)}), headers};
 }
 
-export async function send(env, template, to, data = {}, {now = new Date()} = {}) {
+/**
+ * Mails `template` to `to` through every rule above; never throws. {ok, id} or {ok: false, reason}.
+ * `test`: a test send (a Test press, the admin page's test buttons). Why (owner, 5 Nov 2026: "test emmail are aside of this cap"): it is logged as `test:<template>`,
+ * never refused by DAILY_MAX and never takes its room; GLOBAL_DAY_MAX still counts it. A mark in the template name, not a new column: a failed migration only warns
+ * (site.yml), and a missing column would stop every mail.
+ */
+export async function send(env, template, to, data = {}, {now = new Date(), test = false} = {}) {
   const spec = TEMPLATES[template];
+  const logged = test ? `test:${template}` : template;
   if (!spec) return {ok: false, reason: 'bad_template'};
   if (env.MAIL !== 'on' || !env.EMAIL || !env.STATS) return {ok: false, reason: 'off'};
   try {
     const verdict = await mailAllowed(env, to, spec.list, spec);
     const addr = await addrOf(to);
-    if (!verdict.ok) { if (verdict.reason !== 'bad_address' && verdict.reason !== 'marketing_off') await record(env, now, addr, spec.list, template, verdict.reason); return verdict; }
+    if (!verdict.ok) { if (verdict.reason !== 'bad_address' && verdict.reason !== 'marketing_off') await record(env, now, addr, spec.list, logged, verdict.reason); return verdict; }
     const since = new Date(now.getTime() - DAY).toISOString();
-    const mine = await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE addr = ? AND status = 'sent' AND at >= ?").bind(addr, since).first();
+    const mine = test ? {n: 0} : await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE addr = ? AND status = 'sent' AND at >= ? AND template NOT LIKE 'test:%'").bind(addr, since).first();
     const all = await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'sent' AND at >= ?").bind(since).first();
-    if (mine.n >= DAILY_MAX || all.n >= Number(env.MAIL_DAY_MAX || GLOBAL_DAY_MAX)) { await record(env, now, addr, spec.list, template, 'rate'); return {ok: false, reason: 'rate'}; }
+    if ((!test && mine.n >= DAILY_MAX) || all.n >= Number(env.MAIL_DAY_MAX || GLOBAL_DAY_MAX)) { await record(env, now, addr, spec.list, logged, 'rate'); return {ok: false, reason: 'rate'}; }
     const appVersion = await appVersionOf(env, addr);
     const stop = spec.essential ? null : await stopLink(env, to, spec.list);
     const {subject, text, html, headers} = compose(template, {...data, appVersion}, stop && {stop, settings: await settingsLink(env, to)});
     const result = await env.EMAIL.send({from: FROM[spec.list], replyTo: REPLY_TO, to: clean(to), subject, text, html, ...(headers && {headers})});
-    await record(env, now, addr, spec.list, template, 'sent', result?.messageId || null);
+    await record(env, now, addr, spec.list, logged, 'sent', result?.messageId || null);
     return {ok: true, id: result?.messageId || null};
   } catch (error) {
     console.error(`mail ${template}: ${error.message}`);
-    await record(env, now, await addrOf(to).catch(() => ''), spec.list, template, 'failed');
+    await record(env, now, await addrOf(to).catch(() => ''), spec.list, logged, 'failed');
+    return {ok: false, reason: 'failed'};
+  }
+}
+
+/**
+ * The alert test mail, at most once a rolling day per address, whatever comes in parallel: {ok: true, at, earlier?} or a refusal; never throws.
+ * Every Test that proves "your alerts reach you" goes here (through api/mail-held.js testAlert), so five presses or a stolen repo key get one mail, never five.
+ * The list rules run first: an address that bounced or stopped our mail since the last test is told, not "ok". `mail` sends it; the default is the test template.
+ * Why (review of hr-23, 5 Nov 2026): a read then a send let 20 parallel calls send 20 mails. One INSERT ... WHERE NOT EXISTS claims the day (D1 runs a statement alone);
+ * send() logs 'sent' before the claim goes, so a later call always sees one of the two.
+ */
+export async function sendTestMail(env, to, now = new Date(), mail = () => send(env, 'always-on-test', to, {}, {now, test: true})) {
+  if (env.MAIL !== 'on' || !env.EMAIL || !env.STATS) return {ok: false, reason: 'off'};
+  try {
+    const spec = TEMPLATES['always-on-test'];
+    const allowed = await mailAllowed(env, to, spec.list, spec);
+    if (!allowed.ok) return allowed;
+    const addr = await addrOf(to), since = new Date(now.getTime() - DAY).toISOString();
+    const fresh = new Date(now.getTime() - CLAIM_MS).toISOString();   // Why (Gitar on #430): a Worker that dies leaves its claim; past this it is no call at work and no mail sent
+    const claim = await env.STATS.prepare("INSERT INTO mail_log (at, addr, list, template, status) SELECT ?, ?, ?, 'test:always-on-test', 'claimed' WHERE NOT EXISTS (SELECT 1 FROM mail_log WHERE addr = ? AND template = 'test:always-on-test' AND ((status = 'sent' AND at >= ?) OR (status = 'claimed' AND at >= ?)))")
+      .bind(now.toISOString(), addr, spec.list, addr, since, fresh).run();
+    if ((claim.meta?.changes ?? claim.changes) !== 1) {
+      const today = await env.STATS.prepare("SELECT at FROM mail_log WHERE addr = ? AND template = 'test:always-on-test' AND ((status = 'sent' AND at >= ?) OR (status = 'claimed' AND at >= ?)) ORDER BY at LIMIT 1").bind(addr, since, fresh).first();
+      return {ok: true, at: today?.at || now.toISOString(), earlier: true};
+    }
+    try {
+      const sent = await mail();
+      return sent.ok ? {...sent, at: now.toISOString()} : sent;
+    } finally {
+      await env.STATS.prepare("DELETE FROM mail_log WHERE addr = ? AND template = 'test:always-on-test' AND status = 'claimed'").bind(addr).run();
+    }
+  } catch (error) {
+    console.error(`mail test: ${error.message}`);
     return {ok: false, reason: 'failed'};
   }
 }

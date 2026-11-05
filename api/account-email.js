@@ -5,7 +5,7 @@ import {authorize, digestOf, equal, tokenFor} from '../shared/guard.js';
 import {installOfTrialKey} from '../shared/trial-key.js';
 import {addrOf, confirmLink, send, validAddress, clean} from '../shared/mail.js';
 import {fromTelegram} from './mail-html.js';
-import {CADENCES, deliver, hold} from './mail-held.js';
+import {CADENCES, deliver, hold, testAlert} from './mail-held.js';
 import {page, switchOff} from './mail-unsub.js';
 import {accountOf, createAccount, link} from '../shared/pro.js';
 import {escTags} from '../shared/html.js';
@@ -120,7 +120,8 @@ export async function resend(request, env, now = new Date()) {
   return json(200, {ok: false, error: sent.reason === 'off' ? 'off' : sent.reason === 'rate' ? 'wait' : 'not_sent'});
 }
 
-// POST /api/notify/email {subject, html, buttons?: [{text, url}], kind?: 'activity'}: 'activity' is held for the digest, anything else goes at once; `html` is the Telegram HTML the engine built (tgcard.py); only a safe subset reaches the mail (mail-html.js).
+// POST /api/notify/email {subject, html, buttons?: [{text, url}], kind?: 'activity' | 'test'}: 'activity' is held for the digest; 'test' (the GitHub way's Test) sends the
+// alert test mail instead of the body, once a day, outside the per-address cap (api/mail-held.js testAlert: a stolen repo key gets one mail a day); anything else goes at once; `html` is the Telegram HTML the engine built (tgcard.py); only a safe subset reaches the mail (mail-html.js).
 export async function notify(request, env, now = new Date()) {
   const install = (await installOfTrialKey(request.headers.get('x-api-key'), env))?.install;   // also the JPT1 key an Always-on repo holds: it reaches only this route and the trial status
   if (!install || !env.STATS) return json(401, {ok: false, error: 'unauthorized'});
@@ -128,6 +129,7 @@ export async function notify(request, env, now = new Date()) {
   const account = await accountOf(env, install);
   if (!account?.email) return json(200, {ok: false, reason: 'no_address'});
   const body = await request.json().catch(() => ({}));
+  if (body.kind === 'test') { const sent = await testAlert(env, account, now); return json(200, sent.ok ? {ok: true, earlier: !!sent.earlier} : {ok: false, reason: sent.reason}); }
   const {html, text} = fromTelegram(body.html);
   if (!text) return json(400, {ok: false, reason: 'empty'});
   const buttons = (Array.isArray(body.buttons) ? body.buttons : []).slice(0, 6).filter(b => b && /^https:\/\//.test(b.url) && b.text).map(b => ({text: String(b.text).slice(0, 80), url: String(b.url).slice(0, 500)}));

@@ -1,9 +1,9 @@
-// The e-mail sender (shared/mail.js, api/mail-unsub.js): refusals, the 6-a-day limit, the two lists, one-click unsubscribe, bounce/complaint events, and that no mail body or plain address is logged.
+// The e-mail sender (shared/mail.js, api/mail-unsub.js): refusals, the per-address limit, the two lists, one-click unsubscribe, bounce/complaint events, and that no mail body or plain address is logged.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
-import {DAILY_MAX, addrOf, mailAllowed, send, stopLink} from '../../../../shared/mail.js';
+import {DAILY_MAX, addrOf, mailAllowed, send, sendTestMail, stopLink} from '../../../../shared/mail.js';
 import {handleEvent, unsubscribe} from '../../../../api/mail-unsub.js';
 import {TEMPLATES} from '../../../../shared/mail-templates.js';
 import {createAccount} from '../../../../shared/pro.js';
@@ -43,7 +43,62 @@ test('nothing is sent when MAIL is off, the binding is missing, the address is b
   assert.equal(sent.length, 0);
 });
 
-test('the 7th mail to one address in a day is refused; another address and the next day are fine', async () => {
+test('a test mail is outside the per-address cap: sent when the address is full, never takes its room; the alert test goes once a day', async () => {
+  // Why (owner, 5 Nov 2026: "Still, test emmail are aside of this cap"): the owner's own Test failed with "Too many e-mails today".
+  const {e, sent} = setup();
+  for (let i = 0; i < 3; i++) assert.equal((await send(e, 'digest', 'a@b.co', digest, {now, test: true})).ok, true);
+  for (let i = 0; i < DAILY_MAX; i++) assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).ok, true, `real mail ${i + 1} after 3 tests`);
+  assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).reason, 'rate');
+  assert.equal((await sendTestMail(e, 'a@b.co', now)).ok, true, 'the alert test goes on a full address');
+  assert.deepEqual(await sendTestMail(e, 'a@b.co', new Date(now.getTime() + 3600e3)), {ok: true, at: now.toISOString(), earlier: true}, 'and once a day');
+  assert.equal(sent.length, 3 + DAILY_MAX + 1);
+  assert.deepEqual(e.STATS.db.prepare("SELECT template FROM mail_log WHERE template LIKE 'test:%' GROUP BY template").all().map(r => r.template), ['test:always-on-test', 'test:digest']);
+  const capped = setup({MAIL_DAY_MAX: '2'});
+  for (let i = 0; i < 2; i++) await send(capped.e, 'digest', `p${i}@b.co`, digest, {now, test: true});
+  assert.equal((await send(capped.e, 'digest', 'q@b.co', digest, {now, test: true})).reason, 'rate', 'the product-wide cap still counts tests');
+});
+
+test('the alert test mail goes once a day even when 20 calls arrive at once, and a failed one can be tried again', async () => {
+  // Why (review of hr-23, 5 Nov 2026): a read then a send let 20 parallel calls send 20 mails through a route a repo key can reach.
+  const {e, sent} = setup();
+  const all = await Promise.all(Array.from({length: 20}, () => sendTestMail(e, 'a@b.co', now)));
+  assert.equal(sent.length, 1);
+  assert.ok(all.every(r => r.ok));
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'claimed'").get().n, 0, 'no claim left behind');
+  const flaky = setup();
+  flaky.e.EMAIL = {send: async () => { throw new Error('provider down'); }};
+  assert.deepEqual(await sendTestMail(flaky.e, 'a@b.co', now), {ok: false, reason: 'failed'});
+  flaky.e.EMAIL = {send: async () => ({messageId: 'm1'})};
+  assert.equal((await sendTestMail(flaky.e, 'a@b.co', now)).earlier, undefined, 'a refused mail does not use up the day');
+});
+
+test('a claim left by a Worker that died counts for two minutes only: the next Test sends, it does not claim a mail that never went', async () => {
+  // Why (Gitar on #430, 5 Nov 2026): a leftover claim read as "a test e-mail went to you today" for 24 h with nothing sent.
+  const {e, sent} = setup();
+  const leftover = async ago => e.STATS.db.prepare("INSERT INTO mail_log (at, addr, list, template, status) VALUES (?, ?, 'service', 'test:always-on-test', 'claimed')").run(new Date(now.getTime() - ago).toISOString(), await addrOf('a@b.co'));
+  await leftover(60e3);
+  assert.equal((await sendTestMail(e, 'a@b.co', now)).earlier, true, 'a fresh claim is another call at work');
+  assert.equal(sent.length, 0);
+  e.STATS.db.prepare('DELETE FROM mail_log').run();
+  await leftover(3 * 60e3);
+  assert.equal((await sendTestMail(e, 'a@b.co', now)).earlier, undefined);
+  assert.equal(sent.length, 1);
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'claimed'").get().n, 0);
+});
+
+test('the alert test mail says the truth: an address that stopped mail since the last test is refused, mail off is off, a D1 error never throws', async () => {
+  const {e} = setup();
+  await sendTestMail(e, 'a@b.co', now);
+  e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'service', 'bounce', ?)").run(await addrOf('a@b.co'), now.toISOString());
+  assert.equal((await sendTestMail(e, 'a@b.co', new Date(now.getTime() + 3600e3))).ok, false);
+  assert.equal((await sendTestMail({...setup().e, MAIL: 'off'}, 'a@b.co', now)).reason, 'off');
+  const broken = setup().e;
+  broken.STATS = {...broken.STATS, prepare: () => { throw new Error('no such table'); }};
+  assert.equal((await sendTestMail(broken, 'a@b.co', now)).ok, false);
+});
+
+test('the 11th mail to one address in a day is refused; another address and the next day are fine', async () => {
+  assert.equal(DAILY_MAX, 10, 'owner, 5 Nov 2026: "10 a day"');
   const {e, sent} = setup();
   for (let i = 0; i < DAILY_MAX; i++) assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).ok, true);
   assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).reason, 'rate');

@@ -83,8 +83,8 @@ export const TEMPLATES = {
   'always-on-test': {list: 'service',
     subject: () => 'Always on test: your alerts reach you',
     title: () => 'Your alerts reach you',
-    text: () => 'You pressed Test on Always on. This e-mail is how we tell you about new jobs: when a search finds some, you get the best five, at most once every 4 hours.',
-    html: () => '<p>You pressed Test on Always on. This e-mail is how we tell you about new jobs: when a search finds some, you get the best five, at most once every 4 hours.</p>'},
+    text: () => 'You pressed Test on Always on. This e-mail is how we tell you about new jobs when a search finds some.',
+    html: () => '<p>You pressed Test on Always on. This e-mail is how we tell you about new jobs when a search finds some.</p>'},
   // The marketing list: sent by hand (admin/mail-lifecycle.js launch), only to opted-in addresses and only with env.MARKETING_MAIL = "on". Data: {pro, proAi, pricingUrl} (euro prices from shared/pro-packages.js).
   'pro-launch': {list: 'marketing',
     subject: () => 'Jobadabra Pro is out',
