@@ -149,7 +149,7 @@
       <div>
         <span class="eyebrow">Pro · early access</span>
         <h2>Be first to try Pro</h2>
-        <p>Pro is a one-time payment, €9 or €19 with AI, no subscription. Leave your email and you'll hear from us once, when Pro is ready.</p>
+        <p>Pro is a one-time payment, €9 or €19 with AI, no subscription. Leave your email and we'll tell you when Pro is ready and when a new version comes out.</p>
       </div>
       <form id="waitlist" novalidate>
         <label for="email">Email</label>
@@ -158,7 +158,7 @@
         <input id="role" name="role" type="text" maxlength="200" placeholder="e.g. Product designer in Lisbon">
         <input class="trap" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
         <button class="btn btn-primary" type="submit">Get early access</button>
-        <p class="fine" id="waitlist-note">One email when Pro is ready. No newsletter.</p>
+        <p class="fine" id="waitlist-note">Pro launch and new releases only. Every email has a link to stop them.</p>
       </form>
     </div>
   </section>
@@ -183,8 +183,8 @@
       const result = await response.json();
       if (!result.ok) throw new Error(result.error);
       note.className = 'fine thanks';
-      note.textContent = result.already ? "You're already on the list. We'll email you when Pro is ready."
-        : "Thanks, you're on the list. We'll email you once, when Pro is ready.";
+      note.textContent = result.already ? "You're already on the list. We'll email you when Pro is ready and when a new version comes out."
+        : "Thanks, you're on the list. We'll email you when Pro is ready and when a new version comes out.";
     } catch (error) {
       button.disabled = false;
       note.textContent = error.message || "That didn't go through. Please try again.";

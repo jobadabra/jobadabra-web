@@ -9,6 +9,7 @@ import {previews} from './email-preview.js';
 import {TEST_INBOX, testSend} from './email-test-send.js';
 import {releaseView} from './release-mail-page.js';
 import {audienceCard, audienceRows} from './email-audience.js';
+import {mailTypesCard} from './email-types.js';
 import {newestFirst} from './changelog.js';
 import {latestStableVersion, releaseData} from './release-mail.js';
 import {compose} from '../shared/mail.js';
@@ -34,7 +35,7 @@ ${notice?.template === mail.name ? notice.html : ''}
 ${mail.noDraft ? '' : `<form method="post" action="/admin/growth/email"><input type="hidden" name="template" value="${esc(mail.name)}">${mail.real ? `<input type="hidden" name="release" value="${esc(mail.version)}">` : ''}${detail ? '<input type="hidden" name="detail" value="1">' : ''}<button type="submit">Send to test inbox</button></form>
 <form class="personal-test" method="post" action="/admin/growth/email"><input type="hidden" name="template" value="${esc(mail.name)}"><input type="hidden" name="mine" value="1">${mail.real ? `<input type="hidden" name="release" value="${esc(mail.version)}">` : ''}${detail ? '<input type="hidden" name="detail" value="1">' : ''}<div class="test-address"><label for="test-address-${esc(mail.name)}">Your email address</label><input id="test-address-${esc(mail.name)}" type="email" name="to" placeholder="you@example.com" autocomplete="email" required></div><button type="submit">Send to my email</button></form>`}`}</section>`;
 
-const REASONS = {off: 'Email sending is switched off or its sender is unavailable.', marketing_off: 'Product news sending is switched off.', rate: 'The daily sending limit was reached. Try again tomorrow.', unsubscribed: 'This address has unsubscribed from this kind of email.', suppressed: 'This address is blocked after a bounce or complaint.', failed: 'The email provider could not send this message. Check the failure log and try again.', bad_address: 'Enter a valid email address.', no_release: 'No stable release draft is available yet.'};
+const REASONS = {off: 'Email sending is switched off or its sender is unavailable.', marketing_off: 'News sending is switched off.', no_tick: 'This address has not ticked Tips and tricks.', not_confirmed: 'This address is not confirmed yet.', not_asked: 'This address has not answered the news question in the app yet.', pro_only: 'This address joined from the app, so it gets only the Pro launch mail.', rate: 'The daily sending limit was reached. Try again tomorrow.', unsubscribed: 'This address has unsubscribed from this kind of email.', suppressed: 'This address is blocked after a bounce or complaint.', failed: 'The email provider could not send this message. Check the failure log and try again.', bad_address: 'Enter a valid email address.', no_release: 'No stable release draft is available yet.'};
 
 // A known send result is shown inside its own template card, at the redirect's fragment target.
 const noticeOf = (value, destination) => {
@@ -49,9 +50,9 @@ const realRelease = async env => {
   const version = await latestStableVersion(env);
   const row = version && await env.STATS.prepare('SELECT data,status FROM release_mail WHERE version = ?').bind(version).first();
   const data = version && await releaseData(env, {...(row ? JSON.parse(row.data) : {}), version}, {status: row?.status});
-  return data ? {name: 'release', list: 'marketing', real: true, version, noDraft: !row,
+  return data ? {name: 'release', list: 'releases', real: true, version, noDraft: !row,
     pendingMessage: row ? '' : (data.sections.length ? 'The release email draft is not ready yet. This is the real changelog for the latest stable; sending is unavailable until its draft is prepared.' : 'No user-visible changes since the previous stable. No release email has been prepared.'), ...compose('release', data, {stop: '#', settings: '#'})}
-    : {name: 'release', list: 'marketing', real: true, error: 'No stable release draft is available yet.'};
+    : {name: 'release', list: 'releases', real: true, error: 'No stable release draft is available yet.'};
 };
 
 const releasesOf = async env => newestFirst((await env.STATS.prepare("SELECT r.version,r.status FROM release_mail r JOIN changelog_entries c ON c.version=r.version WHERE c.channel='stable'").all()).results || []);
@@ -71,12 +72,13 @@ export function page(data, accounts = null, notice = null, audience = null, rele
 .pill{display:inline-block;padding:1px 10px;border-radius:99px;border:1px solid currentColor;font-size:13px}.pill.on{color:#4cc38a}.pill.off{color:#ff7b70}.tpl iframe{width:100%;height:540px;border:1px solid #2c3340;border-radius:8px;background:#fff}.days{display:flex;align-items:flex-end;gap:2px;height:80px}.days i{flex:1;min-width:2px;border-radius:2px 2px 0 0}.days .s{background:#ff8a4c}.days .r{background:#ff7b70;opacity:.7}${TEMPLATE_STYLE}${VIZ_STYLE}</style></head><body><main>
 <header><h1>✉️ E-mail</h1><span class="muted">What our e-mail did · ${windows}</span></header>${releaseLinks(releases)}
 <section class="card" style="margin-bottom:16px"><h2>Switches</h2>${switches} <span class="muted">· ${n(data.today)} of ${n(data.dayMax)} sent in the last 24 h · ${DAILY_MAX} a day per address (tests aside) · change them in Cloudflare</span></section>
+${mailTypesCard(data.dayMax, n)}
 ${accounts ? `<div class="tiles">${tile('Trial accounts', accounts.trial, 'gave an address')}${tile('Confirmed', accounts.confirmed, 'clicked the first mail')}${tile('Unconfirmed', accounts.unconfirmed, 'follow up')}${tile('Always on paused', accounts.paused, 'hosted schedule paused')}${tile('Converted to Pro', accounts.converted, 'trial accounts that paid')}</div>` : ''}
 <div class="tiles">${tile('Sent', data.sent, `last ${data.days} days`)}${tile('Not sent', data.notSent, 'refused before sending')}${tile('Failed', data.failed, 'the provider said no')}${tile('Bounces and complaints', data.stopped, 'addresses stopped, all time')}${tile('Held for the digest', data.held.items, `${n(data.held.accounts)} accounts${data.held.oldest ? ` · oldest ${esc(data.held.oldest.slice(0, 16).replace('T', ' '))}` : ''}`)}</div>
 <section class="card" style="margin-bottom:16px"><h2>Per day</h2><div class="days" role="img" aria-label="Mail per day">${bars}</div><span class="muted">orange = sent, red = not sent</span></section>
 <div class="pair">${table('By template', ['Template', 'Sent', 'Not sent', 'Last sent'], data.byTemplate.map(r => [esc(r.template), n(r.sent), n(r.refused), esc((r.last || '').slice(0, 16).replace('T', ' '))]), templateChart(data.byTemplate))}
 ${table('Why mail was not sent', ['Reason', 'Mails'], data.refused.map(r => [esc(r.reason), n(r.n)]), refusedChart(data.refused))}</div>
-<div class="pair">${table('Addresses', ['Group', 'Accounts'], [['Confirmed', n(data.confirmed)], ['Unconfirmed', n(data.unconfirmed)], ['Product news opt-in', n(data.optIn)]], addressChart([['Confirmed', data.confirmed], ['Unconfirmed', data.unconfirmed], ['Product news opt-in', data.optIn]]))}
+<div class="pair">${table('Addresses', ['Group', 'Accounts'], [['Confirmed', n(data.confirmed)], ['Unconfirmed', n(data.unconfirmed)], ['Service', n(data.types.service)], ['New releases', n(data.types.releases)], ['Tips and tricks', n(data.types.tips)], ['Job digest', n(data.types.jobdigest)]], addressChart([['Confirmed', data.confirmed], ['Unconfirmed', data.unconfirmed], ['Service', data.types.service], ['New releases', data.types.releases], ['Tips and tricks', data.types.tips], ['Job digest', data.types.jobdigest]]))}
 ${table('Stopped (all time)', ['Reason', 'List', 'Addresses'], data.offReasons.map(r => [esc(r.reason), esc(r.list), n(r.n)]), stoppedChart(data.offReasons))}</div>
 ${audience ? audienceCard(audience) : ''}
 <h2>Email previews <span class="muted">(real release content; other templates use samples)</span></h2><p class="muted">"Send to test inbox" mails only <code>${esc(TEST_INBOX)}</code> through the real sender, as a test: outside the per-address cap, inside the daily total; it needs the MAIL switch on.</p>${data.testMail.length ? `<section class="card" id="test-inbox"><h2>Arrived in the test inbox (7 days)</h2><table>${data.testMail.map(m => `<tr><td>${esc(m.received_at.slice(0, 16).replace('T', ' '))}</td><td>${esc(m.to_addr)}</td><td>${esc(m.subject)}</td></tr>`).join('')}</table></section>` : '<section class="card" id="test-inbox"><h2>Test inbox</h2><p class="muted">No received copies yet. A successful send may take a moment to arrive.</p></section>'}<div class="pair tpls">${previews().map(mail => templateCard(mail.name === 'release' && releaseMail ? releaseMail : mail, data.byTemplate.find(r => r.template === mail.name)?.sent || 0, notice)).join('')}</div>

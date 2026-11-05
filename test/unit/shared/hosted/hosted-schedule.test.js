@@ -9,7 +9,7 @@ import {inbox, result, runToken, schedule, startRun} from '../../../../shared/ho
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0083_hosted.sql', '0135_mail_on.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE IF NOT EXISTS revoked (who TEXT PRIMARY KEY, reason TEXT, at TEXT)');
   const statement = (text, args = []) => ({bind: (...v) => statement(text, v), run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
@@ -39,7 +39,8 @@ test('switching on needs the install key and an e-mail; it makes a trial account
   assert.equal((await put(e, 'install-aaaa1', {on: true})).status, 400);
   const res = await put(e, 'install-aaaa1', {on: true, email: 'A@Example.com', marketing: true, freqHours: 4});
   assert.deepEqual(await res.json(), {ok: true, state: 'on', freqHours: 24, nextRunAt: '2026-10-16T11:00:00.000Z'});   // a trial never gets more than once a day
-  assert.deepEqual(rows(e, 'SELECT plan, email, marketing_opt_in, marketing_opt_in_at FROM pro_accounts'), [{plan: 'trial', email: 'a@example.com', marketing_opt_in: 1, marketing_opt_in_at: now.toISOString()}]);
+  assert.deepEqual(rows(e, 'SELECT plan, email FROM pro_accounts'), [{plan: 'trial', email: 'a@example.com'}]);
+  assert.deepEqual(rows(e, 'SELECT list, via, at FROM mail_on ORDER BY list'), [{list: 'tips', via: 'old-box', at: now.toISOString()}], 'the ticked wizard box is a Tips and tricks yes; releases are a default and store nothing');
   assert.equal(rows(e, 'SELECT * FROM pro_devices').length, 1);
   await put(e, 'install-aaaa1', {on: true});   // again: still one schedule, the next run is kept
   assert.equal(rows(e, 'SELECT * FROM hosted_schedules').length, 1);
@@ -92,10 +93,26 @@ test('opening the app resumes a schedule the 14-day pause stopped, and only that
   assert.deepEqual(rows(e, 'SELECT state, pause_reason FROM hosted_schedules'), [{state: 'on', pause_reason: null}]);
 });
 
-test('an unticked wizard box is a no to product news, written to mail_off; no answer is not (opt-out since 28 Oct 2026, Gitar on #218)', async () => {
+test('product news need a tick in the wizard: an unticked box and no answer write no stop and no tick (owner, 5 Nov 2026)', async () => {
   const e = env();
   e.STATS.db.exec('CREATE TABLE IF NOT EXISTS mail_off (addr TEXT NOT NULL, list TEXT NOT NULL, reason TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (addr, list))');
   await put(e, 'install-aaaa1', {on: true, email: 'no@example.com', marketing: false});
   await put(e, 'install-bbbb2', {on: true, email: 'silent@example.com'});
-  assert.deepEqual(rows(e, 'SELECT list, reason FROM mail_off'), [{list: 'marketing', reason: 'wizard'}]);
+  assert.deepEqual(rows(e, 'SELECT list, reason FROM mail_off'), []);
+  assert.equal(rows(e, 'SELECT * FROM mail_on').length, 0, 'an unticked box stores no yes and no stop');
+  assert.equal(rows(e, 'SELECT * FROM mail_off').length, 0);
+});
+
+test('the wizard\'s ticked box never lifts a stop: its copy in the app can be older than an unsubscribe through a mail link', async () => {
+  // Why (review of #436): hosted-search.js sends `marketing` on every turn-on from the app's stored copy.
+  const e = env();
+  await put(e, 'install-aaaa1', {on: true, email: 'me@example.com'});
+  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
+  e.STATS.db.exec("INSERT INTO mail_off (addr, list, reason, at) SELECT email_hash, 'tips', 'unsubscribe', 'x' FROM pro_accounts");
+  await put(e, 'install-aaaa1', {on: true, email: 'me@example.com', marketing: true});
+  assert.deepEqual(rows(e, 'SELECT list FROM mail_on'), [], 'no yes stored');
+  assert.deepEqual(rows(e, 'SELECT list FROM mail_off'), [{list: 'tips'}], 'the stop stays');
+  e.STATS.db.exec('DELETE FROM mail_off');
+  await put(e, 'install-aaaa1', {on: true, email: 'me@example.com', marketing: true});
+  assert.deepEqual(rows(e, 'SELECT list, via FROM mail_on'), [{list: 'tips', via: 'old-box'}], 'with no stop on file the ticked box is a tips yes, on an existing account too');
 });

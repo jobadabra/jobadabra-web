@@ -5,16 +5,16 @@
 ## Decisions (owner, 28 Oct 2026)
 | Question | Answer |
 |---|---|
-| Audience | Every address we hold that has not turned promotional mail off: `pro_accounts.email` (trial, Always on, Pro) + KV `signup:<email>` (waitlist). Measured 28 Oct: 5 accounts, 1 waitlist signup, 0 unsubscribed. |
-| Consent | Opt-out. Joining the waitlist or giving an address in the wizard counts as agreeing to product news ("a user who puts himself on the waiting list is considered as wanting promotional emails"). `marketing_opt_in` stops gating; `mail_off` (list marketing/all) and the new `pro_accounts.marketing_off_at` do. |
+| Audience | Everyone New releases reaches (owner, 5 Nov 2026: "this should be on by default"; "After confirming"): a confirmed account (or Pro) that has not stopped it, plus website waitlist signups. A waitlist signup from the app has seen "Nothing else", so it gets only the Pro launch mail. Rule: `newsRefusal` in `shared/mail-lists.js`; Admin → E-mail shows each address with what each type does for it. |
+| Consent | Four types (owner, 5 Nov 2026: "we should not treat all the emails as one box"): **service** (on), **Job digest** (off until ticked; the best new matches of the last search for people without Always on; the mail itself comes later), **New releases** (ticked by default for a confirmed address, but no release mail goes before the person has answered the card in the app, `newsAnswered`; a website waitlist signup counts as answered; a stop turns it off), **Tips and tricks** (off until a real tick; carries the Pro launch offer, which every waitlist signup also gets). A stored yes is `mail_on`, a stop is `mail_off`; no row = no answer yet, so a default is told from a choice (`newsAnswered`). The old single box `marketing_opt_in` is no longer read; migration `0135` carried it over. |
 | Switch | `MARKETING_MAIL=on` is turned on by the owner (his 28 Oct yes); the first real send is still his click only. |
-| Unsubscribe | The footer of **every** promotional mail carries the one-click "stop" link + the `List-Unsubscribe` headers (already added by `shared/mail.js` for any non-essential template). A test loops over every `marketing` template and fails if one lacks it. |
+| Unsubscribe | The footer of **every** promotional mail carries the one-click "stop" link + the `List-Unsubscribe` headers (already added by `shared/mail.js` for any non-essential template). Each link stops its own type only (a link from a mail sent before the split stops both news types). A test loops over every news template and fails if one lacks it. |
 | Content | The complete `changelog_entries` row for the version: New / Improved / Fixed rows. Short subject `Jobadabra <version> · What's new`, prominent version heading; owner may add an introduction (5 Nov 2026). |
 | Trigger | `release-stable.sh` / `canary-promote.yml` call the site once with the version; idempotent per version (`release_mail` row, primary key version). |
 | Sender | `Igor from Jobadabra <news@jobadabra.top>`. |
 
 ## Pieces
-1. `shared/mail-templates.js`: template `release` (list marketing), our mail frame, categorized changelog rows, pills, update button.
+1. `shared/mail-templates.js`: template `release` (list releases), our mail frame, categorized changelog rows, pills, update button.
 2. `db/migrations/0105_release_mail.sql`: `release_mail(version PK, status draft|sent, headline, created_at, sent_at, sent_count)`; `pro_accounts.marketing_off_at`.
 3. `admin/release-mail.js`: draft from changelog, list on /admin/email, "Send test", "Send to everyone" (batches under the 3000/day cap and 6/day/address).
 4. `api/release-mail-ingest.js`: the promotion call (Bearer key), idempotent.

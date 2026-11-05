@@ -10,7 +10,7 @@ const notFound = () => new Response('Not found', {status: 404});
 const HEAD = {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'};
 
 // How many of the addresses we hold would get it now (the same per-address check send() makes; MARKETING_MAIL is judged separately, as "on" here).
-export const reach = async env => (await audienceRows(env)).filter(row => row.gets).length;
+export const reach = async env => (await audienceRows(env)).filter(row => row.releases).length;
 
 export async function releaseView(request, env) {
   const url = new URL(request.url), version = url.searchParams.get('release') || '';

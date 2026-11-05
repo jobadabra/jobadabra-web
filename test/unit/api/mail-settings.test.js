@@ -11,7 +11,7 @@ import {createAccount} from '../../../shared/pro.js';
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql', '0135_mail_on.sql']) db.exec(sql(file));
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values), run: async () => db.prepare(text).run(...args),
     all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
   return {db, prepare: text => statement(text)};
@@ -19,7 +19,7 @@ function d1() {
 const now = new Date('2026-10-17T10:00:00Z');
 const env = (extra = {}) => ({MAIL: 'on', STATS: d1(), STATS_SALT: 'salt', ...extra});
 const save = async (e, link, fields) => settings(new Request(link, {method: 'POST', body: new URLSearchParams(fields)}), e, now);
-const accountRow = e => e.STATS.db.prepare('SELECT marketing_opt_in, service_mail_off_at, digest_cadence FROM pro_accounts').get();
+const accountRow = e => e.STATS.db.prepare('SELECT service_mail_off_at, digest_cadence FROM pro_accounts').get();
 
 test('the signed link opens the page without a sign-in; a cut-off link does not', async () => {
   const e = env();
@@ -48,19 +48,39 @@ test('saving turns service mail off and on and sets the digest cadence', async (
   assert.ok(id);
 });
 
-test('product news shows off and cannot be switched on while the marketing flag is off; with the flag on it can', async () => {
+test('the two news boxes show what the site holds: releases on for a confirmed address, tips only with a tick; an unticked default is a stop, an unticked tips is nothing', async () => {
+  // Why (owner, 5 Nov 2026: "this should be on by default. Only "Tips and tricks" should be disabled by default"): shared/mail-lists.js.
+  const e = {...env(), MARKETING_MAIL: 'on'};
+  await createAccount(e, 'me@example.com', now, {plan: 'trial'});
+  const box = async (to, name) => new RegExp(`name="${name}"[^>]* checked`).test(await (await settings(new Request(await settingsLink(e, to)), e, now)).text());
+  const stops = () => e.STATS.db.prepare("SELECT list FROM mail_off WHERE list IN ('releases', 'tips')").all().map(r => r.list);
+  assert.deepEqual([await box('me@example.com', 'releases'), await box('me@example.com', 'tips')], [false, false], 'unconfirmed: the sender sends no news yet');
+  assert.equal(await box('wait@example.com', 'releases'), true, 'an address with no account has no confirm step to wait for');
+  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
+  assert.deepEqual([await box('me@example.com', 'releases'), await box('me@example.com', 'tips')], [true, false]);
+  const link = await settingsLink(e, 'me@example.com');
+  await save(e, link, {service: 'on', releases: 'on'});
+  assert.deepEqual(stops(), [], 'a box left as it was takes nothing back');
+  await save(e, link, {service: 'on', releases: 'on', tips: 'on'});
+  assert.equal(await box('me@example.com', 'tips'), true);
+  assert.equal(e.STATS.db.prepare("SELECT via FROM mail_on WHERE list = 'tips'").get().via, 'mail-settings', 'a tick is stored with where it was given');
+  await save(e, link, {service: 'on'});
+  assert.deepEqual(stops().sort(), ['releases', 'tips'], 'unticking a yes or a default is a stop');
+  assert.deepEqual([await box('me@example.com', 'releases'), await box('me@example.com', 'tips')], [false, false]);
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) n FROM mail_on').get().n, 0);
+});
+
+test('the news boxes are off and locked while the marketing flag is off; with the flag on they can be changed', async () => {
   const e = env(), link = await settingsLink(e, 'me@example.com');
   await createAccount(e, 'me@example.com', now, {plan: 'trial'});
-  e.STATS.db.prepare('UPDATE pro_accounts SET marketing_opt_in = 1').run();   // the wizard's pre-checked box is recorded for later
+  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
   const html = await (await settings(new Request(link), e, now)).text();
-  assert.ok(/name="marketing" disabled/.test(html) && html.includes('We are not sending any product news right now'));
-  await save(e, link, {service: 'on', marketing: 'on'});
-  assert.equal(accountRow(e).marketing_opt_in, 1, 'the recorded opt-in is left as it was');
+  assert.ok(/name="releases" disabled/.test(html) && /name="tips" disabled/.test(html) && html.includes('We are not sending any of these right now'));
+  await save(e, link, {service: 'on', tips: 'on'});
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) n FROM mail_on').get().n + e.STATS.db.prepare("SELECT COUNT(*) n FROM mail_off WHERE list IN ('releases', 'tips')").get().n, 0, 'nothing is saved while the flag is off');
   const on = {...e, MARKETING_MAIL: 'on'};
-  await save(on, link, {service: 'on'});
-  assert.equal(accountRow(e).marketing_opt_in, 0);
-  await save(on, link, {service: 'on', marketing: 'on'});
-  assert.equal(accountRow(e).marketing_opt_in, 1);
+  await save(on, link, {service: 'on', releases: 'on', tips: 'on'});
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) n FROM mail_on WHERE list = 'tips'").get().n, 1);
 });
 
 test('after a bounce or complaint the page says so and changes nothing', async () => {

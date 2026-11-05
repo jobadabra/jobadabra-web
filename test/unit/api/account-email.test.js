@@ -15,7 +15,7 @@ import {createAccount} from '../../../shared/pro.js';
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql', '0135_mail_on.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE revoked (who TEXT PRIMARY KEY, reason TEXT, created_at TEXT)');
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values), run: async () => db.prepare(text).run(...args),
@@ -194,12 +194,102 @@ test('an address unconfirmed for 14 days after its first mail gets no more mail;
   assert.equal((await send('2026-11-02T10:00:00Z')).ok, true, 'confirmed: mail comes again');
 });
 
-test('an account that never answered shows product news ON in the app (opt-out), and saving the address keeps it on', async () => {
+const web = JSON.stringify({source: 'web'}), appSource = JSON.stringify({source: 'app'});
+const withWaitlist = e => { e.WAITLIST = {get: async key => ({'signup:web@example.com': web, 'signup:app@example.com': appSource})[key] ?? null}; return e; };
+const news = async (e, install = 'install-aaaa') => { const got = await call(address, e, install, 'GET'); return {releases: got.releases, tips: got.tips, answered: got.newsAnswered, old: got.marketing}; };
+const rows = (e, sql) => e.STATS.db.prepare(sql).all().map(row => ({...row}));
+
+test('the owner\'s case: a confirmed address with no stop shows New releases on and Tips and tricks off, never answered', async () => {
+  // Why (5 Nov 2026): the owner's box showed "Also send me product news" ticked while the site held no tick (their row: marketing_opt_in 0, no stop on file). GET said "no stop", not "ticked".
   const {e} = setup();
-  await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com'});
-  assert.equal((await call(address, e, 'install-aaaa', 'GET')).marketing, true);
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});
+  assert.deepEqual(await news(e), {releases: false, tips: false, answered: false, old: false}, 'unconfirmed: the sender sends no news');
+  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
+  assert.deepEqual(await news(e), {releases: true, tips: false, answered: false, old: false}, 'releases are a default, tips need a tick; the app\'s old box reads tips');
+  assert.deepEqual(rows(e, 'SELECT * FROM mail_on'), [], 'a default stores nothing');
+});
+
+test('a PUT with releases and tips stores each answer apart; a missing field changes nothing; false stops that type only', async () => {
+  const {e} = setup();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});
+  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', tips: true, newsVia: 'card'});
+  assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true});
+  assert.deepEqual(rows(e, 'SELECT list, via FROM mail_on'), [{list: 'tips', via: 'card'}], 'only what was pressed; the via says where');
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', releases: false});
+  assert.deepEqual(await news(e), {releases: false, tips: true, answered: true, old: true}, 'stopping releases leaves tips');
+  assert.deepEqual(rows(e, "SELECT list FROM mail_off WHERE list IN ('releases', 'tips')"), [{list: 'releases'}]);
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', releases: true});
+  assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true}, 'a yes lifts the stop for a confirmed address');
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});
+  assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true}, 'a save with no news field changes nothing');
+});
+
+test('the old box from an app already out is the Tips and tricks box: true is a tips yes and never touches releases; false stops only what was a yes', async () => {
+  // Why (review of #hr-24, 5 Nov 2026): the app sends marketing on every save, so a never-answered box must not become a stop that later beats a waitlist signup.
+  const {e} = setup();
+  const stops = () => rows(e, "SELECT COUNT(*) n FROM mail_off WHERE list IN ('releases', 'tips')")[0].n;
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: false});
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: false});
+  assert.equal(stops(), 0);
   await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: true});
-  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) n FROM mail_off WHERE list = 'marketing'").get().n, 0);
+  assert.deepEqual(rows(e, 'SELECT list, via FROM mail_on ORDER BY list'), [{list: 'tips', via: 'old-box'}]);
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: false});
+  assert.equal(stops(), 1, 'the tips stop only');
+  const listed = withWaitlist(setup().e);
+  await call(address, listed, 'install-bbbb', 'PUT', {email: 'web@example.com', marketing: false});
+  assert.equal((await news(listed, 'install-bbbb')).releases, true, 'the website waitlist signup still counts: the unticked box took nothing back');
+  assert.equal(rows(listed, "SELECT COUNT(*) n FROM mail_off")[0].n, 0);
+});
+
+test('the app echoing its old box on every save never undoes a releases stop', async () => {
+  // Why (review of #436): the app sends `marketing` (the Tips answer GET showed it) on every save.
+  const {e} = setup();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});
+  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', tips: true});
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', releases: false});
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', marketing: true});   // the echo of the box GET showed
+  assert.deepEqual(await news(e), {releases: false, tips: true, answered: true, old: true}, 'the releases stop stays');
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', tips: false});   // a stop made through a mail link
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', marketing: true, cadence: 'weekly'});   // the app's cached box, echoed on a cadence change
+  assert.deepEqual(await news(e), {releases: false, tips: false, answered: true, old: false}, 'a stale echo never lifts a stop (Gitar on #436)');
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', tips: true});
+  assert.equal((await news(e)).tips, true, 'only the explicit field lifts it');
+});
+
+test('a Pro account saves its choices at its own address; only changing the address is refused', async () => {
+  // Why (review of #hr-24, 5 Nov 2026): the 409 came first, so a Pro person could not tick product news.
+  const {e} = setup();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com'});
+  e.STATS.db.prepare("UPDATE pro_accounts SET plan = 'pro'").run();
+  assert.equal((await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com', tips: true})).status, 200);
+  assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true}, 'a Pro account counts as confirmed');
+  assert.equal((await call(address, e, 'install-aaaa', 'PUT', {email: 'other@example.com'})).status, 409);
+  for (const list of ['releases', 'tips']) e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES ((SELECT email_hash FROM pro_accounts), ?, 'unsubscribe', 'x')").run(list);
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com', releases: true, tips: true});
+  assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true}, 'a Pro account with no confirm timestamp can lift its own stop (Gitar on #436)');
+});
+
+test('a yes from an unconfirmed address does not erase that address\'s stop: it may be someone else\'s', async () => {
+  // Why (review of #hr-24, 5 Nov 2026): anyone can type an address, and a stop must beat a tick.
+  const {e} = setup();
+  for (const list of ['releases', 'tips']) e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, ?, 'unsubscribe', 'x')").run(await addrOf('stopped@example.com'), list);
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'stopped@example.com', releases: true, tips: true});
+  assert.equal(rows(e, "SELECT COUNT(*) n FROM mail_off WHERE list IN ('releases', 'tips')")[0].n, 2);
+  assert.deepEqual(await news(e), {releases: false, tips: false, answered: true, old: false});
+  e.STATS.db.prepare('UPDATE pro_accounts SET email_confirmed_at = ?').run('2026-10-16T09:00:00Z');
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'stopped@example.com', releases: true, tips: true});
+  assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true}, 'the confirmed owner of the address can turn them back on');
+});
+
+test('a website waitlist signup counts for releases and the app one for the Pro mail only: the app shows what the sender does', async () => {
+  // Why (owner, 5 Nov 2026): the app\'s waitlist dialog still says "We\'ll e-mail you once when Pro opens. Nothing else." (shared/mail-lists.js signupKind).
+  const e = withWaitlist(setup().e);
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'web@example.com'});
+  assert.deepEqual(await news(e), {releases: true, tips: false, answered: false, old: false});
+  await call(address, e, 'install-bbbb', 'PUT', {email: 'app@example.com'});
+  assert.deepEqual(await news(e, 'install-bbbb'), {releases: false, tips: false, answered: false, old: false});
 });
 
 // Owner, 2 Nov 2026 ("Keep it, make it painless"): the welcome goes once per address ever, so a lost mail needs a Resend, rate-limited.

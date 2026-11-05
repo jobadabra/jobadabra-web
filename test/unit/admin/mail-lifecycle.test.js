@@ -13,14 +13,15 @@ import {PAGES} from '../../../admin/admin.js';
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0083_hosted.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0083_hosted.sql', '0135_mail_on.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE revoked (who TEXT PRIMARY KEY, reason TEXT, created_at TEXT)');
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values), run: async () => db.prepare(text).run(...args),
     all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
   return {db, prepare: text => statement(text)};
 }
-const kv = () => { const m = new Map(); return {m, get: async k => m.get(k) ?? null, put: async (k, v) => { m.set(k, v); }}; };
+const kv = () => { const m = new Map(); return {m, get: async k => m.get(k) ?? null, put: async (k, v) => { m.set(k, v); },
+  list: async ({prefix}) => ({keys: [...m.keys()].filter(k => k.startsWith(prefix)).map(name => ({name, metadata: undefined})), list_complete: true})}; };
 const now = new Date('2026-10-16T10:00:00Z');
 const setup = (extra = {}) => { const sent = [], e = {MAIL: 'on', TRIAL_REMINDERS: 'on', STATS: d1(), WAITLIST: kv(), STATS_SALT: 'salt', EMAIL: {send: async m => { sent.push(m); return {messageId: `m${sent.length}`}; }}, ...extra}; return {e, sent}; };
 // A trial account with one install, that applied `applied` times and started its first run `days` days ago.
@@ -77,17 +78,20 @@ test('"Always on paused" goes to a trial account whose hosted schedule paused, f
   assert.equal((await run(e, new Date(now.getTime() + 31 * 86400000))).paused, 2);
 });
 
-test('the Pro-launch mail: off without its flag; counts without send=1; goes only to opted-in addresses, once', async () => {
+test('the Pro-launch mail: off without its flag; counts without send=1; goes to a confirmed Tips and tricks tick and to the waitlist, once', async () => {
+  // Why (owner, 5 Nov 2026): the Pro launch is a Tips and tricks mail that every waitlist signup also asked for (shared/mail-lists.js).
   const {e, sent} = setup();
-  const a = await trial(e, 'yes@example.com'); await trial(e, 'no@example.com');
-  e.STATS.db.prepare('UPDATE pro_accounts SET marketing_opt_in = 1 WHERE id = ?').run(a);
+  const a = await trial(e, 'yes@example.com'); await trial(e, 'no@example.com'); await trial(e, 'unconfirmed@example.com');
+  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x' WHERE id = ?").run(a);
+  e.STATS.db.prepare("INSERT INTO mail_on (addr, list, via, at) VALUES ((SELECT email_hash FROM pro_accounts WHERE id = ?), 'tips', 'card', 'x')").run(a);
+  e.STATS.db.prepare("INSERT INTO mail_on (addr, list, via, at) VALUES ((SELECT email_hash FROM pro_accounts WHERE email = 'unconfirmed@example.com'), 'tips', 'card', 'x')").run();
   assert.deepEqual(await launch(e), {off: true});
   assert.deepEqual(await launch({...e, MAIL_LAUNCH: 'on'}), {off: true}, 'the marketing flag is the owner\'s second key');
   const on = {...e, MAIL_LAUNCH: 'on', MARKETING_MAIL: 'on'};
   assert.deepEqual(await launch(on, {now}), {would: 1});
   assert.equal(sent.length, 0);
   assert.deepEqual(await launch(on, {send: true, now}), {sent: 1, skipped: 0});
-  assert.equal(sent[0].to, 'yes@example.com');
+  assert.equal(sent[0].to, 'yes@example.com', 'an unconfirmed tick may be a stranger\'s: nothing goes to it');
   assert.match(sent[0].text, /Pro €9, or Pro \+ AI €19 with €10 of AI credit \(about \d+ applications\)/);
   assert.match(sent[0].text, /Actual usage varies\./);
   assert.match(sent[0].text, /Pro uses smarter in-house AI while you have credit/);
@@ -106,7 +110,8 @@ test('the signups page counts trial accounts and mail, never shows an address, a
   const {e} = setup();
   const a = await trial(e, 'secret-person@example.com', {applied: 17});
   await trial(e, 'other@example.com');
-  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = '2026-10-15', marketing_opt_in = 1 WHERE id = ?").run(a);
+  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = '2026-10-15' WHERE id = ?").run(a);
+  e.STATS.db.prepare("INSERT INTO mail_on (addr, list, via, at) VALUES ((SELECT email_hash FROM pro_accounts WHERE id = ?), 'tips', 'card', 'x')").run(a);
   await run(e, now);
   const data = await collect(e, now);
   assert.deepEqual([data.trial, data.confirmed, data.unconfirmed, data.optIn, data.converted], [2, 1, 1, 1, 0]);

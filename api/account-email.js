@@ -4,6 +4,7 @@
 import {authorize, digestOf, equal, tokenFor} from '../shared/guard.js';
 import {installOfTrialKey} from '../shared/trial-key.js';
 import {addrOf, confirmLink, send, validAddress, clean} from '../shared/mail.js';
+import {newsAnswer, newsFacts, recordNews} from '../shared/mail-lists.js';
 import {fromTelegram} from './mail-html.js';
 import {CADENCES, deliver, hold, testAlert} from './mail-held.js';
 import {page, switchOff} from './mail-unsub.js';
@@ -18,15 +19,6 @@ async function who(request, env) {
   const given = parseKey(request.headers.get('x-api-key'));
   const access = given && await authorize(env, given.install, given.token, 'ai');
   return access?.ok ? given.install : null;
-}
-
-// Why (28 Oct 2026, Gitar on #218): product news are opt-out, and mail_off is the one gate (shared/mail.js mailAllowed), so an explicit "no" from the app must write it, not only the column.
-async function setMarketing(env, account, on, now) {
-  await env.STATS.prepare('UPDATE pro_accounts SET marketing_opt_in = ?, marketing_opt_in_at = ? WHERE id = ?').bind(on ? 1 : 0, on ? now.toISOString() : null, account).run();
-  const row = await env.STATS.prepare('SELECT email_hash FROM pro_accounts WHERE id = ?').bind(account).first();
-  if (!row?.email_hash) return;
-  if (on) await env.STATS.prepare("DELETE FROM mail_off WHERE addr = ? AND list = 'marketing'").bind(row.email_hash).run();
-  else await switchOff(env, row.email_hash, 'marketing', 'settings', now);
 }
 
 // Why (3 Nov 2026, owner: "Send me a telegram message everytime a new user puts his email, adds his email in the application"): the owner's Brain chat hears of each address an install gives, first time ("New user e-mail")
@@ -50,9 +42,10 @@ export async function address(request, env, now = new Date(), fetcher = fetch, c
   if (!install || !env.STATS) return json(401, {ok: false, error: 'unauthorized'});
   let account = await accountOf(env, install);
   if (request.method === 'GET') {
-    // Why (28 Oct 2026, Gitar on #218): product news are opt-out, so "on" is the absence of a mail_off row; reading the old opt-in column showed an unasked account as off, and the app's next save would have stopped its mail.
-    const newsOff = !!(account?.email_hash && await env.STATS.prepare("SELECT 1 AS y FROM mail_off WHERE addr = ? AND list IN ('marketing', 'all')").bind(account.email_hash).first());
-    return json(200, {ok: true, email: account?.email || null, confirmed: !!account?.email_confirmed_at, marketing: !!account?.email_hash && !newsOff, serviceOff: !!account?.service_mail_off_at, cadence: account?.digest_cadence || 'daily', plan: account?.plan || null,
+    // Why (5 Nov 2026, the owner's box showed ticked with no tick stored): each box shows what the site holds (shared/mail-lists.js), never "no stop on file". `marketing` is for apps already out there.
+    const facts = account?.email_hash ? await newsFacts(env, account.email_hash, account.email) : null;
+    const answer = list => !!facts && newsAnswer(list, facts);
+    return json(200, {ok: true, email: account?.email || null, confirmed: !!account?.email_confirmed_at, releases: answer('releases'), tips: answer('tips'), jobdigest: answer('jobdigest'), newsAnswered: !!facts?.answered, marketing: answer('tips'), serviceOff: !!account?.service_mail_off_at, cadence: account?.digest_cadence || 'daily', plan: account?.plan || null,
       sending: env.MAIL === 'on' && !!env.EMAIL,
       unconfirmedStopped: !!(account?.email_hash && await env.STATS.prepare("SELECT 1 AS y FROM mail_off WHERE addr = ? AND list = 'service' AND reason = 'unconfirmed'").bind(account.email_hash).first())});   // 14 days unconfirmed (api/mail-held.js)   // the kill switch (shared/mail.js): the app says so instead of promising a mail
   }
@@ -60,7 +53,7 @@ export async function address(request, env, now = new Date(), fetcher = fetch, c
   const body = await request.json().catch(() => ({})), email = clean(body.email);
   if (!validAddress(email)) return json(400, {ok: false, error: 'Enter an email address like you@example.com.'});
   const hash = await digestOf(email);
-  if (account && account.plan === 'pro') return json(409, {ok: false, error: 'pro'});   // a Pro account's address changes only through its own sign-in
+  if (account && account.plan === 'pro' && account.email_hash !== hash) return json(409, {ok: false, error: 'pro'});   // a Pro account's address changes only through its own sign-in
   const holder = await env.STATS.prepare('SELECT id FROM pro_accounts WHERE email_hash = ?').bind(hash).first();
   let fresh = false, changed = false;   // a new or changed address: welcomed with the confirm button and told to the owner
   if (account && account.email_hash !== hash) {
@@ -84,7 +77,7 @@ export async function address(request, env, now = new Date(), fetcher = fetch, c
     if (ctx?.waitUntil) ctx.waitUntil(ping); else await ping;
     await welcome(env, email, now);
   }
-  if (typeof body.marketing === 'boolean') await setMarketing(env, account.id, body.marketing, now);
+  await recordNews(env, account.id, body, now);
   if (CADENCES.includes(body.cadence)) await env.STATS.prepare('UPDATE pro_accounts SET digest_cadence = ? WHERE id = ?').bind(body.cadence, account.id).run();   // how often the digest comes: daily or weekly
   return json(200, {ok: true});
 }

@@ -7,12 +7,15 @@ export const SWITCHES = ['MAIL', 'MARKETING_MAIL', 'TRIAL_REMINDERS', 'MAIL_LAUN
 const one = async (env, sql, ...args) => (await env.STATS.prepare(sql).bind(...args).first().catch(() => null)) || {n: 0};
 const many = async (env, sql, ...args) => (await env.STATS.prepare(sql).bind(...args).all().catch(() => ({results: []}))).results || [];
 
+// The accounts each mail type reaches (shared/mail-lists.js; releases wait for an answer); the waitlist is in the owner's card (admin/email-audience.js). Inlined literal: `list` comes from this file only.
+const NOT_STOPPED = list => `NOT EXISTS (SELECT 1 FROM mail_off o WHERE o.addr = a.email_hash AND o.list IN ('all', '${list}'))`;
+
 export const windowOf = value => (WINDOWS.includes(Number(value)) ? Number(value) : 7);
 export const hashOf = addr => String(addr || '').slice(0, 8);   // addr is already a digest (shared/mail.js addrOf); 8 characters tell two rows apart and nothing else
 
 export async function collect(env, {days = 7, now = new Date()} = {}) {
   const since = new Date(now.getTime() - days * DAY).toISOString();
-  const [perDay, byTemplate, refused, recent, offReasons, confirmed, unconfirmed, optIn, held, heldOldest, today] = await Promise.all([
+  const [perDay, byTemplate, refused, recent, offReasons, confirmed, unconfirmed, service, releases, tips, digest, held, heldOldest, today] = await Promise.all([
     many(env, "SELECT substr(at, 1, 10) AS day, SUM(status = 'sent') AS sent, SUM(status NOT IN ('sent', 'claimed')) AS refused FROM mail_log WHERE at >= ? GROUP BY day ORDER BY day", since),
     many(env, "SELECT template, SUM(status = 'sent') AS sent, SUM(status NOT IN ('sent', 'claimed')) AS refused, MAX(CASE WHEN status = 'sent' THEN at END) AS last FROM mail_log WHERE at >= ? GROUP BY template ORDER BY sent DESC", since),
     many(env, "SELECT status AS reason, COUNT(*) AS n FROM mail_log WHERE status NOT IN ('sent', 'claimed') AND at >= ? GROUP BY status ORDER BY n DESC", since),
@@ -20,7 +23,10 @@ export async function collect(env, {days = 7, now = new Date()} = {}) {
     many(env, 'SELECT reason, list, COUNT(*) AS n FROM mail_off GROUP BY reason, list ORDER BY n DESC'),
     one(env, 'SELECT COUNT(*) AS n FROM pro_accounts WHERE email_confirmed_at IS NOT NULL'),
     one(env, 'SELECT COUNT(*) AS n FROM pro_accounts WHERE email_confirmed_at IS NULL'),
-    one(env, 'SELECT COUNT(*) AS n FROM pro_accounts WHERE marketing_opt_in = 1'),
+    one(env, `SELECT COUNT(*) AS n FROM pro_accounts a WHERE a.service_mail_off_at IS NULL AND ${NOT_STOPPED('service')}`),
+    one(env, `SELECT COUNT(*) AS n FROM pro_accounts a WHERE (a.email_confirmed_at IS NOT NULL OR a.plan = 'pro') AND ${NOT_STOPPED('releases')} AND (EXISTS (SELECT 1 FROM mail_on y WHERE y.addr = a.email_hash AND y.list IN ('releases', 'tips')) OR EXISTS (SELECT 1 FROM mail_off o WHERE o.addr = a.email_hash AND o.list IN ('releases', 'tips')))`),
+    one(env, `SELECT COUNT(*) AS n FROM pro_accounts a JOIN mail_on y ON y.addr = a.email_hash AND y.list = 'tips' WHERE (a.email_confirmed_at IS NOT NULL OR a.plan = 'pro') AND ${NOT_STOPPED('tips')}`),
+    one(env, `SELECT COUNT(*) AS n FROM pro_accounts a JOIN mail_on y ON y.addr = a.email_hash AND y.list = 'jobdigest' WHERE (a.email_confirmed_at IS NOT NULL OR a.plan = 'pro') AND ${NOT_STOPPED('jobdigest')}`),
     one(env, 'SELECT COUNT(*) AS n, COUNT(DISTINCT account) AS accounts FROM mail_held'),
     one(env, 'SELECT MIN(at) AS at, 0 AS n FROM mail_held'),
     one(env, "SELECT COUNT(*) AS n FROM mail_log WHERE status = 'sent' AND at >= ?", new Date(now.getTime() - DAY).toISOString()),
@@ -30,6 +36,6 @@ export async function collect(env, {days = 7, now = new Date()} = {}) {
   const failed = refused.find(row => row.reason === 'failed')?.n || 0;
   const stopped = offReasons.filter(row => row.reason === 'bounce' || row.reason === 'complaint').reduce((total, row) => total + row.n, 0);
   return {days, testMail, sent, notSent, failed, stopped, perDay, byTemplate, refused, recent: recent.map(row => ({...row, addr: hashOf(row.addr)})), offReasons,
-    confirmed: confirmed.n, unconfirmed: unconfirmed.n, optIn: optIn.n, held: {items: held.n, accounts: held.accounts || 0, oldest: heldOldest.at || null}, today: today.n,
+    confirmed: confirmed.n, unconfirmed: unconfirmed.n, types: {service: service.n, releases: releases.n, tips: tips.n, jobdigest: digest.n}, held: {items: held.n, accounts: held.accounts || 0, oldest: heldOldest.at || null}, today: today.n,
     switches: SWITCHES.map(name => ({name, on: env[name] === 'on'})), dayMax: Number(env.MAIL_DAY_MAX || 3000)};
 }

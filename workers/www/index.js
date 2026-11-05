@@ -146,11 +146,12 @@ export async function waitlist(request, env) {
 
   const key = `signup:${email}`;
   if (await env.WAITLIST.get(key)) return json(200, {ok: true, already: true});
-  const source = form.source === 'app' ? 'app' : 'web';   // the Plan screen in the Desktop App says "app"; the website form says nothing
+  // The Plan screen in the Desktop App says "app"; the website form says nothing. Why (owner, 5 Nov 2026): "app-news" is for the app once its dialog names release mails (shared/mail-lists.js signupKind).
+  const source = ['app', 'app-news'].includes(form.source) ? form.source : 'web';
   const entry = {email, role, source, at: new Date().toISOString(), country: request.cf?.country || ''};
   await env.WAITLIST.put(key, JSON.stringify(entry), {metadata: {at: entry.at, role, source}});
   // Why (5 Nov 2026, owner: an alert never carries a name or e-mail address): the address is read on /admin/growth/email, the ping says one came.
-  await alertOwner(env, 'pro-waitlist', {text: `✈️ Pro early access sign-up${role ? ` · ${role}` : ''}${source === 'app' ? ' · from the app' : ''}`, link: 'https://www.jobadabra.top/admin/growth/email',
+  await alertOwner(env, 'pro-waitlist', {text: `✈️ Pro early access sign-up${role ? ` · ${role}` : ''}${source !== 'web' ? ' · from the app' : ''}`, link: 'https://www.jobadabra.top/admin/growth/email',
     legacy: env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID ? {token: env.TELEGRAM_BOT_TOKEN, chat: env.TELEGRAM_CHAT_ID} : null}).catch(() => {});
   return json(200, {ok: true});
 }

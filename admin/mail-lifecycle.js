@@ -3,6 +3,7 @@
 // The trial numbers are the ones GET /api/trial/status keeps in KV per install (shared/trial.js). Guard: test/unit/admin/mail-lifecycle.test.js.
 import {digestOf} from '../shared/guard.js';
 import {addrOf, send} from '../shared/mail.js';
+import {audienceRows} from './email-audience.js';
 import {FREE_APPLICATIONS, stand} from '../shared/trial.js';
 import {OFFERS} from '../shared/pro-packages.js';
 
@@ -56,10 +57,10 @@ export async function run(env, now = new Date()) {
   return done;
 }
 
-// The Pro-launch mail to every opted-in address that has not had it (owner sends it by hand: POST /admin/mail/launch). env.MAIL_LAUNCH = "on" and env.MARKETING_MAIL = "on" are the flags; without ?send=1 it only counts.
+// The Pro-launch mail to every Tips and tricks tick and waitlist signup (shared/mail-lists.js) that has not had it (owner sends it by hand: POST /admin/mail/launch). env.MAIL_LAUNCH = "on" and env.MARKETING_MAIL = "on" are the flags; without ?send=1 it only counts.
 export async function launch(env, {send: really = false, now = new Date()} = {}) {
   if (env.MAIL_LAUNCH !== 'on' || env.MARKETING_MAIL !== 'on') return {off: true};
-  const rows = (await env.STATS.prepare('SELECT email FROM pro_accounts WHERE marketing_opt_in = 1 ORDER BY created_at').all()).results || [];
+  const rows = (await audienceRows(env)).filter(row => row.launch);
   const todo = [];
   for (const {email} of rows) if (!await sentSince(env, email, 'pro-launch', '')) todo.push(email);
   if (!really) return {would: todo.length};
