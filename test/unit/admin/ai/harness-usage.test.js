@@ -25,7 +25,8 @@ test('every value of the upload is clamped, unknown tool ids are dropped, and cl
   assert.deepEqual(wild.help.with_map, {n: 3, turns: 0, calls: 0, minutes: 1e5, ready: 3}, 'ready never exceeds n');
   assert.deepEqual(wild.help.without_map, {n: 0, turns: 0, calls: 0, minutes: 0, ready: 0});
   assert.deepEqual(cleanFixer(day), day); assert.deepEqual(cleanFixer(cleanFixer(wild)), wild);
-  for (const bad of [null, 'text', 5, []]) assert.equal(cleanFixer(bad), null);
+  for (const bad of [null, 'text', 5, [], {runs: 'x', tools: []}, {runs: 3}]) assert.equal(cleanFixer(bad), null);
+  assert.deepEqual(cleanFixer({runs: 24, tools: [], help: {with_map: {n: 500}, without_map: {n: 500}}}).help.with_map.n, 24); assert.equal(cleanFixer({runs: 24, tools: [], help: {with_map: {n: 500}, without_map: {n: 500}}}).help.without_map.n, 0, 'groups never add up to more than the runs');
 });
 
 test('below 5 runs in a group the card says "too few to compare" and claims nothing; with enough runs it says the difference as a link', () => {
@@ -33,6 +34,7 @@ test('below 5 runs in a group the card says "too few to compare" and claims noth
   assert.match(small, /too few to compare/); assert.doesNotMatch(small, /fewer turns|more turns/);
   const enough = fixerCard({...day, day: '2026-11-05'});
   assert.match(enough, /43% fewer turns with the map/); assert.match(enough, /link, not a cause/); assert.match(enough, /as of 2026-11-05/); assert.match(enough, /<details>/);
+  assert.match(fixerCard({...day, help: {with_map: day.help.with_map, without_map: {...day.help.without_map, turns: 0}}}), /too few to compare/, 'a zero baseline is no baseline');
   assert.match(fixerCard({...day, help: {with_map: {...day.help.with_map, turns: 6}, without_map: day.help.without_map}}), /more turns with the map/);
 });
 
@@ -43,7 +45,7 @@ test('no card, or a card that counted no run, reads "No data yet", never zeros',
 test('a stored card of any shape (raw, from before a change) renders without throwing and never as HTML', () => {
   for (const stored of [{runs: 'many', tools: 'x', help: null}, {runs: 5, tools: [{id: 'map-index', runs: '<img src=x onerror=1>'}], help: {with_map: {n: '<b>', turns: '<i>'}}}, new Date(), {runs: 3, day: '<script>', tools: [], help: {}}]) {
     const html = harnessPage(null, stored);
-    assert.doesNotMatch(html, /<img|<script>|<i>&lt|<b>x/);
+    assert.doesNotMatch(html, /<img|<script|onerror=/);
   }
   assert.doesNotMatch(fixerCard({runs: 3, day: '<script>', tools: [], help: {}}), /<script>|as of/);
   assert.match(harnessPage(null, null), /No data yet/, 'the page still has its other cards without the upload');
@@ -55,8 +57,10 @@ test('the route stores the kind clamped, the page shows the card to the owner on
   assert.equal((await call(e, '/admin/ai/harness')).status, 404);
   const html = await (await call(e, '/admin/ai/harness', owner)).text();
   assert.match(html, /does the map help/); assert.match(html, /43% fewer turns/); assert.match(html, /Context layers and sources/); assert.doesNotMatch(html, /evil/);
-  assert.equal((await put(e, {kind: 'harness-fixer', days: [{day: '2026-11-05', runs: 'x'}]})).status, 200, 'a card with no usable number is stored as empty, shown as No data yet');
-  assert.match(await (await call(e, '/admin/ai/harness', owner)).text(), /No data yet/);
+  assert.equal((await put(e, {kind: 'harness-fixer', days: [{day: '2026-11-06', runs: 'x'}]})).status, 400, 'a malformed day is refused and the last good card stays');
+  assert.match(await (await call(e, '/admin/ai/harness', owner)).text(), /43% fewer turns/);
+  assert.equal((await put(e, {kind: 'harness-fixer', days: [{day: '2026-11-07', runs: 0, tools: [], help: {}}]})).status, 200);
+  assert.match(await (await call(e, '/admin/ai/harness', owner)).text(), /No data yet/, 'a day with no runs reads as No data yet, not zeros');
   assert.equal((await put(e, {kind: 'harness-local', days: [{day: '2026-11-05'}]})).status, 400, 'the Mac kind is not accepted');
   assert.equal((await call(e, '/admin/agents/agent-coding', owner)).status, 200);
   assert.equal((await call(e, '/admin/ai/runs', owner)).status, 200);

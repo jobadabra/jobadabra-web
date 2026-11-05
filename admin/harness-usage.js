@@ -13,14 +13,15 @@ const TOOL_WORDS = {'map-index': ['Map index', 'docs/map/index.md'], 'map-hub': 
 export const MIN_GROUP = 5;
 const DAY = /^\d{4}-\d\d-\d\d$/;
 
-const group = source => { const n = count(source?.n); return {n, turns: avg(source?.turns), calls: avg(source?.calls), minutes: avg(source?.minutes), ready: Math.min(n, count(source?.ready))}; };
+const group = (source, room) => { const n = Math.min(room, count(source?.n)); return {n, turns: avg(source?.turns), calls: avg(source?.calls), minutes: avg(source?.minutes), ready: Math.min(n, count(source?.ready))}; };
 
 /** One day of the fixer upload -> the clamped card, or null when it is not an object. Unknown tool ids are dropped, a repeated id keeps its first row. */
 export function cleanFixer(card) {
-  if (!card || typeof card !== 'object' || Array.isArray(card)) return null;
+  if (!card || typeof card !== 'object' || Array.isArray(card) || typeof card.runs !== 'number' || !Array.isArray(card.tools)) return null;   // Why (5 Nov 2026, review): a malformed day must answer 400, not overwrite the last good day with zeros
   const runs = count(card.runs), seen = new Set();
   const tools = (Array.isArray(card.tools) ? card.tools.slice(0, 20) : []).filter(tool => TOOL_IDS.includes(tool?.id) && !seen.has(tool.id) && seen.add(tool.id)).map(tool => ({id: tool.id, runs: Math.min(runs, count(tool.runs))}));
-  return {runs, tools, help: {with_map: group(card.help?.with_map), without_map: group(card.help?.without_map)}};
+  const yes = group(card.help?.with_map, runs);   // the two groups are parts of the same runs: they cannot add up to more than `runs`
+  return {runs, tools, help: {with_map: yes, without_map: group(card.help?.without_map, runs - yes.n)}};
 }
 
 const pct = (part, whole) => (whole ? Math.round(part / whole * 100) : 0);
@@ -29,13 +30,13 @@ const bar = share => `<span class="hu-bar" role="img" aria-label="${share}% of r
 /** The verdict chip and sentence: nothing is claimed below MIN_GROUP runs in either group; otherwise the difference in turns, said as a link in observed runs, not a cause. */
 function verdict(help) {
   const {with_map: yes, without_map: no} = help;
-  if (yes.n < MIN_GROUP || no.n < MIN_GROUP) return {chip: chip('wait', `⚠️ too few to compare · ${yes.n} with the map, ${no.n} without`, `Needs at least ${MIN_GROUP} runs in each group`), line: `${yes.n} runs used the map and ${no.n} did not: too few runs to compare (needs ${MIN_GROUP} in each group).`};
+  if (yes.n < MIN_GROUP || no.n < MIN_GROUP || !no.turns) return {chip: chip('wait', `⚠️ too few to compare · ${yes.n} with the map, ${no.n} without`, `Needs at least ${MIN_GROUP} runs in each group`), line: `${yes.n} runs used the map and ${no.n} did not: too few runs to compare (needs ${MIN_GROUP} in each group, with turns counted).`};
   const change = no.turns ? Math.round((yes.turns - no.turns) / no.turns * 100) : 0;
   const kind = change <= -10 ? ['good', `✅ ${-change}% fewer turns with the map`] : change >= 10 ? ['warn', `▲ ${change}% more turns with the map`] : ['plain', '≈ about the same turns'];
   return {chip: chip(...kind), line: `Runs that read the map took <b>${yes.turns}</b> turns on average, runs that did not <b>${no.turns}</b>. The runs are not matched, so this shows a link, not a cause.`};
 }
 
-export const USAGE_STYLE = '.hu-bar{display:inline-block;height:8px;background:#262c33;border-radius:4px;overflow:hidden;vertical-align:middle}.hu-bar i{display:block;height:100%;background:#5ec47a}.ai-wrap .hu-tbl{min-width:0}.hu-bar{width:80px}@media(min-width:700px){.hu-bar{width:120px}}.hu-tbl td:nth-child(2){white-space:nowrap}.hu-tbl td:not(:first-child),.hu-tbl th:not(:first-child){text-align:right}';
+export const USAGE_STYLE = '.hu-bar{display:inline-block;width:80px;height:8px;background:#262c33;border-radius:4px;overflow:hidden;vertical-align:middle}.hu-bar i{display:block;height:100%;background:#5ec47a}.ai-wrap .hu-tbl{min-width:0}@media(min-width:700px){.hu-bar{width:120px}}.hu-tools td:nth-child(2){white-space:nowrap}.hu-tbl td:not(:first-child),.hu-tbl th:not(:first-child){text-align:right}';
 
 /** The card "Use by the CI fixer · does the map help?" from a stored fixer card (or null) and its stored day; "No data yet" when there is no card or it counted no run. */
 export function fixerCard(stored) {
@@ -47,7 +48,7 @@ export function fixerCard(stored) {
   const ready = group => `<b>${group.ready}</b> of ${group.n}${group.n ? ` · ${pct(group.ready, group.n)}%` : ''}`;
   return `<section class="card"><h2>${title} <span class="muted">· last 30 days · ${card.runs} runs${day ? ` · as of ${esc(day)}` : ''}</span></h2>
 <div class="ai-chips">${call.chip}</div><p style="margin:8px 0">${call.line}</p>
-<div class="ai-wrap"><table class="hu-tbl"><tr><th>Map page read</th><th>Runs</th><th>Share</th></tr>${tools}</table></div>
+<div class="ai-wrap"><table class="hu-tbl hu-tools"><tr><th>Map page read</th><th>Runs</th><th>Share</th></tr>${tools}</table></div>
 <details><summary>With the map vs without</summary><div class="ai-wrap"><table class="hu-tbl"><tr><th></th><th>With the map</th><th>Without</th></tr>
 <tr><td>Runs</td><td><b>${yes.n}</b></td><td><b>${no.n}</b></td></tr><tr><td>Turns (average)</td><td><b>${yes.turns}</b></td><td><b>${no.turns}</b></td></tr>
 <tr><td>Broker calls (average)</td><td><b>${yes.calls}</b></td><td><b>${no.calls}</b></td></tr><tr><td>Minutes (average)</td><td><b>${yes.minutes}</b></td><td><b>${no.minutes}</b></td></tr>

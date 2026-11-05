@@ -84,6 +84,6 @@ export async function view(request, env, now = new Date()) {
   if (url.searchParams.has('key')) return remember(url, env, request);
   const since = new Date(now.getTime() - 63 * 86400000).toISOString().slice(0, 10);
   let rows = [];
-  try { rows = env.STATS ? (await env.STATS.prepare('SELECT kind, day, card, updated_at FROM agent_coding_days WHERE day >= ? AND kind NOT LIKE \'harness%\' ORDER BY day').bind(since).all()).results || [] : []; } catch { rows = []; }
+  try { rows = env.STATS ? (await env.STATS.prepare('SELECT kind, day, card, updated_at FROM agent_coding_days WHERE day >= ? AND kind NOT IN (\'harness\', \'harness-fixer\') ORDER BY day').bind(since).all()).results || [] : []; } catch { rows = []; }
   return new Response(url.searchParams.get('tab') === 'sdlc' ? sdlcPage(rows, now) : page(rows, now), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
 }
