@@ -56,7 +56,7 @@ export function windows(limits, fallback, nowMs = Date.now()) {
   // The provider's own word beats our percent (a review finding, 5 Nov 2026): 'allowed_warning' is amber, anything else but 'allowed' is a limit hit, whatever the number says.
   const provider = status => (!status || status === 'allowed' ? null : status === 'allowed_warning' ? {tone: 'warn', word: 'Provider warns'} : {tone: 'bad', word: 'Limit reached'});
   const claudeWin = (w, who, sub, note) => {
-    const ok = w && live(w.resetsAt), state = provider(w?.status) || provider(limits?.claude?.status);
+    const ok = w && live(w.resetsAt), state = w?.status ? provider(w.status) : provider(limits?.claude?.status);   // the window's own word wins, 'allowed' included (Gitar on #376)
     return {key: 'claude', who, label: who, sub, pct: ok ? clamp(w.utilization * 100) : null, resets: ok ? w.resetsAt * 1000 : 0, note: ok ? note : 'Read again at the next Claude call', state: ok ? state : null};
   };
   const codex = limits?.codex, codexOk = codex && live(codex.resetsAt);
@@ -77,9 +77,10 @@ export function limitsCard(limits, fallback, nowMs = Date.now()) {
     const tone = w.pct === null ? 'off' : (w.state && (w.state.tone === 'bad' || toneOf(w.pct) === 'good') ? w.state.tone : toneOf(w.pct));
     return {...w, tone, word: w.state?.word || w.word};
   });
-  const known = rings.filter(w => w.pct !== null), top = known.sort((a, b) => b.pct - a.pct)[0];
-  const flagged = rings.find(w => w.state && w.pct !== null && w.state.tone === 'bad') || rings.find(w => w.state && w.pct !== null);
-  const verdict = flagged ? [flagged.state.tone, `${flagged.who}: ${flagged.state.word.toLowerCase()}`] : !top ? ['off', 'No limit read yet'] : top.pct >= WARN ? [top.tone, `${top.who} at ${top.pct}%`] : ['good', 'Nothing near a limit'];
+  const known = rings.filter(w => w.pct !== null), top = [...known].sort((a, b) => b.pct - a.pct)[0];
+  const rank = w => ({bad: 2, warn: 1, good: 0}[w.tone] ?? -1) * 1000 + (w.state ? 100 : 0) + (w.pct ?? 0);   // the most severe ring speaks: red before amber, a provider word before a bare percent (Gitar on #376)
+  const worst = known.slice().sort((x, y) => rank(y) - rank(x))[0];
+  const verdict = !worst ? ['off', 'No limit read yet'] : worst.tone === 'good' ? ['good', 'Nothing near a limit'] : [worst.tone, worst.state ? `${worst.who}: ${worst.state.word.toLowerCase()}` : `${worst.who} at ${worst.pct}%`];
   return `<section class="card" id="ai-limits"><h2>🎯 Where each subscription stands</h2><small class="muted">The broker tries Codex first, then Claude, then Free AI. Each ring is one window the provider itself reports. Times are Zurich.</small>
 <p style="margin:10px 0 0"><span class="chip ${verdict[0]}">${esc(verdict[1])}</span> <small class="muted">${top ? `Highest: ${esc(top.who)} at ${top.pct}%. ` : ''}Scheduled jobs stop at 70% of the Codex week.</small></p>
 <div class="rings">${rings.map(w => ring({...w, now: nowMs})).join('\n')}</div></section>`;

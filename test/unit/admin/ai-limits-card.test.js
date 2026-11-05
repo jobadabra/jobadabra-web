@@ -89,3 +89,20 @@ test('time words never print 24 h; a ring at 0% draws no dot', () => {
   const zero = limitsCard(subscriptionOf({limits: {usedPercent: 0, resetsAt: sec(now + 3600e3)}}), null, now);
   assert.match(zero, /stroke-linecap="butt" stroke-dasharray="0\.0 400"/);
 });
+
+// Gitar on #376 (5 Nov 2026): two more cases of the same class, "which word speaks".
+test('a window that says allowed is not turned red by another window or the overall status', () => {
+  const both = subscriptionOf({chain: [{name: 'claude', limits: {status: 'rejected', fiveHour: {utilization: 0.4, resetsAt: sec(now + 3600e3), status: 'rejected'}, sevenDay: {utilization: 0.3, resetsAt: sec(now + 7200e3), status: 'allowed'}}}]});
+  const [, week, five] = windows(both, FALLBACK, now);
+  assert.equal(five.state.word, 'Limit reached'); assert.equal(week.state, null, 'the 7-day window reports allowed: no state');
+  assert.doesNotMatch(limitsCard(both, FALLBACK, now).split('Claude, week')[1].split('Claude, 5 hours')[0], /Limit reached/);
+  const none = windows(subscriptionOf({chain: [{name: 'claude', limits: {status: 'rejected', fiveHour: {utilization: 0.4, resetsAt: sec(now + 3600e3)}, sevenDay: null}}]}), FALLBACK, now)[2];
+  assert.equal(none.state.word, 'Limit reached', 'a window with no word of its own takes the overall one');
+});
+
+test('the verdict is the most severe ring: a red Codex beats a Claude warning; a warning beats a bare amber percent', () => {
+  const health = {limits: {usedPercent: 95, resetsAt: sec(now + 3600e3)}, chain: [{name: 'claude', limits: {status: 'allowed_warning', fiveHour: {utilization: 0.1, resetsAt: sec(now + 3600e3), status: 'allowed_warning'}, sevenDay: null}}]};
+  assert.match(limitsCard(subscriptionOf(health), FALLBACK, now), /chip bad">Codex at 95%/);
+  const amber = {limits: {usedPercent: 75, resetsAt: sec(now + 3600e3)}, chain: health.chain};
+  assert.match(limitsCard(subscriptionOf(amber), FALLBACK, now), /chip warn">Claude, 5 hours: provider warns/);
+});
