@@ -155,3 +155,12 @@ test('the email overview links to stable release drafts and template detail page
   assert.match(html, /href="\/admin\/growth\/email\?release=0\.9\.9"/);
   assert.match(html, /href="\/admin\/growth\/email\?template=welcome"/);
 });
+
+test('the four number tables are charts with the table behind "Show table"; the tooltip script is on the page once', async () => {
+  const {env} = await fill();
+  const html = page(await collect(env, {now}));
+  assert.equal((html.match(/<summary>Show table<\/summary>/g) || []).length, 4);   // By template, Why mail was not sent, Addresses, Stopped
+  assert.match(html, /By template<\/h2><div class="vz">[\s\S]*?<details class="vz-more"><summary>Show table[\s\S]*?<th>Template<\/th>/);
+  assert.equal((html.match(/id="tip"/g) || []).length, 1);
+  assert.match(html, /Last 10 refusals and failures<\/h2><table>/);   // a log stays a table
+});

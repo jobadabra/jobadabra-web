@@ -3,6 +3,8 @@
 import {filterLinks, trendChip} from './admin.js';
 import {viewer} from '../shared/auth.js';
 import {insightTrends} from './trends.js';
+import {stepCostChart} from './email-charts.js';
+import {figure, VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 const chip = (data, key) => (data.trends?.[key] ? trendChip(data.trends[key].label, data.trends[key].values, data.trends[key]) : '');   // its weeks (admin/trends.js)
 import {REASONS, MIN_PEOPLE, REASON_TEXT, day, pct, store, hints, report} from '../shared/intelligence.js';
 
@@ -22,7 +24,7 @@ header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px;min-width:0}
 table{width:100%;border-collapse:collapse;margin-top:8px}th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:6px 4px}
 td{padding:8px 4px;border-top:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}.bar{height:8px;border-radius:99px;background:var(--amber);min-width:2px}
-</style></head><body><main>
+${VIZ_STYLE}</style></head><body><main>
 <header><div><h1>🧠 Insights</h1><small class="muted">Counts only, by coarse tags: no job title, company or text. A role word is named only once ${MIN_PEOPLE}+ people chose it.</small></div>
 <div class="muted">Last ${range} · <a href="/intelligence">Public page</a></div></header>
 <section class="card"><h2>🔎 Is the search too narrow?${chip(data, 'coverage')}</h2><small class="muted">Share of postings in people's wanted places that their role keywords catch (reports from each crawl), by role and region.</small>
@@ -55,9 +57,9 @@ ${data.reasons.map(row => `<tr><td>${esc(REASON_TEXT[row.reason] || row.reason)}
 <section class="card"><h2>💸 What the AI costs us${chip(data, 'cost')}</h2><small class="muted">Included AI through the relay (founder and friend keys today, Pro later): money per step and per user per active day. This is what a pass price and a credit budget must cover.</small>
 <table><tr><th>Users</th><th>Total</th><th>Per user per active day</th><th>Median · 95th · max</th><th>Per user per month</th></tr>
 <tr><td>${data.cost.users}</td><td>$${data.cost.total.toFixed(2)}</td><td>$${data.cost.perUserDay.mean.toFixed(3)}</td><td>$${data.cost.perUserDay.median.toFixed(3)} · $${data.cost.perUserDay.p95.toFixed(3)} · $${data.cost.perUserDay.max.toFixed(3)}</td><td><b>$${data.cost.monthPerActiveUser.toFixed(2)}</b></td></tr></table>
-<table><tr><th>Step</th><th>Calls</th><th>Cost</th><th>Per call</th></tr>
-${data.cost.steps.map(row => `<tr><td>${esc(row.action)}</td><td>${row.calls}</td><td>$${row.usd.toFixed(3)}</td><td>$${row.perCall.toFixed(4)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No relay calls yet. Steps are labelled by the app, so an older app shows as "other".</td></tr>'}</table></section>
-</main></body></html>`;
+${figure({chart: stepCostChart(data.cost.steps), table: `<table><tr><th>Step</th><th>Calls</th><th>Cost</th><th>Per call</th></tr>
+${data.cost.steps.map(row => `<tr><td>${esc(row.action)}</td><td>${row.calls}</td><td>$${row.usd.toFixed(3)}</td><td>$${row.perCall.toFixed(4)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No relay calls yet. Steps are labelled by the app, so an older app shows as "other".</td></tr>'}</table>`})}</section>
+</main>${VIZ_TOOLTIP}</body></html>`;
 }
 export async function view(request, env, now = new Date()) {
   if (!await viewer(request, env) || !env.STATS) return new Response('Not found', {status: 404});
