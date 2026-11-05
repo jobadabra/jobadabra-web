@@ -84,8 +84,8 @@ test('the Worker applies a press to the next request: pressing MAIL off shows it
 // requests (fetch) and cron (scheduled); the queue and email handlers only record bounces and receive test mail.
 test('both entry points that can send mail lay the pressed switches over env', () => {
   const source = readFileSync(new URL('../../../workers/www/index.js', import.meta.url), 'utf8');
-  assert.match(source, /async function metered\([^)]*\) \{[^]*?withSwitches\(env\)/);
-  assert.match(source, /async scheduled\(event, rawEnv, ctx\) \{\s*const env = await withSwitches\(rawEnv\)/);
+  assert.match(source, /async function metered\([^)]*\) \{[^]*?await withSwitches\(env\.STATS \? \{\.\.\.env, STATS: meter\(env\.STATS, tally\)\}/);   // a request: the switch read is metered too
+  assert.match(source, /TIMERS_OWN_CRON\) return runTimers\(event, rawEnv[^\n]*\n\s*const env = await withSwitches\(rawEnv\)/);   // cron: after the 47 trigger, which sends no mail and must touch nothing else
 });
 
 test('a press that cannot be saved says so (503) instead of an unexplained error', async () => {

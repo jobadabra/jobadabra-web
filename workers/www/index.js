@@ -192,8 +192,9 @@ export async function judgeLearning(db, now = new Date()) {
 
 // Every request runs against a metered database (worker/d1-meter.js): its rows read and written, its route and its caller go to Workers Logs as one JSON line.
 async function metered(request, env, ctx) {
-  const tally = newTally(), laid = await withSwitches(env);   // Why (5 Nov 2026, owner: real switches): the pressed MAIL/MARKETING_MAIL/TRIAL_REMINDERS/MAIL_LAUNCH states lie over the wrangler.toml values for this request; read from the raw binding (not the per-request meter wrapper) so shared/mail-switches.js's 5 s cache is shared across requests
-  const withMeter = laid.STATS ? {...laid, STATS: meter(laid.STATS, tally)} : laid;
+  const tally = newTally();
+  // Why (5 Nov 2026, owner: real switches): the pressed MAIL/MARKETING_MAIL/TRIAL_REMINDERS/MAIL_LAUNCH states lie over the wrangler.toml values for this request (shared/mail-switches.js); the one small read is metered like the rest.
+  const withMeter = await withSwitches(env.STATS ? {...env, STATS: meter(env.STATS, tally)} : env);
   let status = 500;
   try { const response = await route(request, withMeter, ctx); status = response.status; return response; } finally { const line = requestLine(request, status, tally); if (line) console.log(line); }
 }
@@ -341,9 +342,9 @@ export default {
   queue: (batch, env) => mailUnsub.consume(batch, env),   // Email Sending bounce/complaint events (Queues subscription, api/mail-unsub.js)
   // Daily (wrangler.toml [triggers]): app reports older than 90 days dropped; the top problems go to GitHub triage.
   async scheduled(event, rawEnv, ctx) {
-    const env = await withSwitches(rawEnv);   // the pressed mail switches, like a request (shared/mail-switches.js)
     // Why (1 Nov 2026, owner: "Timers to site Worker, delete bot"): the old bot Worker's on-time starts (shared/timers.js, dormant until TIMERS=on). The 47 cron is its own trigger and is awaited, so a refused start fails the cron in Cloudflare's history; it never falls through to the daily jobs.
-    if (event.cron === TIMERS_OWN_CRON) return runTimers(event, env, {dispatch}).then(() => {});
+    if (event.cron === TIMERS_OWN_CRON) return runTimers(event, rawEnv, {dispatch}).then(() => {});   // starts the e2e run and nothing else: no mail, so no switch read (test/unit/shared/timers.test.js)
+    const env = await withSwitches(rawEnv);   // the pressed mail switches, like a request (shared/mail-switches.js)
     if (event.cron === SENTRY_CRON) {   // every 5 minutes: only the Sentry alerts (admin/sentry-alert.js); the daily jobs below run once a day
       ctx.waitUntil(hostedTick(env).then(done => { if (done.enqueued || Object.keys(done.paused).length) console.log(`hosted tick: ${JSON.stringify(done)}`); }).catch(error => console.error(`hosted tick: ${error.message}`)));   // hosted Always on: due schedules to the Queue (api/hosted-tick.js; nothing while HOSTED_ALWAYS_ON is off)
       ctx.waitUntil(readyTick(env).then(done => { if (done.started || done.finished) console.log(`ready tick: ${JSON.stringify(done)}`); }).catch(error => console.error(`ready tick: ${error.message}`)));   // Ready to send: due nights to the Queue, over-time nights finished (api/ready-tick.js; nothing while READY_TO_SEND is off)
