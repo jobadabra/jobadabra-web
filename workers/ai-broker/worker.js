@@ -10,7 +10,7 @@ import {refuseReply} from './lib/guard.mjs';
 import {slots} from './lib/queue.mjs';
 import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
 import {modelOf, validEffort, weightOf, EFFORTS} from './lib/tiers.mjs';
-import {exhausted, overloaded, codexMessage, fallbackToday, newNote, apiPrecheck, freeAiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
+import {exhausted, overloaded, codexMessage, tokenShaped, fallbackToday, newNote, apiPrecheck, freeAiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
 import {chainOf, configured, recordOutcome, engineHealth, CHOICES} from './lib/engines.mjs';
 import {CLAUDE_MODELS} from './lib/tiers.mjs';
 import {demotedNow, recordPerf} from './lib/adapt.mjs';
@@ -185,7 +185,7 @@ export class CodexBroker extends Container {
       if (answer.authFile) await this.ctx.storage.put('login', answer.authFile);   // write-through BEFORE the reply goes out: a rotated token is never only in the container
       if (!reply.ok && exhausted(answer.error) && hasLater) return null;
       if (!reply.ok && overloaded(answer.error) && hasLater) return {passOn: 'overloaded', detail: codexMessage(answer.error).slice(0, 200), refusal: json(502, {why: answer.error})};   // counted as a failure (and for JOB-202's demotion), but a later engine answers
-      if (!reply.ok) { if (answer.error === 'login-lost') await this.ctx.storage.put('lost', true); return json(reply.status === 500 && answer.error === 'login-lost' ? 503 : 502, {why: refuseReply(answer.error) ? 'codex-failed (detail withheld: token-shaped)' : answer.error}); }
+      if (!reply.ok) { if (answer.error === 'login-lost') await this.ctx.storage.put('lost', true); return json(reply.status === 500 && answer.error === 'login-lost' ? 503 : 502, {why: tokenShaped(answer.error) ? 'codex-failed (detail withheld: token-shaped)' : answer.error}); }
       if (answer.limits) { this.limits = answer.limits; await this.ctx.storage.put('limits', answer.limits); }
       const used = (answer.tokens.input + answer.tokens.output) * weightOf(body.effort);   // a higher effort counts for more of the week (lib/tiers.mjs EFFORT_WEIGHT)
       // Completions also transact: a token write must never overwrite a newer daily reservation.

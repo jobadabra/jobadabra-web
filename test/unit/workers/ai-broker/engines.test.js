@@ -241,10 +241,13 @@ test('Codex turned away for capacity (run 42040707448): the Claude subscription 
     assert.equal(reply.status, 502); assert.equal((await reply.json()).why, error);
     Date.now.mock.restore();
   }
-  for (const error of ['codex-failed:1 boom', 'codex-failed:1 rate_limit_exceeded', capacity('Selected model is at capacity sk-' + 'a'.repeat(30))]) {   // anything else, or a token-shaped text, stays Codex's own refusal
+  const escapedKey = capacity('Selected model is at capacity \\u0073k-' + 'a'.repeat(30));   // Gitar on #406: token-shaped only once its JSON escape is decoded
+  for (const error of ['codex-failed:1 boom', 'codex-failed:1 rate_limit_exceeded', capacity('Selected model is at capacity sk-' + 'a'.repeat(30)), escapedKey]) {   // anything else, or a token-shaped text, stays Codex's own refusal
     const {broker, calls} = world(t, 'codex', {...withToken, codex: () => new Response(JSON.stringify({error}), {status: 500})});
-    assert.equal((await broker.call('pr', body)).status, 502, error);
+    const reply = await broker.call('pr', body);
+    assert.equal(reply.status, 502, error);
     assert.equal(calls.claudeCli, 0);
+    if (error === escapedKey) assert.equal((await reply.json()).why, 'codex-failed (detail withheld: token-shaped)', 'the escaped key never leaves the broker');
     Date.now.mock.restore();
   }
 });
