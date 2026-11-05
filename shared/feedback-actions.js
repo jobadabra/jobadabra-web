@@ -50,7 +50,8 @@ async function deleteFiles(bucket, ref) {
 
 /**
  * Applies one action by the owner. `input` = {ref, action, note?, impact?}; `who` is the log's 'owner (session)' | 'owner (key)'. `opts`: {trusted: the caller proved it is the AI run (admin/feedback-ai.js), the only
- * way to apply an `internal` action; start: (ref) => Promise, starts the CI run for `ai` (absent = Send to AI is not set up)}.
+ * way to apply an `internal` action; run: {state_at, ai_run}, the exact attempt a trusted failure may end;
+ * start: (ref) => Promise, starts the CI run for `ai` (absent = Send to AI is not set up)}.
  * -> {ok: true, state, impact} | {ok: false, status, error}. The state change is a compare-and-set on the state read first (two clicks cannot both win) and is batched with its log line, which is written only when a row changed.
  * A delete removes the R2 files first (a failure there leaves the row, so it can be tried again), then the row; its log line keeps the ref and no text. `input.from` (optional) is the state the caller expects: any other state is a 409.
  */
@@ -70,7 +71,7 @@ export async function act(env, input, who, now = new Date(), opts = {}) {
   const raced = refused(409, 'Someone just changed this feedback. Reload the page.');
   if (action === 'ai') {
     if (!opts.start) return refused(503, 'Send to AI is not set up on this site (the dispatch token).');
-    const gate = await aiGate(env.STATS, now);   // 1 at a time, 3 a day: checked before anything changes
+    const gate = await aiGate(env.STATS, now);   // one at a time and the daily cap: checked before anything changes
     if (!gate.ok) return refused(gate.status, gate.error);
   }
   if (input.from && input.from !== row.state) return raced;   // "Undo" names the state it undoes: a card that moved on is left alone
@@ -96,12 +97,18 @@ export async function act(env, input, who, now = new Date(), opts = {}) {
   const detail = `${row.state} -> ${spec.to}${note || form.detail ? `: ${note || form.detail}` : ''}${form.tell ? ` (tell: ${form.tell})` : ''}`;
   // Why (5b code review, 3 Nov 2026): "Mark as released" decides whether to tell from the `told` it read, so the write also checks it: a card reopened and re-fixed with "never tell" in between is not told.
   const caps = action === 'ai' ? aiGuard(now) : null;   // the caps are part of the write itself, so two clicks at once cannot both pass
-  const guard = action === 'released' ? ' AND told = ?' : caps ? caps.sql : '', guardArgs = action === 'released' ? [row.told] : caps ? caps.args : [];
+  let guard = action === 'released' ? ' AND told = ?' : caps ? caps.sql : '';
+  const guardArgs = action === 'released' ? [row.told] : caps ? caps.args : [];
+  // Why (5 Nov 2026, owner): a failed GitHub run restores retry, but a late check or callback must never reset a newer attempt.
+  if (opts.trusted && opts.run && action === 'ai_failed') {
+    guard += ' AND state_at = ? AND ai_run = ?';
+    guardArgs.push(opts.run.state_at, opts.run.ai_run);
+  }
   if (!await commit(env.STATS.prepare(`UPDATE feedback SET state = ?, state_at = ?, state_note = ?${sets} WHERE ref = ? AND state = ?${guard}`).bind(spec.to, at, form.stateNote ?? (spec.note ? note : ''), ...keys.map(key => columns[key]), ref, row.state, ...guardArgs), detail)) return raced;
   if (action === 'ai') {   // the card is ai_running and logged; now the run. A start that fails sends the card straight back to new with the reason (never a card stuck "running").
     try { await opts.start(ref); } catch (error) {
       await act(env, {ref, action: 'ai_failed', why: `could not start the run: ${String(error.message || error).slice(0, 120)}`}, 'system', now, {trusted: true});
-      return refused(502, 'Could not start the AI run. The card is back to new; no AI was used (the click still counts toward today\'s 3).');
+      return refused(502, 'Could not start the AI run. The card is back to new; no AI was used (the click still counts toward the daily limit).');
     }
   }
   const told = form.tell === 'now' ? await tellOnce(env, ref, now, 'owner (told)') : undefined;   // after the change is saved: a failing mail never undoes it

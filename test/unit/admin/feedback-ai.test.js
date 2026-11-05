@@ -8,7 +8,7 @@ import {NOW, REPO, add, env, log, prUrl, row, signer} from '../shared/feedback/f
 
 const kit = await signer(), deps = {jwks: kit.jwks};
 const get = (ref, token) => brief(new Request(`https://x/api/feedback/brief?ref=${ref}`, {headers: token ? {Authorization: `Bearer ${token}`} : {}}), env_, NOW, deps);
-const post = (body, token, e = env_) => status(new Request('https://x/api/feedback/ai-status', {method: 'POST', headers: token ? {Authorization: `Bearer ${token}`} : {}, body: JSON.stringify(body)}), e, NOW, deps);
+const post = (body, token, e = env_, extra = {}) => status(new Request('https://x/api/feedback/ai-status', {method: 'POST', headers: token ? {Authorization: `Bearer ${token}`} : {}, body: JSON.stringify(body)}), e, NOW, {...deps, ...extra});
 let env_;
 const closeFile = branch => `${REPO}/.github/workflows/feedback-ai-closed.yml@refs/heads/${branch}`;
 const running = (fields = {}) => { env_ = env(); return add(env_, {state: 'ai_running', ...fields}); };
@@ -194,4 +194,59 @@ test('the agent run reports its own card: pr, none and failed from the bound run
   const none = running({ai_run: '7001'});
   assert.equal((await post({ref: none, status: 'none', verdict: 'needs-human', why: 'tests-failed'}, own)).status, 200);
   assert.equal(row(env_, none).state, 'new', 'the card is new again with the verdict');
+});
+
+test('a cap or busy refusal before the brief returns the card to new and lets the owner try again', async () => {
+  for (const word of ['cap', 'busy']) {
+    const ref = running(), token = await kit.token({workflow_ref: fixerRef('main')});
+    const fetcher = async () => Response.json({id: 9001, display_title: `AI fixer feedback ${ref}`, path: '.github/workflows/ai-fixer.yml', event: 'workflow_dispatch', head_branch: 'main', created_at: NOW.toISOString()});
+    const answer = await post({ref, status: word}, token, env_, {fetch: fetcher});
+    assert.equal(answer.status, 200, word);
+    assert.equal(row(env_, ref).state, 'new');
+    assert.match(row(env_, ref).state_note, /failed:/);
+    const list = await (await view(new Request('https://x/admin/feedback/inbox?json=1', {headers: {Authorization: 'Bearer owner-key'}}), env_, NOW)).json();
+    assert.ok(list.rows.find(r => r.ref === ref).actions.includes('ai'));
+  }
+  const bound = running({ai_run: '77'});
+  assert.equal((await post({ref: bound, status: 'cap'}, await kit.token({workflow_ref: fixerRef('main')}))).status, 409, 'a refused run cannot clear another run already bound to the card');
+  assert.equal(row(env_, bound).state, 'ai_running');
+});
+
+test('the owner poll reconciles a failed GitHub run, even when it never took the brief, and restores Send to AI', async () => {
+  for (const bound of ['', '9001']) {
+    const e = env(), ref = add(e, {state: 'ai_running', ai_run: bound, state_at: '2026-11-03T12:00:00.573Z'});
+    const calls = [], run = {id: 9001, display_title: `AI fixer feedback ${ref}`, path: '.github/workflows/ai-fixer.yml', event: 'workflow_dispatch', head_branch: 'main', created_at: NOW.toISOString(), status: 'completed', conclusion: 'failure'};
+    const fetcher = async (url, init) => { calls.push(url); assert.equal(init.headers.Authorization, 'Bearer timers-token'); return Response.json(bound ? run : {workflow_runs: [run]}); };
+    const answer = await view(new Request('https://x/admin/feedback/inbox?json=1', {headers: {Authorization: 'Bearer owner-key'}}), e, new Date('2026-11-03T12:00:01.000Z'), {fetch: fetcher});
+    const shown = (await answer.json()).rows.find(r => r.ref === ref);
+    assert.equal(shown.state, 'new', `failed run, bound=${bound}`);
+    assert.match(shown.state_note, /GitHub workflow failed/);
+    assert.ok(shown.actions.includes('ai'));
+    assert.equal(calls.length, 1);
+    assert.deepEqual(log(e, ref).map(line => line.action), ['ai_failed']);
+  }
+});
+
+test('reconciliation keeps running, unknown and unrelated GitHub runs unchanged, and cannot overwrite a newer attempt', async () => {
+  for (const scenario of ['running', 'unavailable', 'another-card', 'old-run', 'new-attempt']) {
+    const e = env(), ref = add(e, {state: 'ai_running'});
+    const run = {id: 9001, display_title: `AI fixer feedback ${scenario === 'another-card' ? '0000000000000001' : ref}`, path: '.github/workflows/ai-fixer.yml', event: 'workflow_dispatch', head_branch: 'main', created_at: scenario === 'old-run' ? '2026-11-03T11:59:59Z' : NOW.toISOString(), status: scenario === 'running' ? 'in_progress' : 'completed', conclusion: 'failure'};
+    const fetcher = async () => {
+      if (scenario === 'new-attempt') e.STATS.db.prepare('UPDATE feedback SET state_at = ?, ai_run = ? WHERE ref = ?').run('2026-11-03T12:00:01.000Z', '9002', ref);
+      return scenario === 'unavailable' ? new Response(null, {status: 403}) : Response.json({workflow_runs: [run]});
+    };
+    await view(new Request('https://x/admin/feedback/inbox?json=1', {headers: {Authorization: 'Bearer owner-key'}}), e, NOW, {fetch: fetcher});
+    assert.equal(row(e, ref).state, 'ai_running', scenario);
+    assert.equal(log(e, ref).length, 0, scenario);
+  }
+});
+
+
+test('an old cap callback cannot reset a newer unbound attempt', async () => {
+  const ref = running(), token = await kit.token({workflow_ref: fixerRef('main')});
+  const fetcher = async () => Response.json({id: 9001, display_title: `AI fixer feedback ${ref}`, path: '.github/workflows/ai-fixer.yml', event: 'workflow_dispatch', head_branch: 'main', created_at: '2026-11-03T11:59:59Z'});
+  const answer = await post({ref, status: 'busy'}, token, env_, {fetch: fetcher});
+  assert.equal(answer.status, 409);
+  assert.equal(row(env_, ref).state, 'ai_running');
+  assert.equal(log(env_, ref).length, 0);
 });
