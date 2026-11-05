@@ -3,6 +3,8 @@
 import {esc} from '../shared/html.js';
 import {filterLinks} from './admin.js';
 import {CHIP_STYLE, chip} from './chip.js';
+import {kindsChart} from './jobsearch-charts.js';
+import {figure, VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 import {shareTone} from './applying-tiles.js';
 
 const pct = value => (value == null ? '–' : `${value}%`);
@@ -40,8 +42,8 @@ function grid(view) {
 ${view.personas.map(p => `<tr><td>${esc(p.persona)} <span class="muted">${esc(p.country)}</span></td><td>${chip(esc(p.kind))}</td>${names.map(name => cell(name, p.persona)).join('')}</tr>`).join('')}</table></div></section>`;
 }
 
-const kinds = view => `<section class="card"><h2>Tech and non-tech</h2><p class="muted">Relevant jobs in place per kind of role, the share of shown jobs.</p><div class="wide"><table><tr><th>Tool</th><th class="num">Tech</th><th class="num">Non-tech</th></tr>
-${view.tools.map(tool => { const t = view.kinds.tech?.[tool.tool], n = view.kinds['non-tech']?.[tool.tool]; const show = x => (x ? `${x.relevant} <span class="muted">(${pct(x.relevantShare)})</span>` : '–'); return `<tr class="${tool.ours ? 'ours' : ''}"><td>${esc(tool.tool)}</td><td class="num">${show(t)}</td><td class="num">${show(n)}</td></tr>`; }).join('')}</table></div></section>`;
+const kinds = view => `<section class="card"><h2>Tech and non-tech</h2><p class="muted">Relevant jobs in place per kind of role, the share of shown jobs.</p>${figure({chart: kindsChart(view), table: `<div class="wide"><table><tr><th>Tool</th><th class="num">Tech</th><th class="num">Non-tech</th></tr>
+${view.tools.map(tool => { const t = view.kinds.tech?.[tool.tool], n = view.kinds['non-tech']?.[tool.tool]; const show = x => (x ? `${x.relevant} <span class="muted">(${pct(x.relevantShare)})</span>` : '–'); return `<tr class="${tool.ours ? 'ours' : ''}"><td>${esc(tool.tool)}</td><td class="num">${show(t)}</td><td class="num">${show(n)}</td></tr>`; }).join('')}</table></div>`})}</section>`;
 
 const beyond = view => ((view.beyond || []).length ? `<section class="card"><h2>Relevant jobs we add beyond each rival</h2><p class="muted">Ours with every source on: jobs the judge found relevant and in place that this rival did not show. A search where the rival's own search failed is not counted for it (last column), so its total is not a smaller number made to look complete.</p>
 <table><tr><th>Rival</th><th class="num">Jobs we add</th><th class="num">Searches not counted</th></tr>${view.beyond.map(([rival, n, missing]) => `<tr><td>${esc(rival)}</td><td class="num">${missing >= view.beyondSearches ? '–' : n}</td><td class="num ${missing ? 'warn' : 'muted'}">${missing ? `${missing} of ${view.beyondSearches}` : '–'}</td></tr>`).join('')}</table></section>` : '');
@@ -60,7 +62,7 @@ export function page(snapshot, {round} = {}) {
   const body = !view ? `<section class="card"><h2>No data yet</h2><p class="muted">The bake-off's search-bench publish step sends every scored round here (<code>PUT /benchmark-search/data</code>); the first round fills this page.</p></section>`
     : `${keys.length > 1 ? filterLinks(keys.map(k => [k, k, `?round=${encodeURIComponent(k)}`]), key) : ''}${tiles(view)}${scoreboard(view)}${grid(view)}${kinds(view)}${missed(view)}${beyond(view)}${METHOD}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Benchmark Job Search · Admin</title>
-<link rel="icon" href="/favicon-32.png"><style>${CSS}${CHIP_STYLE}</style></head><body><main>
+<link rel="icon" href="/favicon-32.png"><style>${CSS}${CHIP_STYLE}${VIZ_STYLE}</style></head><body><main>
 <header><h1>🏁 Benchmark Job Search</h1><span class="muted">${snapshot ? `as of ${esc(snapshot.at.slice(0, 16).replace('T', ' '))} UTC${key ? ` · round ${esc(key)}` : ''}` : ''}</span></header>
-${body}</main></body></html>`;
+${body}</main>${VIZ_TOOLTIP}</body></html>`;
 }

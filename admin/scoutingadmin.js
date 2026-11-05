@@ -11,6 +11,8 @@ import {floorFor, cellsOf, gaps, heatmap, history, runs, sources, tiles, topKind
 import {section as readMethods} from '../shared/readmethods.js';
 import {day, snapshot, gather} from '../shared/scouting-snapshot.js';
 import {CHIP_STYLE, chip} from './chip.js';
+import {employerKindChart, familyChart, freshnessChart, usefulChart} from './jobsearch-charts.js';
+import {figure, VIZ_STYLE} from './viz.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"]/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[ch]));
 export const n = value => Number(value || 0).toLocaleString('en-US');
@@ -22,8 +24,8 @@ function familySection(families) {
   if (!families) return '';
   const row = (key, label) => `<tr><td>${label}</td><td>${n(families[key].sharing7)}</td><td>${n(families[key].shared)}</td><td>${n(families[key].dead)}</td><td>${n(families[key].boardsMatched)}</td></tr>`;
   return `<section class="card"><h2>🤖 Shared by installs, per AI family</h2><small class="muted">From each install's latest health report. Unknown = shared before 9 Oct 2026, or no health report yet. The central scout and the published list are everyone's.</small>
-<table><tr><th>Family</th><th>Installs sharing (7 d)</th><th>Employer job sites shared</th><th>Dead ends reported</th><th>Board reads with matches</th></tr>
-${row('claude', 'Claude')}${row('openai', 'OpenAI')}${row('unknown', 'Unknown')}</table></section>`;
+${figure({chart: familyChart(families), table: `<table><tr><th>Family</th><th>Installs sharing (7 d)</th><th>Employer job sites shared</th><th>Dead ends reported</th><th>Board reads with matches</th></tr>
+${row('claude', 'Claude')}${row('openai', 'OpenAI')}${row('unknown', 'Unknown')}</table>`})}</section>`;
 }
 
 // Steps installs skipped because another install had already done them (src/pool_served.py, shared daily): today, 7 days, 30 days, per kind.
@@ -68,7 +70,7 @@ export function page(data, url = new URL('https://www.jobadabra.top/admin/job-se
 .verdict{background:#1d1a12;border:1px solid #5a4620;border-radius:14px;padding:14px 16px;margin-bottom:12px}
 .scroll{overflow-x:auto}.countries td,.countries th{text-align:right;font-variant-numeric:tabular-nums;padding:6px 5px}.countries td:first-child,.countries th:first-child{text-align:left}.thin{color:#ef8a8a}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start}.grid2>.card{margin-bottom:0}.grid2{margin-bottom:12px}
-h2.more{margin:22px 0 8px;color:#8d949c;font-weight:600}${CHART_STYLE}
+h2.more{margin:22px 0 8px;color:#8d949c;font-weight:600}${CHART_STYLE}${VIZ_STYLE}
 </style></head><body><main>
 <header><div><h1>🛰️ Scouting</h1><small class="muted">The central employer list: counts, company names and job-site addresses only. <a href="/admin/growth/insights">Insights →</a>${data.family ? ` · what ${esc(FAMILIES[data.family])} installs shared` : ''}</small></div></header>
 ${familyLinks(url, data.family || '')}
@@ -88,8 +90,8 @@ ${fold('📈 Growth (daily snapshots)', `<section class="card"><small class="mut
 <table><tr><th>Day</th><th>Employers</th><th>Outside IT</th><th>Failing</th><th>From installs</th><th>Dead ends</th></tr>
 ${rows(data.daily, row => [esc(row.day), n(row.feeds), n(row.non_it), n(row.failing), n(row.from_pool), n(row.dead_ends)], 'No snapshot yet: the first comes with the next publish.')}</table></section>`)}
 ${fold('🗺️ Coverage by kind of role and region', `<section class="card"><small class="muted">Employers by the kind they mostly hire for (their role mix) and region.</small>
-<div class="scroll"><table><tr><th>Kind</th><th>All</th>${regions.map(region => `<th>${esc(region)}</th>`).join('')}</tr>
-${rows(Object.entries(kinds).sort((a, b) => b[1] - a[1]), ([kind, count]) => [esc(kind), n(count), ...regions.map(region => n(grid[`${kind}|${region}`]))], 'No employers yet.')}</table></div></section>`)}
+${figure({chart: employerKindChart(kinds, grid, regions), table: `<div class="scroll"><table><tr><th>Kind</th><th>All</th>${regions.map(region => `<th>${esc(region)}</th>`).join('')}</tr>
+${rows(Object.entries(kinds).sort((a, b) => b[1] - a[1]), ([kind, count]) => [esc(kind), n(count), ...regions.map(region => n(grid[`${kind}|${region}`]))], 'No employers yet.')}</table></div>`})}</section>`)}
 ${fold('🤝 The pool and discovery routes', `<div class="grid2"><section class="card"><small class="muted">What installs share (on unless switched off): every employer their scout verified and every feed and board their jobs check read, as it happens.</small>
 <table><tr><td>Installs sharing, last 7 days</td><td>${n(data.sharing7)}</td></tr><tr><td>Installs sharing, last 30 days</td><td>${n(data.sharing30)}</td></tr>
 <tr><td>Different employers shared (90 days)</td><td>${n(data.shared)}</td></tr></table></section>
@@ -97,11 +99,11 @@ ${fold('🤝 The pool and discovery routes', `<div class="grid2"><section class=
 <table><tr><th>Route</th><th>Employers</th><th>Jobs matched</th></tr>${rows(data.routes, row => [esc(row.how), n(row.feeds), n(row.hits)], 'Nothing shared with a route yet (share v2).')}</table></section></div>
 ${familySection(data.families)}${servedSection(data.served, today)}`)}
 ${fold(`🩺 Freshness and most useful employers · ${n(failing.length)} failing`, `<div class="grid2"><section class="card"><small class="muted">From each employer's last reads (the central scout).</small>
-<table><tr><td>Growing (more jobs than last read)</td><td>${n(up)}</td></tr><tr><td>Shrinking</td><td>${n(down)}</td></tr>
-<tr><td>No open job right now</td><td>${n(emptyNow)}</td></tr><tr><td>Failing (3+ reads in a row)</td><td>${n(failing.length)}</td></tr></table>
+${figure({chart: feeds.length ? freshnessChart([['Growing (more jobs than last read)', up], ['Shrinking', down], ['No open job right now', emptyNow], ['Failing (3+ reads in a row)', failing.length]]) : '', table: `<table><tr><td>Growing (more jobs than last read)</td><td>${n(up)}</td></tr><tr><td>Shrinking</td><td>${n(down)}</td></tr>
+<tr><td>No open job right now</td><td>${n(emptyNow)}</td></tr><tr><td>Failing (3+ reads in a row)</td><td>${n(failing.length)}</td></tr></table>`})}
 <table><tr><th>Failing</th><th>Reads failed</th><th>Last OK</th></tr>${rows(failing.slice(0, 10), feed => [esc(feed.company), n(feed.fresh.fails), esc(feed.fresh.ok)], 'None failing.')}</table></section>
 <section class="card"><h2>⭐ Most useful employers</h2><small class="muted">Most interviews, then jobs matched, across installs (last 90 days).</small>
-<table><tr><th>Employer</th><th>Interviews</th><th>Applied</th><th>Matched</th><th>Installs</th><th>Jobs</th></tr>${rows(data.useful, row => [esc(row.company), n(row.interviews), n(row.applied), n(row.hits), n(row.installs), n(row.jobs)], 'Nothing shared yet.')}</table></section></div>`)}
+${figure({chart: usefulChart(data.useful || []), table: `<table><tr><th>Employer</th><th>Interviews</th><th>Applied</th><th>Matched</th><th>Installs</th><th>Jobs</th></tr>${rows(data.useful, row => [esc(row.company), n(row.interviews), n(row.applied), n(row.hits), n(row.installs), n(row.jobs)], 'Nothing shared yet.')}</table>`})}</section></div>`)}
 ${fold('📋 Job boards by kind of role', `<section class="card"><small class="muted">Each board installs' jobs checks read, by their kind of role: how many got a match there.</small>
 <div class="scroll"><table><tr><th>Board</th><th>Kind of role</th><th>Installs</th><th>Got a match</th><th>Jobs matched</th><th>Only on this board</th><th>Interviews</th><th>Failed</th></tr>${rows(data.boards || [], row => [esc(row.board), esc(row.roles || '—'), n(row.installs), n(row.matched), n(row.hits), n(Math.max(0, (row.hits || 0) - (row.dup || 0))), n(row.interviews), n(row.failed)], 'No board reads shared yet.')}</table></div></section>`)}
 ${fold('🧑‍🏫 Advice shown → taken', `<section class="card"><small class="muted">What the app recommended (Strategy cards, "Few new jobs" chips) and how often people took it, last 90 days.</small>
