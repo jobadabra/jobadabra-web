@@ -9,6 +9,8 @@ import {TEST_INBOX, testSend} from './email-test-send.js';
 import {releaseView} from './release-mail-page.js';
 import {audienceCard, audienceRows} from './email-audience.js';
 import {newestFirst} from './changelog.js';
+import {latestStableVersion, releaseData} from './release-mail.js';
+import {compose} from '../shared/mail.js';
 
 const n = value => (Number(value) || 0).toLocaleString('en-US');
 
@@ -23,13 +25,13 @@ const TEMPLATE_STYLE = `.tpl{min-width:0;scroll-margin-top:24px}.tpl h2 a{color:
 
 const templateCard = (mail, sent, notice = null, detail = false) => `<section class="card tpl${detail ? ' template-detail' : ''}" id="template-${esc(mail.name)}">
 ${detail ? '' : `<h2><a href="/admin/growth/email?template=${esc(mail.name)}">${esc(mail.name)}</a></h2>`}
-<p class="muted">${esc(mail.list)}${mail.essential ? ' · essential' : ''}${detail ? '' : ` · sent ${n(sent)} in the window`} · Sample data</p>
+<p class="muted">${esc(mail.list)}${mail.essential ? ' · essential' : ''}${detail ? '' : ` · sent ${n(sent)} in the window`} · ${mail.real ? (mail.version ? `Latest stable release ${esc(mail.version)}` : 'Real release preview') : 'Sample data'}</p>
 ${mail.error ? `<p>Cannot render: ${esc(mail.error)}</p>` : `<p><b>${esc(mail.subject)}</b></p><iframe sandbox title="${esc(mail.name)}" srcdoc="${esc(mail.html)}"></iframe>
 ${notice?.template === mail.name ? notice.html : ''}
-<form method="post" action="/admin/growth/email"><input type="hidden" name="template" value="${esc(mail.name)}">${detail ? '<input type="hidden" name="detail" value="1">' : ''}<button type="submit">Send to test inbox</button></form>
-<form class="personal-test" method="post" action="/admin/growth/email"><input type="hidden" name="template" value="${esc(mail.name)}"><input type="hidden" name="mine" value="1">${detail ? '<input type="hidden" name="detail" value="1">' : ''}<div class="test-address"><label for="test-address-${esc(mail.name)}">Your email address</label><input id="test-address-${esc(mail.name)}" type="email" name="to" placeholder="you@example.com" autocomplete="email" required></div><button type="submit">Send to my email</button></form>`}</section>`;
+<form method="post" action="/admin/growth/email"><input type="hidden" name="template" value="${esc(mail.name)}">${mail.real ? `<input type="hidden" name="release" value="${esc(mail.version)}">` : ''}${detail ? '<input type="hidden" name="detail" value="1">' : ''}<button type="submit">Send to test inbox</button></form>
+<form class="personal-test" method="post" action="/admin/growth/email"><input type="hidden" name="template" value="${esc(mail.name)}"><input type="hidden" name="mine" value="1">${mail.real ? `<input type="hidden" name="release" value="${esc(mail.version)}">` : ''}${detail ? '<input type="hidden" name="detail" value="1">' : ''}<div class="test-address"><label for="test-address-${esc(mail.name)}">Your email address</label><input id="test-address-${esc(mail.name)}" type="email" name="to" placeholder="you@example.com" autocomplete="email" required></div><button type="submit">Send to my email</button></form>`}</section>`;
 
-const REASONS = {off: 'Email sending is switched off or its sender is unavailable.', marketing_off: 'Product news sending is switched off.', rate: 'The daily sending limit was reached. Try again tomorrow.', unsubscribed: 'This address has unsubscribed from this kind of email.', suppressed: 'This address is blocked after a bounce or complaint.', failed: 'The email provider could not send this message. Check the failure log and try again.', bad_address: 'Enter a valid email address.'};
+const REASONS = {off: 'Email sending is switched off or its sender is unavailable.', marketing_off: 'Product news sending is switched off.', rate: 'The daily sending limit was reached. Try again tomorrow.', unsubscribed: 'This address has unsubscribed from this kind of email.', suppressed: 'This address is blocked after a bounce or complaint.', failed: 'The email provider could not send this message. Check the failure log and try again.', bad_address: 'Enter a valid email address.', no_release: 'No stable release draft is available yet.'};
 
 // A known send result is shown inside its own template card, at the redirect's fragment target.
 const noticeOf = (value, destination) => {
@@ -39,12 +41,21 @@ const noticeOf = (value, destination) => {
   return {template, html: `<p id="test-result-${esc(template)}" class="test-result ${result === 'sent' ? 'on' : 'off'}" role="${result === 'sent' ? 'status' : 'alert'}">${esc(message)}${result === 'sent' && destination !== 'personal' ? ' <a href="/admin/growth/email#test-inbox">View the test inbox</a>. Arrival may take a moment.' : ''}</p>`};
 };
 
+// Why (5 Nov 2026, owner): the release preview is real stable-to-stable content, never the sample release.
+const realRelease = async env => {
+  const version = await latestStableVersion(env);
+  const row = version && await env.STATS.prepare('SELECT data,status FROM release_mail WHERE version = ?').bind(version).first();
+  const data = row && await releaseData(env, {...JSON.parse(row.data), version}, {status: row.status});
+  return data ? {name: 'release', list: 'marketing', real: true, version, ...compose('release', data, {stop: '#', settings: '#'})}
+    : {name: 'release', list: 'marketing', real: true, error: 'No stable release draft is available yet.'};
+};
+
 const releasesOf = async env => newestFirst((await env.STATS.prepare("SELECT r.version,r.status FROM release_mail r JOIN changelog_entries c ON c.version=r.version WHERE c.channel='stable'").all()).results || []);
-const releaseLinks = releases => `<section class="card"><h2>Release emails</h2><p class="muted">Stable releases only. Open a draft to review, test and send changes since the previous stable.</p>${releases.length ? `<ul class="release-list">${releases.map(row => `<li><a href="/admin/growth/email?release=${esc(row.version)}">Version ${esc(row.version)}</a> <span class="muted">· ${esc(row.status)}</span></li>`).join('')}</ul>` : '<p class="muted">No stable release drafts yet.</p>'}</section>`;
+const releaseLinks = releases => `<section class="card"><h2>Release emails</h2><p><a href="/admin/growth/email?template=release">Review latest stable email</a></p><p class="muted">Stable releases only. Open a draft to review, test and send changes since the previous stable.</p>${releases.length ? `<ul class="release-list">${releases.map(row => `<li><a href="/admin/growth/email?release=${esc(row.version)}">Version ${esc(row.version)}</a> <span class="muted">· ${esc(row.status)}</span></li>`).join('')}</ul>` : '<p class="muted">No stable release drafts yet.</p>'}</section>`;
 
 const templatePage = (mail, notice) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(mail.name)} email template · Admin</title><style>${TEMPLATE_STYLE}.tpl iframe{display:block;width:100%;box-sizing:border-box;border:1px solid #2c3340;border-radius:8px;background:#fff}.tpl button{cursor:pointer;border:1px solid #f5b54a;background:#1b2027;color:#f5b54a}</style></head><body><main><header><div><a href="/admin/growth/email">← All email</a><h1>${esc(mail.name)} email template</h1><p class="muted">Sample preview. For a real release draft, return to Release emails.</p></div></header>${templateCard(mail, 0, notice, true)}</main></body></html>`;
 
-export function page(data, accounts = null, notice = null, audience = null, releases = []) {
+export function page(data, accounts = null, notice = null, audience = null, releases = [], releaseMail) {
   const tile = (label, value, note) => `<section class="card tile"><span class="muted">${label}</span><b>${n(value)}</b><span class="muted">${note}</span></section>`;
   const table = (title, head, rows) => `<section class="card"><h2>${title}</h2>${rows.length ? `<table><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr>${rows.map(r => `<tr>${r.map((c, i) => `<td${i ? ' class="num"' : ''}>${c}</td>`).join('')}</tr>`).join('')}</table>` : '<p class="muted">Nothing yet.</p>'}</section>`;
   const top = Math.max(1, ...data.perDay.map(row => (row.sent || 0) + (row.refused || 0)));
@@ -64,7 +75,7 @@ ${table('Why mail was not sent', ['Reason', 'Mails'], data.refused.map(r => [esc
 <div class="pair">${table('Addresses', ['Group', 'Accounts'], [['Confirmed', n(data.confirmed)], ['Unconfirmed', n(data.unconfirmed)], ['Product news opt-in', n(data.optIn)]])}
 ${table('Stopped (all time)', ['Reason', 'List', 'Addresses'], data.offReasons.map(r => [esc(r.reason), esc(r.list), n(r.n)]))}</div>
 ${audience ? audienceCard(audience) : ''}
-<h2>Templates, as the person sees them <span class="muted">(sample data, example links)</span></h2><p class="muted">"Send to test inbox" mails only <code>${esc(TEST_INBOX)}</code> through the real sender, so it counts in the daily caps; it needs the MAIL switch on.</p>${data.testMail.length ? `<section class="card" id="test-inbox"><h2>Arrived in the test inbox (7 days)</h2><table>${data.testMail.map(m => `<tr><td>${esc(m.received_at.slice(0, 16).replace('T', ' '))}</td><td>${esc(m.to_addr)}</td><td>${esc(m.subject)}</td></tr>`).join('')}</table></section>` : '<section class="card" id="test-inbox"><h2>Test inbox</h2><p class="muted">No received copies yet. A successful send may take a moment to arrive.</p></section>'}<div class="pair tpls">${previews().map(mail => templateCard(mail, data.byTemplate.find(r => r.template === mail.name)?.sent || 0, notice)).join('')}</div>
+<h2>Email previews <span class="muted">(real release content; other templates use samples)</span></h2><p class="muted">"Send to test inbox" mails only <code>${esc(TEST_INBOX)}</code> through the real sender, so it counts in the daily caps; it needs the MAIL switch on.</p>${data.testMail.length ? `<section class="card" id="test-inbox"><h2>Arrived in the test inbox (7 days)</h2><table>${data.testMail.map(m => `<tr><td>${esc(m.received_at.slice(0, 16).replace('T', ' '))}</td><td>${esc(m.to_addr)}</td><td>${esc(m.subject)}</td></tr>`).join('')}</table></section>` : '<section class="card" id="test-inbox"><h2>Test inbox</h2><p class="muted">No received copies yet. A successful send may take a moment to arrive.</p></section>'}<div class="pair tpls">${previews().map(mail => templateCard(mail.name === 'release' && releaseMail ? releaseMail : mail, data.byTemplate.find(r => r.template === mail.name)?.sent || 0, notice)).join('')}</div>
 ${table('Last 10 refusals and failures', ['When (UTC)', 'Address (hash)', 'Template', 'Why'], data.recent.map(r => [esc(r.at.slice(0, 16).replace('T', ' ')), `<code>${esc(r.addr)}</code>`, esc(r.template), esc(r.status)]))}
 </main></body></html>`;
 }
@@ -76,9 +87,13 @@ export async function view(request, env) {
   if (!await viewer(request, env)) return new Response('Not found', {status: 404});
   const notice = noticeOf(url.searchParams.get('test'), url.searchParams.get('destination'));
   const headers = {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'};
+  if (url.searchParams.get('template') === 'release') {
+    const version = await latestStableVersion(env);
+    return version ? new Response(null, {status: 302, headers: {Location: `/admin/growth/email?release=${version}`, 'Cache-Control': 'no-store'}}) : new Response('No stable release draft is available yet.', {status: 404});
+  }
   if (url.searchParams.has('template')) {
     const mail = previews().find(mail => mail.name === url.searchParams.get('template'));
     return mail ? new Response(templatePage(mail, notice), {headers}) : new Response('Unknown template.', {status: 404});
   }
-  return new Response(page(await collect(env, {days: windowOf(url.searchParams.get('days'))}), await accountsOf(env), notice, (await isOwner(request, env)) ? await audienceRows(env) : null, await releasesOf(env)), {headers});
+  return new Response(page(await collect(env, {days: windowOf(url.searchParams.get('days'))}), await accountsOf(env), notice, (await isOwner(request, env)) ? await audienceRows(env) : null, await releasesOf(env), await realRelease(env)), {headers});
 }

@@ -47,3 +47,33 @@ test('template navigation, test results and inputs work at desktop and phone wid
     assert.equal(sent.length, 4, 'only the fake sender receives the successful test messages');
   } finally { await browser.close(); site.close(); }
 });
+
+test('the release title opens the live stable draft and its test sends that content without broadcasting', async t => {
+  const browser = await launchChromium(process.cwd());
+  if (!browser) return t.skip('playwright-core not installed');
+  const site = await workerServer(process.cwd(), ['release-mail']);
+  const sent = []; site.env.EMAIL = {send: async mail => { sent.push(mail); return {messageId: 'fake-message'}; }};
+  try {
+    const page = await browser.newPage({viewport: {width: 1440, height: 900}});
+    await page.route(url => !url.href.startsWith(site.base), route => route.abort());
+    await page.goto(site.base + '/admin/growth/email', {waitUntil: 'load'});
+    await page.locator('#template-release h2 a').click();
+    await page.waitForURL(url => url.searchParams.get('release') === '0.9.9');
+    assert.match(await page.locator('h1').textContent(), /0\.9\.9/);
+    const frame = page.frames().find(frame => frame !== page.mainFrame());
+    const text = await frame.locator('body').textContent();
+    assert.match(text, /Changes since version 0\.9\.6/);
+    assert.match(text, /Faster location updates/);
+    assert.doesNotMatch(text, /0\.8\.42|See why each job fits/);
+    assert.equal(sent.length, 0, 'opening the draft never sends anything');
+    await page.locator('#release-test-address').fill('reviewer@example.com');
+    await page.getByRole('button', {name: 'Send test · 0.9.9', exact: true}).click();
+    await page.waitForURL(url => url.searchParams.has('done'));
+    assert.equal(sent.length, 1);
+    assert.match(sent[0].subject, /\[TEST\] Jobadabra 0\.9\.9/);
+    assert.match(sent[0].text, /Changes since version 0\.9\.6/);
+    const row = await site.env.STATS.prepare("SELECT status FROM release_mail WHERE version='0.9.9'").first();
+    assert.equal(row.status, 'draft');
+    await page.close();
+  } finally { await browser.close(); site.close(); }
+});

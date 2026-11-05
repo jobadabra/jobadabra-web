@@ -44,3 +44,7 @@ The Email overview starts with stable release draft links. Template titles open 
 ## Release template layout (owner, 5 Nov 2026)
 
 Category labels sit above distinct change headings and regular-weight descriptions, giving the text the full content width on phones. Change groups are separated by spacing and light dividers. App labels use restrained inline emphasis rather than filled chips, and multi-step instructions use an ordered list. The version stays prominent; the primary button opens the app, and download remains a footer fallback. HTML and plain text carry the same instructions and destination.
+
+## Live release preview (owner, 5 Nov 2026)
+
+`/admin/growth/email?template=release` resolves to the newest stable version's real review page, not the sample template. The overview's release card and its test buttons use the same real stable-to-stable content. Gallery forms pin the version displayed, and the review URL pins the version being approved; a Latest stable email link resolves afresh when wanted. A test is marked TEST and never changes broadcast status. Missing real drafts do not fall back to sample release content. Other email templates keep sample data. Viewing is read-only, and sending to everyone remains the owner's explicit confirmation.

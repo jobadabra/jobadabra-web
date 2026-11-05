@@ -24,6 +24,12 @@ export function dataFrom({version, date, groups = []}) {
   return {version, month: `${MONTHS[(month || 1) - 1]} ${year}`, headline: items[0].text.replace(/\.$/, ''), sections: items.map(item => ({kind: item.kind, title: item.lead, text: item.text})), updateUrl: `${SITE}/download`};
 }
 
+/** Selects the latest published stable changelog version using numeric version order. */
+export async function latestStableVersion(env) {
+  const {results = []} = await env.STATS.prepare("SELECT version FROM changelog_entries WHERE channel = 'stable'").all();
+  return newestFirst(results)[0]?.version || null;
+}
+
 /** Builds a stable-to-stable window; hidden stable releases still bound the interval. */
 async function stableWindow(env, version) {
   const {results = []} = await env.STATS.prepare('SELECT version, date, channel, hidden, body FROM changelog_entries').all();

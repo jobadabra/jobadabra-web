@@ -162,13 +162,14 @@ test('the product news list shows every address with its source and whether it g
   assert.doesNotMatch(await page({}), /w@example\.com/);
 });
 
-test('"Send to my email" mails the typed address the sample of a template; a bad address is refused; a non-owner gets nothing', async () => {
+test('"Send to my email" mails the real release to the typed address; invalid input and non-owners get nothing', async () => {
   const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
+  await draft(e, '0.8.42', now);
   const post = (fields, headers = {Authorization: 'Bearer owner-key'}) => testSend(new Request('https://www.jobadabra.top/admin/growth/email', {method: 'POST', headers: {...headers, Origin: 'https://www.jobadabra.top'}, body: new URLSearchParams(fields)}), e);
   assert.equal((await post({template: 'release', mine: '1', to: 'me@example.com'})).status, 303);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, 'me@example.com');
-  assert.equal(sent[0].subject, `Jobadabra ${SAMPLES.release.version} · What's new`);
+  assert.equal(sent[0].subject, "[TEST] Jobadabra 0.8.42 · What's new");
   assert.equal((await post({template: 'release', mine: '1', to: 'not-an-address'})).status, 400);
   assert.equal((await post({template: 'release', to: 'me@example.com'})).status, 400, 'without "mine" only test inboxes');
   assert.equal((await post({template: 'release', mine: '1', to: 'me@example.com'}, {})).status, 404);
@@ -356,4 +357,54 @@ test('the release action opens the installed app even for an older saved downloa
   assert.match(mail.html, /<ol[^>]*>/);
   assert.match(mail.text, /1\. Open Jobs\./);
   assert.match(mail.text, /2\. Click any row/);
+});
+
+test('the release template opens the newest real stable draft, while gallery and test use its complete interval', async () => {
+  const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
+  e.STATS.db.exec('DELETE FROM changelog_entries');
+  for (const [version, channel, lead] of [['0.9.6', 'stable', 'Previous stable'], ['0.9.8', 'stable', 'Older stable'], ['0.9.9', 'beta', 'Beta change'], ['0.9.10', 'stable', 'Latest stable change'], ['0.9.11', 'beta', 'Future beta']]) {
+    e.STATS.db.prepare('INSERT INTO changelog_entries (version,date,channel,hidden,body,at) VALUES (?,?,?,?,?,?)').run(version, '2026-11-05', channel, 0, JSON.stringify([{kind: 'fixes', items: [{lead, text: `${lead} works.`}]}]), 'x');
+  }
+  await draft(e, '0.9.8', now); await draft(e, '0.9.10', now);
+  e.STATS.db.exec('CREATE TABLE IF NOT EXISTS test_mail (received_at TEXT, to_addr TEXT, subject TEXT)');
+  const headers = {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'};
+  const response = await emailView(new Request('https://www.jobadabra.top/admin/growth/email?template=release', {headers}), e);
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get('Location'), '/admin/growth/email?release=0.9.10');
+  const page = await (await emailView(new Request('https://www.jobadabra.top/admin/growth/email', {headers}), e)).text();
+  assert.match(page, /Latest stable release/);
+  assert.match(page, /Latest stable change/);
+  assert.doesNotMatch(page, /Version 0\.8\.42|See why each job fits/);
+  await emailView(new Request('https://www.jobadabra.top/admin/growth/email', {method: 'POST', headers, body: new URLSearchParams({template: 'release', mine: '1', to: 'reviewer@example.com', release: '0.9.10'})}), e);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].subject, "[TEST] Jobadabra 0.9.10 · What's new");
+  assert.match(sent[0].text, /Changes since version 0\.9\.8/);
+  assert.match(sent[0].text, /Beta change/);
+  assert.match(sent[0].html, /Latest stable change/);
+  assert.doesNotMatch(sent[0].html, /Future beta|See why each job fits/);
+  assert.equal(e.STATS.db.prepare("SELECT status FROM release_mail WHERE version='0.9.10'").get().status, 'draft');
+});
+
+
+test('a missing real stable draft never falls back to the sample release or sends it', async () => {
+  const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
+  e.STATS.db.exec('DELETE FROM changelog_entries');
+  const headers = {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'};
+  const view = await emailView(new Request('https://www.jobadabra.top/admin/growth/email?template=release', {headers}), e);
+  assert.equal(view.status, 404);
+  assert.doesNotMatch(await view.text(), /0\.8\.42|See why each job fits/);
+  const response = await testSend(new Request('https://www.jobadabra.top/admin/growth/email', {method: 'POST', headers, body: new URLSearchParams({template: 'release', mine: '1', to: 'reviewer@example.com'})}), e);
+  assert.match(response.headers.get('Location'), /release:no_release/);
+  assert.equal(sent.length, 0);
+});
+
+test('a release test from an already open template page returns visible feedback on the pinned real draft', async () => {
+  const {e} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
+  await draft(e, '0.8.42', now);
+  const headers = {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'};
+  const response = await testSend(new Request('https://www.jobadabra.top/admin/growth/email', {method: 'POST', headers, body: new URLSearchParams({template: 'release', detail: '1', mine: '1', to: 'reviewer@example.com'})}), e);
+  const destination = new URL(response.headers.get('Location'), 'https://www.jobadabra.top');
+  assert.equal(destination.searchParams.get('release'), '0.8.42');
+  const html = await (await emailView(new Request(destination, {headers}), e)).text();
+  assert.match(html, /Test of release 0\.8\.42 sent to reviewer@example\.com/);
 });
