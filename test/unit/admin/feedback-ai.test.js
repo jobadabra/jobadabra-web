@@ -8,7 +8,7 @@ import {NOW, REPO, add, env, log, prUrl, row, signer} from '../shared/feedback/f
 
 const kit = await signer(), deps = {jwks: kit.jwks};
 const get = (ref, token) => brief(new Request(`https://x/api/feedback/brief?ref=${ref}`, {headers: token ? {Authorization: `Bearer ${token}`} : {}}), env_, NOW, deps);
-const post = (body, token, e = env_) => status(new Request('https://x/api/feedback/ai-status', {method: 'POST', headers: token ? {Authorization: `Bearer ${token}`} : {}, body: JSON.stringify(body)}), e, NOW, deps);
+const post = (body, token, e = env_, extra = {}) => status(new Request('https://x/api/feedback/ai-status', {method: 'POST', headers: token ? {Authorization: `Bearer ${token}`} : {}, body: JSON.stringify(body)}), e, NOW, {...deps, ...extra});
 let env_;
 const closeFile = branch => `${REPO}/.github/workflows/feedback-ai-closed.yml@refs/heads/${branch}`;
 const running = (fields = {}) => { env_ = env(); return add(env_, {state: 'ai_running', ...fields}); };
@@ -199,7 +199,8 @@ test('the agent run reports its own card: pr, none and failed from the bound run
 test('a cap or busy refusal before the brief returns the card to new and lets the owner try again', async () => {
   for (const word of ['cap', 'busy']) {
     const ref = running(), token = await kit.token({workflow_ref: fixerRef('main')});
-    const answer = await post({ref, status: word}, token);
+    const fetcher = async () => Response.json({id: 9001, display_title: `AI fixer feedback ${ref}`, path: '.github/workflows/ai-fixer.yml', event: 'workflow_dispatch', head_branch: 'main', created_at: NOW.toISOString()});
+    const answer = await post({ref, status: word}, token, env_, {fetch: fetcher});
     assert.equal(answer.status, 200, word);
     assert.equal(row(env_, ref).state, 'new');
     assert.match(row(env_, ref).state_note, /failed:/);
@@ -238,4 +239,14 @@ test('reconciliation keeps running, unknown and unrelated GitHub runs unchanged,
     assert.equal(row(e, ref).state, 'ai_running', scenario);
     assert.equal(log(e, ref).length, 0, scenario);
   }
+});
+
+
+test('an old cap callback cannot reset a newer unbound attempt', async () => {
+  const ref = running(), token = await kit.token({workflow_ref: fixerRef('main')});
+  const fetcher = async () => Response.json({id: 9001, display_title: `AI fixer feedback ${ref}`, path: '.github/workflows/ai-fixer.yml', event: 'workflow_dispatch', head_branch: 'main', created_at: '2026-11-03T11:59:59Z'});
+  const answer = await post({ref, status: 'busy'}, token, env_, {fetch: fetcher});
+  assert.equal(answer.status, 409);
+  assert.equal(row(env_, ref).state, 'ai_running');
+  assert.equal(log(env_, ref).length, 0);
 });

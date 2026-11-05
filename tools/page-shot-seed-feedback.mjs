@@ -4,6 +4,7 @@ import {PUBLIC_REPO} from '../shared/repos.js';
 
 /** Seeds the feedback inbox with the existing fictional reports and workflow states. */
 export async function feedbackSeed({env}) {
+  if (await env.STATS.prepare("SELECT ref FROM feedback WHERE ref = 'a1b2c3d4e5f60718'").first()) return;   // the all-pages walk composes these seeds in one database
     const fs = await import('node:fs'), kept = new Map(), shot = fs.readFileSync('desktop/docs/ui/actions.jpg');
     env.FEEDBACK_FILES = {put: async (key, value) => { kept.set(key, value); }, get: async key => (kept.has(key) ? {body: kept.get(key)} : null),
       list: async ({prefix}) => ({objects: [...kept.keys()].filter(key => key.startsWith(prefix)).map(key => ({key})), truncated: false}), delete: async keys => { for (const key of [].concat(keys)) kept.delete(key); }};

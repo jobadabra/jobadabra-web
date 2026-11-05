@@ -6,6 +6,7 @@
 // `<repo>/.github/workflows/feedback-ai.yml@refs/heads/main` or ai-fixer.yml@refs/heads/main (the file as merged, never a branch's copy), its event workflow_dispatch (the run the owner's click started) or, for merged/closed,
 // pull_request_target from feedback-ai-closed.yml (or feedback-ai.yml until it moves) (runs main's file, never a PR's). And the card must be in the state the step needs, inside the hour. A fork's run has no token at all.
 import {act} from '../shared/feedback-actions.js';
+import {readCardRun} from '../shared/feedback-runs.js';
 import {AUDIENCE, CLOSE_WORKFLOW, FIXER_WORKFLOW, STALE_MS, WORKFLOW, briefOf} from '../shared/feedback-ai.js';
 import {releasePr} from '../shared/feedback-reply.js';
 import {githubJwks, verifyRunToken} from '../shared/github-oidc.js';
@@ -70,6 +71,7 @@ export async function status(request, env, now = new Date(), deps = {}) {
   } else if (!releasePr(row.pr_url) || releasePr(row.pr_url) !== releasePr(body.pr)) {   // merged/closed: only for the PR the card holds
     return json({ok: false, error: 'that is not the pull request of this feedback'}, 409);
   }
+  if (refusal && !await readCardRun(env, {...row, ref}, String(claims.run_id), deps.fetch).catch(() => null)) return json({ok: false, error: 'this run is not the current feedback attempt'}, 409);
   const why = body.status === 'cap' ? 'the daily AI run limit was reached; try again when the limit resets.'
     : body.status === 'busy' ? 'another AI run is still going; try again when it finishes.' : body.why;
   const done = await act(env, {ref, action, pr: body.pr, verdict: body.verdict, why}, `ai (${event === 'workflow_dispatch' ? `run ${claims.run_id}` : `PR ${releasePr(body.pr)}`})`, now, {trusted: true, run: refusal ? row : undefined});
