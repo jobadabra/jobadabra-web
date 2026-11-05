@@ -10,7 +10,7 @@ import {CHART_STYLE, TOOLTIP} from '../shared/scoutingcharts.js';
 import {floorFor, cellsOf, gaps, heatmap, history, runs, sources, tiles, topKind, trends} from '../shared/scoutingvisual.js';
 import {section as readMethods} from '../shared/readmethods.js';
 import {day, snapshot, gather} from '../shared/scouting-snapshot.js';
-import {CHIP_STYLE, chip} from './chip.js';
+import {chip} from './chip.js';
 import {employerKindChart, familyChart, freshnessChart, usefulChart} from './jobsearch-charts.js';
 import {figure, VIZ_STYLE} from './viz.js';
 
@@ -65,8 +65,7 @@ export function page(data, url = new URL('https://www.jobadabra.top/admin/job-se
       + `${n(data.sharing7)} install${data.sharing7 === 1 ? '' : 's'} sharing this week; ${pct(nonIt, feeds.length)} hire mostly outside IT.`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>Scouting · Admin</title><link rel="icon" href="/favicon-32.png">
-<style>${CHIP_STYLE}
-.card{padding:16px;margin-bottom:12px;min-width:0}td{padding:7px 4px;vertical-align:top;overflow-wrap:anywhere}th{padding:6px 4px}
+<style>.card{padding:16px;margin-bottom:12px;min-width:0}td{padding:7px 4px;vertical-align:top;overflow-wrap:anywhere}th{padding:6px 4px}
 .verdict{background:#1d1a12;border:1px solid #5a4620;border-radius:14px;padding:14px 16px;margin-bottom:12px}
 .scroll{overflow-x:auto}.countries td,.countries th{text-align:right;font-variant-numeric:tabular-nums;padding:6px 5px}.countries td:first-child,.countries th:first-child{text-align:left}.thin{color:#ef8a8a}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start}.grid2>.card{margin-bottom:0}.grid2{margin-bottom:12px}
