@@ -222,6 +222,7 @@ export class CodexBroker extends Container {
   async codexStep(lane, body, model, verdict, hasLater, loginChecked, session = '') {
     if (!loginChecked) { const refusal = await this.loginRefusal(); if (refusal) return refusal; }
     if (verdict.ranOut) return hasLater ? null : json(429, {why: verdict.why});
+    const entered = Date.now();
     const unlock = session ? await this.turns(session) : () => {};   // before the slot: a waiting turn of one conversation must not hold a slot others need
     try {
       const release = await this.gate.acquire(lane === 'drift' ? 'scheduled' : lane);   // nightly drift shares scheduled queue priority
@@ -229,15 +230,23 @@ export class CodexBroker extends Container {
         const delta = typeof body.delta === 'string' ? body.delta : '', now = Date.now();
         const plan = session ? planOf(((await this.ctx.storage.get('sessions')) || {})[session], {now, tier: body.tier ?? 'mid', delta}) : null;
         const sent = {prompt: body.prompt, schema: body.schema, images: body.images, search: body.search, effort: body.effort, model, ...(session ? {session: {key: session, ...plan, delta, end: body.endSession === true}} : {})};   // an allow-list, never the caller's body: nothing else of theirs reaches the container
-        const reply = await this.containerFetch('http://c/call', {method: 'POST', body: JSON.stringify(sent)});
-        const text = await reply.text();
+        const sentAt = Date.now();
+        // Why (5 Nov 2026, a8, owner via mac-32: "ONE timeline with timestamps on all 3 hops"; Gitar on #428: a throw or a non-JSON body left no line): what this Worker spent before the container (the conversation's lock, the gate slot, the session read), what the container leg took and what the container saw codex do. It is written to this Worker's log on EVERY exit of the container leg (a throw too, the deploy-swap signature) and returned in the 200 and 502 bodies. Logging only.
+        const mark = (status, extra = {}) => {
+          const line = {waitMs: sentAt - entered, containerMs: Date.now() - sentAt, status, model, effort: body.effort ?? 'default', ...extra};
+          console.log(JSON.stringify({codexCall: lane, session: session ? 'conversation' : 'single', ...line}));
+          return line;
+        };
+        let reply, text;
+        try { reply = await this.containerFetch('http://c/call', {method: 'POST', body: JSON.stringify(sent)}); text = await reply.text(); } catch (error) { mark('threw', {error: String(error?.message || error).slice(0, 80)}); throw error; }
         let answer;
-        try { answer = JSON.parse(text); } catch { return json(502, {why: `container: ${text.slice(0, 300)}`}); }   // the platform's own error text (not our server's JSON): say it, never crash (a 1101 hid it, 28 Oct 2026)
+        try { answer = JSON.parse(text); } catch { return json(502, {why: `container: ${text.slice(0, 300)}`, timeline: mark(reply.status, {note: 'not JSON'})}); }   // the platform's own error text (not our server's JSON): say it, never crash (a 1101 hid it, 28 Oct 2026)
+        const timeline = mark(reply.status, typeof answer.trace === 'string' ? {codex: answer.trace} : {});
         if (answer.authFile) await this.ctx.storage.put('login', answer.authFile);   // write-through BEFORE the reply goes out: a rotated token is never only in the container
         await this.markIfAnswered(reply, answer);
         if (!reply.ok && exhausted(answer.error) && hasLater) return null;
         if (!reply.ok && overloaded(answer.error) && hasLater) return {passOn: 'overloaded', detail: codexMessage(answer.error).slice(0, 200), refusal: json(502, {why: answer.error})};   // counted as a failure (and for JOB-202's demotion), but a later engine answers
-        if (!reply.ok) { if (answer.error === 'login-lost') await this.ctx.storage.put('lost', true); return json(reply.status === 500 && answer.error === 'login-lost' ? 503 : 502, {why: tokenShaped(answer.error) ? 'codex-failed (detail withheld: token-shaped)' : answer.error}); }
+        if (!reply.ok) { if (answer.error === 'login-lost') await this.ctx.storage.put('lost', true); return json(reply.status === 500 && answer.error === 'login-lost' ? 503 : 502, {why: tokenShaped(answer.error) ? 'codex-failed (detail withheld: token-shaped)' : answer.error, timeline}); }
         if (answer.limits) { this.limits = answer.limits; await this.ctx.storage.put('limits', answer.limits); }
         // Why ([bf], 5 Nov 2026, owner: "that context should be only once"): a conversation's call counts what it added (input minus cached, plus output); every other call counts in full, as before (lib/sessions.mjs countedOf).
         const counted = countedOf(answer.tokens, Boolean(session)), used = counted * weightOf(body.effort);   // a higher effort counts for more of the week (lib/tiers.mjs EFFORT_WEIGHT)
@@ -249,7 +258,7 @@ export class CodexBroker extends Container {
         });
         const refused = refuseReply(answer.reply);
         if (refused) return json(422, {why: refused});
-        return json(200, {reply: answer.reply, tokens: {...answer.tokens, counted}, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'codex', ...(answer.session ? {session: answer.session} : {})});
+        return json(200, {reply: answer.reply, tokens: {...answer.tokens, counted}, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'codex', timeline, ...(answer.session ? {session: answer.session} : {})});
       } finally { release(); }
     } finally { unlock(); }
   }
