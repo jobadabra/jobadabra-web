@@ -40,6 +40,25 @@ test('the runner Workers point at the Dockerfiles that live here', () => {
   assert.match(readFileSync(new URL('workers/hosted-runner/wrangler.jsonc', root), 'utf8'), /"image": "\.\.\/\.\.\/hosted\/Dockerfile"/);
 });
 
+test('a change to any file the Ready to send image copies redeploys the runner', () => {
+  // Why (5 Nov 2026, hr): #280 moved hosted/ready-fill here from the public repo, but no trigger moved with it, so a fix to the container (#403) never deployed.
+  // This repo's sources (hosted/ in the joined tree is ops/hosted/ here) start the release on push; public ones start it through public-watch.yml.
+  const docker = readFileSync(new URL('hosted/ready-fill/Dockerfile', root), 'utf8');
+  const release = readFileSync(new URL('.github/workflows/release-ready-runner.yml', root), 'utf8'), watch = readFileSync(new URL('.github/workflows/public-watch.yml', root), 'utf8');
+  const watched = (watch.match(/public-watch\.sh "\$GITHUB_WORKSPACE" ready ([^)]+)\)/) || [])[1]?.split(/\s+/) || [];
+  const missing = [];
+  for (const [, args] of docker.matchAll(/^COPY (.+)$/gm)) {
+    for (const source of args.trim().split(/\s+/).slice(0, -1)) {
+      const folder = source.replace(/\/[^/]*\*[^/]*$/, '');   // hosted/ready-fill/*.mjs -> hosted/ready-fill
+      const own = folder.split('/').slice(0, 2).join('/');   // hosted/ready-fill/package.json -> hosted/ready-fill
+      if (folder.startsWith('hosted/')) { if (!release.includes(`'ops/${own}/**'`)) missing.push(`release-ready-runner.yml paths lack 'ops/${own}/**'`); }
+      else if (source === 'desktop/package.json') continue;   // Why (5 Nov 2026): only its "type": "module" is used; a version bump at each release must not redeploy the runner
+      else if (!watched.some(path => folder === path || folder.startsWith(`${path}/`))) missing.push(`public-watch.yml's ready list lacks ${folder}`);
+    }
+  }
+  assert.deepEqual(missing, []);
+});
+
 // Moved from the public repo's tests/test_hosted_run.py (1 Nov 2026, rs 5c/6): the Dockerfile lives here now, so the checks on its text do too.
 test('the Always on image starts the server and bakes in no secret', () => {
   const docker = readFileSync(new URL('hosted/Dockerfile', root), 'utf8');

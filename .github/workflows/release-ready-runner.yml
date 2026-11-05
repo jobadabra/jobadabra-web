@@ -9,6 +9,7 @@ on:
     paths:
       - 'workers/ready-runner/**'
       - 'api/ready-consume.js'
+      - 'ops/hosted/ready-fill/**'   # Why (5 Nov 2026, hr): the container's own files moved here in #280 without this line, so #403's fix never deployed
       - '.github/workflows/release-ready-runner.yml'
   workflow_dispatch:
 permissions:
