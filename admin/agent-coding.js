@@ -7,6 +7,7 @@ import {viewer, remember} from '../shared/auth.js';
 import {HOOKS, page} from './agent-coding-page.js';
 import {sdlcPage} from './agent-coding-sdlc.js';
 import {cleanHarness} from './harness-clean.js';
+import {cleanFixer} from './harness-usage.js';
 
 const authorized = (request, env) => Boolean(env.SELFHEAL_PUBLISH_KEY && equal((request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, ''), env.SELFHEAL_PUBLISH_KEY));
 const json = (body, status = 200) => new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json'}});
@@ -57,7 +58,7 @@ export function cleanAgents(card) {
     engine: pick(item?.engine, ['broker', 'api-key', 'free', 'workers-ai'], 'broker'), ...(item?.product === true ? {product: true} : {}), ...(item?.state ? {state: pick(item.state, ['on', 'idle', 'off'], 'idle'), runs: (typeof item.runs === 'string' && /^[grsc.]{0,8}$/.test(item.runs)) ? item.runs : '', lastRun: DAY.test(item.lastRun) ? item.lastRun : ''} : {})})).filter(item => item.name && item.file);
   return agents.length ? {agents, steps} : null;
 }
-const CLEAN = {gate: cleanGate, ci: cleanCi, sdlc: cleanSdlc, agents: cleanAgents, harness: cleanHarness};
+const CLEAN = {gate: cleanGate, ci: cleanCi, sdlc: cleanSdlc, agents: cleanAgents, harness: cleanHarness, 'harness-fixer': cleanFixer};
 const DAY = /^\d{4}-\d\d-\d\d$/;
 
 export async function ingest(request, env, now = new Date()) {
@@ -83,6 +84,6 @@ export async function view(request, env, now = new Date()) {
   if (url.searchParams.has('key')) return remember(url, env, request);
   const since = new Date(now.getTime() - 63 * 86400000).toISOString().slice(0, 10);
   let rows = [];
-  try { rows = env.STATS ? (await env.STATS.prepare('SELECT kind, day, card, updated_at FROM agent_coding_days WHERE day >= ? AND kind != \'harness\' ORDER BY day').bind(since).all()).results || [] : []; } catch { rows = []; }
+  try { rows = env.STATS ? (await env.STATS.prepare('SELECT kind, day, card, updated_at FROM agent_coding_days WHERE day >= ? AND kind NOT LIKE \'harness%\' ORDER BY day').bind(since).all()).results || [] : []; } catch { rows = []; }
   return new Response(url.searchParams.get('tab') === 'sdlc' ? sdlcPage(rows, now) : page(rows, now), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
 }

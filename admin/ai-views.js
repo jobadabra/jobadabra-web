@@ -19,5 +19,5 @@ export const agentsView = route(async (env, now) => agentsPage(await latestCard(
 export const stepsView = route(async (env, now) => stepsPage(await latestCard(env), (await readBroker(env))?.tally || null, now));
 /** Owner-only CI run outcomes, read from the existing harness upload. */
 export const runsView = route(async (env, now) => runsPage(await latestCard(env, 'harness'), now));
-export const harnessView = route(async (env, now) => harnessPage(await latestCard(env, 'harness'), now));
+export const harnessView = route(async (env, now) => harnessPage(await latestCard(env, 'harness'), await latestCard(env, 'harness-fixer')));
 export const enginesView = route(async (env, now) => enginesPage(await readBroker(env), now));
