@@ -3,7 +3,7 @@
 // unsubscribe link and headers, and logs the mail (hash of the address, never the body) in mail_log. Switch: env.MAIL = "on" (anything else sends nothing). Guard: test/unit/shared/mail/mail.test.js.
 import {appVersionOf} from './app-needs.js';
 import {digestOf, tokenFor} from './guard.js';
-import {frameHtml, frameText, SITE} from './mail-frame.js';
+import {frameHtml, frameText, REPLY_TO, SITE} from './mail-frame.js';
 import {TEMPLATES} from './mail-templates.js';
 
 export const DAILY_MAX = 6;                 // per address, per rolling 24 h (spec §4c "Abuse")
@@ -55,8 +55,8 @@ async function record(env, now, addr, list, template, status, id = null) {
 // `data.appVersion` (set by send(): the app version the address's installs last reported, or absent) lets a template swap an "Open in Jobadabra" button for "Update Jobadabra" (shared/app-needs.js).
 export function compose(template, data = {}, links = null) {
   const spec = TEMPLATES[template];
-  const why = spec.essential ? 'A security email: sent even if you stopped other emails.'
-    : spec.list === 'marketing' ? 'You get this because you joined the waitlist or set up Jobadabra with this address.' : 'You get this because you set up Jobadabra with this address.';
+  const why = spec.essential ? 'A security email, sent even if you stopped other emails.'
+    : spec.list === 'marketing' ? 'You joined the waitlist or set up Jobadabra.' : 'You set up Jobadabra with this address.';
   const frame = {title: spec.title(data), why, button: spec.button?.(data) || null, links};
   const headers = links ? {'List-Unsubscribe': `<${links.stop}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'} : undefined;
   return {subject: spec.subject(data), text: frameText({...frame, body: spec.text(data)}), html: frameHtml({...frame, body: spec.html(data), hero: spec.hero?.(data)}), headers};
@@ -77,7 +77,7 @@ export async function send(env, template, to, data = {}, {now = new Date()} = {}
     const appVersion = await appVersionOf(env, addr);
     const stop = spec.essential ? null : await stopLink(env, to, spec.list);
     const {subject, text, html, headers} = compose(template, {...data, appVersion}, stop && {stop, settings: await settingsLink(env, to)});
-    const result = await env.EMAIL.send({from: FROM[spec.list], to: clean(to), subject, text, html, ...(headers && {headers})});
+    const result = await env.EMAIL.send({from: FROM[spec.list], replyTo: REPLY_TO, to: clean(to), subject, text, html, ...(headers && {headers})});
     await record(env, now, addr, spec.list, template, 'sent', result?.messageId || null);
     return {ok: true, id: result?.messageId || null};
   } catch (error) {
