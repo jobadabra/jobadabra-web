@@ -1,4 +1,4 @@
-// The Finder scorecard, Judged noise and Verdict audit cards of the Self-healing page, and the Red main tab: what each draws from its stored data, who sees buttons, and that stored text is escaped.
+// The Finder scorecard, Judged noise and Verdict audit cards of the Bug loop page, and the Red main tab: what each draws from its stored data, who sees buttons, and that stored text is escaped.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {page as redMain} from '../../../admin/red-main-page.js';

@@ -1,4 +1,4 @@
-// The CI's small stores (admin/ci-state.js) and the owner's buttons on the Self-healing page: who may read or write which key, the append and tick rules, Forget and the two POSTs.
+// The CI's small stores (admin/ci-state.js) and the owner's buttons on the Bug loop page: who may read or write which key, the append and tick rules, Forget and the two POSTs.
 // Replaces the pinned issues #274 (noise register), #2736 (verdict audit) and #2817 (red main).
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -68,7 +68,7 @@ async function ownerCookie(env) {
   const first = await view(new Request('https://x.dev/self-heal?key=owner-key'), env);
   return first.headers.get('Set-Cookie').split(';')[0];
 }
-const post = (env, cookie, fields, origin = 'https://x.dev') => view(new Request('https://x.dev/admin/testing/self-healing', {method: 'POST', headers: {Cookie: cookie, Origin: origin, 'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields).toString()}), env);
+const post = (env, cookie, fields, origin = 'https://x.dev') => view(new Request('https://x.dev/admin/testing/bug-loop', {method: 'POST', headers: {Cookie: cookie, Origin: origin, 'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields).toString()}), env);
 
 test('the owner presses Forget and a tick: both save and redirect back to their card; a stranger or another site is refused', async () => {
   const {env, rows} = fakeEnv(new Map([['noise-register', JSON.stringify({entries: [{id: 'a'}, {id: 'b'}]})], ['verdict-audit', JSON.stringify({audits: [{week: 'w', closed: null, items: [{key: 'i1', tick: null}]}]})]]));

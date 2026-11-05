@@ -36,7 +36,7 @@ export async function report(db, now = new Date()) {
       {label: 'downloads', values: byWeek(downloads, now, list => list.length)}],
     '/admin/growth/app': [app.machines, app.problems],
     '/admin/growth/insights': [insights.replies, insights.scores],
-    '/admin/testing/self-healing': [{label: 'precision', values: byWeek(weekly(snaps), now, latest(snaps, 'precision')), format: pct}],
+    '/admin/testing/bug-loop': [{label: 'precision', values: byWeek(weekly(snaps), now, latest(snaps, 'precision')), format: pct}],
     '/admin/ai/costs': [{label: 'scheduled jobs + relay', values: byWeek([...jobCost, ...relay], now, sum('usd')), format: usd, higherIsBetter: false}],
     '/admin/form-filling/real-users': [{label: 'required questions filled', values: byWeek(filled, now, ratio('ok', 'n')), format: pct},
       {label: 'blind spots per 100', values: byWeek([...blind, ...exposure], now, list => { const base = sum('base')(list); return base ? (100 * sum('blind')(list)) / base : null; }),
@@ -54,7 +54,7 @@ export async function report(db, now = new Date()) {
   if (fresh[0]?.n) attention.push({page: '/admin/growth/app', text: `${fresh[0].n} new problem${fresh[0].n === 1 ? '' : 's'} reported by the apps this week`, tone: 'bad'});
   const r = cards['/admin/form-filling/real-users'][0].values;
   if (last(r) != null && prev(r) != null && last(r) < prev(r)) attention.push({page: '/admin/form-filling/real-users', text: `Required questions filled fell from ${pct(prev(r))} to ${pct(last(r))}`, tone: 'bad'});
-  if (recall && recall.planted && recall.caught < recall.planted) attention.push({page: '/admin/testing/self-healing', text: `Self-healing missed ${recall.planted - recall.caught} of ${recall.planted} planted bugs`, tone: 'bad'});
+  if (recall && recall.planted && recall.caught < recall.planted) attention.push({page: '/admin/testing/bug-loop', text: `Bug loop missed ${recall.planted - recall.caught} of ${recall.planted} planted bugs`, tone: 'bad'});
   const c = cards['/admin/ai/costs'][0].values;
   if (last(c) != null && prev(c) && last(c) > 1.5 * prev(c) && last(c) - prev(c) > 1) attention.push({page: '/admin/ai/costs', text: `AI cost up from ${usd(prev(c))} to ${usd(last(c))} this week`, tone: 'warn'});
   const p = app.problems.values;
@@ -76,7 +76,7 @@ export function page(data, who = {role: 'superadmin'}) {
       return `<div class="metric"><small class="muted">${esc(s.label)}</small><div class="line">${known.length >= 2 ? spark(s.values, {...s, width: 140, height: 30})
         : `<span>${known.length ? esc(format(known.at(-1))) : '–'}</span>`}</div></div>`;
     }).join('') || '<p class="muted">No weekly numbers here: open the page →</p>'}
-${item.path === '/admin/testing/self-healing' && data.recall ? `<small class="muted">recall ${data.recall.caught}/${data.recall.planted} planted bugs</small>` : ''}</a>`;
+${item.path === '/admin/testing/bug-loop' && data.recall ? `<small class="muted">recall ${data.recall.caught}/${data.recall.planted} planted bugs</small>` : ''}</a>`;
   }).join('');
   const tone = {bad: '🔴', warn: '🟠', info: '🔵'};
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

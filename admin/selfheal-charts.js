@@ -1,4 +1,4 @@
-// The charts of /admin/testing/self-healing (owner, 5 Nov 2026: tables that are summaries become charts): what each detector found and why issues were closed.
+// The charts of /admin/testing/bug-loop (owner, 5 Nov 2026: tables that are summaries become charts): what each detector found and why issues were closed.
 // Each takes the table the page drew before and returns one figure (admin/viz.js): the chart, the table behind "Show table". Pure; guard: test/unit/admin/selfheal-charts.test.js.
 import {figure, split, stacks} from './viz.js';
 

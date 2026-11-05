@@ -1,4 +1,4 @@
-// The four state cards of /admin/testing/self-healing, one per pinned GitHub issue they replace (owner, 5 Nov 2026: "turn this pinned issues into dashboards/tabs/pages in Admin … and will
+// The four state cards of /admin/testing/bug-loop, one per pinned GitHub issue they replace (owner, 5 Nov 2026: "turn this pinned issues into dashboards/tabs/pages in Admin … and will
 // remove them from GH issue list"): Top issues (#1892, the snapshot's `ranking`), Finder scorecard (#341, `scorecard`), Verdict audit (#2736, ci_state `verdict-audit`) and Judged noise (#274,
 // ci_state `noise-register`). Pure: stored data in, HTML out; the owner's buttons are plain forms handled by admin/selfheal.js. Test: test/unit/admin/selfheal-state-cards.test.js.
 import {esc} from '../shared/html.js';
@@ -57,7 +57,7 @@ export function scoreSection(card, previous = null) {
 // ---------- Verdict audit: five random verdicts a week, ticked right or wrong by the owner ----------
 const rate = score => (score && score.right + score.wrong ? `${score.right} of ${score.right + score.wrong} right` : 'nothing ticked');
 
-const button = (item, value, label, on) => `<form method="post" action="/admin/testing/self-healing#audit"><input type="hidden" name="action" value="tick"><input type="hidden" name="key" value="${esc(item.key)}"><input type="hidden" name="value" value="${on ? '' : value}"><button type="submit" class="btn${on ? ` on-${value}` : ''}" aria-pressed="${on}">${label}</button></form>`;
+const button = (item, value, label, on) => `<form method="post" action="/admin/testing/bug-loop#audit"><input type="hidden" name="action" value="tick"><input type="hidden" name="key" value="${esc(item.key)}"><input type="hidden" name="value" value="${on ? '' : value}"><button type="submit" class="btn${on ? ` on-${value}` : ''}" aria-pressed="${on}">${label}</button></form>`;
 
 function itemRow(item, owner) {
   const ticks = owner ? `<div class="ticks">${button(item, 'right', '👍 right', item.tick === 'right')}${button(item, 'wrong', '👎 wrong', item.tick === 'wrong')}</div>` : (item.tick ? chip(item.tick === 'right' ? '👍 right' : '👎 wrong', item.tick === 'right' ? 'good' : 'bad') : chip('not ticked', 'off'));
@@ -85,7 +85,7 @@ const SHOWN = 15;
 const NOISE_TONE = {'false-positive': 'off', harness: 'off', real: 'good', 'needs-human': 'warn'};
 const noiseTone = word => (Object.hasOwn(NOISE_TONE, word) ? NOISE_TONE[word] : 'off');
 
-const forget = item => `<form method="post" action="/admin/testing/self-healing#noise"><input type="hidden" name="action" value="forget"><input type="hidden" name="id" value="${esc(item.id)}"><button type="submit" class="btn">Forget</button></form>`;
+const forget = item => `<form method="post" action="/admin/testing/bug-loop#noise"><input type="hidden" name="action" value="forget"><input type="hidden" name="id" value="${esc(item.id)}"><button type="submit" class="btn">Forget</button></form>`;
 
 /** The card: the newest SHOWN entries, each with its verdict chip and why; `owner` adds the Forget buttons. '' when the store was never written. */
 export function noiseSection(state, owner = false) {

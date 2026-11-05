@@ -115,7 +115,7 @@ test('the overview: a card per page and what needs attention, pulled from their 
   db.prepare("INSERT INTO feedback (at, day, install, version, platform, text, contact) VALUES ('2026-10-11T10:00:00Z', '2026-10-11', 'i1', '0.8', 'mac', 'hello', '')").run();
   const data = await report(e.STATS, now);
   const texts = data.attention.map(item => `${item.page} ${item.text}`);
-  for (const want of ['/admin/growth/app 1 new problem', 'Required questions filled fell from 90% to 50%', '/admin/testing/self-healing Self-healing missed 1 of 15', '/admin/feedback/inbox 1 feedback message'])
+  for (const want of ['/admin/growth/app 1 new problem', 'Required questions filled fell from 90% to 50%', '/admin/testing/bug-loop Bug loop missed 1 of 15', '/admin/feedback/inbox 1 feedback message'])
     assert.ok(texts.some(text => text.includes(want)), want);
   const html = await (await get(e, '/admin', owner)).text();
   for (const page of PAGES.filter(p => p.path !== '/admin' && !p.superadmin)) assert.ok(html.includes(`class="card dash" href="${page.path}"`), page.path);

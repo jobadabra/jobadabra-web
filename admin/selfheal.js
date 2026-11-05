@@ -189,7 +189,7 @@ export async function snapshots(env) {
 
 export function page(_legacy, live = null, history = [], state = {}) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex"><title>Self-healing · Admin</title><link rel="icon" href="/favicon-32.png">
+<meta name="robots" content="noindex"><title>Bug loop · Admin</title><link rel="icon" href="/favicon-32.png">
 <style>${CHIP_STYLE}${VIZ_STYLE}
 :root{--bg:#0b0d10;--card:#14181d;--line:#262c33;--text:#f4efe3;--muted:#8d949c;--amber:#f5b54a;--teal:#5ec4b6;--s1:#3987e5;--s2:#d95926;--s3:#199e70}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,sans-serif}
@@ -204,7 +204,7 @@ ul{margin:8px 0 0;padding-left:18px}li{margin-top:6px}
 .reference summary{cursor:pointer;list-style:none}.reference summary::-webkit-details-marker{display:none}.reference summary h2::after{content:' ▸ show';color:var(--amber);font-weight:400;font-size:13px}.reference[open] summary h2::after{content:' ▾'}
 ${TREND_STYLE}${STATE_STYLE}
 </style></head><body><main>
-<header><h1>🔁 Self-healing</h1><span class="muted">${esc(rangeText(live))}</span></header>
+<header><h1>🔁 Bug loop</h1><span class="muted">${esc(rangeText(live))}</span></header>
 ${liveSection(live, history, undefined, state)}
 ${principlesSection()}
 </main><noscript><style>.period[hidden]{display:block!important}</style></noscript><div id="tip" role="tooltip" hidden></div><script>${TREND_SCRIPT}</script></body></html>`;
