@@ -93,11 +93,11 @@ test('every promotional template carries the unsubscribe link in its html and te
   }
 });
 
-test('the release mail renders: pills, categorized changes, the stop link', () => {
+test('the release mail renders: emphasis, categorized changes, the stop link', () => {
   const mail = compose('release', SAMPLES.release, {stop: 'https://s/stop', settings: 'https://s/set'});
   assert.equal(mail.subject, `Jobadabra ${SAMPLES.release.version} · What's new`);
-  assert.ok(mail.html.includes('Improved') && mail.html.includes('Download latest version') && mail.html.includes('https://s/stop'));
-  assert.match(mail.html, /<span[^>]*>Jobs<\/span>/);
+  assert.ok(mail.html.includes('Improved') && mail.html.includes('Open Jobadabra App') && mail.html.includes('https://s/stop'));
+  assert.match(mail.html, /<strong[^>]*>Jobs<\/strong>/);
   assert.ok(!mail.text.includes('*'));
 });
 
@@ -344,4 +344,16 @@ test('sent release previews and test copies retain the sent snapshot after chang
   await emailView(new Request(url, {method: 'POST', headers, body: new URLSearchParams({action: 'test', to: 'reviewer@example.com'})}), e);
   assert.equal(sent.length, 2);
   assert.match(sent[1].html, /Faster jobs/); assert.doesNotMatch(sent[1].html, /Replacement notes/);
+});
+
+
+test('the release action opens the installed app even for an older saved download URL', () => {
+  const mail = compose('release', {...SAMPLES.release, updateUrl: 'https://www.jobadabra.top/download'});
+  assert.match(mail.html, /href="https:\/\/www\.jobadabra\.top\/open\?view=jobs"[^>]*>Open Jobadabra App<\/a>/);
+  assert.match(mail.text, /Open Jobadabra App: https:\/\/www\.jobadabra\.top\/open\?view=jobs/);
+  assert.doesNotMatch(mail.html, /Download latest version/);
+  assert.match(mail.html, /Download Jobadabra/);
+  assert.match(mail.html, /<ol[^>]*>/);
+  assert.match(mail.text, /1\. Open Jobs\./);
+  assert.match(mail.text, /2\. Click any row/);
 });
