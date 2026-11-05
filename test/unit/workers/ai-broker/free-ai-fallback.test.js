@@ -100,7 +100,7 @@ test('fallback keeps drift daily admission; a search or an image Free AI cannot 
   const {broker, storage} = harness(undefined, fallbackEnv());
   await storage.put('limits', {usedPercent: 100});
   const search = await broker.call('scheduled', {...body, search: true});
-  assert.equal(search.status, 503); assert.match((await search.json()).why, /fallback:search-unsupported/);
+  assert.equal(search.status, 429); assert.match((await search.json()).why, /^budget:week /);   // Why (5 Nov 2026): past the reserve line it is the line's refusal, the one clients skip; a call pinned to Free AI keeps fallback:search-unsupported (engines.test.js)
   for (let i = 0; i < 24; i++) assert.equal((await broker.call('drift', body)).status, 200);
   const denied = await broker.call('drift', body);
   assert.equal(denied.status, 429); assert.match((await denied.json()).why, /budget:daily/);

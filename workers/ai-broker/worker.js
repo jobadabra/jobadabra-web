@@ -1,11 +1,11 @@
 // The AI broker (specs docs/superpowers/specs/2026-11-01-ai-broker-design.md here and 2026-10-28-ci-on-codex-subscription-design.md in the public repo): every CI, scheduled and benchmark AI call runs here, today on the owner's one ChatGPT/Codex login.
 // Why (1 Nov 2026, owner): renamed from codex-broker. The Durable Object class is still `CodexBroker`: the namespace transfer from the old Worker needs the same class name on both sides (proven on a throwaway pair); the class is renamed in the cleanup PR.
 // A job proves itself with GitHub's per-run OIDC token (lib/oidc.mjs); the login lives only in this Durable Object's storage and is written through after every call, before the reply is sent.
-// One `ENGINE` var names the engine that answers first (codex by default); the others follow in a fixed order and answer only when the one before ran out or is not configured (lib/engines.mjs). Other refusals retain their existing controls.
+// One `ENGINE` var names the engine that answers first (codex by default); the others follow in a fixed order and answer only when the one before ran out or is not configured (lib/engines.mjs); a lane the reserve holds back skips Claude past its line (lib/budget.mjs). Other refusals retain their existing controls.
 import {Container, getContainer} from '@cloudflare/containers';
 import {verifyRunToken, githubJwks} from './lib/oidc.mjs';
 import {laneOf} from './lib/lanes.mjs';
-import {allow, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
+import {allow, heldByReserve, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
 import {refuseReply} from './lib/guard.mjs';
 import {slots} from './lib/queue.mjs';
 import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
@@ -147,14 +147,17 @@ export class CodexBroker extends Container {
     if (body.only && !Object.hasOwn(body, 'engine')) return json(400, {why: 'only needs an engine: only this engine answers, or the call is refused'});
     const model = modelOf(body.tier);
     if (!model) return json(400, {why: `unknown tier "${String(body.tier).slice(0, 20)}" (small, mid or large)`});
-    const env = this.brokerEnv, {chain} = chainOf(env, body.engine, body.engine === undefined ? await demotedNow(this.ctx.storage, env) : [], body.only === true);   // an engine doing worse is moved back (lib/adapt.mjs) unless this call names its own   // body.engine = this one call's own first choice (e.g. one workflow trying claude); admission and caps stay the same
+    const env = this.brokerEnv, {chain, first} = chainOf(env, body.engine, body.engine === undefined ? await demotedNow(this.ctx.storage, env) : [], body.only === true);   // an engine doing worse is moved back (lib/adapt.mjs) unless this call names its own   // body.engine = this one call's own first choice (e.g. one workflow trying claude); admission and caps stay the same
     // Why (1 Nov 2026): with Codex first a refused login never counts toward the daily cap (as before the chain); with another engine first Codex's step checks it when reached.
     if (chain[0] === 'codex') { const refusal = await this.loginRefusal(); if (refusal) return refusal; }
     this.limits ||= (await this.ctx.storage.get('limits')) || null;   // kept in storage: an eviction must not switch the whole-week brake off (Gitar #221)
     if (this.limits?.resetsAt && this.limits.resetsAt <= Date.now() / 1000) this.limits = null;
-    // `others` can answer when Codex has run out; `later` is the part of the chain after Codex.
-    const others = chain.filter(engine => engine !== 'codex' && configured(engine, env));
-    const later = chain.slice(chain.indexOf('codex') + 1).filter(engine => configured(engine, env));
+    // Why (5 Nov 2026, owner: "I first stop scheduled jobs spilling onto your Claude plan at the 70% Codex line"): Claude here is the owner's own subscription, and it has no lane limit, so scheduled calls past the line landed on it (the scout: 48 of 199 calls in 3 days, logged `codex ran-out`). A lane the reserve holds back may still use Free AI, under its day cap; Claude only when it is the chosen first engine (a call naming it, a pin, ENGINE). A demoted Codex is not a choice (`first` stays codex).
+    const noClaude = heldByReserve(lane) && first !== 'claude' && body.only !== true;
+    // Why (5 Nov 2026, owner's brief: "A job refused here gets the normal refusal, and its items wait for the next run"; review): past the line a search or an image has nobody left, Free AI takes neither, so it is the line's own `budget:` refusal (below), never `fallback:*`, which clients show red. A Free AI that really failed keeps its reason (owner, 4 Nov 2026: a fallback that cannot answer is a failure the job shows).
+    const freeAiCannot = body.search === true || body.images?.length > 0;
+    // `others` can answer when Codex has run out.
+    const others = chain.filter(engine => engine !== 'codex' && configured(engine, env) && !(noClaude && (engine === 'claude' || (engine === 'free-ai' && freeAiCannot))));
     // Check and persist admission together: concurrent calls and reruns share one UTC allowance, whichever engine answers.
     // No refund on a queue/transport/model failure; the reservation commits before an engine is called.
     const verdict = await this.ctx.storage.transaction(async storage => {
@@ -170,6 +173,8 @@ export class CodexBroker extends Container {
       return check;
     });
     if (!verdict.ok && !verdict.ranOut) return json(429, {why: verdict.why});   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
+    const atLine = noClaude && verdict.ranOut === true, walk = atLine ? chain.filter(engine => engine !== 'claude') : chain;
+    const later = walk.slice(walk.indexOf('codex') + 1).filter(engine => configured(engine, env));   // the part of this call's walk after Codex
     const note = newNote(), ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note}, day = new Date(Date.now()).toISOString().slice(0, 10), skipped = [];
     let busyPassed = false, held = null, codexRefusal = null;   // busyPassed: Claude's slots were full for too long and the call went on; held: the last refusal of an engine it went on to; codexRefusal: Codex's own 502 when it passed on for capacity
     const skip = async (engine, why, counted = true, detail = '') => { skipped.push({engine, why, ...(detail ? {detail} : {})}); if (why === 'busy') busyPassed = true; if (why === 'failed' || why === 'overloaded') await recordPerf(this.ctx.storage, env, engine, false); return counted ? recordOutcome(this.ctx.storage, day, engine, {'ran-out': 'ranOut', busy: 'busy'}[why] ?? 'failed') : null; };
@@ -180,8 +185,8 @@ export class CodexBroker extends Container {
       const fell = skipped.filter(entry => !(entry.engine === engine && entry.why === 'busy'));   // Claude answering after its busy turn did answer: fellBack lists only engines that did not
       return reply.ok && fell.length ? json(200, {...(await reply.json()), fellBack: fell}) : reply;
     };
-    const waitMs = chain.includes('claude') && configured('claude', env) && await mayPassOn({chain, body, env, storage: this.ctx.storage, verdict}) ? this.busyMs : undefined;   // undefined = wait for a Claude slot as long as it takes
-    for (const engine of chain) {
+    const waitMs = walk.includes('claude') && configured('claude', env) && await mayPassOn({chain: walk, body, env, storage: this.ctx.storage, verdict}) ? this.busyMs : undefined;   // undefined = wait for a Claude slot as long as it takes
+    for (const engine of walk) {
       const started = Date.now();
       let reply = null;
       if (engine === 'codex') { reply = await this.codexStep(lane, body, model, verdict, later.length > 0, chain[0] === 'codex', session); if (!reply || reply.passOn) { codexRefusal = reply?.refusal ?? null; await skip(engine, reply?.passOn ?? 'ran-out', true, reply?.detail); reply = null; } }
