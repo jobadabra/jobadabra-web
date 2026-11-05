@@ -47,7 +47,8 @@ export async function state(request, env, now = new Date()) {
   return Response.json({ok: true});
 }
 
-// PUT (install key): the app pushes {search, profile, cv} when hosted goes on and whenever they change. GET (run token): the container reads them as JSON.
+// PUT (install key): the app pushes {search, profile} when hosted goes on and whenever they change. GET (run token): the container reads them as JSON.
+// Why (5 Nov 2026, Gitar on #407): no CV is kept. The app has sent cv '' since 16 Oct, and the privacy page says the CV is not sent; a cv field is dropped, not stored.
 export async function config(request, env, now = new Date()) {
   if (!hostedOn(env) || !env.HOSTED_STATE) return notFound();
   if (request.method === 'GET') {
@@ -63,7 +64,7 @@ export async function config(request, env, now = new Date()) {
   let given;
   try { given = JSON.parse(text); } catch { return Response.json({ok: false, error: 'Send JSON'}, {status: 400}); }
   if (text.length > CONFIG_MAX || typeof given.search !== 'object' || !given.search) return Response.json({ok: false, error: 'bad config'}, {status: 413});
-  const kept = JSON.stringify({search: given.search, profile: String(given.profile || ''), cv: String(given.cv || '')});
+  const kept = JSON.stringify({search: given.search, profile: String(given.profile || '')});
   await write(env, account.id, 'config.json', new TextEncoder().encode(kept));
   return Response.json({ok: true});
 }
