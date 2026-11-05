@@ -19,15 +19,18 @@ import {view as emailView} from '../../../admin/email.js';
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0093_changelog.sql', '0105_changelog_plain.sql', '0117_release_mail.sql']) db.exec(sql(file));
+  for (const file of ['0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0093_changelog.sql', '0105_changelog_plain.sql', '0117_release_mail.sql', '0134_mail_on.sql']) db.exec(sql(file));
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values),
     run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
     all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
   return {db, prepare: text => statement(text), batch: async list => { for (const item of list) await item.run(); }};
 }
+const meta = value => { try { return JSON.parse(value); } catch { return undefined; } };
 const kv = () => { const m = new Map(); return {m, get: async k => m.get(k) ?? null, put: async (k, v) => { m.set(k, v); },
-  list: async ({prefix}) => ({keys: [...m.keys()].filter(k => k.startsWith(prefix)).map(name => ({name})), list_complete: true})}; };
+  list: async ({prefix}) => ({keys: [...m.keys()].filter(k => k.startsWith(prefix)).map(name => ({name, metadata: meta(m.get(name))})), list_complete: true})}; };   // the Worker puts the entry and its metadata together (workers/www/index.js)
 const now = new Date('2026-10-28T10:00:00Z');
+const WEB = JSON.stringify({source: 'web'});   // a signup from the website form (shared/mail-lists.js signupKind)
+const confirm = (e, ...emails) => e.STATS.db.prepare(`UPDATE pro_accounts SET email_confirmed_at = 'x' WHERE email IN (${emails.map(() => '?').join(',')})`).run(...emails);
 const groups = [{kind: 'features', items: [{lead: 'Faster jobs', text: 'Open a job and see why it fits.'}, {lead: 'Calendar', text: 'Interviews show on a calendar.'}]}, {kind: 'fixes', items: [{lead: 'A fix', text: 'Something works.'}]}];
 function setup(extra = {}) {
   const sent = [], e = {MAIL: 'on', MARKETING_MAIL: 'on', STATS: d1(), WAITLIST: kv(), STATS_SALT: 'salt', SELFHEAL_PUBLISH_KEY: 'k', EMAIL: {send: async m => { sent.push(m); return {messageId: `m${sent.length}`}; }}, ...extra};
@@ -58,21 +61,22 @@ test('the trigger from a fake promotion: wrong key is a 404, right key drafts', 
   assert.deepEqual(await (await call('k')).json(), {drafted: true});
 });
 
-test('the audience is every ticked account and waitlist address, once; an account that never ticked is out; sending reaches all but the stopped and never mails a version twice', async () => {
-  // Why (owner, 5 Nov 2026: marketing is its own unticked choice; "the waitlist emails count..."; was opt-out since 28 Oct).
+test('the audience is every confirmed account and website waitlist address, once; an unconfirmed account is out; sending reaches the rest and never mails a version twice', async () => {
+  // Why (owner, 5 Nov 2026: "this should be on by default"; "After confirming"): New releases is on for a confirmed address until it stops them.
   const {e, sent} = setup();
   await createAccount(e, 'trial@example.com', now, {plan: 'trial'});
   await createAccount(e, 'stop@example.com', now, {plan: 'trial'});
   await createAccount(e, 'bounced@example.com', now, {plan: 'trial'});
   await createAccount(e, 'never@example.com', now, {plan: 'trial'});
-  e.STATS.db.prepare("UPDATE pro_accounts SET marketing_opt_in = 1 WHERE email IN ('stop@example.com', 'bounced@example.com')").run();
-  await e.WAITLIST.put('signup:wait@example.com', '1');
-  await e.WAITLIST.put('signup:trial@example.com', '1');   // on both lists: once
+  confirm(e, 'trial@example.com', 'stop@example.com', 'bounced@example.com');
+  await e.WAITLIST.put('signup:wait@example.com', WEB);
+  await e.WAITLIST.put('signup:trial@example.com', WEB);   // on both lists: once
   assert.equal((await audience(e)).length, 4);
-  e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'marketing', 'unsubscribe', 'x')").run(await addrOf('stop@example.com'));
+  e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'releases', 'unsubscribe', 'x')").run(await addrOf('stop@example.com'));
   e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'all', 'bounce', 'x')").run(await addrOf('bounced@example.com'));
+  assert.equal((await audience(e)).length, 2, 'the stopped are out of the audience itself');
   await draft(e, '0.8.42', now);
-  assert.deepEqual(await sendAll(e, '0.8.42', {now}), {sent: 2, skipped: 2});
+  assert.deepEqual(await sendAll(e, '0.8.42', {now}), {sent: 2, skipped: 0});
   assert.deepEqual(sent.map(m => m.to).sort(), ['trial@example.com', 'wait@example.com']);
   assert.ok(sent.every(m => m.from.startsWith('Igor from Jobadabra <')));
   assert.deepEqual(await sendAll(e, '0.8.42', {now}), {refused: 'not a draft'});
@@ -81,7 +85,7 @@ test('the audience is every ticked account and waitlist address, once; an accoun
 
 test('with MARKETING_MAIL off nothing is sent', async () => {
   const {e, sent} = setup({MARKETING_MAIL: 'off'});
-  await e.WAITLIST.put('signup:wait@example.com', '1');
+  await e.WAITLIST.put('signup:wait@example.com', WEB);
   await draft(e, '0.8.42', now);
   await sendAll(e, '0.8.42', {now});
   assert.equal(sent.length, 0);
@@ -130,9 +134,9 @@ test('the review page shows the mail and "Send to N people" (N = who would get i
   await createAccount(e, 'a@example.com', now, {plan: 'trial'});
   await createAccount(e, 'stop@example.com', now, {plan: 'trial'});
   await createAccount(e, 'never@example.com', now, {plan: 'trial'});
-  e.STATS.db.prepare("UPDATE pro_accounts SET marketing_opt_in = 1 WHERE email IN ('a@example.com', 'stop@example.com')").run();
-  await e.WAITLIST.put('signup:w@example.com', '1');
-  e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'marketing', 'unsubscribe', 'x')").run(await addrOf('stop@example.com'));
+  confirm(e, 'a@example.com', 'stop@example.com');
+  await e.WAITLIST.put('signup:w@example.com', WEB);
+  e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'releases', 'unsubscribe', 'x')").run(await addrOf('stop@example.com'));
   await draft(e, '0.8.42', now);
   assert.equal(await reach(e), 2);
   const owner = {Authorization: 'Bearer owner-key'};
@@ -151,18 +155,23 @@ test('the review page shows the mail and "Send to N people" (N = who would get i
   assert.match(sent[0].html, /A better headline/);
 });
 
-test('the product news list shows every address with its source and whether it gets news; only the owner sees addresses', async () => {
+test('the news list shows every address with its source and what each type does for it; only the owner sees addresses', async () => {
   const {e} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
   e.STATS.db.exec('CREATE TABLE IF NOT EXISTS test_mail (received_at TEXT, to_addr TEXT, subject TEXT)');
   await createAccount(e, 'a@example.com', now, {plan: 'trial'});
   await createAccount(e, 'stop@example.com', now, {plan: 'trial'});
   await createAccount(e, 'never@example.com', now, {plan: 'trial'});
-  await e.WAITLIST.put('signup:a@example.com', '1');
-  await e.WAITLIST.put('signup:w@example.com', '1');
-  e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'marketing', 'unsubscribe', 'x')").run(await addrOf('stop@example.com'));
-  const rows = await audienceRows(e);
-  assert.deepEqual(rows.map(r => [r.email, r.source, r.gets]).sort(), [['a@example.com', 'both', true], ['never@example.com', 'account', false], ['stop@example.com', 'account', false], ['w@example.com', 'waitlist', true]]);
-  assert.match(audienceCard(rows), /2 get it, 1 stopped, 1 never ticked/);
+  confirm(e, 'a@example.com', 'stop@example.com');
+  await e.WAITLIST.put('signup:a@example.com', WEB);
+  await e.WAITLIST.put('signup:w@example.com', WEB);
+  await e.WAITLIST.put('signup:app@example.com', JSON.stringify({source: 'app'}));
+  e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'releases', 'unsubscribe', 'x')").run(await addrOf('stop@example.com'));
+  e.STATS.db.prepare("INSERT INTO mail_on (addr, list, via, at) VALUES (?, 'tips', 'card', 'x')").run(await addrOf('a@example.com'));
+  const rows = await audienceRows(e), by = Object.fromEntries(rows.map(r => [r.email, r]));
+  assert.deepEqual(rows.map(r => [r.email, r.source, r.releases]).sort(), [['a@example.com', 'both', true], ['app@example.com', 'waitlist', false], ['never@example.com', 'account', false], ['stop@example.com', 'account', false], ['w@example.com', 'waitlist', true]]);
+  assert.deepEqual([by['a@example.com'].tips, by['w@example.com'].tips, by['w@example.com'].launch, by['app@example.com'].launch, by['never@example.com'].launch], [true, false, true, true, false], 'tips need a tick; the Pro launch also reaches every waitlist signup');
+  assert.deepEqual([by['never@example.com'].releasesWhy, by['stop@example.com'].releasesWhy, by['app@example.com'].releasesWhy], ['not confirmed', 'stopped', 'Pro mail only']);
+  assert.match(audienceCard(rows), /2 New releases, 1 Tips and tricks, 5 addresses/);
   const page = async headers => (await emailView(new Request('https://www.jobadabra.top/admin/growth/email', {headers}), e)).text();
   assert.match(await page({Authorization: 'Bearer owner-key'}), /w@example\.com/);
   assert.doesNotMatch(await page({}), /w@example\.com/);
@@ -182,7 +191,7 @@ test('"Send to my email" mails the real release to the typed address; invalid in
   assert.equal(sent.length, 1);
 });
 
-test('the product news list costs a fixed number of queries however many addresses there are (Gitar on #218: 2N+1 per page load)', async () => {
+test('the news list costs a fixed number of queries however many addresses there are (Gitar on #218: 2N+1 per page load)', async () => {
   const {e} = setup();
   let queries = 0;
   const prepare = e.STATS.prepare;
@@ -190,7 +199,7 @@ test('the product news list costs a fixed number of queries however many address
   for (let n = 0; n < 30; n++) await e.WAITLIST.put(`signup:person${n}@example.com`, '1');
   const before = queries;
   assert.equal((await audienceRows(e)).length, 30);
-  assert.ok(queries - before <= 2, `${queries - before} queries for 30 addresses`);
+  assert.ok(queries - before <= 3, `${queries - before} queries for 30 addresses`);
 });
 
 test('the draft ping uses the Brain bot the site Worker already has when no build-log bot is set (no new secret)', async () => {
@@ -203,7 +212,7 @@ test('the draft ping uses the Brain bot the site Worker already has when no buil
 test('release test sends the selected edited draft to one address, labels it as a test and leaves the broadcast pending', async () => {
   const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
   await draft(e, '0.8.42', now);
-  await e.WAITLIST.put('signup:audience@example.com', '1');
+  await e.WAITLIST.put('signup:audience@example.com', WEB);
   const post = fields => emailView(new Request('https://www.jobadabra.top/admin/growth/email?release=0.8.42', {
     method: 'POST', headers: {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'}, body: new URLSearchParams(fields),
   }), e);
@@ -233,7 +242,7 @@ test('a saved old draft picks up the complete changelog in preview, test and bro
   const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
   const old = {version: '0.8.42', month: 'October 2026', headline: 'An old long headline', sections: [{title: 'Faster jobs', text: 'Open a job and see why it fits.'}]};
   e.STATS.db.prepare('INSERT INTO release_mail (version, data, created_at) VALUES (?, ?, ?)').run('0.8.42', JSON.stringify(old), 'x');
-  await e.WAITLIST.put('signup:audience@example.com', '1');
+  await e.WAITLIST.put('signup:audience@example.com', WEB);
   const request = (fields) => new Request('https://www.jobadabra.top/admin/growth/email?release=0.8.42', {headers: {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'}, ...(fields ? {method: 'POST', body: new URLSearchParams(fields)} : {})});
   const html = await (await emailView(request(), e)).text();
   assert.match(html, /Version 0\.8\.42/);
@@ -283,7 +292,7 @@ test('direct draft, test and broadcast calls refuse a beta, even if a draft row 
   assert.deepEqual(await draft(e, '0.8.42', now), {refused: 'not stable'});
   assert.equal(e.STATS.db.prepare('SELECT COUNT(*) n FROM release_mail').get().n, 0);
   e.STATS.db.prepare('INSERT INTO release_mail (version, data, created_at) VALUES (?, ?, ?)').run('0.8.42', JSON.stringify(dataFrom({version: '0.8.42', date: '2026-10-27', groups})), 'x');
-  await e.WAITLIST.put('signup:audience@example.com', '1');
+  await e.WAITLIST.put('signup:audience@example.com', WEB);
   assert.deepEqual(await sendAll(e, '0.8.42', {now}), {refused: 'not stable'});
   assert.equal(e.STATS.db.prepare('SELECT status FROM release_mail').get().status, 'draft');
   const response = await emailView(new Request('https://www.jobadabra.top/admin/growth/email?release=0.8.42', {method: 'POST', headers: {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'}, body: new URLSearchParams({action: 'test', to: 'reviewer@example.com'})}), e);
@@ -307,7 +316,7 @@ test('stable mail includes all intervening beta changes, excludes both boundarie
   const data = JSON.parse(e.STATS.db.prepare("SELECT data FROM release_mail WHERE version='0.9.9'").get().data);
   assert.equal(data.previousStable, '0.9.6');
   assert.deepEqual(data.sections.map(s => s.title), ['Beta one', 'Beta two', 'Target stable change']);
-  await e.WAITLIST.put('signup:audience@example.com', '1');
+  await e.WAITLIST.put('signup:audience@example.com', WEB);
   const post = fields => emailView(new Request('https://www.jobadabra.top/admin/growth/email?release=0.9.9', {method: 'POST', headers: {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'}, body: new URLSearchParams(fields)}), e);
   // Already stored drafts with category metadata must also be rebuilt from the stable window.
   e.STATS.db.prepare("UPDATE release_mail SET data=? WHERE version='0.9.9'").run(JSON.stringify({...data, sections: [{kind: 'fixes', title: 'Beta two', text: 'Beta two works.'}]}));
@@ -342,7 +351,7 @@ test('a stable with no final-build notes still includes beta changes; a hidden p
 
 test('sent release previews and test copies retain the sent snapshot after changelog edits', async () => {
   const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
-  await e.WAITLIST.put('signup:audience@example.com', '1');
+  await e.WAITLIST.put('signup:audience@example.com', WEB);
   await draft(e, '0.8.42', now); await sendAll(e, '0.8.42', {now});
   e.STATS.db.prepare('UPDATE changelog_entries SET body=?').run(JSON.stringify([{kind: 'fixes', items: [{lead: 'Replacement notes', text: 'Later edited words.'}]}]));
   const url = 'https://www.jobadabra.top/admin/growth/email?release=0.8.42', headers = {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'};

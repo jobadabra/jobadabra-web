@@ -121,7 +121,7 @@ test('with the MAIL switch off, or for a list the address stopped, the result sa
   const {env, sent} = await live();
   assert.equal((await view(post({template: 'welcome'}), {...env, MAIL: 'off'})).headers.get('Location'), '/admin/growth/email?test=welcome:off&destination=inbox#test-result-welcome');
   assert.equal((await view(post({template: 'pro-launch'}), {...env, MARKETING_MAIL: 'off'})).headers.get('Location'), '/admin/growth/email?test=pro-launch:marketing_off&destination=inbox#test-result-pro-launch');
-  env.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'marketing', 'unsubscribe', 'x')").run(await addrOf('test-account-admin@jobpilotto.top'));   // product news are opt-out (28 Oct 2026): stopped is what refuses
+  env.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'tips', 'unsubscribe', 'x')").run(await addrOf('test-account-admin@jobpilotto.top'));   // the Pro launch is a Tips and tricks mail: a stop on that type refuses it, a test send skips only the tick rules
   assert.equal((await view(post({template: 'pro-launch'}), {...env, MARKETING_MAIL: 'on'})).headers.get('Location'), '/admin/growth/email?test=pro-launch:unsubscribed&destination=inbox#test-result-pro-launch');
   assert.equal(sent.length, 0);
 });

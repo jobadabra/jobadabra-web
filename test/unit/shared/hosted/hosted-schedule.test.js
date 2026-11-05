@@ -9,7 +9,7 @@ import {inbox, result, runToken, schedule, startRun} from '../../../../shared/ho
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0083_hosted.sql', '0134_mail_on.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE IF NOT EXISTS revoked (who TEXT PRIMARY KEY, reason TEXT, at TEXT)');
   const statement = (text, args = []) => ({bind: (...v) => statement(text, v), run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
@@ -39,7 +39,8 @@ test('switching on needs the install key and an e-mail; it makes a trial account
   assert.equal((await put(e, 'install-aaaa1', {on: true})).status, 400);
   const res = await put(e, 'install-aaaa1', {on: true, email: 'A@Example.com', marketing: true, freqHours: 4});
   assert.deepEqual(await res.json(), {ok: true, state: 'on', freqHours: 24, nextRunAt: '2026-10-16T11:00:00.000Z'});   // a trial never gets more than once a day
-  assert.deepEqual(rows(e, 'SELECT plan, email, marketing_opt_in, marketing_opt_in_at FROM pro_accounts'), [{plan: 'trial', email: 'a@example.com', marketing_opt_in: 1, marketing_opt_in_at: now.toISOString()}]);
+  assert.deepEqual(rows(e, 'SELECT plan, email FROM pro_accounts'), [{plan: 'trial', email: 'a@example.com'}]);
+  assert.deepEqual(rows(e, 'SELECT list, via, at FROM mail_on ORDER BY list'), ['releases', 'tips'].map(list => ({list, via: 'old-box', at: now.toISOString()})), 'the ticked wizard box is a stored yes for both news types');
   assert.equal(rows(e, 'SELECT * FROM pro_devices').length, 1);
   await put(e, 'install-aaaa1', {on: true});   // again: still one schedule, the next run is kept
   assert.equal(rows(e, 'SELECT * FROM hosted_schedules').length, 1);
@@ -98,5 +99,6 @@ test('product news need a tick in the wizard: an unticked box and no answer writ
   await put(e, 'install-aaaa1', {on: true, email: 'no@example.com', marketing: false});
   await put(e, 'install-bbbb2', {on: true, email: 'silent@example.com'});
   assert.deepEqual(rows(e, 'SELECT list, reason FROM mail_off'), []);
-  assert.deepEqual(rows(e, 'SELECT marketing_opt_in FROM pro_accounts').map(r => r.marketing_opt_in), [0, 0]);
+  assert.equal(rows(e, 'SELECT * FROM mail_on').length, 0, 'an unticked box stores no yes and no stop');
+  assert.equal(rows(e, 'SELECT * FROM mail_off').length, 0);
 });

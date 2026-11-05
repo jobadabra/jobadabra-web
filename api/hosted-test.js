@@ -34,7 +34,7 @@ export async function aiAnswers(env, token, now, wait = AI_WAIT_MS) {
 
 // The Test's alert step, at the press (owner, 5 Nov 2026: "The test should include also a notification test... telegram or email, whatever the user built"):
 // a run on our servers alerts by e-mail only (shared/hosted-notify.js), so one short mail to the account's address, through the mail module's limits.
-const MAIL_WHY = {no_channel: 'E-mail alerts are off. Turn them on in Settings → Notifications.', off: 'E-mail is not available right now.', rate: 'Our e-mail is busy right now. Try again in an hour.', unconfirmed_stopped: 'Confirm your address first: use Resend in Settings → Notifications.',
+const MAIL_WHY = {no_channel: 'E-mail alerts are off. Turn them on in Settings → Notifications.', off: 'E-mail is not available right now.', rate: 'Our e-mail is busy right now. Try again in an hour.', unconfirmed_stopped: 'Confirm your address first: use "Send the confirm link again" in Settings → Notifications.',
   suppressed: 'Your address bounced or marked us as spam, so e-mail alerts are off. Check the address in Settings → Notifications.', unsubscribed: 'You stopped our e-mails. Turn alerts back on in Settings → Notifications.'};
 async function checkMail(env, account, id, now) {
   if (!await claim(env, id, 'mail')) return;

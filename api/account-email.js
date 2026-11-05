@@ -3,7 +3,8 @@
 // POST /api/account/email/resend sends the confirm link again; /confirm confirms the address. An address another account already holds is refused here (joining it takes a code sent to that address, the device sign-in). Guard: test/unit/api/account-email.test.js.
 import {authorize, digestOf, equal, tokenFor} from '../shared/guard.js';
 import {installOfTrialKey} from '../shared/trial-key.js';
-import {addrOf, confirmLink, saidYes, send, validAddress, clean} from '../shared/mail.js';
+import {addrOf, confirmLink, send, validAddress, clean} from '../shared/mail.js';
+import {newsAnswer, newsFacts, recordNews} from '../shared/mail-lists.js';
 import {fromTelegram} from './mail-html.js';
 import {CADENCES, deliver, hold, testAlert} from './mail-held.js';
 import {page, switchOff} from './mail-unsub.js';
@@ -18,20 +19,6 @@ async function who(request, env) {
   const given = parseKey(request.headers.get('x-api-key'));
   const access = given && await authorize(env, given.install, given.token, 'ai');
   return access?.ok ? given.install : null;
-}
-
-/**
- * Saves the app's product news box. `fresh`: the address was just given, so its box takes nothing back.
- * Why (review of hr-24, 5 Nov 2026): the app sends `marketing` on every save, so `false` is a stop only when it takes back a yes; a never-answered box stays no answer.
- * A tick from an unconfirmed address keeps that address's stop: anyone can type someone else's address.
- */
-async function setMarketing(env, account, on, now, fresh) {
-  const row = await env.STATS.prepare('SELECT email, email_hash, email_confirmed_at, marketing_opt_in FROM pro_accounts WHERE id = ?').bind(account).first();
-  if (!row?.email_hash) return;
-  if (on) {
-    await env.STATS.prepare('UPDATE pro_accounts SET marketing_opt_in = 1, marketing_opt_in_at = ? WHERE id = ?').bind(now.toISOString(), account).run();
-    if (row.email_confirmed_at) await env.STATS.prepare("DELETE FROM mail_off WHERE addr = ? AND list = 'marketing'").bind(row.email_hash).run();
-  } else if (row.marketing_opt_in || (!fresh && await saidYes(env, row.email, row))) await switchOff(env, row.email_hash, 'marketing', 'settings', now);
 }
 
 // Why (3 Nov 2026, owner: "Send me a telegram message everytime a new user puts his email, adds his email in the application"): the owner's Brain chat hears of each address an install gives, first time ("New user e-mail")
@@ -55,9 +42,10 @@ export async function address(request, env, now = new Date(), fetcher = fetch, c
   if (!install || !env.STATS) return json(401, {ok: false, error: 'unauthorized'});
   let account = await accountOf(env, install);
   if (request.method === 'GET') {
-    // Why (owner, 5 Nov 2026; replaces 28 Oct opt-out): "on" is a yes (shared/mail.js saidYes) with no mail_off row; an account that never answered is off.
-    const newsOff = !!(account?.email_hash && await env.STATS.prepare("SELECT 1 AS y FROM mail_off WHERE addr = ? AND list IN ('marketing', 'all')").bind(account.email_hash).first());
-    return json(200, {ok: true, email: account?.email || null, confirmed: !!account?.email_confirmed_at, marketing: !!account?.email_hash && !newsOff && await saidYes(env, account.email, account), serviceOff: !!account?.service_mail_off_at, cadence: account?.digest_cadence || 'daily', plan: account?.plan || null,
+    // Why (5 Nov 2026, the owner's box showed ticked with no tick stored): each box shows what the site holds (shared/mail-lists.js), never "no stop on file". `marketing` is for apps already out there.
+    const facts = account?.email_hash ? await newsFacts(env, account.email_hash, account.email) : null;
+    const answer = list => !!facts && newsAnswer(list, facts);
+    return json(200, {ok: true, email: account?.email || null, confirmed: !!account?.email_confirmed_at, releases: answer('releases'), tips: answer('tips'), newsAnswered: !!facts?.answered, marketing: answer('tips'), serviceOff: !!account?.service_mail_off_at, cadence: account?.digest_cadence || 'daily', plan: account?.plan || null,
       sending: env.MAIL === 'on' && !!env.EMAIL,
       unconfirmedStopped: !!(account?.email_hash && await env.STATS.prepare("SELECT 1 AS y FROM mail_off WHERE addr = ? AND list = 'service' AND reason = 'unconfirmed'").bind(account.email_hash).first())});   // 14 days unconfirmed (api/mail-held.js)   // the kill switch (shared/mail.js): the app says so instead of promising a mail
   }
@@ -89,7 +77,7 @@ export async function address(request, env, now = new Date(), fetcher = fetch, c
     if (ctx?.waitUntil) ctx.waitUntil(ping); else await ping;
     await welcome(env, email, now);
   }
-  if (typeof body.marketing === 'boolean') await setMarketing(env, account.id, body.marketing, now, fresh);
+  await recordNews(env, account.id, body, now);
   if (CADENCES.includes(body.cadence)) await env.STATS.prepare('UPDATE pro_accounts SET digest_cadence = ? WHERE id = ?').bind(body.cadence, account.id).run();   // how often the digest comes: daily or weekly
   return json(200, {ok: true});
 }

@@ -1,5 +1,5 @@
 // The mails we send, by name. shared/mail.js puts each through the frame (shared/mail-frame.js: logo, title, button, footer with the unsubscribe and settings links) and adds the headers. A template says its list
-// ('service' or 'marketing'), whether it is `essential` (a sign-in code: not stopped by an unsubscribe), and builds subject, title, content (text and html) and an optional one `button` from plain data. Guard: test/unit/shared/mail/mail.test.js.
+// ('service', 'releases' or 'tips': shared/mail-lists.js), whether it is `essential` (a sign-in code: not stopped by an unsubscribe), and builds subject, title, content (text and html) and an optional one `button` from plain data. Guard: test/unit/shared/mail/mail.test.js.
 import {appButton} from './app-needs.js';
 import {purchaseCreditWords} from './credit-purchase-words.js';
 import {codeBox, esc, jobRows, jobText, link} from './mail-frame.js';
@@ -85,15 +85,15 @@ export const TEMPLATES = {
     title: () => 'Your alerts reach you',
     text: () => 'You pressed Test on Always on. This e-mail is how we tell you about new jobs when a search finds some.',
     html: () => '<p>You pressed Test on Always on. This e-mail is how we tell you about new jobs when a search finds some.</p>'},
-  // The marketing list: sent by hand (admin/mail-lifecycle.js launch), only to opted-in addresses and only with env.MARKETING_MAIL = "on". Data: {pro, proAi, pricingUrl} (euro prices from shared/pro-packages.js).
-  'pro-launch': {list: 'marketing',
+  // Tips and tricks (owner, 5 Nov 2026), and every waitlist signup asked for this one mail: sent by hand (admin/mail-lifecycle.js launch), only with env.MARKETING_MAIL = "on". Data: {pro, proAi, pricingUrl} (euro prices from shared/pro-packages.js).
+  'pro-launch': {list: 'tips', waitlistToo: true,
     subject: () => 'Jobadabra Pro is out',
     title: () => 'Jobadabra Pro is out',
     button: ({pricingUrl}) => ({label: 'See Pro', url: pricingUrl}),
     text: ({pro, proAi}) => `One payment, no subscription: Pro €${pro}, or Pro + AI €${proAi} with ${purchaseCreditWords('pro-ai')} VAT included.`,
     html: ({pro, proAi}) => `<p>One payment, no subscription: Pro €${esc(pro)}, or Pro + AI €${esc(proAi)} with ${purchaseCreditWords('pro-ai')} VAT included.</p>`},
   // The "What's new" mail at a stable release (shared/mail-release.js), held as a draft on /admin/growth/email until the owner clicks "Send to everyone". Data: see mail-release.js.
-  'release': {list: 'marketing',
+  'release': {list: 'releases',
     subject: releaseSubject,
     title: releaseSubject,
     hero: releaseHero,

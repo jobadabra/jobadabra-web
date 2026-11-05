@@ -11,7 +11,7 @@ import {createAccount} from '../../../../shared/pro.js';
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0002_telemetry.sql', '0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql']) db.exec(sql(file));
+  for (const file of ['0002_telemetry.sql', '0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql', '0134_mail_on.sql']) db.exec(sql(file));
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values), run: async () => db.prepare(text).run(...args),
     all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
   return {db, prepare: text => statement(text)};
@@ -22,7 +22,7 @@ const jobs = {total: 1, matches: [{title: 'SRE', company: 'Acme', fit: 80, url: 
 async function mailTo(versions, template = 'digest', data = jobs) {
   const sent = [], e = {MAIL: 'on', MARKETING_MAIL: 'on', STATS: d1(), STATS_SALT: 'salt', EMAIL: {send: async m => { sent.push(m); return {messageId: 'm1'}; }}};
   const account = await createAccount(e, 'me@example.com', now, {plan: 'trial'});
-  e.STATS.db.prepare('UPDATE pro_accounts SET marketing_opt_in = 1').run();   // Why (#436): the release mail goes only to a tick or the waitlist
+  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();   // Why (#436): the release mail goes only to a confirmed address (shared/mail-lists.js)
   versions.forEach((version, i) => {
     e.STATS.db.prepare('INSERT INTO pro_devices (install, account, added_at, last_seen) VALUES (?, ?, ?, ?)').run(`inst${i}`, account, now.toISOString(), now.toISOString());
     for (const [n, v] of [].concat(version).entries()) e.STATS.db.prepare("INSERT INTO telemetry (day, at, kind, install, version, platform, fingerprint, summary, data) VALUES ('2026-11-05', ?, 'health', ?, ?, 'darwin', 'f', 's', '{}')").run(`2026-11-0${n + 1}T00:00:00Z`, `inst${i}`, v);

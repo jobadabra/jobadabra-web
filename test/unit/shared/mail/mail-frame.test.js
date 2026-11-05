@@ -13,7 +13,7 @@ import {createAccount} from '../../../../shared/pro.js';
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql', '0134_mail_on.sql']) db.exec(sql(file));
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values), run: async () => db.prepare(text).run(...args),
     all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
   return {db, prepare: text => statement(text)};
@@ -43,7 +43,8 @@ test('every template goes through the frame: logo, title, footer with stop + set
   for (const [name, spec] of Object.entries(TEMPLATES)) {
     const {e, sent} = setup({MARKETING_MAIL: 'on'});
     await createAccount(e, 'me@example.com', now, {plan: 'trial'});
-    e.STATS.db.prepare('UPDATE pro_accounts SET marketing_opt_in = 1').run();
+    e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();   // news goes only to a confirmed address; Tips and tricks also needs its tick (shared/mail-lists.js)
+    e.STATS.db.prepare("INSERT INTO mail_on (addr, list, via, at) SELECT email_hash, 'tips', 'card', 'x' FROM pro_accounts").run();
     assert.equal((await send(e, name, 'me@example.com', SAMPLES[name], {now})).ok, true, name);
     const {html, text} = sent[0];
     assert.ok(html.includes('data-jp-frame="1"') && html.includes('<title>'), `${name}: framed`);

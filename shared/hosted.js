@@ -5,6 +5,7 @@ import {authorize, digestOf, equal, tokenFor} from './guard.js';
 import {accountOf, createAccount, link} from './pro.js';
 import {chargeCompute} from './hosted-budget.js';
 import {digest} from './hosted-notify.js';
+import {recordNews} from './mail-lists.js';
 
 export const hostedOn = env => env.HOSTED_ALWAYS_ON === 'on';
 export const RUN_TOKEN_MINUTES = 30, INACTIVE_DAYS = 14, INBOX_MAX = 200, TRIAL_FREQ_HOURS = 24, MIN_FREQ_HOURS = 4;
@@ -69,10 +70,10 @@ export async function schedule(request, env, now = new Date()) {
     const id = await createAccount(env, email, now, {plan: 'trial'});
     const linked = await link(env, id, install, now);
     if (!linked.ok) return Response.json({ok: false, error: linked.error}, {status: 409});
-    if (body.marketing === true) await env.STATS.prepare('UPDATE pro_accounts SET marketing_opt_in = 1, marketing_opt_in_at = ? WHERE id = ?').bind(now.toISOString(), id).run();
-    // Why (owner, 5 Nov 2026; replaces 28 Oct opt-out): a new account gets product news only with a tick; an unticked box takes nothing back, so it writes no stop.
     account = await accountOf(env, install);
   }
+  // Why (owner, 5 Nov 2026): a ticked wizard box is the person's own press and must reach the site (shared/mail-lists.js recordNews); an unticked one takes nothing back.
+  if (body.marketing === true) await recordNews(env, account.id, {marketing: true}, now);
   const pro = account.plan === 'pro' && account.status === 'active';
   const freq = pro ? Math.max(MIN_FREQ_HOURS, Math.min(24, Math.floor(Number(body.freqHours)) || TRIAL_FREQ_HOURS)) : TRIAL_FREQ_HOURS;
   const next = iso(now.getTime() + HOUR);   // first run within the hour of switching on

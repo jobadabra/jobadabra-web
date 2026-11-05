@@ -13,7 +13,7 @@ export async function collect(env, now = new Date()) {
   const [trial, confirmed, optIn, paused, converted, sent, refused, off] = await Promise.all([
     one(env, "SELECT COUNT(*) AS n FROM pro_accounts WHERE plan = 'trial'"),
     one(env, "SELECT COUNT(*) AS n FROM pro_accounts WHERE plan = 'trial' AND email_confirmed_at IS NOT NULL"),
-    one(env, "SELECT COUNT(*) AS n FROM pro_accounts WHERE plan = 'trial' AND marketing_opt_in = 1"),
+    one(env, "SELECT COUNT(*) AS n FROM pro_accounts a JOIN mail_on y ON y.addr = a.email_hash AND y.list = 'tips' WHERE a.plan = 'trial'"),
     one(env, "SELECT COUNT(DISTINCT h.account) AS n FROM hosted_schedules h JOIN pro_accounts a ON a.id = h.account WHERE a.plan = 'trial' AND h.state = 'paused'"),
     one(env, "SELECT COUNT(*) AS n FROM pro_accounts WHERE plan = 'pro' AND trial_started_at IS NOT NULL"),
     many(env, "SELECT template, COUNT(*) AS n FROM mail_log WHERE status = 'sent' AND at >= ? GROUP BY template ORDER BY n DESC", since),
@@ -30,7 +30,7 @@ export function page(data) {
 <style>.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}.tile b{display:block;font-size:30px;margin:4px 0}h2{margin:0 0 8px}</style></head><body><main>
 <header><h1>✉️ Signups</h1><span class="muted">Trial accounts and our e-mail · mail: last 7 days</span></header>
 <div class="tiles">${tile('Trial accounts', data.trial, 'gave an address (wizard or Settings)')}${tile('Confirmed', data.confirmed, 'clicked the link in the first mail')}${tile('Unconfirmed', data.unconfirmed, 'follow up with the next mail')}
-${tile('Product news: yes', data.optIn, 'the opt-in box')}${tile('Always on paused', data.paused, 'hosted schedule paused')}${tile('Converted to Pro', data.converted, 'trial accounts that paid')}</div>
+${tile('Tips and tricks: yes', data.optIn, 'the tick')}${tile('Always on paused', data.paused, 'hosted schedule paused')}${tile('Converted to Pro', data.converted, 'trial accounts that paid')}</div>
 ${table('Mail sent', data.sent, 'template')}${table('Mail not sent', data.refused, 'status')}${table('Switched off (all time)', data.off, 'reason')}
 </main></body></html>`;
 }

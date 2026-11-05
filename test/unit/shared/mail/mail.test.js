@@ -6,12 +6,13 @@ import {test} from 'node:test';
 import {DAILY_MAX, addrOf, mailAllowed, send, sendTestMail, stopLink} from '../../../../shared/mail.js';
 import {handleEvent, unsubscribe} from '../../../../api/mail-unsub.js';
 import {TEMPLATES} from '../../../../shared/mail-templates.js';
+import {sayYes} from '../../../../shared/mail-lists.js';
 import {createAccount} from '../../../../shared/pro.js';
 
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0134_mail_on.sql']) db.exec(sql(file));
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values), run: async () => db.prepare(text).run(...args),
     all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
   return {db, prepare: text => statement(text)};
@@ -126,24 +127,40 @@ test('a sign-in code is not stopped by the service unsubscribe, and carries no u
   assert.ok(!sent[0].text.includes('unsubscribe') && !sent[0].headers);
 });
 
-test('marketing mail needs a yes: a tick or the waitlist; an account with no stored choice gets none; its unsubscribe beats a tick; the service list is untouched', async () => {
-  // Why (owner, 5 Nov 2026: marketing is its own unticked choice; "the waitlist emails count..."; was opt-out since 28 Oct).
-  TEMPLATES.news = {list: 'marketing', subject: () => 'News', title: () => 'News', text: () => 'Pro is here', html: () => '<p>Pro is here</p>'};
+test('the three types: service is on, New releases is on for a confirmed address, Tips and tricks needs a tick; each stop link stops its own type only', async () => {
+  // Why (owner, 5 Nov 2026: "this should be on by default. Only "Tips and tricks" should be disabled by default"; "After confirming"): shared/mail-lists.js.
+  TEMPLATES.news = {list: 'releases', subject: () => 'News', title: () => 'News', text: () => 'A new version', html: () => '<p>A new version</p>'};
+  TEMPLATES.offer = {list: 'tips', subject: () => 'Offer', title: () => 'Offer', text: () => 'Pro is here', html: () => '<p>Pro is here</p>'};
+  TEMPLATES.launch = {list: 'tips', waitlistToo: true, subject: () => 'Launch', title: () => 'Launch', text: () => 'Pro is here', html: () => '<p>Pro is here</p>'};
+  const entry = source => JSON.stringify({source});
   try {
-    const {e, sent} = setup({MARKETING_MAIL: 'on', WAITLIST: {get: async key => (key === 'signup:wait@example.com' ? '1' : null)}});
+    const {e, sent} = setup({MARKETING_MAIL: 'on', WAITLIST: {get: async key => ({'signup:web@example.com': entry('web'), 'signup:app@example.com': entry('app')})[key] ?? null}});
     await createAccount(e, 'me@example.com', now, {plan: 'trial'});
-    assert.equal((await send({...e, MARKETING_MAIL: 'off'}, 'news', 'me@example.com', {}, {now})).reason, 'marketing_off', 'the owner\'s flag is off: nothing promotional goes out');
-    assert.equal((await send(e, 'news', 'me@example.com', {}, {now})).reason, 'no_tick', 'an account that never answered');
-    assert.equal((await send(e, 'news', 'nobody@example.com', {}, {now})).reason, 'no_tick', 'an address we hold no yes for');
-    assert.equal((await send(e, 'news', 'Wait@Example.com', {}, {now})).ok, true, 'the waitlist counts');
-    assert.equal((await send(e, 'news', 'nobody@example.com', {}, {now, test: true})).ok, true, 'a test send goes to the typed address');
-    e.STATS.db.prepare('UPDATE pro_accounts SET marketing_opt_in = 1').run();
-    assert.equal((await send(e, 'news', 'me@example.com', {}, {now})).ok, true, 'a tick');
-    assert.match(sent[0].from, /^Igor from Jobadabra <no-reply@jobadabra\.top>$/);
-    await unsubscribe(new Request(await stopLink(e, 'me@example.com', 'marketing'), {method: 'POST'}), e, now);
-    assert.equal((await send(e, 'news', 'me@example.com', {}, {now})).reason, 'unsubscribed');
-    assert.equal((await send(e, 'digest', 'me@example.com', digest, {now})).ok, true);
-  } finally { delete TEMPLATES.news; }
+    const reason = async (template, to, extra = {}) => { const r = await send(e, template, to, {}, {now, ...extra}); return r.ok ? 'sent' : r.reason; };
+    assert.equal(await reason('news', 'me@example.com'), 'not_confirmed', 'an unconfirmed address may be a stranger\'s');
+    assert.equal(await reason('news', 'nobody@example.com'), 'not_confirmed', 'an address we hold nothing for');
+    assert.equal(await reason('news', 'web@example.com'), 'sent', 'the website waitlist form names release mails');
+    assert.equal(await reason('news', 'app@example.com'), 'pro_only', 'the app\'s dialog still says "Nothing else"');
+    assert.equal(await reason('launch', 'app@example.com'), 'sent', 'every waitlist signup asked for the Pro launch');
+    assert.equal(await reason('offer', 'web@example.com'), 'no_tick', 'Tips and tricks need a real tick, the waitlist is not one');
+    assert.equal(await reason('news', 'nobody@example.com', {test: true}), 'sent', 'a test send goes to the typed address');
+    assert.equal((await send({...e, MARKETING_MAIL: 'off'}, 'news', 'web@example.com', {}, {now})).reason, 'marketing_off', 'the owner\'s flag is off: nothing promotional goes out');
+    e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
+    assert.equal(await reason('news', 'me@example.com'), 'sent', 'a confirmed address gets releases with no tick');
+    assert.equal(await reason('offer', 'me@example.com'), 'no_tick');
+    await sayYes(e, await addrOf('me@example.com'), 'tips', 'card', now);
+    assert.equal(await reason('offer', 'me@example.com'), 'sent', 'a real tick');
+    assert.match(sent.at(-1).from, /^Igor from Jobadabra <no-reply@jobadabra\.top>$/);
+    await unsubscribe(new Request(await stopLink(e, 'me@example.com', 'tips'), {method: 'POST'}), e, now);
+    assert.equal(await reason('offer', 'me@example.com'), 'unsubscribed');
+    assert.equal(await reason('news', 'me@example.com'), 'sent', 'stopping tips leaves releases');
+    assert.equal(await reason('offer', 'me@example.com', {test: true}), 'unsubscribed', 'a test send still obeys a stop');
+    await unsubscribe(new Request(await stopLink(e, 'me@example.com', 'releases'), {method: 'POST'}), e, now);
+    assert.equal(await reason('news', 'me@example.com'), 'unsubscribed');
+    assert.equal((await send(e, 'digest', 'me@example.com', digest, {now})).ok, true, 'the service list is untouched');
+    await unsubscribe(new Request(await stopLink(e, 'me@example.com', 'marketing'), {method: 'POST'}), e, now);   // a link in a mail sent before the three types
+    assert.equal(e.STATS.db.prepare("SELECT COUNT(*) n FROM mail_off WHERE list IN ('releases', 'tips')").get().n, 2);
+  } finally { delete TEMPLATES.news; delete TEMPLATES.offer; delete TEMPLATES.launch; }
 });
 
 test('a hard bounce or a complaint turns every list off, even a sign-in code; a soft bounce does not', async () => {

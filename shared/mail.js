@@ -1,9 +1,10 @@
 // Our e-mail sender (Cloudflare Email Sending, binding EMAIL): send(env, template, to, data) is the one way any code mails a person. It refuses (never throws) on a bad address,
-// a bounce/complaint, an unsubscribe from the template's list, marketing without an opt-in, or more than DAILY_MAX mails a day to one address; it adds the footer, the one-click
+// a bounce/complaint, a stop from the template's list, news its rules hold back (shared/mail-lists.js), or more than DAILY_MAX mails a day to one address; it adds the footer, the one-click
 // unsubscribe link and headers, and logs the mail (hash of the address, never the body) in mail_log. Switch: env.MAIL = "on" (anything else sends nothing). Guard: test/unit/shared/mail/mail.test.js.
 import {appVersionOf} from './app-needs.js';
 import {digestOf, tokenFor} from './guard.js';
 import {frameHtml, frameText, REPLY_TO, SITE} from './mail-frame.js';
+import {NEWS, newsFacts, newsRefusal} from './mail-lists.js';
 import {TEMPLATES} from './mail-templates.js';
 
 // Per address, per rolling 24 h, every template together: a safety net so a bug of ours (a loop, a schedule firing too often) cannot flood one person into
@@ -13,13 +14,14 @@ export const DAILY_MAX = 10;
 const GLOBAL_DAY_MAX = 3000;                // a safety net over every address; env.MAIL_DAY_MAX overrides
 const DAY = 24 * 60 * 60 * 1000, CLAIM_MS = 2 * 60 * 1000;
 const ADDRESS = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/;
-const FROM = {service: 'Jobadabra <no-reply@jobadabra.top>', marketing: 'Igor from Jobadabra <no-reply@jobadabra.top>'};   // owner, 26 Oct 2026: "The sender email address should be no-reply@jobadabra.top"; 28 Oct 2026: product news come from "Igor from Jobadabra"
+const IGOR = 'Igor from Jobadabra <no-reply@jobadabra.top>';
+const FROM = {service: 'Jobadabra <no-reply@jobadabra.top>', releases: IGOR, tips: IGOR};   // owner, 26 Oct 2026: "The sender email address should be no-reply@jobadabra.top"; 28 Oct 2026: product news come from "Igor from Jobadabra"
 
 export const clean = to => String(to || '').trim().toLowerCase();
 export const validAddress = to => ADDRESS.test(clean(to)) && clean(to).length <= 254;
 export const addrOf = to => digestOf(clean(to));   // the key everywhere: pro_accounts.email_hash, mail_log.addr, mail_off.addr
 
-// The one-click link for a list ('service' = stop the daily searches' mail, 'marketing' = stop news). Signed, no sign-in.
+// The one-click link for a list: it stops that type only. Signed, no sign-in.
 // The signed link that confirms an address (the first mail carries it, api/account-email.js).
 export async function confirmLink(env, to) {
   const addr = await addrOf(to);
@@ -38,21 +40,18 @@ export async function settingsLink(env, to) {
 }
 
 // -> {ok: true} or {ok: false, reason}. For a caller that builds an expensive mail (the digest) and wants to know first.
-/**
- * Whether `email` said yes to product news: a tick on its account, or a signup on the waitlist (KV signup:<email>). An account with no stored choice is no yes.
- * Why (owner, 5 Nov 2026, on jobadabra #3282: "Keep on, service mails only (Recommended)"; the list: "the waitlist emails count..."; replaces 28 Oct opt-out): marketing has its own unticked choice.
- * A mail_off row beats it: callers check that first.
- */
-export const saidYes = async (env, email, account) => !!account?.marketing_opt_in || !!await env.WAITLIST?.get(`signup:${clean(email)}`);
-
-export async function mailAllowed(env, to, list = 'service', {essential = false, test = false} = {}) {
+export async function mailAllowed(env, to, list = 'service', {essential = false, test = false, waitlistToo = false} = {}) {
   if (!validAddress(to)) return {ok: false, reason: 'bad_address'};
-  if (list === 'marketing' && env.MARKETING_MAIL !== 'on') return {ok: false, reason: 'marketing_off'};   // owner, 17 Oct 2026: no promotional mail until he turns it on
+  const news = NEWS.includes(list);
+  if (news && env.MARKETING_MAIL !== 'on') return {ok: false, reason: 'marketing_off'};   // owner, 17 Oct 2026: no promotional mail until he turns it on
   const addr = await addrOf(to);
   const off = await env.STATS.prepare("SELECT list, reason FROM mail_off WHERE addr = ? AND list IN ('all', ?)").bind(addr, list).all();
   for (const row of off.results || []) if (row.list === 'all' || !essential) return {ok: false, reason: row.list === 'all' ? 'suppressed' : 'unsubscribed'};
-  const account = await env.STATS.prepare('SELECT marketing_opt_in, service_mail_off_at FROM pro_accounts WHERE email_hash = ?').bind(addr).first().catch(() => null);
-  if (list === 'marketing' && !test && !await saidYes(env, to, account)) return {ok: false, reason: 'no_tick'};   // a test send goes to the owner's typed address or the test inbox
+  const account = await env.STATS.prepare('SELECT service_mail_off_at FROM pro_accounts WHERE email_hash = ?').bind(addr).first().catch(() => null);
+  if (news && !test) {   // a test send goes to the owner's typed address or the test inbox
+    const reason = newsRefusal(list, await newsFacts(env, addr, clean(to)), {waitlistToo});
+    if (reason) return {ok: false, reason};
+  }
   if (list === 'service' && !essential && account?.service_mail_off_at) return {ok: false, reason: 'unsubscribed'};
   return {ok: true};
 }
@@ -61,12 +60,14 @@ async function record(env, now, addr, list, template, status, id = null) {
   await env.STATS?.prepare('INSERT INTO mail_log (at, addr, list, template, status, message_id) VALUES (?, ?, ?, ?, ?, ?)').bind(now.toISOString(), addr, list, template, status, id).run().catch(() => {});
 }
 
+const WHY = {service: 'You set up Jobadabra with this address.', releases: 'You get new-release emails at this address.', tips: 'You ticked Tips and tricks or joined the Pro list.'};
+
 // The subject, text, html and headers of a mail: the template's content inside the frame. `links` = {stop, settings} (none for an essential mail). Also what /admin/growth/email shows (admin/email-preview.js).
 // `data.appVersion` (set by send(): the app version the address's installs last reported, or absent) lets a template swap an "Open in Jobadabra" button for "Update Jobadabra" (shared/app-needs.js).
 export function compose(template, data = {}, links = null) {
   const spec = TEMPLATES[template];
   const why = spec.essential ? 'A security email, sent even if you stopped other emails.'
-    : spec.list === 'marketing' ? 'You joined the waitlist or chose product news.' : 'You set up Jobadabra with this address.';
+    : WHY[spec.list];
   const frame = {title: spec.title(data), why, button: spec.button?.(data) || null, links};
   const headers = links ? {'List-Unsubscribe': `<${links.stop}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'} : undefined;
   return {subject: spec.subject(data), text: frameText({...frame, body: spec.text(data)}), html: frameHtml({...frame, body: spec.html(data), hero: spec.hero?.(data)}), headers};
