@@ -11,6 +11,7 @@ import {loadNightlySummary, lastDays} from './nightly-summary.js';
 import {NIGHTLY_STYLE, trendHtml} from './nightly-summary-html.js';
 import {finderJobs} from './report-only-finders.js';
 import {QUALITY_STYLE, board} from './product-quality-html.js';
+import {VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 import {loadQuality} from './product-quality-data.js';
 import {snapshots} from './selfheal.js';
 
@@ -33,7 +34,7 @@ export function model(summary, healing, now = new Date()) {
   return {groups, unlisted: jobs.filter(job => !listed.has(job.id)).map(job => job.id), jobs};
 }
 
-const STYLE = `${CHIP_STYLE}${BAND_STYLE}${NIGHTLY_STYLE}${QUALITY_STYLE}.band{margin-bottom:12px}
+const STYLE = `${CHIP_STYLE}${BAND_STYLE}${NIGHTLY_STYLE}${VIZ_STYLE}${QUALITY_STYLE}.band{margin-bottom:12px}
 .group{margin:22px 0 8px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8d949c}.group .muted{text-transform:none;letter-spacing:0;font-weight:400}
 .rjob:target{outline:2px solid #f5b54a}
 .rjob .src{margin-top:6px;font-size:12px}`;
@@ -50,7 +51,7 @@ export function page(built, quality = null) {
 <header><h1>📊 Report only</h1><span class="muted">${built.groups.length} groups · ${built.jobs.length} measurements · last 14 days</span></header>
 ${quality ? `${board(quality)}<div class="qhead">⚙️ Did the nightly jobs run <span class="muted">· the measurements behind it</span></div>` : ''}${band}
 ${built.groups.map(group => `<div class="group">${group.icon} ${esc(group.title)} <span class="muted">· ${esc(group.note)}</span></div><div class="rgrid">${group.jobs.map(jobHtml).join('')}</div>`).join('\n')}
-</main></body></html>`;
+</main>${quality ? VIZ_TOOLTIP : ''}</body></html>`;
 }
 
 export async function view(request, env, now = new Date()) {

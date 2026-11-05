@@ -1,7 +1,7 @@
 // admin/viz*.js: the admin's one chart module (owner, 5 Nov 2026: tables that are summaries become charts). Every form: rows in, marks out; empty, one row, zero, a hostile label.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {moneyTicks} from '../../../admin/viz-time.js';
+import {countTicks, moneyTicks} from '../../../admin/viz-time.js';
 import {VIZ_STYLE, bars, columns, figure, meter, meters, split, stacks} from '../../../admin/viz.js';
 
 const count = (html, needle) => html.split(needle).length - 1;
@@ -76,6 +76,9 @@ test('the phone rule moves only a row\'s own children: the meters inside a row k
 
 test('code review of 5 Nov 2026: cents get a fractional axis, an idle engine draws its empty track, a missing figure is 0 not NaN, zero runs or calls never print Infinity', async () => {
   assert.deepEqual(moneyTicks(0.3), [0, 0.1, 0.2, 0.3], 'a $0.30 day: 10-cent steps, not 0 and 1');
+  assert.deepEqual([countTicks(1), countTicks(0), countTicks(4), countTicks(13)], [[0, 1, 2], [0, 1, 2], [0, 1, 2, 3, 4], [0, 5, 10, 15]], 'a count axis never has half a bug');
+  assert.deepEqual(countTicks(NaN), [0, 1, 2], 'a bad number ends the loop (a hang would block the Worker request)');
+  assert.doesNotMatch(columns([{day: '2026-11-03', values: [1], tip: ''}], [{name: 'Bugs', tone: 's1'}], {whole: true}), />0\.5</, 'whole: no fractional tick');
   assert.deepEqual(moneyTicks(8), [0, 2, 4, 6, 8]); assert.deepEqual(moneyTicks(0), [0, 0.5, 1], 'nothing to draw still has a scale');
   assert.match(columns([{day: '2026-11-03', values: [0.3], tip: ''}], [{name: 'Jobs', tone: 's1'}], {unit: '$'}), />\$0\.1</);
   assert.match(stacks([{label: 'Free AI', text: '✅ ready', parts: [{value: 0, tone: 'good'}], tip: 'x'}]), /<span class="vz-track"><\/span>/, 'a row with no calls still has its track');

@@ -8,6 +8,7 @@ import {lastDays, nightlySummary} from '../../../../admin/nightly-summary.js';
 import {judge, median, pooled, verdictOf, weeks} from '../../../../admin/product-quality.js';
 import {aiQuality, areasOf, bugs, formFilling, reliability, speed} from '../../../../admin/product-quality-areas.js';
 import {loadInputs, loadQuality} from '../../../../admin/product-quality-data.js';
+import {chartOf} from '../../../../admin/product-quality-charts.js';
 import {areaCard, board} from '../../../../admin/product-quality-html.js';
 import worker from '../../../../workers/www/index.js';
 
@@ -197,4 +198,30 @@ test('the page never goes down with the board: a failing board is null, the page
   assert.match(html, /Did the nightly jobs run/);
   assert.match(html, /0 of 5 areas on target/);
   assert.ok(errors.mock.calls.some(call => /fill cards unreadable: boom/.test(String(call.arguments[0]))), 'the broken source is named in the log');
+});
+
+test('charts: a line per day for a rate (a day with no data is a gap and says so), columns for bugs, nothing for an area with no series', () => {
+  const rows = entries(upTo(6, 0, back => ({filled: back === 3 ? 0 : 9, required: back === 3 ? 0 : 10})));
+  const form = formFilling({days, fill: {rows, sample: {forms: 9, installs: 4, min: 3, enough: true}}});
+  const html = chartOf(form);
+  assert.match(html, /class="vz-cols"[^>]*aria-label="Form filling per day"/);
+  assert.match(html, new RegExp(`data-tip="${DAYS(0)}: 90%"`));
+  assert.match(html, new RegExp(`data-tip="${DAYS(10)}: no data"`), 'a day with no fill is "no data", never 0%');
+  assert.doesNotMatch(html, /data-tip="[^"]*: 0%"/);
+  assert.match(html, /<details class="vz-more"><summary>Show table<\/summary>[\s\S]*<td>no data<\/td>/, 'the exact numbers sit behind "Show table"');
+  const bug = chartOf(bugs({days, snapshot: {caught: [{day: DAYS(1), runId: 1, line: 'a'}]}, newProblems: [{day: DAYS(1), n: 2}], finders: null}));
+  assert.match(bug, new RegExp(`data-tip="${DAYS(1)}: 1 caught by tests, 2 reached a user"`));
+  assert.match(bug, /Caught by tests<\/span><span><i style="background:var\(--s2\)"><\/i>Reached a user/);
+  const none = formFilling({days, fill: null});
+  assert.equal(chartOf(none), '');
+  assert.equal(chartOf(formFilling({days, fill: {rows, sample: {forms: 2, installs: 2, min: 3, enough: false}}})), '', 'too few installs draws no line: no percent to chart');
+  const bar = chartOf(aiQuality({nightly: {jobs: [{id: 'quality-ai', value: '96%', sub: '', series: days.map((day, i) => ({day, value: i >= 20 ? 0.96 : null})), bar: {value: 0.8}}]}}));
+  assert.match(bar, /Bar: 80%/);
+  const seconds = chartOf(speed({days, searches: {rows: Array.from({length: 7}, (_, i) => ({day: DAYS(6 - i), install: `i${i % 4}`, s: 9}))}}));
+  assert.match(seconds, new RegExp(`data-tip="${DAYS(0)}: 9 s"`), 'seconds draw on a count axis, not 0-100%');
+  assert.doesNotMatch(seconds, />100%</);
+  assert.match(seconds, /Axis in seconds, lower is better/, 'the axis labels have no unit, so the chart says it');
+  const empty = formFilling({days, fill: {rows: [], sample: null}});
+  assert.equal(chartOf({...bar && aiQuality({nightly: {jobs: [{id: 'quality-ai', value: '96%', sub: '', series: days.map(day => ({day, value: 0.9})), bar: {value: 0.8}}]}}), series: days.map(day => ({day, value: null}))}), '', 'every day empty: no frame around a table of no data');
+  assert.equal(empty.series.length, 0);
 });
