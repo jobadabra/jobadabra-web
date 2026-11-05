@@ -57,6 +57,11 @@ test('the Quality AI card shows the newest replay even when that night has no qu
   assert.match(html, new RegExp(`<td>${D(2)}</td>.*?<span class="chip off">–</span>`), 'a night with no replay shows a dash');
 });
 
+test('with no quality night at all in the window, the card still shows the newest replay', () => {
+  assert.match(qualityCard([], undefined, [{runId: 30, day: D(0), promptCases: replay({right: 61})}]), /No live quality night yet.*<b>61\/63<\/b>/);
+  assert.doesNotMatch(qualityCard([], undefined, []), /Prompt cases/);
+});
+
 test('the nightly summary draws a replay-only night as a point of the trend', () => {
   const now = new Date(), snapshot = {quality: [], promptNights: [{runId: 3, day: D(0), promptCases: replay()}, {runId: 2, day: D(1), promptCases: replay({flipped: 1})}]};
   const job = nightlySummary({snapshot}, now).jobs.find(item => item.id === 'prompt-cases');

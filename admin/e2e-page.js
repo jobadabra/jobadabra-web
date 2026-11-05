@@ -101,8 +101,9 @@ const promptTile = prompt => {
   return `<section class="card tile"><span class="muted">Prompt cases (newest night)</span><b>${esc(words.text)}</b>${prompt && ['asked', 'first'].includes(prompt.status) ? `<div>${chip(prompt.flipped ? `${prompt.flipped} got worse` : 'none got worse', prompt.flipped ? 'bad' : 'good')}</div>` : ''}<span class="muted">${esc(detail)}</span></section>`;
 };
 export function qualityCard(nights = [], repo = PUBLIC_REPO, promptNights = undefined) {
-  if (!nights.length) return '<section class="card"><h2>How steady the AI is · quality suite</h2><p class="muted">No live quality night yet: the night\'s fresh quality run scores the golden jobs twice.</p></section>';
-  const rate = rateOf(nights), tone = ok => (ok ? 'good' : 'bad'), prompts = promptNightsOf({quality: nights, promptNights}), promptOfDay = day => prompts.find(row => row.day === day)?.promptCases;   // a night's replay is found by day: it has its own run id, and may have no quality row
+  const prompts = promptNightsOf({quality: nights, promptNights});
+  if (!nights.length) return `<section class="card"><h2>How steady the AI is · quality suite</h2><p class="muted">No live quality night yet: the night\'s fresh quality run scores the golden jobs twice.</p>${prompts.length ? `<div class="tiles">${promptTile(prompts[0].promptCases)}</div>` : ''}</section>`;   // Why (#259, code review): replays do not depend on a quality night, so they show without one
+  const rate = rateOf(nights), tone = ok => (ok ? 'good' : 'bad'), promptOfDay = day => prompts.find(row => row.day === day)?.promptCases;   // a night's replay is found by day: it has its own run id, and may have no quality row
   const html = `<section class="card"><h2>How steady the AI is · last ${rate.pairs} score pairs (${rate.nights} ${rate.nights === 1 ? 'night' : 'nights'})</h2>
 <div class="tiles"><section class="card tile"><span class="muted">Same score twice (within ${BARS.within})</span><b>${rate1(rate.agree)}</b>${chip(`bar ≥ ${BARS.agree * 100}%`, tone(rate.agreeOk))}</section>
 <section class="card tile"><span class="muted">Big jumps (over ${BARS.jump} apart)</span><b>${rate1(rate.jumps)}</b>${chip(`bar ≤ ${BARS.jumps * 100}%`, tone(rate.jumpsOk))}</section>
