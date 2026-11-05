@@ -6,6 +6,7 @@ import {esc} from '../shared/html.js';
 import {remember} from '../shared/auth.js';
 import {CAUSES, CAUSE_IDS, causeId} from './e2e-causes.js';
 import {KINDS} from './e2e-intel.js';
+import {promptNightsOf} from './e2e-prompt.js';
 import {TOP_CSS, top} from './e2e-top.js';
 import {filterLinks} from './admin.js';
 import {BARS_CSS, barRows, legend} from './day-bars.js';
@@ -99,17 +100,18 @@ const promptTile = prompt => {
     : prompt.status === 'carried' ? `nothing asked, ${prompt.right} of ${prompt.total} right as last asked` : `${prompt.noise} model noise · ${prompt.newWrong} new wrong · ${prompt.unconfirmed} unconfirmed · ${prompt.calls} calls`;
   return `<section class="card tile"><span class="muted">Prompt cases (newest night)</span><b>${esc(words.text)}</b>${prompt && ['asked', 'first'].includes(prompt.status) ? `<div>${chip(prompt.flipped ? `${prompt.flipped} got worse` : 'none got worse', prompt.flipped ? 'bad' : 'good')}</div>` : ''}<span class="muted">${esc(detail)}</span></section>`;
 };
-export function qualityCard(nights = [], repo = PUBLIC_REPO) {
-  if (!nights.length) return '<section class="card"><h2>How steady the AI is · quality suite</h2><p class="muted">No live quality night yet: the night\'s fresh quality run scores the golden jobs twice.</p></section>';
-  const rate = rateOf(nights), tone = ok => (ok ? 'good' : 'bad');
+export function qualityCard(nights = [], repo = PUBLIC_REPO, promptNights = undefined) {
+  const prompts = promptNightsOf({quality: nights, promptNights});
+  if (!nights.length) return `<section class="card"><h2>How steady the AI is · quality suite</h2><p class="muted">No live quality night yet: the night\'s fresh quality run scores the golden jobs twice.</p>${prompts.length ? `<div class="tiles">${promptTile(prompts[0].promptCases)}</div>` : ''}</section>`;   // Why (#259, code review): replays do not depend on a quality night, so they show without one
+  const rate = rateOf(nights), tone = ok => (ok ? 'good' : 'bad'), promptOfDay = day => prompts.find(row => row.day === day)?.promptCases;   // a night's replay is found by day: it has its own run id, and may have no quality row
   const html = `<section class="card"><h2>How steady the AI is · last ${rate.pairs} score pairs (${rate.nights} ${rate.nights === 1 ? 'night' : 'nights'})</h2>
 <div class="tiles"><section class="card tile"><span class="muted">Same score twice (within ${BARS.within})</span><b>${rate1(rate.agree)}</b>${chip(`bar ≥ ${BARS.agree * 100}%`, tone(rate.agreeOk))}</section>
 <section class="card tile"><span class="muted">Big jumps (over ${BARS.jump} apart)</span><b>${rate1(rate.jumps)}</b>${chip(`bar ≤ ${BARS.jumps * 100}%`, tone(rate.jumpsOk))}</section>
 <section class="card tile"><span class="muted">Facts exact</span><b>${rate1(rate.factsTotal ? rate.factsExact / rate.factsTotal : null)}</b><span class="muted">${rate.factsExact} of ${rate.factsTotal}</span></section>
 <section class="card tile"><span class="muted">Score texts with invented facts</span><b>${rate1(rate.judged ? rate.invented / rate.judged : null)}</b><span class="muted">${rate.invented} of ${rate.judged} judged</span></section>
-${promptTile(nights.find(night => night.promptCases)?.promptCases)}</div>
+${promptTile(prompts[0]?.promptCases)}</div>
 <div class="scroll"><table><tr><th>Night</th><th>Run</th><th class="num">Pairs</th><th class="num">Within ${BARS.within}</th><th class="num">Over ${BARS.jump}</th><th class="num">Facts exact</th><th class="num">Invented</th><th class="num">Prompt cases</th></tr>${nights.slice(0, 14).map(night =>
-  `<tr><td>${esc(night.day)}</td><td><a href="https://github.com/${esc(repo)}/actions/runs/${Number(night.runId)}">#${Number(night.runId)}</a></td><td class="num">${night.pairs}</td><td class="num">${chip(`${night.within8}`, night.within8 / night.pairs >= BARS.agree ? 'good' : 'warn')}</td><td class="num">${night.over20 ? chip(`${night.over20}`, 'bad') : chip('0', 'good')}</td><td class="num">${night.factsExact}/${night.factsTotal}</td><td class="num">${night.invented}/${night.judged}</td><td class="num">${chip(esc(promptWords(night.promptCases).text), promptWords(night.promptCases).tone)}</td></tr>`).join('')}</table></div></section>`;
+  `<tr><td>${esc(night.day)}</td><td><a href="https://github.com/${esc(repo)}/actions/runs/${Number(night.runId)}">#${Number(night.runId)}</a></td><td class="num">${night.pairs}</td><td class="num">${chip(`${night.within8}`, night.within8 / night.pairs >= BARS.agree ? 'good' : 'warn')}</td><td class="num">${night.over20 ? chip(`${night.over20}`, 'bad') : chip('0', 'good')}</td><td class="num">${night.factsExact}/${night.factsTotal}</td><td class="num">${night.invented}/${night.judged}</td><td class="num">${chip(esc(promptWords(promptOfDay(night.day)).text), promptWords(promptOfDay(night.day)).tone)}</td></tr>`).join('')}</table></div></section>`;
   return html;
 }
 
@@ -153,7 +155,7 @@ export function page(snapshot, {range = '7d', kind = 'all', repo = PUBLIC_REPO, 
   const w = windowOf(snapshot, range, now, kind), name = `${RANGES[range].name}${kind === 'all' ? '' : ` · ${KIND_NAMES[kind]}`}`;
   const body = !snapshot ? `<section class="card"><h2>No data yet</h2><p class="muted">The workflow <code>e2e-intel.yml</code> publishes every finished e2e run hourly; the first run fills this page.</p></section>`
     : `${filters}${greenCard(snapshot, {kind, days: RANGES[range].days, now, kindName: id => KIND_NAMES[id] || id, scopeName: name})}${['all', 'beta'].includes(kind) ? betaCard(snapshot, {days: RANGES[range].days, now, repo, scopeName: RANGES[range].name}) : ''}${withPrChart(top(w, {repo}), w)}${tiles(w)}
-${qualityCard(snapshot.quality || [], repo)}
+${qualityCard(snapshot.quality || [], repo, snapshot.promptNights)}
 ${greyCard(snapshot, now, repo)}
 ${speedCard(snapshot, now)}
 <section class="card"><h2>Red suites per day, by cause · ${esc(name)}</h2>${w.reds ? bars(w) : '<p class="muted">No red suites in this range.</p>'}</section>

@@ -6,6 +6,7 @@
 // What has no number yet says so (value '–' and the reason in `sub`); nothing here invents a night.
 import {BARS, rateOf} from './e2e-quality.js';
 import {readSnapshot} from './e2e-intel.js';
+import {promptNightsOf} from './e2e-prompt.js';
 
 export const NIGHTS = 14, DAY = 86400000;
 const dayOf = value => new Date(value).toISOString().slice(0, 10);
@@ -38,7 +39,7 @@ function qualityAi(snapshot, days) {
 function promptCases(snapshot, days) {
   const files = ['prompt-cases-night.yml'], title = 'Prompt cases', bar = {value: null, label: 'nothing got worse than last night'};
   const byDay = new Map();
-  for (const night of [...(snapshot?.quality || [])].sort((a, b) => a.runId - b.runId)) if (night.promptCases && days.includes(night.day)) byDay.set(night.day, night.promptCases);   // only the nights the trend shows
+  for (const night of promptNightsOf(snapshot).reverse()) if (days.includes(night.day)) byDay.set(night.day, night.promptCases);   // only the nights the trend shows
   if (!byDay.size) return empty('prompt-cases', title, files, 'no night replayed in the last 14 nights', bar);
   const series = days.map(day => { const p = byDay.get(day); return p && p.total ? {day, value: p.right / p.total, ok: p.status === 'not-asked' ? null : p.flipped === 0} : {day, value: null, ok: null}; });
   const last = [...byDay].at(-1)[1], when = [...byDay].at(-1)[0];
