@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
-import {MAIL_TYPES, NEWS, newsAnswer, newsRefusal, signupKind} from '../../../../shared/mail-lists.js';
+import {MAIL_TYPES, NEWS, newsAnswer, newsFacts, newsRefusal, signupKind} from '../../../../shared/mail-lists.js';
 
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 const facts = ({stops = [], yes = [], confirmed = false, signup = ''} = {}) => ({stops: new Set(stops), yes: new Set(yes), confirmed, signup});
@@ -54,4 +54,16 @@ test('migration 0134: the old box becomes a yes or a stop for both news types; t
   const rows = text => db.prepare(text).all().map(row => ({...row}));
   assert.deepEqual(rows('SELECT addr, list, via, at FROM mail_on ORDER BY list'), ['releases', 'tips'].map(list => ({addr: 'hash-ticked', list, via: 'tick', at: '2026-10-05'})));
   assert.deepEqual(rows('SELECT addr, list FROM mail_off ORDER BY addr, list'), [{addr: 'hash-bounced', list: 'all'}, {addr: 'hash-stopped', list: 'releases'}, {addr: 'hash-stopped', list: 'service'}, {addr: 'hash-stopped', list: 'tips'}]);
+});
+
+test('a stop made under the old single list still holds for both news types when migration 0134 has not run (CI only warns on a failed migration)', async () => {
+  const db = new DatabaseSync(':memory:');
+  for (const file of ['0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql']) db.exec(sql(file));   // no mail_on table
+  const statement = (text, args = []) => ({bind: (...values) => statement(text, values), all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
+  const env = {STATS: {prepare: text => statement(text)}, MARKETING_MAIL: 'on'};
+  db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES ('stopped', 'marketing', 'unsubscribe', 'x')").run();
+  const {mailAllowed} = await import('../../../../shared/mail.js');
+  assert.equal((await newsFacts(env, 'stopped', null)).stops.size, 2);
+  assert.equal((await newsFacts(env, 'nobody', null)).yes.size, 0, 'a missing mail_on only sends less');
+  assert.equal((await mailAllowed({...env, STATS_SALT: 's'}, 'a@example.com', 'releases')).ok, false, 'confirm the sender reads the same way: no account, so not confirmed');
 });

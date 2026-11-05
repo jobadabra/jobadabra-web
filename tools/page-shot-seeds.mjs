@@ -238,6 +238,7 @@ export const seeds = {...notifySeeds,
       .bind(new Date(today - 86400000).toISOString(), new Date(today - 2 * 86400000).toISOString(), new Date(today - 3 * 86400000).toISOString()).run();
     for (let i = 0; i < 9; i++) await env.STATS.prepare("INSERT INTO pro_accounts (id, email_hash, email, created_at, plan, email_confirmed_at, marketing_opt_in) VALUES (?, ?, ?, ?, 'trial', ?, ?)")   // 9 made-up trial accounts: 6 confirmed, 3 with product news on (5 Nov 2026, admin charts)
       .bind(`acc_demo_${i}`, `demohash${i}`, `demo${i}@example.invalid`, new Date(today - i * 86400000).toISOString(), i < 6 ? new Date(today - i * 86400000).toISOString() : null, i % 3 === 0 ? 1 : 0).run();
+    await env.STATS.prepare("INSERT INTO mail_on (addr, list, via, at) SELECT email_hash, 'tips', 'card', created_at FROM pro_accounts WHERE marketing_opt_in = 1").run().catch(() => {});   // 3 Tips and tricks ticks (5 Nov 2026, the three mail types); the old tree has no mail_on table
     await env.STATS.prepare("INSERT INTO test_mail (received_at, to_addr, from_addr, subject, body) VALUES (?, 'test-account-admin@jobpilotto.top', 'notifications@jobadabra.top', 'Confirm your email for Jobadabra', 'Demo')").bind(new Date(today - 600000).toISOString()).run();
     for (const account of ['acc_demo1', 'acc_demo2']) await env.STATS.prepare("INSERT INTO mail_held (account, at, subject, html, text) VALUES (?, ?, 'Demo', '<p>Demo</p>', 'Demo')").bind(account, new Date(today - 3600000).toISOString()).run();
   },

@@ -8,7 +8,8 @@ import {collect, hashOf, SWITCHES, windowOf} from '../../../admin/email-data.js'
 import {page} from '../../../admin/email.js';
 import {previews, SAMPLES} from '../../../admin/email-preview.js';
 import {TEMPLATES} from '../../../shared/mail-templates.js';
-import {addrOf} from '../../../shared/mail.js';
+import {DAILY_MAX, addrOf} from '../../../shared/mail.js';
+import {MAIL_TYPES} from '../../../shared/mail-lists.js';
 import {TEST_INBOX} from '../../../admin/email-test-send.js';
 import {view} from '../../../admin/email.js';
 
@@ -124,6 +125,16 @@ test('with the MAIL switch off, or for a list the address stopped, the result sa
   env.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'tips', 'unsubscribe', 'x')").run(await addrOf('test-account-admin@jobpilotto.top'));   // the Pro launch is a Tips and tricks mail: a stop on that type refuses it, a test send skips only the tick rules
   assert.equal((await view(post({template: 'pro-launch'}), {...env, MARKETING_MAIL: 'on'})).headers.get('Location'), '/admin/growth/email?test=pro-launch:unsubscribed&destination=inbox#test-result-pro-launch');
   assert.equal(sent.length, 0);
+});
+
+test('the page prints the agreed mail rules from the code: three types, who gets each, the per-address and daily limits', async () => {
+  // Why (owner, 5 Nov 2026: "store in the Admin -> Email all these settings we agreed on"): the card reads MAIL_TYPES and DAILY_MAX, so it cannot drift from what send() does.
+  const {env} = await fill();
+  const html = page(await collect(env, {now}));
+  const card = html.slice(html.indexOf('id="mail-types"'), html.indexOf('</section>', html.indexOf('id="mail-types"')));
+  for (const type of MAIL_TYPES) assert.ok(card.includes(type.name) && card.includes(type.who.slice(0, 20)), type.id);
+  assert.match(card, /Tips and tricks<\/b><\/td><td>[^<]*<\/td><td><span class="pill off">Off/);
+  assert.ok(card.includes(`${DAILY_MAX} mails a day`) && card.includes('stops that type only'));
 });
 
 test('every template card has its own button, and only a known notice word is printed', async () => {

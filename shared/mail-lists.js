@@ -34,7 +34,9 @@ export function newsRefusal(list, facts, {waitlistToo = false} = {}) {
 
 /** What the site holds for an address digest; `email` (lower-case, or null) finds its waitlist signup. -> {stops, yes, confirmed, signup, answered} */
 export async function newsFacts(env, addr, email) {
-  const stops = new Set(((await env.STATS.prepare("SELECT list FROM mail_off WHERE addr = ? AND list IN ('all', 'releases', 'tips')").bind(addr).all()).results || []).map(row => row.list));
+  const stops = new Set(((await env.STATS.prepare("SELECT list FROM mail_off WHERE addr = ? AND list IN ('all', 'releases', 'tips', 'marketing')").bind(addr).all()).results || []).map(row => row.list));
+  // Why (review of #436): a failed migration only warns (site.yml), so a stop made under the old single list must still hold, for both news types.
+  if (stops.delete('marketing')) for (const list of NEWS) stops.add(list);
   // Why (5 Nov 2026): a failed migration only warns (site.yml). Without mail_on nobody has a stored yes, and every stop is still read above, so this can only send less.
   const yes = new Set(((await env.STATS.prepare('SELECT list FROM mail_on WHERE addr = ?').bind(addr).all().catch(() => null))?.results || []).map(row => row.list));
   const account = await env.STATS.prepare('SELECT email_confirmed_at, plan FROM pro_accounts WHERE email_hash = ?').bind(addr).first().catch(() => null);
@@ -60,18 +62,20 @@ export async function switchOff(env, addr, list, reason, now = new Date()) {
 }
 
 /**
- * Records the answers a person pressed: `releases` and/or `tips` (a missing one changes nothing), or the old single box `marketing` from an app already out there.
- * Why (owner, 5 Nov 2026): that box's words name both types, so true is a yes to both; false counts only when it takes back a yes, because an implied box is no answer.
- * A yes from an unconfirmed address keeps that address's stop: anyone can type someone else's address. `account` = pro_accounts.id.
+ * Records the answers a person pressed: `releases` and/or `tips` (a missing one changes nothing), or the old single box `marketing` from an app already out.
+ * Why (owner, 5 Nov 2026; review of #436): that old box shows the Tips and tricks answer (GET `marketing`), and the app sends it back on every save, so it is the Tips box only: true can
+ * never touch the releases answer, and false counts only when it takes back a yes. An implied box is no answer.
+ * A yes from an unconfirmed address keeps that address's stop: anyone can type someone else's address. `lift: false` (the Always on wizard, whose app copy can be stale) never lifts any stop.
+ * `account` = pro_accounts.id.
  */
-export async function recordNews(env, account, body, now = new Date()) {
+export async function recordNews(env, account, body, now = new Date(), {lift = true} = {}) {
   const row = await env.STATS.prepare('SELECT email, email_hash, email_confirmed_at FROM pro_accounts WHERE id = ?').bind(account).first();
   if (!row?.email_hash) return;
   const facts = await newsFacts(env, row.email_hash, row.email), via = body.newsVia === 'card' ? 'card' : 'settings';
   let answers = NEWS.filter(list => typeof body[list] === 'boolean').map(list => [list, body[list]]);
-  if (!answers.length && (body.marketing === true || (body.marketing === false && facts.yes.has('tips')))) answers = NEWS.map(list => [list, body.marketing]);
+  if (!answers.length && (body.marketing === true || (body.marketing === false && facts.yes.has('tips')))) answers = [['tips', body.marketing]];
   for (const [list, yes] of answers) {
     if (!yes) await switchOff(env, row.email_hash, list, 'settings', now);
-    else if (row.email_confirmed_at || !facts.stops.has(list)) await sayYes(env, row.email_hash, list, body.marketing === true ? 'old-box' : via, now);
+    else if (facts.stops.has(list) ? lift && !!row.email_confirmed_at : true) await sayYes(env, row.email_hash, list, body.marketing === true ? 'old-box' : via, now);
   }
 }

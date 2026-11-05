@@ -12,10 +12,10 @@ const row = (name, checked, label, note, disabled = false) => `<p><label><input 
 
 async function stateOf(env, addr) {
   const off = (await env.STATS.prepare("SELECT list FROM mail_off WHERE addr = ? AND list IN ('all', 'service')").bind(addr).all()).results || [];
-  const account = await env.STATS.prepare('SELECT email, email_confirmed_at, service_mail_off_at, digest_cadence FROM pro_accounts WHERE email_hash = ?').bind(addr).first().catch(() => null);
+  const account = await env.STATS.prepare('SELECT email, plan, email_confirmed_at, service_mail_off_at, digest_cadence FROM pro_accounts WHERE email_hash = ?').bind(addr).first().catch(() => null);
   const lists = new Set(off.map(r => r.list));
   // Why (5 Nov 2026): an address with no account has no confirm step to wait for (the waitlist); an account's address counts once it is confirmed, like the sender reads it (shared/mail-lists.js).
-  const facts = {...await newsFacts(env, addr, account?.email || null), confirmed: !account || !!account.email_confirmed_at};
+  const facts = {...await newsFacts(env, addr, account?.email || null), confirmed: !account || !!account.email_confirmed_at || account.plan === 'pro'};
   return {blocked: lists.has('all'), service: !lists.has('service') && !account?.service_mail_off_at, cadence: account?.digest_cadence || 'daily', news: Object.fromEntries(NEWS.map(list => [list, newsAnswer(list, facts)])), account};
 }
 

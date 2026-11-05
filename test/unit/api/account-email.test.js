@@ -225,7 +225,7 @@ test('a PUT with releases and tips stores each answer apart; a missing field cha
   assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true}, 'a save with no news field changes nothing');
 });
 
-test('the old box from an app already out: true is a yes to both types; false stops only what was a yes', async () => {
+test('the old box from an app already out is the Tips and tricks box: true is a tips yes and never touches releases; false stops only what was a yes', async () => {
   // Why (review of #hr-24, 5 Nov 2026): the app sends marketing on every save, so a never-answered box must not become a stop that later beats a waitlist signup.
   const {e} = setup();
   const stops = () => rows(e, "SELECT COUNT(*) n FROM mail_off WHERE list IN ('releases', 'tips')")[0].n;
@@ -233,13 +233,24 @@ test('the old box from an app already out: true is a yes to both types; false st
   await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: false});
   assert.equal(stops(), 0);
   await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: true});
-  assert.deepEqual(rows(e, 'SELECT list, via FROM mail_on ORDER BY list'), [{list: 'releases', via: 'old-box'}, {list: 'tips', via: 'old-box'}]);
+  assert.deepEqual(rows(e, 'SELECT list, via FROM mail_on ORDER BY list'), [{list: 'tips', via: 'old-box'}]);
   await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: false});
-  assert.equal(stops(), 2);
+  assert.equal(stops(), 1, 'the tips stop only');
   const listed = withWaitlist(setup().e);
   await call(address, listed, 'install-bbbb', 'PUT', {email: 'web@example.com', marketing: false});
   assert.equal((await news(listed, 'install-bbbb')).releases, true, 'the website waitlist signup still counts: the unticked box took nothing back');
   assert.equal(rows(listed, "SELECT COUNT(*) n FROM mail_off")[0].n, 0);
+});
+
+test('the app echoing its old box on every save never undoes a releases stop', async () => {
+  // Why (review of #436): the app sends `marketing` (the Tips answer GET showed it) on every save.
+  const {e} = setup();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});
+  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', tips: true});
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', releases: false});
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', marketing: true});   // the echo of the box GET showed
+  assert.deepEqual(await news(e), {releases: false, tips: true, answered: true, old: true}, 'the releases stop stays');
 });
 
 test('a Pro account saves its choices at its own address; only changing the address is refused', async () => {

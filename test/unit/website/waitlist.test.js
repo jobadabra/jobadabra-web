@@ -34,7 +34,9 @@ test('a sign-up from the app is stored with source "app"; the website form is "w
   await waitlist(post({email: 'odd@example.com', source: 'anything'}, '6.6.6.6'), env);
   assert.equal(JSON.parse(env.WAITLIST.data.get('signup:app@example.com')).source, 'app');
   assert.equal(JSON.parse(env.WAITLIST.data.get('signup:web@example.com')).source, 'web');
-  assert.equal(JSON.parse(env.WAITLIST.data.get('signup:odd@example.com')).source, 'web', 'only "app" is taken as given');
+  assert.equal(JSON.parse(env.WAITLIST.data.get('signup:odd@example.com')).source, 'web', 'only "app" and "app-news" are taken as given');
+  await waitlist(post({email: 'newapp@example.com', source: 'app-news'}, '8.8.8.8'), env);
+  assert.equal(JSON.parse(env.WAITLIST.data.get('signup:newapp@example.com')).source, 'app-news', 'the app, once its dialog names release mails (shared/mail-lists.js signupKind)');
   for (let i = 0; i < 10; i++) await waitlist(post({email: `q${i}@example.com`, source: 'app'}, '7.7.7.7'), env);
   assert.equal((await waitlist(post({email: 'late@example.com', source: 'app'}, '7.7.7.7'), env)).status, 429);
 });

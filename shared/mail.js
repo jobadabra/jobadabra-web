@@ -45,8 +45,8 @@ export async function mailAllowed(env, to, list = 'service', {essential = false,
   const news = NEWS.includes(list);
   if (news && env.MARKETING_MAIL !== 'on') return {ok: false, reason: 'marketing_off'};   // owner, 17 Oct 2026: no promotional mail until he turns it on
   const addr = await addrOf(to);
-  const off = await env.STATS.prepare("SELECT list, reason FROM mail_off WHERE addr = ? AND list IN ('all', ?)").bind(addr, list).all();
-  for (const row of off.results || []) if (row.list === 'all' || !essential) return {ok: false, reason: row.list === 'all' ? 'suppressed' : 'unsubscribed'};
+  const off = await env.STATS.prepare("SELECT list, reason FROM mail_off WHERE addr = ? AND list IN ('all', ?, 'marketing')").bind(addr, list).all();
+  for (const row of off.results || []) if (row.list === 'all' || (!essential && (row.list !== 'marketing' || news))) return {ok: false, reason: row.list === 'all' ? 'suppressed' : 'unsubscribed'};
   const account = await env.STATS.prepare('SELECT service_mail_off_at FROM pro_accounts WHERE email_hash = ?').bind(addr).first().catch(() => null);
   if (news && !test) {   // a test send goes to the owner's typed address or the test inbox
     const reason = newsRefusal(list, await newsFacts(env, addr, clean(to)), {waitlistToo});

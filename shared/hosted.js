@@ -72,8 +72,8 @@ export async function schedule(request, env, now = new Date()) {
     if (!linked.ok) return Response.json({ok: false, error: linked.error}, {status: 409});
     account = await accountOf(env, install);
   }
-  // Why (owner, 5 Nov 2026): a ticked wizard box is the person's own press and must reach the site (shared/mail-lists.js recordNews); an unticked one takes nothing back.
-  if (body.marketing === true) await recordNews(env, account.id, {marketing: true}, now);
+  // Why (owner, 5 Nov 2026): a ticked wizard box is the person's own press and must reach the site (shared/mail-lists.js recordNews); an unticked one takes nothing back. The app's copy of the box can be stale (a stop made through a mail link), so this never lifts a stop.
+  if (body.marketing === true) await recordNews(env, account.id, {marketing: true}, now, {lift: false});
   const pro = account.plan === 'pro' && account.status === 'active';
   const freq = pro ? Math.max(MIN_FREQ_HOURS, Math.min(24, Math.floor(Number(body.freqHours)) || TRIAL_FREQ_HOURS)) : TRIAL_FREQ_HOURS;
   const next = iso(now.getTime() + HOUR);   // first run within the hour of switching on

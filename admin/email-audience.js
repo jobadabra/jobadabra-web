@@ -3,13 +3,13 @@
 // (the page's counts stay for every admin). Reads the same rule send() uses (shared/mail-lists.js newsRefusal). Guard: test/unit/admin/release-mail.test.js.
 import {esc} from '../shared/html.js';
 import {addrOf, clean, validAddress} from '../shared/mail.js';
-import {newsRefusal, signupKind} from '../shared/mail-lists.js';
+import {NEWS, newsRefusal, signupKind} from '../shared/mail-lists.js';
 
 const REASONS = {no_tick: 'not ticked', not_confirmed: 'not confirmed', pro_only: 'Pro mail only', unsubscribed: 'stopped', suppressed: 'bounced or complained', bad_address: 'not an address'};
 const NOBODY = new Set();
 
 // addr -> set of lists, from rows of {addr, list}.
-const byAddress = rows => { const out = new Map(); for (const {addr, list} of rows) out.set(addr, (out.get(addr) || new Set()).add(list)); return out; };
+const byAddress = rows => { const out = new Map(); for (const {addr, list} of rows) for (const one of list === 'marketing' ? NEWS : [list]) out.set(addr, (out.get(addr) || new Set()).add(one)); return out; };   // 'marketing': a stop from before the split, for both news types
 
 // -> [{email, source: 'account' | 'waitlist' | 'both', plan, since (ISO or ''), releases, tips, launch, releasesWhy, tipsWhy}], newest first. Judged as if MARKETING_MAIL were on, so the list is true before the flag flips.
 export async function audienceRows(env) {
@@ -23,7 +23,7 @@ export async function audienceRows(env) {
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
   // Two queries for every address, then each is judged in memory by send()'s own rule (Gitar on #218: a check per address made 2N+1 queries per page load).
-  const stops = byAddress((await env.STATS.prepare("SELECT addr, list FROM mail_off WHERE list IN ('all', 'releases', 'tips')").all()).results || []);
+  const stops = byAddress((await env.STATS.prepare("SELECT addr, list FROM mail_off WHERE list IN ('all', 'releases', 'tips', 'marketing')").all()).results || []);
   const yes = byAddress((await env.STATS.prepare('SELECT addr, list FROM mail_on').all().catch(() => null))?.results || []);
   const rows = [];
   for (const row of by.values()) {
