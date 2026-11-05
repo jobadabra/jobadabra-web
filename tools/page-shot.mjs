@@ -1,6 +1,7 @@
 // One page, rendered through the REAL Worker (workers/www/index.js) on demo data, shot at every width and theme, and refused when it is unstyled
 // (owner, 25 Oct 2026: jobadabra-web#92's Before/After images were the admin page as raw HTML, rendered without the layout that adds its CSS).
-//   tools/site-run.sh node tools/page-shot.mjs --path /admin/growth/promo-codes --width 1440,390 --theme dark,light --out <dir> [--name before] [--seed promo-codes] [--full] [--scroll '<selector>'] [--click '<selector>'] [--then '<selector>']
+//   tools/site-run.sh node tools/page-shot.mjs --path /admin/growth/promo-codes --width 1440,390 --theme dark,light --out <dir> [--name before] [--seed promo-codes] [--full] [--clip '<selector>'] [--scroll '<selector>'] [--click '<selector>'] [--then '<selector>']
+// --clip '<selector>': shoot only that element (the section the PR changed: readable at a table cell's width; exit 1 when it is not on the page).
 // Writes <dir>/<name>-<width>[-<theme>].png (theme in the name only when more than one). Exit 1 when the page is unstyled (nothing is written for it).
 // The data is an in-memory database built from db/migrations/ plus a seed (tools/page-shot-seeds.mjs); the owner login is the test key. The live site is never contacted:
 // every request to another host is blocked. Run inside the overlay (tools/site-run.sh), from the checkout of the tree to shoot (before: a worktree of the old commit).
@@ -39,7 +40,12 @@ try {
       if (args.scroll) { await page.locator(String(args.scroll)).first().scrollIntoViewIfNeeded(); await page.waitForTimeout(500); }   // --scroll '<selector>': shoot that part of the page (a full-page shot leaves iframes blank)
       if (args.click) { await page.locator(String(args.click)).first().click(); await page.waitForTimeout(300); }
       if (args.then) { await page.locator(String(args.then)).first().click(); await page.waitForTimeout(300); }   // --then '<selector>': a second press after --click (a menu item, then its form; 3 Nov 2026)   // --click '<selector>': press it before the shot (an open dropdown); after --scroll
-      await page.screenshot({path: file, fullPage: !!args.full}); console.log(file);
+      if (args.clip) {   // Why (5 Nov 2026, owner: "the screenshots on the PRs … has nothing to do with the changes"): the PR's shot is the changed section, readable in a table cell; a selector that matches nothing fails, never a full-page fallback
+        const section = page.locator(String(args.clip)).first();
+        try { await section.waitFor({state: 'visible', timeout: 3000}); } catch { failed = true; console.error(`NO SECTION ${pagePath} at ${width}px ${theme}: --clip '${args.clip}' matches nothing visible`); await context.close(); continue; }
+        await section.screenshot({path: file});
+      } else await page.screenshot({path: file, fullPage: !!args.full});
+      console.log(file);
     }
     await context.close();
   }
