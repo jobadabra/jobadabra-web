@@ -49,10 +49,12 @@ async function containerRunner(trip) {
   }
   // What the container answered to POST /run is logged (status and the first 400 characters): "the container ran" failed for four nights (21-24 Oct 2026) with nothing in the log to say why.
   // The request body goes as a string, so Content-Length is sent: a streamed body goes chunked and src/hosted_run.py reads Content-Length 0 -> {} -> 400 (the cause of the 21-24 Oct failures).
-  return {fetch: async request => { const answer = await fetch('http://127.0.0.1:8080/run', {method: 'POST', body: await request.text()}); if (!answer.ok) log(`the container answered ${answer.status}: ${(await answer.clone().text()).replace(/\s+/g, ' ').slice(0, 400)}`); return answer; }, stop: () => spawnSync('docker', ['logs', 'jp-hosted-e2e'], {stdio: 'inherit'}) && spawnSync('docker', ['stop', 'jp-hosted-e2e'])};
+  // The path and method go through as sent: consume() reads GET / (the build stamp) before it POSTs /run.
+  return {fetch: async request => { const answer = await fetch(`http://127.0.0.1:8080${new URL(request.url).pathname}`, request.method === 'GET' ? {} : {method: request.method, body: await request.text()}); if (!answer.ok) log(`the container answered ${answer.status}: ${(await answer.clone().text()).replace(/\s+/g, ' ').slice(0, 400)}`); return answer; }, stop: () => spawnSync('docker', ['logs', 'jp-hosted-e2e'], {stdio: 'inherit'}) && spawnSync('docker', ['stop', 'jp-hosted-e2e'])};
 }
 function pythonRunner(trip) {
   return {fetch: async request => {
+    if (request.method === 'GET') return new Response(JSON.stringify({ok: true, build: 'in-process', started: new Date().toISOString()}));   // no container here: the build stamp is only read
     const {token, site} = await request.json();
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'jp-hosted-e2e-feeds-'));
     const code = await new Promise(resolve => spawn(PYTHON, ['-m', 'src', 'hosted', '--site', site, '--token', token], {cwd: ROOT, stdio: 'inherit',
@@ -119,6 +121,7 @@ async function main() {
     assert.equal(ticked.enqueued, 1, `the tick queues one run: ${JSON.stringify(ticked)}`);
     const queued = await cloud.drain();
     assert.deepEqual(queued, {ok: 1, failed: 0}, 'the container ran');
+    assert.match(cloud.lines.join('\n'), RUNNER === 'docker' ? /hosted run \S+: container build [0-9a-f]{12}, started \d{4}-\d\d-\d\dT/ : /container build in-process/, 'the log says which code the container runs');
     log('2 tick queued the run, the engine ran');
 
     // 3. The result: stored, the debit, the mail, the fake model's calls.
