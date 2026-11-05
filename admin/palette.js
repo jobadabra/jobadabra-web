@@ -175,6 +175,7 @@ function client(scan, rank) {
     // Why (5 Nov 2026, admin charts: the E2E page's Speed and Scorecard cards grew past one screen, so "PR suite jobs" and "Missed, no suite plays it" landed below the fold): a heading that sits further down its card than the
     // screen holds (minus the ~110 px the sticky bar takes) scrolls to the heading itself, not to the card's top.
     const deep = el !== box && el.getBoundingClientRect().bottom - box.getBoundingClientRect().top > innerHeight - 140;
+    if (deep) el.style.scrollMarginTop = '110px';   // the box gets this margin only with palette-flash, after the scroll; the heading needs it before, or the sticky bar covers it (code review, 5 Nov 2026)
     (deep ? el : box).scrollIntoView({block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
     box.classList.remove('palette-flash'); void box.offsetWidth; box.classList.add('palette-flash');
   }

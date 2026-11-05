@@ -75,3 +75,11 @@ test('The three layers, Slowest 10 and the PR checks card are charts that keep t
   const checks = checksPage([{month: '2026-10', card}]);
   assert.match(checks, /🟢 1 proven/); assert.match(checks, /🟡 1 to review/); assert.match(checks, /3 catches · 1 false/); assert.match(checks, /p90 14 min/); assert.match(checks, /<details class="vz-more">[\s\S]*<table>/); assert.equal(checks.split('id="tip"').length - 1, 1);
 });
+
+test('code review of 5 Nov 2026: a caption never sits over a chart that was not drawn', async () => {
+  assert.equal(prCostChart([{day: '2026-11-01', full: [0, 0], merge: [0, 0], prMin: 30}]).includes("Main's full runs"), false, 'no main run: no green-share caption');
+  assert.match(prCostChart([{day: '2026-11-01', full: [0, 0], merge: [0, 0], prMin: 30}]), /PR e2e minutes per day/);
+  const shares = prCostChart([{day: '2026-11-02', full: [1, 2], merge: [0, 0], prMin: 0}, {day: '2026-11-01', full: [2, 2], merge: [0, 0], prMin: 0}]);
+  assert.match(shares, /full runs that ended green/); assert.doesNotMatch(shares, /PR e2e minutes per day/, 'no PR minutes: no empty 0 / 0.5 / 1 axis');
+  assert.doesNotMatch(checksPage([{month: '2026-10', card: JSON.stringify({days: 30, checks: []})}]), /How long each check/);
+});

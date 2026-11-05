@@ -31,8 +31,8 @@ export function figure({lead = [], chart = '', table = '', label = 'Show table'}
 
 /** The CSS of every chart form, once per page (the page's own style block holds it). Colours are variables on .vz; a light set sits under [data-theme=light]. */
 export const VIZ_STYLE = `${CHIP_STYLE}${TIP_STYLE}
-.vz{--vz-track:#262c33;--vz-line:#262c33;--vz-text:#f4efe3;--vz-muted:#8d949c;--vz-ink:#0b0d10;--vz-link:#f5b54a;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#9085e9;--off:#6b7580;--good:#3fcf82;--warn:#f0b429;--bad:#ff6b6b;container-type:inline-size;margin-top:10px}
-:root[data-theme=light] .vz{--vz-track:#e7e5df;--vz-line:#dedcd6;--vz-text:#0b0b0b;--vz-muted:#52514e;--vz-ink:#fff;--vz-link:#8a5a00;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#6250d6;--off:#9a9a94;--good:#0c8a4a;--warn:#b7791f;--bad:#d03b3b}
+.vz{--vz-track:#262c33;--vz-line:#262c33;--vz-text:#f4efe3;--vz-muted:#8d949c;--vz-ink:#0b0d10;--vz-link:#f5b54a;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#9085e9;--vz-card:#14181d;--off:#6b7580;--good:#3fcf82;--warn:#f0b429;--bad:#ff6b6b;container-type:inline-size;margin-top:10px}
+:root[data-theme=light] .vz{--vz-track:#e7e5df;--vz-line:#dedcd6;--vz-text:#0b0b0b;--vz-muted:#52514e;--vz-ink:#fff;--vz-link:#8a5a00;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#6250d6;--vz-card:#fff;--off:#9a9a94;--good:#0c8a4a;--warn:#b7791f;--bad:#d03b3b}
 .vz-lead{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
 /* Why (5 Nov 2026, Speed range shot: the budget tick sat 4 px apart on rows with longer values): the rows share ONE set of columns (subgrid), so every track has the same length and bars compare. */
 .vz-bars{display:grid;grid-template-columns:minmax(110px,200px) 1fr auto;column-gap:12px;row-gap:2px}.vz-row{display:grid;grid-template-columns:subgrid;grid-column:1 / -1;align-items:center;padding:5px 4px;border-radius:8px;min-height:36px}

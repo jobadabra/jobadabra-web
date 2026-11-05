@@ -43,7 +43,7 @@ export function speedFigure(rows, table, {budgetSeconds}) {
 /** Which suites cost the most: bars of red job time, the causes in the tooltip. `rows` = suiteRows(w) (already costliest first), `label(id)` names a cause. Ten bars; the table holds every suite. */
 export function suiteCostFigure(rows, table, label) {
   const shown = rows.slice(0, 10), total = rows.reduce((sum, row) => sum + row.min, 0);
-  return figure({lead: rows.length ? [[`${hours(total)} in red suites`], [`${rows.length} suites`]] : [],
+  return figure({lead: rows.length ? [[`${hours(total)} job time in red suites`], [`${rows.length} suites`]] : [],
     chart: bars(shown.map(row => ({label: row.suite, hint: `${row.platform === 'windows' ? 'Windows' : 'Mac + Linux'} · ${num(row.n)} red`, value: row.min, text: hours(row.min),
       tip: `${row.suite} (${row.platform === 'windows' ? 'Windows' : 'Mac + Linux'}) · ${num(row.n)} red · ${hours(row.min)} · ${Object.entries(row.causes).sort((a, b) => b[1] - a[1]).map(([id, n]) => `${label(id)} ${n}`).join(', ')}`}))), table});
 }
@@ -62,9 +62,9 @@ export function prCostChart(green) {
   const days = green.slice().reverse(), share = ([greens, runs]) => (runs ? Math.round((100 * greens) / runs) : null);
   const points = days.map(row => ({day: row.day, value: share(row.full), tip: `${row.day} · full runs green ${row.full[1] ? `${share(row.full)}% (${row.full[0]}/${row.full[1]})` : 'none ran'} · after-merge steps green ${row.merge[1] ? `${share(row.merge)}% (${row.merge[0]}/${row.merge[1]})` : 'none ran'}`}));
   const minutes = days.map(row => ({day: row.day, values: [row.prMin || 0], tip: `${row.day} · PR e2e ${num(row.prMin)} min (waiting for a runner + running)`}));
-  if (!points.some(point => point.value !== null) && !minutes.some(day => day.values[0])) return '';
-  return `<p class="muted vz-cap2">Main's full runs that ended green, per day</p>${line(points, {tone: 's1', name: "Main's green share"})}`
-    + `<p class="muted vz-cap2">PR e2e minutes per day</p>${columns(minutes, [{name: 'PR e2e minutes', tone: 's2'}])}`;
+  // Why (code review, 5 Nov 2026): a caption only goes with a chart that was drawn; days with no main run, or none with PR minutes, leave that half out.
+  const share_ = line(points, {tone: 's1', name: "Main's green share"}), cost = minutes.some(day => day.values[0]) ? columns(minutes, [{name: 'PR e2e minutes', tone: 's2'}]) : '';
+  return (share_ ? `<p class="muted vz-cap2">Main's full runs that ended green, per day</p>${share_}` : '') + (cost ? `<p class="muted vz-cap2">PR e2e minutes per day</p>${cost}` : '');
 }
 
 /** The e2e and CI files that changed most this week as bars of commits. `files` = [{file, commits}]. */

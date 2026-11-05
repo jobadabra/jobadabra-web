@@ -89,7 +89,7 @@ function slowCard(snapshot) {
   const slow = (snapshot.slowest || []).slice().sort((a, b) => b.ms - a.ms).slice(0, 10);
   const rows = slow.map((row, i) => `<tr><td class="num">${i + 1}</td><td><code>${esc(row.test)}</code><div class="muted">${esc(row.file)}</div></td><td>${chip(esc(LAYER_NAMES[row.layer]))}</td><td class="num">${row.ms > SLOW_MS ? chip(seconds(row.ms), 'warn') : seconds(row.ms)}</td></tr>`).join('');
   return `<section class="card"><h2>Slowest 10 tests</h2><p class="muted">Integration tests are meant to be seconds: over ${SLOW_MS / 1000} s is flagged. Newest main run of each layer.</p>
-${rows ? figure({lead: slow.some(row => row.ms > SLOW_MS) ? [[`${slow.filter(row => row.ms > SLOW_MS).length} over ${SLOW_MS / 1000} s`, 'warn']] : [['all within 5 s', 'good']],
+${rows ? figure({lead: slow.some(row => row.ms > SLOW_MS) ? [[`${slow.filter(row => row.ms > SLOW_MS).length} over ${SLOW_MS / 1000} s`, 'warn']] : [[`all within ${SLOW_MS / 1000} s`, 'good']],
     chart: bars(slow.map(row => ({label: row.test, hint: `${LAYER_NAMES[row.layer]} · ${row.file}`, value: row.ms, text: seconds(row.ms), tip: `${row.test} · ${LAYER_NAMES[row.layer]} · ${row.file} · ${seconds(row.ms)}`})), {max: Math.max(SLOW_MS, ...slow.map(row => row.ms))}),
     table: `<div class="scroll"><table><tr><th class="num">#</th><th>Test</th><th>Layer</th><th class="num">Time</th></tr>${rows}</table></div>`}) : '<p class="muted">No test timings stored yet.</p>'}</section>`;
 }

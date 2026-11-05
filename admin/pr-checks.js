@@ -52,6 +52,7 @@ function verdictLead(checks) {
 
 /** Per check one stacked bar of its red runs (real catches against false reds), then how long each makes us wait (p90 as a bar). Why (owner, 5 Nov 2026, sketch: "split: real catches | false reds per check, p90 as a bar, verdict chip"). */
 function checksChart(checks) {
+  if (!checks.length) return '';
   const rows = checks.map(check => ({label: check.name, text: check.verdict === 'proven' ? '🟢 proven' : '🟡 review', sub: `${check.realCatches} catches · ${check.falseReds} false`,
     parts: [{value: check.realCatches, tone: 'good'}, {value: check.falseReds, tone: 'bad'}],
     tip: `${check.name} · ${check.runs} runs · real catches ${check.realCatches} · false reds ${check.falseReds} · p90 ${check.p90Min} min · adds ${check.addedMin} min to the wait`}));
