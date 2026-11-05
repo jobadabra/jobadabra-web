@@ -90,6 +90,7 @@ import {replies as feedbackReplies} from '../../api/feedback-replies.js';
 import {view as feedbackView, file as feedbackFile, actRoute as feedbackAct} from '../../admin/feedback.js';
 import {purgeFiles as purgeFeedbackFiles} from '../../shared/feedback.js';
 import {retryImpact} from '../../shared/feedback-impact.js';
+import {pingOverdue} from '../../shared/feedback-overdue.js';
 import {reportForm} from '../../shared/report-form.js';
 import {view as reportsView} from '../../admin/report-view.js';
 import * as recipeLibrary from '../../api/recipes.js';
@@ -347,6 +348,9 @@ export default {
       ctx.waitUntil(synthetic.tick(env, new Date(event.scheduledTime || Date.now())).then(done => { if (done.ran) console.log(`synthetic round: ${JSON.stringify(done)}`); }).catch(error => console.error(`synthetic round: ${error.message}`)));   // every 15 min (shared/synthetic.js; report only)
       // Why (31 Oct 2026, owner "Start it from the Worker"; the integrations collector joined 1 Nov 2026): GitHub's hourly schedules ran every ~4.5 h or not at all; this trigger fires on time, one tick an hour per collector (INTEL_COLLECTORS, shared/intel-start.js). All 5 account cron triggers are used.
       ctx.waitUntil(startIntelCollectors(env, new Date(event.scheduledTime || Date.now()), dispatch).then(async results => { await recordStarts(env.STATS, results, new Date(event.scheduledTime || Date.now())); for (const {workflow, error} of results) { if (error) console.error(`${workflow.replace('.yml', '')} start failed: ${error}; GitHub's own schedule is the backup`); else console.log(`scheduled ${workflow} cron=*/5`); } }));
+      // Why (5 Nov 2026, Gitar on #439): the promise is a reply within 24 hours, so the owner is warned within the hour; the daily block below would warn up to a day late. One tick an hour (minute 10); the once-per-report flag stops a double ping.
+      const tickAt = new Date(event.scheduledTime || Date.now());
+      if (tickAt.getUTCMinutes() === 10) ctx.waitUntil(pingOverdue(env, tickAt).catch(error => console.error(`feedback overdue ping: ${error.message}`)));   // a report 24 h old with no reply: the owner is told once (shared/feedback-overdue.js)
       return;
     }
     ctx.waitUntil(sentryAlert.purge(env).catch(error => console.error(`sentry alert purge: ${error.message}`)));

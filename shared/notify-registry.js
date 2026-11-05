@@ -38,6 +38,7 @@ export const ALERTS = [
   a('feedback-received', '💬 Feedback received', 'users', 'every', 'users', {wired: true}),
   a('form-reported', '📝 A form was reported', 'users', 'every', 'users', {wired: true}),
   a('email-added', '✉️ An account added or changed its e-mail', 'users', 'every', 'users', {wired: true}),
+  a('feedback-overdue', '⏰ A feedback is 24 h old with no reply', 'users', 'every', 'users', {wired: true}),
   a('feedback-not-told', '📣 Feedback reporters not told after a release', 'users', 'problems', 'users', {jobs: ['feedback-released.yml']}),
   a('feedback-impact-down', '📉 Feedback impact job is down', 'users', 'problems', 'users', {wired: true}),
   a('always-on-failed', '☁️ Always on: a user\'s run failed', 'users', 'every', 'engineering', {status: 'new'}),
