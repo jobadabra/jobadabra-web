@@ -3,13 +3,13 @@
 // A service stop also sets pro_accounts.service_mail_off_at; a news stop replaces that type's yes (shared/mail-lists.js). Guard: test/unit/shared/mail/mail.test.js.
 import {cardPage} from '../shared/card-page.js';
 import {digestOf, equal, tokenFor} from '../shared/guard.js';
-import {NEWS, switchOff} from '../shared/mail-lists.js';
+import {OPT_IN, switchOff} from '../shared/mail-lists.js';
 
 export {switchOff};   // moved to shared/mail-lists.js so shared/hosted.js can use it; api callers keep this import
 
-const LISTS = ['service', ...NEWS, 'marketing'];   // 'marketing': the link in a mail sent before the three types; its box named both news types
+const LISTS = ['service', ...OPT_IN, 'marketing'];   // 'marketing': the link in a mail sent before the three types; its box named both news types
 export const page = (title, body, status = 200) => cardPage({title, body, status, tone: status >= 400 ? 'bad' : ''});   // the site's one card (shared/card-page.js)
-const MEANING = {service: 'the daily search mails (new matches, reminders)', releases: 'new-release emails', tips: 'tips and tricks', marketing: 'new-release emails and tips and tricks'};
+const MEANING = {service: 'the daily search mails (new matches, reminders)', jobdigest: 'the job digest', releases: 'new-release emails', tips: 'tips and tricks', marketing: 'new-release emails and tips and tricks'};
 
 export async function unsubscribe(request, env, now = new Date()) {
   const url = new URL(request.url), addr = url.searchParams.get('a') || '', list = url.searchParams.get('l') || '', token = url.searchParams.get('t') || '';

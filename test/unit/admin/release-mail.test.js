@@ -30,6 +30,7 @@ const kv = () => { const m = new Map(); return {m, get: async k => m.get(k) ?? n
   list: async ({prefix}) => ({keys: [...m.keys()].filter(k => k.startsWith(prefix)).map(name => ({name, metadata: meta(m.get(name))})), list_complete: true})}; };   // the Worker puts the entry and its metadata together (workers/www/index.js)
 const now = new Date('2026-10-28T10:00:00Z');
 const WEB = JSON.stringify({source: 'web'});   // a signup from the website form (shared/mail-lists.js signupKind)
+const answered = async (e, ...emails) => { for (const email of emails) e.STATS.db.prepare("INSERT INTO mail_on (addr, list, via, at) VALUES (?, 'releases', 'card', 'x')").run(await addrOf(email)); };   // the person saved the card in the app
 const confirm = (e, ...emails) => e.STATS.db.prepare(`UPDATE pro_accounts SET email_confirmed_at = 'x' WHERE email IN (${emails.map(() => '?').join(',')})`).run(...emails);
 const groups = [{kind: 'features', items: [{lead: 'Faster jobs', text: 'Open a job and see why it fits.'}, {lead: 'Calendar', text: 'Interviews show on a calendar.'}]}, {kind: 'fixes', items: [{lead: 'A fix', text: 'Something works.'}]}];
 function setup(extra = {}) {
@@ -69,6 +70,7 @@ test('the audience is every confirmed account and website waitlist address, once
   await createAccount(e, 'bounced@example.com', now, {plan: 'trial'});
   await createAccount(e, 'never@example.com', now, {plan: 'trial'});
   confirm(e, 'trial@example.com', 'stop@example.com', 'bounced@example.com');
+  await answered(e, 'trial@example.com', 'stop@example.com', 'bounced@example.com');
   await e.WAITLIST.put('signup:wait@example.com', WEB);
   await e.WAITLIST.put('signup:trial@example.com', WEB);   // on both lists: once
   assert.equal((await audience(e)).length, 4);
@@ -135,6 +137,7 @@ test('the review page shows the mail and "Send to N people" (N = who would get i
   await createAccount(e, 'stop@example.com', now, {plan: 'trial'});
   await createAccount(e, 'never@example.com', now, {plan: 'trial'});
   confirm(e, 'a@example.com', 'stop@example.com');
+  await answered(e, 'a@example.com', 'stop@example.com');
   await e.WAITLIST.put('signup:w@example.com', WEB);
   e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'releases', 'unsubscribe', 'x')").run(await addrOf('stop@example.com'));
   await draft(e, '0.8.42', now);
@@ -161,7 +164,8 @@ test('the news list shows every address with its source and what each type does 
   await createAccount(e, 'a@example.com', now, {plan: 'trial'});
   await createAccount(e, 'stop@example.com', now, {plan: 'trial'});
   await createAccount(e, 'never@example.com', now, {plan: 'trial'});
-  confirm(e, 'a@example.com', 'stop@example.com');
+  confirm(e, 'a@example.com', 'stop@example.com', 'never@example.com');
+  await answered(e, 'a@example.com', 'stop@example.com');
   await e.WAITLIST.put('signup:a@example.com', WEB);
   await e.WAITLIST.put('signup:w@example.com', WEB);
   await e.WAITLIST.put('signup:app@example.com', JSON.stringify({source: 'app'}));
@@ -170,8 +174,8 @@ test('the news list shows every address with its source and what each type does 
   const rows = await audienceRows(e), by = Object.fromEntries(rows.map(r => [r.email, r]));
   assert.deepEqual(rows.map(r => [r.email, r.source, r.releases]).sort(), [['a@example.com', 'both', true], ['app@example.com', 'waitlist', false], ['never@example.com', 'account', false], ['stop@example.com', 'account', false], ['w@example.com', 'waitlist', true]]);
   assert.deepEqual([by['a@example.com'].tips, by['w@example.com'].tips, by['w@example.com'].launch, by['app@example.com'].launch, by['never@example.com'].launch], [true, false, true, true, false], 'tips need a tick; the Pro launch also reaches every waitlist signup');
-  assert.deepEqual([by['never@example.com'].releasesWhy, by['stop@example.com'].releasesWhy, by['app@example.com'].releasesWhy], ['not confirmed', 'stopped', 'Pro mail only']);
-  assert.match(audienceCard(rows), /2 New releases, 1 Tips and tricks, 5 addresses/);
+  assert.deepEqual([by['never@example.com'].releasesWhy, by['stop@example.com'].releasesWhy, by['app@example.com'].releasesWhy], ['not asked yet', 'stopped', 'Pro mail only'], 'a confirmed address waits for the card');
+  assert.match(audienceCard(rows), /2 New releases, 1 Tips and tricks, 0 Job digest, 5 addresses/);
   const page = async headers => (await emailView(new Request('https://www.jobadabra.top/admin/growth/email', {headers}), e)).text();
   assert.match(await page({Authorization: 'Bearer owner-key'}), /w@example\.com/);
   assert.doesNotMatch(await page({}), /w@example\.com/);

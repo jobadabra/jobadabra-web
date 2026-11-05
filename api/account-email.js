@@ -45,7 +45,7 @@ export async function address(request, env, now = new Date(), fetcher = fetch, c
     // Why (5 Nov 2026, the owner's box showed ticked with no tick stored): each box shows what the site holds (shared/mail-lists.js), never "no stop on file". `marketing` is for apps already out there.
     const facts = account?.email_hash ? await newsFacts(env, account.email_hash, account.email) : null;
     const answer = list => !!facts && newsAnswer(list, facts);
-    return json(200, {ok: true, email: account?.email || null, confirmed: !!account?.email_confirmed_at, releases: answer('releases'), tips: answer('tips'), newsAnswered: !!facts?.answered, marketing: answer('tips'), serviceOff: !!account?.service_mail_off_at, cadence: account?.digest_cadence || 'daily', plan: account?.plan || null,
+    return json(200, {ok: true, email: account?.email || null, confirmed: !!account?.email_confirmed_at, releases: answer('releases'), tips: answer('tips'), jobdigest: answer('jobdigest'), newsAnswered: !!facts?.answered, marketing: answer('tips'), serviceOff: !!account?.service_mail_off_at, cadence: account?.digest_cadence || 'daily', plan: account?.plan || null,
       sending: env.MAIL === 'on' && !!env.EMAIL,
       unconfirmedStopped: !!(account?.email_hash && await env.STATS.prepare("SELECT 1 AS y FROM mail_off WHERE addr = ? AND list = 'service' AND reason = 'unconfirmed'").bind(account.email_hash).first())});   // 14 days unconfirmed (api/mail-held.js)   // the kill switch (shared/mail.js): the app says so instead of promising a mail
   }

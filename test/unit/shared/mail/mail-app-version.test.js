@@ -22,7 +22,8 @@ const jobs = {total: 1, matches: [{title: 'SRE', company: 'Acme', fit: 80, url: 
 async function mailTo(versions, template = 'digest', data = jobs) {
   const sent = [], e = {MAIL: 'on', MARKETING_MAIL: 'on', STATS: d1(), STATS_SALT: 'salt', EMAIL: {send: async m => { sent.push(m); return {messageId: 'm1'}; }}};
   const account = await createAccount(e, 'me@example.com', now, {plan: 'trial'});
-  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();   // Why (#436): the release mail goes only to a confirmed address (shared/mail-lists.js)
+  e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();   // Why (#436): the release mail goes only to a confirmed address that has answered the card (shared/mail-lists.js)
+  e.STATS.db.prepare("INSERT INTO mail_on (addr, list, via, at) SELECT email_hash, 'releases', 'card', 'x' FROM pro_accounts").run();
   versions.forEach((version, i) => {
     e.STATS.db.prepare('INSERT INTO pro_devices (install, account, added_at, last_seen) VALUES (?, ?, ?, ?)').run(`inst${i}`, account, now.toISOString(), now.toISOString());
     for (const [n, v] of [].concat(version).entries()) e.STATS.db.prepare("INSERT INTO telemetry (day, at, kind, install, version, platform, fingerprint, summary, data) VALUES ('2026-11-05', ?, 'health', ?, ?, 'darwin', 'f', 's', '{}')").run(`2026-11-0${n + 1}T00:00:00Z`, `inst${i}`, v);

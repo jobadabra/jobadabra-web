@@ -6,28 +6,31 @@ import {test} from 'node:test';
 import {MAIL_TYPES, NEWS, newsAnswer, newsFacts, newsRefusal, signupKind} from '../../../../shared/mail-lists.js';
 
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
-const facts = ({stops = [], yes = [], confirmed = false, signup = ''} = {}) => ({stops: new Set(stops), yes: new Set(yes), confirmed, signup});
+const facts = ({stops = [], yes = [], confirmed = false, signup = '', answered = false} = {}) => ({stops: new Set(stops), yes: new Set(yes), confirmed, signup, answered});
 
-test('the types are service, releases, tips, in the owner\'s order, and Admin prints the same table', () => {
-  assert.deepEqual(MAIL_TYPES.map(type => type.id), ['service', ...NEWS]);
-  assert.deepEqual(MAIL_TYPES.map(type => type.starts), ['On', 'On', 'Off']);
+test('the types are service, job digest, releases, tips, in the owner\'s order, and Admin prints the same table', () => {
+  assert.deepEqual(MAIL_TYPES.map(type => type.id), ['service', 'jobdigest', ...NEWS]);
+  assert.deepEqual(MAIL_TYPES.map(type => type.starts), ['On', 'Off', 'On', 'Off']);
 });
 
-test('who each news type reaches: every case of the agreed rules in one table', () => {
+test('who each type reaches: every case of the agreed rules in one table', () => {
   const cases = [
-    // [what we know about the address, releases refusal, tips refusal, Pro launch refusal]
-    ['unconfirmed account, no answer', facts(), 'not_confirmed', 'no_tick', 'no_tick'],
-    ['confirmed account, no answer (the default)', facts({confirmed: true}), '', 'no_tick', 'no_tick'],
-    ['confirmed account that ticked tips', facts({confirmed: true, yes: ['tips']}), '', '', ''],
-    ['unconfirmed account that ticked tips: may be a stranger\'s', facts({yes: ['tips']}), 'not_confirmed', 'not_confirmed', 'not_confirmed'],
-    ['website waitlist signup', facts({signup: 'news'}), '', 'no_tick', ''],
-    ['app waitlist signup: its dialog says "Nothing else"', facts({signup: 'pro'}), 'pro_only', 'no_tick', ''],
-    ['confirmed account that stopped releases', facts({confirmed: true, stops: ['releases'], yes: ['tips']}), 'unsubscribed', '', ''],
-    ['stopped tips beats the tick and the waitlist', facts({confirmed: true, stops: ['tips'], yes: ['tips'], signup: 'news'}), '', 'unsubscribed', 'unsubscribed'],
-    ['a bounce stops everything', facts({confirmed: true, stops: ['all'], yes: ['tips'], signup: 'news'}), 'suppressed', 'suppressed', 'suppressed'],
+    // [what we know about the address, releases refusal, tips refusal, Pro launch refusal, job digest refusal]
+    ['unconfirmed account, no answer', facts(), 'not_confirmed', 'no_tick', 'no_tick', 'no_tick'],
+    ['confirmed account that has not answered the card (the default shown ticked)', facts({confirmed: true}), 'not_asked', 'no_tick', 'no_tick', 'no_tick'],
+    ['confirmed account that saved the card with releases ticked', facts({confirmed: true, yes: ['releases'], answered: true}), '', 'no_tick', 'no_tick', 'no_tick'],
+    ['confirmed account that ticked tips: that is an answer about news', facts({confirmed: true, yes: ['tips'], answered: true}), '', '', '', 'no_tick'],
+    ['confirmed account that ticked the job digest only: not an answer about news', facts({confirmed: true, yes: ['jobdigest']}), 'not_asked', 'no_tick', 'no_tick', ''],
+    ['unconfirmed account that ticked tips and the digest: may be a stranger\'s', facts({yes: ['tips', 'jobdigest'], answered: true}), 'not_confirmed', 'not_confirmed', 'not_confirmed', 'not_confirmed'],
+    ['website waitlist signup under the new wording: an answer by itself', facts({signup: 'news'}), '', 'no_tick', '', 'no_tick'],
+    ['app waitlist signup: its dialog says "Nothing else"', facts({signup: 'pro'}), 'pro_only', 'no_tick', '', 'no_tick'],
+    ['confirmed account that stopped releases', facts({confirmed: true, stops: ['releases'], yes: ['tips'], answered: true}), 'unsubscribed', '', '', 'no_tick'],
+    ['stopped tips beats the tick and the waitlist', facts({confirmed: true, stops: ['tips'], yes: ['tips'], signup: 'news', answered: true}), '', 'unsubscribed', 'unsubscribed', 'no_tick'],
+    ['stopped job digest', facts({confirmed: true, stops: ['jobdigest'], yes: ['tips'], answered: true}), '', '', '', 'unsubscribed'],
+    ['a bounce stops everything', facts({confirmed: true, stops: ['all'], yes: ['tips', 'jobdigest'], signup: 'news', answered: true}), 'suppressed', 'suppressed', 'suppressed', 'suppressed'],
   ];
-  for (const [name, f, releases, tips, launch] of cases) {
-    assert.deepEqual([newsRefusal('releases', f), newsRefusal('tips', f), newsRefusal('tips', f, {waitlistToo: true})], [releases, tips, launch], name);
+  for (const [name, f, releases, tips, launch, digest] of cases) {
+    assert.deepEqual([newsRefusal('releases', f), newsRefusal('tips', f), newsRefusal('tips', f, {waitlistToo: true}), newsRefusal('jobdigest', f)], [releases, tips, launch, digest], name);
   }
 });
 

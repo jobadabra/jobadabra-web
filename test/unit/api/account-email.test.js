@@ -251,6 +251,11 @@ test('the app echoing its old box on every save never undoes a releases stop', a
   await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', releases: false});
   await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', marketing: true});   // the echo of the box GET showed
   assert.deepEqual(await news(e), {releases: false, tips: true, answered: true, old: true}, 'the releases stop stays');
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', tips: false});   // a stop made through a mail link
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', marketing: true, cadence: 'weekly'});   // the app's cached box, echoed on a cadence change
+  assert.deepEqual(await news(e), {releases: false, tips: false, answered: true, old: false}, 'a stale echo never lifts a stop (Gitar on #436)');
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', tips: true});
+  assert.equal((await news(e)).tips, true, 'only the explicit field lifts it');
 });
 
 test('a Pro account saves its choices at its own address; only changing the address is refused', async () => {
@@ -261,6 +266,9 @@ test('a Pro account saves its choices at its own address; only changing the addr
   assert.equal((await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com', tips: true})).status, 200);
   assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true}, 'a Pro account counts as confirmed');
   assert.equal((await call(address, e, 'install-aaaa', 'PUT', {email: 'other@example.com'})).status, 409);
+  for (const list of ['releases', 'tips']) e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES ((SELECT email_hash FROM pro_accounts), ?, 'unsubscribe', 'x')").run(list);
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com', releases: true, tips: true});
+  assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true}, 'a Pro account with no confirm timestamp can lift its own stop (Gitar on #436)');
 });
 
 test('a yes from an unconfirmed address does not erase that address\'s stop: it may be someone else\'s', async () => {

@@ -127,9 +127,10 @@ test('a sign-in code is not stopped by the service unsubscribe, and carries no u
   assert.ok(!sent[0].text.includes('unsubscribe') && !sent[0].headers);
 });
 
-test('the three types: service is on, New releases is on for a confirmed address, Tips and tricks needs a tick; each stop link stops its own type only', async () => {
+test('the four types: service is on, New releases wait for the card, Tips and tricks and the Job digest need a tick; each stop link stops its own type only', async () => {
   // Why (owner, 5 Nov 2026: "this should be on by default. Only "Tips and tricks" should be disabled by default"; "After confirming"): shared/mail-lists.js.
   TEMPLATES.news = {list: 'releases', subject: () => 'News', title: () => 'News', text: () => 'A new version', html: () => '<p>A new version</p>'};
+  TEMPLATES.jobs = {list: 'jobdigest', subject: () => 'Jobs', title: () => 'Jobs', text: () => 'Matches', html: () => '<p>Matches</p>'};
   TEMPLATES.offer = {list: 'tips', subject: () => 'Offer', title: () => 'Offer', text: () => 'Pro is here', html: () => '<p>Pro is here</p>'};
   TEMPLATES.launch = {list: 'tips', waitlistToo: true, subject: () => 'Launch', title: () => 'Launch', text: () => 'Pro is here', html: () => '<p>Pro is here</p>'};
   const entry = source => JSON.stringify({source});
@@ -146,8 +147,14 @@ test('the three types: service is on, New releases is on for a confirmed address
     assert.equal(await reason('news', 'nobody@example.com', {test: true}), 'sent', 'a test send goes to the typed address');
     assert.equal((await send({...e, MARKETING_MAIL: 'off'}, 'news', 'web@example.com', {}, {now})).reason, 'marketing_off', 'the owner\'s flag is off: nothing promotional goes out');
     e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
-    assert.equal(await reason('news', 'me@example.com'), 'sent', 'a confirmed address gets releases with no tick');
+    assert.equal(await reason('news', 'me@example.com'), 'not_asked', 'a confirmed address waits until it has answered the card (owner, 5 Nov 2026)');
     assert.equal(await reason('offer', 'me@example.com'), 'no_tick');
+    assert.equal(await reason('jobs', 'me@example.com'), 'no_tick');
+    await sayYes(e, await addrOf('me@example.com'), 'releases', 'card', now);
+    assert.equal(await reason('news', 'me@example.com'), 'sent', 'the card is saved with releases ticked');
+    await sayYes(e, await addrOf('me@example.com'), 'jobdigest', 'settings', now);
+    assert.equal(await reason('jobs', 'me@example.com'), 'sent', 'the job digest needs only its own tick, and MARKETING_MAIL does not gate it');
+    assert.equal((await send({...e, MARKETING_MAIL: 'off'}, 'jobs', 'me@example.com', {}, {now})).ok, true);
     await sayYes(e, await addrOf('me@example.com'), 'tips', 'card', now);
     assert.equal(await reason('offer', 'me@example.com'), 'sent', 'a real tick');
     assert.match(sent.at(-1).from, /^Igor from Jobadabra <no-reply@jobadabra\.top>$/);
@@ -160,7 +167,7 @@ test('the three types: service is on, New releases is on for a confirmed address
     assert.equal((await send(e, 'digest', 'me@example.com', digest, {now})).ok, true, 'the service list is untouched');
     await unsubscribe(new Request(await stopLink(e, 'me@example.com', 'marketing'), {method: 'POST'}), e, now);   // a link in a mail sent before the three types
     assert.equal(e.STATS.db.prepare("SELECT COUNT(*) n FROM mail_off WHERE list IN ('releases', 'tips')").get().n, 2);
-  } finally { delete TEMPLATES.news; delete TEMPLATES.offer; delete TEMPLATES.launch; }
+  } finally { delete TEMPLATES.news; delete TEMPLATES.offer; delete TEMPLATES.launch; delete TEMPLATES.jobs; }
 });
 
 test('a hard bounce or a complaint turns every list off, even a sign-in code; a soft bounce does not', async () => {

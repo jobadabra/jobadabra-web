@@ -3,9 +3,9 @@
 // (the page's counts stay for every admin). Reads the same rule send() uses (shared/mail-lists.js newsRefusal). Guard: test/unit/admin/release-mail.test.js.
 import {esc} from '../shared/html.js';
 import {addrOf, clean, validAddress} from '../shared/mail.js';
-import {NEWS, newsRefusal, signupKind} from '../shared/mail-lists.js';
+import {NEWS, newsAnswered, newsRefusal, signupKind} from '../shared/mail-lists.js';
 
-const REASONS = {no_tick: 'not ticked', not_confirmed: 'not confirmed', pro_only: 'Pro mail only', unsubscribed: 'stopped', suppressed: 'bounced or complained', bad_address: 'not an address'};
+const REASONS = {no_tick: 'not ticked', not_confirmed: 'not confirmed', pro_only: 'Pro mail only', not_asked: 'not asked yet', unsubscribed: 'stopped', suppressed: 'bounced or complained', bad_address: 'not an address'};
 const NOBODY = new Set();
 
 // addr -> set of lists, from rows of {addr, list}.
@@ -23,21 +23,22 @@ export async function audienceRows(env) {
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
   // Two queries for every address, then each is judged in memory by send()'s own rule (Gitar on #218: a check per address made 2N+1 queries per page load).
-  const stops = byAddress((await env.STATS.prepare("SELECT addr, list FROM mail_off WHERE list IN ('all', 'releases', 'tips', 'marketing')").all()).results || []);
+  const stops = byAddress((await env.STATS.prepare("SELECT addr, list FROM mail_off WHERE list IN ('all', 'releases', 'tips', 'jobdigest', 'marketing')").all()).results || []);
   const yes = byAddress((await env.STATS.prepare('SELECT addr, list FROM mail_on').all().catch(() => null))?.results || []);
   const rows = [];
   for (const row of by.values()) {
-    const addr = await addrOf(row.email), facts = {stops: stops.get(addr) || NOBODY, yes: yes.get(addr) || NOBODY, confirmed: row.confirmed, signup: row.signup};
-    const bad = validAddress(row.email) ? '' : 'bad_address', releases = bad || newsRefusal('releases', facts), tips = bad || newsRefusal('tips', facts);
-    rows.push({...row, releases: !releases, tips: !tips, launch: !bad && !newsRefusal('tips', facts, {waitlistToo: true}), releasesWhy: REASONS[releases] || '', tipsWhy: REASONS[tips] || ''});
+    const addr = await addrOf(row.email), mine = {stops: stops.get(addr) || NOBODY, yes: yes.get(addr) || NOBODY};
+    const facts = {...mine, confirmed: row.confirmed, signup: row.signup, answered: newsAnswered(mine.yes, mine.stops)};
+    const bad = validAddress(row.email) ? '' : 'bad_address', releases = bad || newsRefusal('releases', facts), tips = bad || newsRefusal('tips', facts), digest = bad || newsRefusal('jobdigest', facts);
+    rows.push({...row, releases: !releases, tips: !tips, jobdigest: !digest, launch: !bad && !newsRefusal('tips', facts, {waitlistToo: true}), releasesWhy: REASONS[releases] || '', tipsWhy: REASONS[tips] || '', jobdigestWhy: REASONS[digest] || ''});
   }
   return rows.sort((a, b) => b.since.localeCompare(a.since));
 }
 
 export function audienceCard(rows) {
   const count = list => rows.filter(row => row[list]).length, pill = (on, why) => `<span class="pill ${on ? 'on' : 'off'}">${on ? 'gets it' : esc(why)}</span>`;
-  const body = rows.map(row => `<tr><td>${esc(row.email)}</td><td>${row.source === 'both' ? 'account + waitlist' : esc(row.source)}${row.plan ? ` · ${esc(row.plan)}` : ''}</td><td class="num">${esc(row.since.slice(0, 10))}</td><td>${pill(row.releases, row.releasesWhy)}</td><td>${pill(row.tips, row.tipsWhy)}</td></tr>`).join('');
-  return `<section class="card" style="margin-bottom:16px"><h2>Who gets news <span class="muted">· ${count('releases')} New releases, ${count('tips')} Tips and tricks, ${rows.length} addresses</span></h2>`
-    + (rows.length ? `<div style="overflow-x:auto"><table><tr><th>Address</th><th>From</th><th>Since</th><th>New releases</th><th>Tips and tricks</th></tr>${body}</table></div>` : '<p class="muted">Nobody yet.</p>')
+  const body = rows.map(row => `<tr><td>${esc(row.email)}</td><td>${row.source === 'both' ? 'account + waitlist' : esc(row.source)}${row.plan ? ` · ${esc(row.plan)}` : ''}</td><td class="num">${esc(row.since.slice(0, 10))}</td><td>${pill(row.releases, row.releasesWhy)}</td><td>${pill(row.tips, row.tipsWhy)}</td><td>${pill(row.jobdigest, row.jobdigestWhy)}</td></tr>`).join('');
+  return `<section class="card" style="margin-bottom:16px"><h2>Who gets news <span class="muted">· ${count('releases')} New releases, ${count('tips')} Tips and tricks, ${count('jobdigest')} Job digest, ${rows.length} addresses</span></h2>`
+    + (rows.length ? `<div style="overflow-x:auto"><table><tr><th>Address</th><th>From</th><th>Since</th><th>New releases</th><th>Tips and tricks</th><th>Job digest</th></tr>${body}</table></div>` : '<p class="muted">Nobody yet.</p>')
     + '<p class="muted">Judged by the rules above, as if MARKETING_MAIL were on. Visible to the owner only.</p></section>';
 }

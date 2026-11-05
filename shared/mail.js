@@ -4,7 +4,7 @@
 import {appVersionOf} from './app-needs.js';
 import {digestOf, tokenFor} from './guard.js';
 import {frameHtml, frameText, REPLY_TO, SITE} from './mail-frame.js';
-import {NEWS, newsFacts, newsRefusal} from './mail-lists.js';
+import {NEWS, OPT_IN, newsFacts, newsRefusal} from './mail-lists.js';
 import {TEMPLATES} from './mail-templates.js';
 
 // Per address, per rolling 24 h, every template together: a safety net so a bug of ours (a loop, a schedule firing too often) cannot flood one person into
@@ -15,7 +15,7 @@ const GLOBAL_DAY_MAX = 3000;                // a safety net over every address; 
 const DAY = 24 * 60 * 60 * 1000, CLAIM_MS = 2 * 60 * 1000;
 const ADDRESS = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/;
 const IGOR = 'Igor from Jobadabra <no-reply@jobadabra.top>';
-const FROM = {service: 'Jobadabra <no-reply@jobadabra.top>', releases: IGOR, tips: IGOR};   // owner, 26 Oct 2026: "The sender email address should be no-reply@jobadabra.top"; 28 Oct 2026: product news come from "Igor from Jobadabra"
+const FROM = {service: 'Jobadabra <no-reply@jobadabra.top>', jobdigest: 'Jobadabra <no-reply@jobadabra.top>', releases: IGOR, tips: IGOR};   // owner, 26 Oct 2026: "The sender email address should be no-reply@jobadabra.top"; 28 Oct 2026: product news come from "Igor from Jobadabra"
 
 export const clean = to => String(to || '').trim().toLowerCase();
 export const validAddress = to => ADDRESS.test(clean(to)) && clean(to).length <= 254;
@@ -48,7 +48,7 @@ export async function mailAllowed(env, to, list = 'service', {essential = false,
   const off = await env.STATS.prepare("SELECT list, reason FROM mail_off WHERE addr = ? AND list IN ('all', ?, 'marketing')").bind(addr, list).all();
   for (const row of off.results || []) if (row.list === 'all' || (!essential && (row.list !== 'marketing' || news))) return {ok: false, reason: row.list === 'all' ? 'suppressed' : 'unsubscribed'};
   const account = await env.STATS.prepare('SELECT service_mail_off_at FROM pro_accounts WHERE email_hash = ?').bind(addr).first().catch(() => null);
-  if (news && !test) {   // a test send goes to the owner's typed address or the test inbox
+  if (OPT_IN.includes(list) && !test) {   // a test send goes to the owner's typed address or the test inbox
     const reason = newsRefusal(list, await newsFacts(env, addr, clean(to)), {waitlistToo});
     if (reason) return {ok: false, reason};
   }
@@ -60,7 +60,7 @@ async function record(env, now, addr, list, template, status, id = null) {
   await env.STATS?.prepare('INSERT INTO mail_log (at, addr, list, template, status, message_id) VALUES (?, ?, ?, ?, ?, ?)').bind(now.toISOString(), addr, list, template, status, id).run().catch(() => {});
 }
 
-const WHY = {service: 'You set up Jobadabra with this address.', releases: 'You get new-release emails at this address.', tips: 'You ticked Tips and tricks or joined the Pro list.'};
+const WHY = {service: 'You set up Jobadabra with this address.', jobdigest: 'You ticked the job digest.', releases: 'You get new-release emails at this address.', tips: 'You ticked Tips and tricks or joined the Pro list.'};
 
 // The subject, text, html and headers of a mail: the template's content inside the frame. `links` = {stop, settings} (none for an essential mail). Also what /admin/growth/email shows (admin/email-preview.js).
 // `data.appVersion` (set by send(): the app version the address's installs last reported, or absent) lets a template swap an "Open in Jobadabra" button for "Update Jobadabra" (shared/app-needs.js).
