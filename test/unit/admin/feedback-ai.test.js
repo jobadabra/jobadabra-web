@@ -10,6 +10,7 @@ const kit = await signer(), deps = {jwks: kit.jwks};
 const get = (ref, token) => brief(new Request(`https://x/api/feedback/brief?ref=${ref}`, {headers: token ? {Authorization: `Bearer ${token}`} : {}}), env_, NOW, deps);
 const post = (body, token, e = env_) => status(new Request('https://x/api/feedback/ai-status', {method: 'POST', headers: token ? {Authorization: `Bearer ${token}`} : {}, body: JSON.stringify(body)}), e, NOW, deps);
 let env_;
+const closeFile = branch => `${REPO}/.github/workflows/feedback-ai-closed.yml@refs/heads/${branch}`;
 const running = (fields = {}) => { env_ = env(); return add(env_, {state: 'ai_running', ...fields}); };
 
 test('the brief is served to the run GitHub started, binds it to the card, and logs who took it', async () => {
@@ -64,14 +65,14 @@ test('a run reports its PR, then the PR merges: the card goes ai_running -> ai_p
   const opened = await post({ref, status: 'pr', pr: prUrl(3100)}, await kit.token());
   assert.deepEqual([opened.status, (await opened.json()).state], [200, 'ai_pr']);
   assert.equal(row(env_, ref).pr_url, prUrl(3100));
-  const merged = await post({ref, status: 'merged', pr: prUrl(3100)}, await kit.token({event_name: 'pull_request_target', run_id: '9100'}));
+  const merged = await post({ref, status: 'merged', pr: prUrl(3100)}, await kit.token({event_name: 'pull_request_target', workflow_ref: closeFile('main'), run_id: '9100'}));
   assert.deepEqual([merged.status, (await merged.json()).state], [200, 'fixed']);
   assert.deepEqual([row(env_, ref).told, row(env_, ref).tell_mode], ['pending', 'release']);
   assert.deepEqual(log(env_, ref).map(l => [l.who, l.action]), [['ai (run 9001)', 'ai_pr'], ['ai (PR 3100)', 'ai_merged']]);
 });
 
 test('merged and closed only for the PR the card holds, and only from a pull_request_target run; a workflow_dispatch run cannot claim a merge', async () => {
-  const e = env(), ref = add(e, {state: 'ai_pr', pr_url: prUrl(3100)}), merge = await kit.token({event_name: 'pull_request_target'});
+  const e = env(), ref = add(e, {state: 'ai_pr', pr_url: prUrl(3100)}), merge = await kit.token({event_name: 'pull_request_target', workflow_ref: closeFile('main')});
   env_ = e;
   assert.equal((await post({ref, status: 'merged', pr: prUrl(3101)}, merge)).status, 409, 'another PR');
   assert.equal((await post({ref, status: 'merged'}, merge)).status, 409, 'no PR named');
@@ -99,13 +100,13 @@ test('only the run that owns the card, inside its hour, can end it; a PR report 
   assert.equal((await post({ref: '0000000000000fff', status: 'none'}, await kit.token())).status, 404);
 });
 
-test('merged and closed are trusted from feedback-ai-closed.yml as merged on main, and only those two steps; a branch copy or a dispatch step from it is refused', async () => {
+test('merged and closed are trusted only from feedback-ai-closed.yml as merged on main, and only those two steps; feedback-ai.yml, a branch copy or a dispatch step from it is refused', async () => {
   // Owner, 5 Nov 2026: "Yes, rename + fold": the close notice moves to its own file so a normal PR's close draws one row, not seven.
-  const closeFile = branch => `${REPO}/.github/workflows/feedback-ai-closed.yml@refs/heads/${branch}`;
   const fromMain = await kit.token({event_name: 'pull_request_target', workflow_ref: closeFile('main')});
   const e = env(), ref = add(e, {state: 'ai_pr', pr_url: prUrl(3100)});
   env_ = e;
   assert.equal((await post({ref, status: 'merged', pr: prUrl(3100)}, await kit.token({event_name: 'pull_request_target', workflow_ref: closeFile('evil')}))).status, 401, 'a branch copy of the close file');
+  assert.equal((await post({ref, status: 'merged', pr: prUrl(3100)}, await kit.token({event_name: 'pull_request_target'}))).status, 401, 'feedback-ai.yml on main no longer closes a card');
   assert.equal(row(e, ref).state, 'ai_pr');
   assert.equal((await post({ref, status: 'merged', pr: prUrl(3100)}, fromMain)).status, 200, 'positive control: the close file on main');
   const run = running({ai_run: '9001'});

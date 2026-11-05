@@ -12,11 +12,9 @@ import {githubJwks, verifyRunToken} from '../shared/github-oidc.js';
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json', 'Cache-Control': 'no-store'}});
 const jwks = githubJwks();   // GitHub's signing keys, cached an hour per isolate
-// Why (5 Nov 2026, owner: "Yes, rename + fold"): merged and closed come from feedback-ai-closed.yml, so a normal PR's close draws one row, not seven.
-// TODO(AI): drop WORKFLOW from merged and closed once jobadabra's close job has moved to CLOSE_WORKFLOW (plan 2026-11-05-check-names, 3/4).
-const CLOSES = [CLOSE_WORKFLOW, WORKFLOW];
+// Why (5 Nov 2026, owner: "Yes, rename + fold"): merged and closed come only from feedback-ai-closed.yml since jobadabra's close job left feedback-ai.yml (plan 2026-11-05-check-names 3/4), so a normal PR's close draws one row, not seven.
 const STEPS = {pr: ['ai_pr', 'workflow_dispatch', [WORKFLOW]], none: ['ai_none', 'workflow_dispatch', [WORKFLOW]], failed: ['ai_failed', 'workflow_dispatch', [WORKFLOW]],
-  merged: ['ai_merged', 'pull_request_target', CLOSES], closed: ['ai_closed', 'pull_request_target', CLOSES]};
+  merged: ['ai_merged', 'pull_request_target', [CLOSE_WORKFLOW]], closed: ['ai_closed', 'pull_request_target', [CLOSE_WORKFLOW]]};
 
 /** The run's verified claims, or null (no token, wrong token, wrong repo/workflow/event). `events`: the event names this step accepts; `files`: the workflow files it trusts, each only as merged on main. Never says which check failed. */
 async function claimsOf(request, env, events, deps, files = [WORKFLOW]) {
