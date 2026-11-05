@@ -1,6 +1,7 @@
 // Draws /admin/agents/agent-coding from the stored days (admin/agent-coding.js): a verdict band, then one card per stat (stopped pushes, what fixed a red, CI/tooling share, fix circles, CI minutes).
 // Pure: rows [{kind, day, card: JSON string, updated_at}] + a clock in, HTML out. Weeks start on Monday (UTC), newest first. No AI; every colour pairs with a word or icon.
 import {esc} from '../shared/html.js';
+import {columns, figure, VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 
 const WEEKS = 8;
 // Why (1 Nov 2026, the owner's yes on the layer-0 counter): the four hooks ~/.claude/hooks/count-blocks.sh counts; a block is a count per fixed label, never text.
@@ -81,9 +82,13 @@ ${note('A fix PR is a merged PR with "fix" in its title or branch; its area is t
 function minutesCard(weeks) {
   const data = weeks.filter(week => week.ci.length);
   if (!data.length) return card('minutes', 'CI minutes per push', 'wall clock, not billed', empty('CI'));
-  const body = weeks.map(week => { const wall = week.ci.flatMap(day => day.wall).sort((a, b) => a - b), queue = week.ci.flatMap(day => day.queue).sort((a, b) => a - b), total = sum(wall, v => v);
+  const stats = week => { const wall = week.ci.flatMap(day => day.wall).sort((a, b) => a - b), queue = week.ci.flatMap(day => day.queue).sort((a, b) => a - b), total = sum(wall, v => v); return {wall, queue, total}; };
+  const chart = columns(weeks.slice().reverse().map(week => { const {wall, queue, total} = stats(week);   // oldest first; a week with no push is a hollow column, never a zero
+    return {day: week.start, values: wall.length ? [round1(pick(wall, .5)), round1(pick(wall, .9))] : [null, null], tip: `week of ${weekWords(week.start)} · ${wall.length ? `${wall.length} pushes · median ${round1(pick(wall, .5))} min · slowest 1 in 10 ${round1(pick(wall, .9))} min · waiting for a runner ${round1(pick(queue, .5))} min · ${pct(sum(week.ci, day => day.cancelledMin), total)}% in cancelled runs` : 'no data'}`}; }),
+    [{name: 'Median', tone: 's1'}, {name: 'Slowest 1 in 10', tone: 's2'}], {labelEvery: 1});
+  const body = weeks.map(week => { const {wall, queue, total} = stats(week);
     return `<tr><td>${esc(weekWords(week.start))}</td>${wall.length ? `<td class="num">${wall.length}</td><td class="num">${round1(pick(wall, .5))} min</td><td class="num">${round1(pick(wall, .9))} min</td><td class="num">${round1(pick(queue, .5))} min</td><td class="num">${pct(sum(week.ci, day => day.cancelledMin), total)}%</td>` : '<td colspan="5" class="muted">no data</td>'}</tr>`; }).join('');
-  return card('minutes', 'CI minutes per push', 'wall clock from start to end, not billed minutes', `<table><thead><tr><th>Week</th><th class="num">Pushes</th><th class="num">Median</th><th class="num">Slowest 1 in 10</th><th class="num">Waiting for a runner</th><th class="num">In cancelled runs</th></tr></thead><tbody>${body}</tbody></table>
+  return card('minutes', 'CI minutes per push', 'wall clock from start to end, not billed minutes', `${figure({chart, table: `<table><thead><tr><th>Week</th><th class="num">Pushes</th><th class="num">Median</th><th class="num">Slowest 1 in 10</th><th class="num">Waiting for a runner</th><th class="num">In cancelled runs</th></tr></thead><tbody>${body}</tbody></table>`})}
 ${note('Per push = all pull-request runs of one commit added together. Waiting for a runner is the longest time from a run being created to starting, per push (the median of those is shown).')}`);
 }
 
@@ -107,8 +112,8 @@ details{margin-top:12px}summary{cursor:pointer;color:#8d949c;font-size:13px}.ac-
 export function page(rows, now = new Date()) {
   const weeks = weeksOf(rows, now), at = rows.map(item => item.updated_at).filter(Boolean).sort().at(-1);
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Agent coding · Agent Coding · Admin</title>
-<link rel="icon" href="/favicon-32.png"><style>${STYLE}${TABS_STYLE}</style></head><body><main>
+<link rel="icon" href="/favicon-32.png"><style>${STYLE}${TABS_STYLE}${VIZ_STYLE}</style></head><body><main>
 <header><h1>🧭 Agent coding</h1><span class="muted ac-top">weekly · last ${WEEKS} weeks${at ? ` · data as of ${esc(at.slice(0, 16).replace('T', ' '))} UTC` : ''} · <a href="/admin/testing/pr-checks">per-check scorecard →</a></span></header>
 ${tabs('weekly')}${verdict(weeks)}
-${gateCard(weeks)}${fixedCard(weeks)}${shareCard(weeks)}${circlesCard(weeks)}${minutesCard(weeks)}</main></body></html>`;
+${gateCard(weeks)}${fixedCard(weeks)}${shareCard(weeks)}${circlesCard(weeks)}${minutesCard(weeks)}</main>${VIZ_TOOLTIP}</body></html>`;
 }
