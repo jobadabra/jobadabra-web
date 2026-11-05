@@ -6,10 +6,11 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {lastDays, nightlySummary} from '../../../../admin/nightly-summary.js';
 import {judge, median, pooled, verdictOf, weeks} from '../../../../admin/product-quality.js';
-import {aiQuality, areasOf, bugs, formFilling, reliability, speed} from '../../../../admin/product-quality-areas.js';
+import {aiQuality, areasOf, bugs, formFilling, qualityModel, reliability, speed} from '../../../../admin/product-quality-areas.js';
 import {loadInputs, loadQuality} from '../../../../admin/product-quality-data.js';
 import {chartOf} from '../../../../admin/product-quality-charts.js';
 import {areaCard, board} from '../../../../admin/product-quality-html.js';
+import {model, page} from '../../../../admin/report-only.js';
 import worker from '../../../../workers/www/index.js';
 
 const now = new Date('2026-11-05T10:00:00Z');
@@ -195,7 +196,7 @@ test('the page never goes down with the board: a failing board is null, the page
   const response = await worker.fetch(new Request('https://www.jobpilotto.top/admin/testing/report-only', {headers: {Cookie: 'jp_stats=k3y'}}), env, {});
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Did the nightly jobs run/);
+  assert.match(html, /Plumbing: did the nightly jobs run/);
   assert.match(html, /0 of 5 areas on target/);
   assert.ok(errors.mock.calls.some(call => /fill cards unreadable: boom/.test(String(call.arguments[0]))), 'the broken source is named in the log');
 });
@@ -224,4 +225,16 @@ test('charts: a line per day for a rate (a day with no data is a gap and says so
   const empty = formFilling({days, fill: {rows: [], sample: null}});
   assert.equal(chartOf({...bar && aiQuality({nightly: {jobs: [{id: 'quality-ai', value: '96%', sub: '', series: days.map(day => ({day, value: 0.9})), bar: {value: 0.8}}]}}), series: days.map(day => ({day, value: null}))}), '', 'every day empty: no frame around a table of no data');
   assert.equal(empty.series.length, 0);
+});
+
+test('plumbing toggle: the 13 nightly cards sit in a closed details under the board; a band chip link opens it; no board, no toggle', () => {
+  const built = model(nightlySummary({snapshot: []}, now), [], now);
+  const withBoard = page(built, qualityModel({}));
+  assert.match(withBoard, /<details class="plumb" id="plumbing"><summary class="qhead">⚙️ Plumbing: did the nightly jobs run/, 'closed by default (no open attribute)');
+  assert.ok(withBoard.indexOf('class="qgrid"') < withBoard.indexOf('id="plumbing"'), 'the board comes first');
+  assert.ok(withBoard.indexOf('id="plumbing"') < withBoard.indexOf('class="group"'), 'every nightly group is inside the toggle');
+  assert.ok(withBoard.indexOf('</details>') > withBoard.lastIndexOf('class="group"'), 'and the toggle closes after the last one');
+  assert.match(withBoard, /closest\('details'\)/, 'a link to a card inside the toggle opens it first');
+  const without = page(built, null);
+  assert.doesNotMatch(without, /plumbing|<details class="plumb"/, 'a failed board leaves the nightly cards in the open, as before');
 });
