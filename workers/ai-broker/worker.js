@@ -10,7 +10,7 @@ import {refuseReply} from './lib/guard.mjs';
 import {slots} from './lib/queue.mjs';
 import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
 import {modelOf, validEffort, weightOf, EFFORTS} from './lib/tiers.mjs';
-import {exhausted, fallbackToday, newNote, apiPrecheck, freeAiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
+import {exhausted, overloaded, codexMessage, tokenShaped, fallbackToday, newNote, apiPrecheck, freeAiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
 import {chainOf, configured, recordOutcome, engineHealth, CHOICES} from './lib/engines.mjs';
 import {CLAUDE_MODELS} from './lib/tiers.mjs';
 import {demotedNow, recordPerf} from './lib/adapt.mjs';
@@ -133,8 +133,8 @@ export class CodexBroker extends Container {
     });
     if (!verdict.ok && !verdict.ranOut) return json(429, {why: verdict.why});   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
     const note = newNote(), ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note}, day = new Date(Date.now()).toISOString().slice(0, 10), skipped = [];
-    let busyPassed = false, held = null;   // busyPassed: Claude's slots were full for too long and the call went on; held: the last refusal of an engine it went on to
-    const skip = async (engine, why, counted = true, detail = '') => { skipped.push({engine, why, ...(detail ? {detail} : {})}); if (why === 'busy') busyPassed = true; if (why === 'failed') await recordPerf(this.ctx.storage, env, engine, false); return counted ? recordOutcome(this.ctx.storage, day, engine, {'ran-out': 'ranOut', busy: 'busy'}[why] ?? 'failed') : null; };
+    let busyPassed = false, held = null, codexRefusal = null;   // busyPassed: Claude's slots were full for too long and the call went on; held: the last refusal of an engine it went on to; codexRefusal: Codex's own 502 when it passed on for capacity
+    const skip = async (engine, why, counted = true, detail = '') => { skipped.push({engine, why, ...(detail ? {detail} : {})}); if (why === 'busy') busyPassed = true; if (why === 'failed' || why === 'overloaded') await recordPerf(this.ctx.storage, env, engine, false); return counted ? recordOutcome(this.ctx.storage, day, engine, {'ran-out': 'ranOut', busy: 'busy'}[why] ?? 'failed') : null; };
     const send = async (engine, reply, started) => {
       await recordOutcome(this.ctx.storage, day, engine, reply.ok ? 'ok' : 'failed', Date.now() - started);
       if (reply.ok || reply.status === 502) await recordPerf(this.ctx.storage, env, engine, reply.ok);   // a real answer or a broken run; a refusal, a lost login or a 4xx says nothing about the engine
@@ -146,7 +146,7 @@ export class CodexBroker extends Container {
     for (const engine of chain) {
       const started = Date.now();
       let reply = null;
-      if (engine === 'codex') { reply = await this.codexStep(lane, body, model, verdict, later.length > 0, chain[0] === 'codex'); if (!reply) await skip(engine, 'ran-out'); }
+      if (engine === 'codex') { reply = await this.codexStep(lane, body, model, verdict, later.length > 0, chain[0] === 'codex'); if (!reply || reply.passOn) { codexRefusal = reply?.refusal ?? null; await skip(engine, reply?.passOn ?? 'ran-out', true, reply?.detail); reply = null; } }
       else if (engine === 'claude') reply = await this.claudeStep(lane, body, skip, waitMs);
       else if (engine === 'free-ai') {
         reply = (!body.search && apiPrecheck(body)) || await freeAiStep(ctx);
@@ -167,10 +167,12 @@ export class CodexBroker extends Container {
       if (chain[0] === 'free-ai') return apiFinish(env, note);   // Why (Gitar on #296): their own reasons stay: fallback:search-unsupported, fallback:unavailable, the 429 day cap
       return json(503, {why: `only-${chain[0]}: ${skipped.find(entry => entry.engine === chain[0])?.why ?? (configured(chain[0], env) ? 'unavailable' : 'not-configured')}`, engine: chain[0], tried: skipped});   // strict call: nobody else answers, and the reason is named
     }
+    // Why (5 Nov 2026, review of the capacity pass-on): Codex at capacity and nobody after it answering is Codex's failure, never Free AI's "budget" (which CI reads as a grey skip) or "search-unsupported".
+    if (codexRefusal) return codexRefusal;
     return apiFinish(env, note);
   }
 
-  // Codex's step: a Response when Codex answered or refused for good, null when it ran out and a later engine is configured.
+  // Codex's step: a Response when Codex answered or refused for good, null when it ran out and a later engine is configured, {passOn: 'overloaded', detail} when its model was at capacity and a later engine is configured.
   async codexStep(lane, body, model, verdict, hasLater, loginChecked) {
     if (!loginChecked) { const refusal = await this.loginRefusal(); if (refusal) return refusal; }
     if (verdict.ranOut) return hasLater ? null : json(429, {why: verdict.why});
@@ -182,7 +184,8 @@ export class CodexBroker extends Container {
       try { answer = JSON.parse(text); } catch { return json(502, {why: `container: ${text.slice(0, 300)}`}); }   // the platform's own error text (not our server's JSON): say it, never crash (a 1101 hid it, 28 Oct 2026)
       if (answer.authFile) await this.ctx.storage.put('login', answer.authFile);   // write-through BEFORE the reply goes out: a rotated token is never only in the container
       if (!reply.ok && exhausted(answer.error) && hasLater) return null;
-      if (!reply.ok) { if (answer.error === 'login-lost') await this.ctx.storage.put('lost', true); return json(reply.status === 500 && answer.error === 'login-lost' ? 503 : 502, {why: refuseReply(answer.error) ? 'codex-failed (detail withheld: token-shaped)' : answer.error}); }
+      if (!reply.ok && overloaded(answer.error) && hasLater) return {passOn: 'overloaded', detail: codexMessage(answer.error).slice(0, 200), refusal: json(502, {why: answer.error})};   // counted as a failure (and for JOB-202's demotion), but a later engine answers
+      if (!reply.ok) { if (answer.error === 'login-lost') await this.ctx.storage.put('lost', true); return json(reply.status === 500 && answer.error === 'login-lost' ? 503 : 502, {why: tokenShaped(answer.error) ? 'codex-failed (detail withheld: token-shaped)' : answer.error}); }
       if (answer.limits) { this.limits = answer.limits; await this.ctx.storage.put('limits', answer.limits); }
       const used = (answer.tokens.input + answer.tokens.output) * weightOf(body.effort);   // a higher effort counts for more of the week (lib/tiers.mjs EFFORT_WEIGHT)
       // Completions also transact: a token write must never overwrite a newer daily reservation.
