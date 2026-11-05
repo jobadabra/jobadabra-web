@@ -25,6 +25,7 @@ const STAND_IN = `const fs = require('node:fs'), cp = require('node:child_proces
       return;
     }
     fs.writeFileSync('out.txt', 'turn ' + turn);
+    if (turn === 3) for (let i = 0; i < 60; i++) console.log(JSON.stringify({type: 'item.completed'}));
     console.log(JSON.stringify({type: 'thread.started', thread_id: 't1'}));
     console.log(JSON.stringify({type: 'turn.completed', usage: {input_tokens: 1000 * turn, cached_input_tokens: 0, output_tokens: turn}}));
   });`;
@@ -55,13 +56,18 @@ for (const stray of ['same-group', 'own-group']) {
     const session = (expect, extra = {}) => ({key: 'jobadabra/jobadabra#1.1#agent-g1', expect, delta: 'next', ...extra});
     const first = await call({prompt: 'full prompt', model: 'm', session: session('none')});
     assert.equal(first.status, 200); assert.equal(first.body.session.mode, 'opened');
-    for (let turn = 2; turn <= 4; turn++) { const next = await call({prompt: 'full prompt', model: 'm', session: session('warm')}); assert.equal(next.status, 200, `turn ${turn}`); assert.equal(next.body.session.mode, 'resumed'); }
+    assert.match(first.body.trace, /^0 spawn\|\d+ thread\.started\|\d+ turn\.completed\|\d+ exit:0$/, 'a healthy call carries its clock home: spawn, each codex event, exit');
+    for (let turn = 2; turn <= 4; turn++) {
+      const next = await call({prompt: 'full prompt', model: 'm', session: session('warm')}); assert.equal(next.status, 200, `turn ${turn}`); assert.equal(next.body.session.mode, 'resumed');
+      if (turn === 3) assert.match(next.body.trace, /\d+ exit:0$/, 'a turn with 60 events still ends with its exit stamp (the trace keeps 39 events + the end)');
+    }
     const started = Date.now();
     const stalled = await Promise.race([call({prompt: 'full prompt', model: 'm', session: session('warm')}), new Promise(resolve => setTimeout(() => resolve('no answer'), 3500))]);
     assert.notEqual(stalled, 'no answer', 'the guard answered within 3.5 s (guard 1.5 s + at most 0.5 s grace); the old run() waited for the helper, about 5 s');
     assert.equal(stalled.status, 500);
     assert.match(stalled.body.error, /^codex-failed:null \[killed after 1\.5 s: codex did not finish\]/, 'the failure says it was the guard');
     assert.match(stalled.body.error, /\[codex events: 2, last: thread\.started > turn\.started\]/, 'and what codex had printed before it stalled');
+    assert.match(stalled.body.trace, /^0 spawn\|\d+ thread\.started\|\d+ turn\.started\|\d+ guard$/, 'the stalled call says where it stopped, with times');
     assert.ok(Date.now() - started < 3000, `came back after ${Date.now() - started} ms`);
     const after = await call({prompt: 'full prompt', model: 'm', session: session('none', {restart: 'gap'})});
     assert.equal(after.status, 200, 'the turn after a stalled one is a new conversation and answers');
