@@ -32,6 +32,7 @@ const SAMPLES = {
   'trial-left': {left: 4},
   'trial-ending': {days: 2, pricingUrl: 'https://www.jobadabra.top/pricing'},
   'always-on-paused': {reason: 'trial-over', pricingUrl: 'https://www.jobadabra.top/pricing', pro: false},
+  'always-on-test': {},
   'pro-launch': {price: '29', launch: '19', pricingUrl: 'https://www.jobadabra.top/pricing'},
   'release': {version: '0.8.42', month: 'October 2026', headline: 'One main change', sections: [{title: 'A change', text: 'See *Jobs*.'}], updateUrl: 'https://www.jobadabra.top/download'},
 };
