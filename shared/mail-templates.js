@@ -1,5 +1,5 @@
 // The mails we send, by name. shared/mail.js puts each through the frame (shared/mail-frame.js: logo, title, button, footer with the unsubscribe and settings links) and adds the headers. A template says its list
-// ('service' or 'marketing'), whether it is `essential` (a sign-in code: not stopped by an unsubscribe), and builds subject, title, content (text and html) and an optional one `button` from plain data. Guard: test/unit/shared/mail.test.js.
+// ('service' or 'marketing'), whether it is `essential` (a sign-in code: not stopped by an unsubscribe), and builds subject, title, content (text and html) and an optional one `button` from plain data. Guard: test/unit/shared/mail/mail.test.js.
 import {purchaseCreditWords} from './credit-purchase-words.js';
 import {codeBox, esc, jobRows, jobText, link} from './mail-frame.js';
 import {LIGHT as C} from './mail-palette.js';

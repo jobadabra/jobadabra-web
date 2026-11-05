@@ -1,7 +1,7 @@
 // /admin/form-filling/lab's page tabs (owner, 14 Oct 2026: "about 5-6-7 tables/sections on this page, too much to scroll, put them under tabs"): one tab bar under the tiles,
 // one panel per tab, every section drawn into a panel. The bar reuses the Fixed tab's .tabs look and its #hash links (applying-fixed.js): #needs-fix, #fixed and #by-cause
 // open the To fix tab, whose own tabs then pick the list ("tabs in tabs", accepted by the owner for now). Owns PAGETABS_CSS and PAGETABS_SCRIPT, the client code that sits
-// right after the tiles inside the page's fetch callback (needs el, app, d). Plain quotes only: it sits in a template literal. Guard: test/unit/admin/applying-pagetabs.test.js.
+// right after the tiles inside the page's fetch callback (needs el, app, d). Plain quotes only: it sits in a template literal. Guard: test/unit/admin/applying/applying-pagetabs.test.js.
 
 // Six tabs, each one question (owner, 15 Oct 2026): To fix (what is broken), Fixed (did the fixes hold), Sites (where each site stands), Outcomes (how applications end), Replays, Coverage.
 // The page opens on To fix, whose own sub-tabs pick Needs a fix / By cause / Why fields were left empty. Old links keep working: HASH_TAB maps them.

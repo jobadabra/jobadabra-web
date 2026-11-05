@@ -1,7 +1,7 @@
 // What the Benchmark Job Search page counts (owner, 20 Oct 2026): one summary row per tool on a persona (a role in a European city), from the bake-off's search-bench rounds -> the scores per tool,
 // the grid per persona, the split by kind (tech / non-tech) and the job systems whose jobs we miss. Pure functions: tool, persona and job-system names arrive as data, none is written here.
 // found = jobs the tool showed; place = those the blind judge put in the persona's city, nearby or remote for their country; role = judged the persona's kind of job; relevant = both.
-// Guard: test/unit/admin/benchmark-search.test.js.
+// Guard: test/unit/admin/benchmark/benchmark-search.test.js.
 export const KINDS = ['tech', 'non-tech'];
 export const share = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : null);
 const sum = (rows, key) => rows.reduce((total, row) => total + (Number(row[key]) || 0), 0);

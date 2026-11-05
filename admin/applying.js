@@ -1,7 +1,7 @@
 // /admin/form-filling/lab: are applications reliable? Layers 2 and 3 of the applying reliability spec (docs/superpowers/specs/2026-10-10-applying-reliability-layers.md):
 // the recorded pages (each case, passed or failed, by run) and the nightly live smoke (each site: the step it reached, its last runs, regressions), plus the
 // fleet's dropped boards (layer 4, shared/digest.js). The owner's Mac uploads each run (POST here, the owner key; desktop/e2e/lib/applying-report.mjs): the
-// site's host and fixed words only, never a posting's address or applicant data. Guard: test/unit/admin/applying.test.js.
+// site's host and fixed words only, never a posting's address or applicant data. Guard: test/unit/admin/applying/applying.test.js.
 import {oneJudgment} from './applying-judgment.js';
 import {testSets, whatWeTestSection} from './what-we-test.js';
 import {leftEmpty, leftEmptySection} from './left-empty.js';

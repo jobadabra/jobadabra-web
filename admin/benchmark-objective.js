@@ -1,5 +1,5 @@
 // The "how objective is this" block at the top of /admin/form-filling/benchmark (owner, 15 Oct 2026): an internal trend, not an independent test. What tilts it toward us, and what would make it objective, each item
-// ticked from the stored runs where they show it (days, runs behind each number, mode, held-out forms) and plain text where they cannot. Names no tool. Guard: test/unit/admin/benchmark.test.js.
+// ticked from the stored runs where they show it (days, runs behind each number, mode, held-out forms) and plain text where they cannot. Names no tool. Guard: test/unit/admin/benchmark/benchmark.test.js.
 import {esc} from '../shared/html.js';
 
 const fields = (a, b) => Math.abs(a - b);

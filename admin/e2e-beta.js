@@ -1,6 +1,6 @@
 // Suites green vs red in every beta run (owner, 1 Nov 2026: "I want this graph in /admin/e2e"; the coordinator had counted them from GitHub by hand). One bar per beta run, oldest to newest:
 // green = e2e suite jobs that passed, red = failed, grey = did not run or did not finish; a ✓ above a bar = that beta was released. Built only from the snapshot row's `betaRuns`
-// (admin/e2e-intel.js keeps it, tools/ci-intel/jobs/e2e-intel.mjs sends it hourly); the page never calls GitHub. Drawn by admin/e2e-page.js (betaCard). Guards: test/unit/admin/e2e-{beta,intel,page}.test.js.
+// (admin/e2e-intel.js keeps it, tools/ci-intel/jobs/e2e-intel.mjs sends it hourly); the page never calls GitHub. Drawn by admin/e2e-page.js (betaCard). Guards: test/unit/admin/e2e/e2e-{beta,intel,page}.test.js.
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {PUBLIC_REPO} from '../shared/repos.js';

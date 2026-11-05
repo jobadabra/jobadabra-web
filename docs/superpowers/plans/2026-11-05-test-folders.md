@@ -8,5 +8,5 @@ The owner chose "Kind first" on 5 Nov 2026. Sketch: https://claude.ai/artifact/6
 | 2/2 | Topic sub-folders of 3 or more tests in `unit/admin`, `unit/shared`, `unit/api` | Same count again |
 
 ## Progress
-- [ ] 1/2 kinds and areas (proof: test/guards/test-folders.test.js)
-- [ ] 2/2 topic sub-folders (proof: none: not started)
+- [x] 1/2 kinds and areas (proof: test/guards/test-folders.test.js @2f214cc)
+- [x] 2/2 topic sub-folders (proof: TESTS.md)

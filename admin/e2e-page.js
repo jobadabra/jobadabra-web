@@ -1,6 +1,6 @@
 // /admin/testing/e2e: where our e2e reds come from (owner, 18 Oct 2026; every run kind and a cause for every red, 27 Oct 2026). Draws the ONE snapshot row admin/e2e-intel.js
 // keeps: every finished e2e run (beta, nightly, main after a merge, scheduled, soak, PR, the daily harness tests), which suites went red, and why (admin/e2e-causes.js), and how steady the AI is in the quality suite (admin/e2e-quality.js). The top
-// (who caused it, top causes and suites, the biggest breaks, PR e2e's cost vs catch) is admin/e2e-top.js. No table scan. Guard: test/unit/admin/e2e-page.test.js.
+// (who caused it, top causes and suites, the biggest breaks, PR e2e's cost vs catch) is admin/e2e-top.js. No table scan. Guard: test/unit/admin/e2e/e2e-page.test.js.
 import {viewer} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {remember} from '../shared/auth.js';

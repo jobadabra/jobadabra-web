@@ -1,6 +1,6 @@
 // The What's new entry written WITHOUT the AI (owner, 24 Oct 2026): when the AI cannot draft a version (limit, bad key, outage) the page still gets it, built from the release's commit subjects, grouped by kind,
 // marked `plain: true` so the next run that can reach the AI writes it again in plain words (PUT redraft). Same checks as any entry (problems()): a subject with an internal word is left out, never shown.
-// Guard: test/unit/admin/changelog-plain.test.js.
+// Guard: test/unit/admin/changelog/changelog-plain.test.js.
 import {FORBIDDEN, problems} from './changelog.js';
 
 const FIXES = /^(fix|fixes|fixed|repair|stop|resolve|correct|prevent|no longer|don't|never)\b/i, FEATURES = /^(add|adds|added|new|let|allow|support|introduce|show|offer|enable|create)\b/i;

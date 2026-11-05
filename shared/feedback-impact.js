@@ -2,7 +2,7 @@
 // Why (3 Nov 2026, owner: "AI suggests, I can modify"): the owner sets the final impact (shared/feedback-actions.js `impact`); this only fills `impact_ai` and `impact_why`.
 // It runs on Workers AI (env.AI, the free open model of Free AI, no key and no paid spend) over the words, the version and the screen name only: never the contact, the install id, the logs or the files.
 // A refusal or a bad answer is written on the row ("AI unavailable: ...") and the daily job tries again, up to 3 times in 7 days; it never blocks saving or the Telegram message.
-// Guarded by test/unit/shared/feedback-impact.test.js (the fixed case set test/fixtures/feedback-impact-cases.json: a prompt change adds its case there and replays them all).
+// Guarded by test/unit/shared/feedback/feedback-impact.test.js (the fixed case set test/fixtures/feedback-impact-cases.json: a prompt change adds its case there and replays them all).
 import {IMPACTS} from './feedback-actions.js';
 import {SMALL, modelFor, costUsd} from './free-ai-models.js';
 import {record} from './aicost.js';

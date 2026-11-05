@@ -1,5 +1,5 @@
 // The payment layer's one small interface (owner, 16 Oct 2026: "Stripe for now… I can switch later"): the accounts and the ledger call these three functions and
-// see only our event shape. Today the adapter is Stripe (./stripe.js); a merchant of record is a new adapter file and a var, not a rewrite. Guard: test/unit/shared/pro-stripe.test.js.
+// see only our event shape. Today the adapter is Stripe (./stripe.js); a merchant of record is a new adapter file and a var, not a rewrite. Guard: test/unit/shared/pro/pro-stripe.test.js.
 import * as stripe from './stripe.js';
 
 const adapters = {stripe};

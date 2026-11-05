@@ -1,6 +1,6 @@
 // The Random draws tab's data (owner, 18 Oct 2026; tools/persona-search/draw.py): one row per daily CI draw, checked on the way in (fixed shapes, counts and seconds, no free text), uploaded with
 // PUT /search-lab/draws (Bearer REPLAYS_PUBLISH_KEY, main only), read back newest first, and judged: FAILED (a step crashed), Weak (no 1st relevant job, fewer than WEAK_FLOOR jobs in places, or under
-// half of the role family's median once MIN_HISTORY earlier draws exist), else Usual. Guard: test/unit/admin/search-lab-draws.test.js.
+// half of the role family's median once MIN_HISTORY earlier draws exist), else Usual. Guard: test/unit/admin/search/search-lab-draws.test.js.
 import {equal} from '../shared/guard.js';
 
 export const KEEP_DRAWS = 400, WEAK_FLOOR = 10, MIN_HISTORY = 5, MIN_POOL = 10, LOW_SHARE = 0.1;

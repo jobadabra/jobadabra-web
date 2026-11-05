@@ -2,7 +2,7 @@
 // replay (the new design) beside the snapshot replay (today's). Since 14 Oct 2026 (owner: "the one list") it lists EVERY pool row: where its newest recording was made (Mac or CI) and when,
 // or "not recorded", and what is next (record, re-record on the Mac, or deferred with its reason). A PROTOTYPE's numbers: every row says its branch and sha, and nothing here feeds Resolution, the scorecard or the Fixed tab.
 // PUT /applying/fidelity (Bearer REPLAYS_PUBLISH_KEY) writes ONE row (the newest record of each pool row, the D1 free plan: 11 Oct 2026). Counts and fixed words only: no page text, no URL, no applicant data.
-// Owns FIDELITY_SCRIPT, the client code admin/applying.js puts inside its page (it uses that page's el, heads, sortRows, ago). Guard: test/unit/admin/applying-fidelity.test.js.
+// Owns FIDELITY_SCRIPT, the client code admin/applying.js puts inside its page (it uses that page's el, heads, sortRows, ago). Guard: test/unit/admin/applying/applying-fidelity.test.js.
 import {equal} from '../shared/guard.js';
 import {dropSnapshot} from './applying-store.js';
 import {PUBLIC_REPO, githubUrl} from '../shared/repos.js';

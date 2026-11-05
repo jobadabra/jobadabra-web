@@ -1,5 +1,5 @@
 // "Who answered today" on the AI cost page (owner, 1 Nov 2026: Claude, Codex or Free AI by one flag, and CI should know which one answers): one row per engine from the broker's /health chain.
-// Words and icons, no raw states; one row per engine the broker reports. Guard: test/unit/admin/ai-broker-card.test.js.
+// Words and icons, no raw states; one row per engine the broker reports. Guard: test/unit/admin/ai/ai-broker-card.test.js.
 import {esc} from '../shared/html.js';
 import {ENGINE_NAMES} from '../shared/ai-broker.js';
 

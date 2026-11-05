@@ -2,7 +2,7 @@
 // (desktop/e2e/lib/fix-ledger.mjs: git trailers "Pool-row:", "Rung:", "Fixture:" plus desktop/e2e/pool-fixes.json; tools/claim-shape.mjs list), joined at view
 // time with the smoke runs already uploaded: a fix is "landed" until an uploaded run after it clears the row ("confirmed"), "back" when a later run lists it again.
 // Fixed values only: a site name without an address or query, a short hash, a version, a rung, guard ids. Owns FIXED_SCRIPT, the tab's client code, which
-// admin/applying.js puts inside its page (it uses that page's el, heads/block, dots, ago). Guard: test/unit/admin/applying-fixed.test.js.
+// admin/applying.js puts inside its page (it uses that page's el, heads/block, dots, ago). Guard: test/unit/admin/applying/applying-fixed.test.js.
 
 import {readVerify, verifyFor} from './applying-verify.js';
 

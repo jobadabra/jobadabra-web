@@ -1,5 +1,5 @@
 // The Lab Job Search "History" screen (owner, 18 Oct 2026: "we have only one screen: Lab ... we should have more"): every kept run of every candidate (the last 30), newest first, with a line per number
-// across the builds and the state each run was in. Counts, seconds and build shas only. Guard: test/unit/admin/search-lab.test.js.
+// across the builds and the state each run was in. Counts, seconds and build shas only. Guard: test/unit/admin/search/search-lab.test.js.
 import {esc} from '../shared/html.js';
 import {TIME_NAMES} from './search-lab-judge.js';
 import {TONE_COLOR, spark} from './search-lab-visuals.js';

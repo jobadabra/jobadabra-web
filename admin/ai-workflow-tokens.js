@@ -1,5 +1,5 @@
 // admin/ai-workflow-tokens.js: "what each CI workflow spent on the AI broker" on the AI cost page, from the broker's /health tally (owner, 3 Nov 2026: "how many tokens it burns compared to all the CI workflows").
-// Counts and token sums per workflow file, last 7 days and today; never a prompt, a login or a key. Guard: test/unit/admin/ai-workflow-tokens.test.js.
+// Counts and token sums per workflow file, last 7 days and today; never a prompt, a login or a key. Guard: test/unit/admin/ai/ai-workflow-tokens.test.js.
 import {esc} from '../shared/html.js';
 import {ENGINE_NAMES} from '../shared/ai-broker.js';
 

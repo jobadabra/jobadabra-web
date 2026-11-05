@@ -1,5 +1,5 @@
 // Ready to send, the 10-minute link to one filled form (spec docs/superpowers/specs/2026-10-17-ready-to-send.md): the owner's app asks for it with his install key and opens it in his browser, where the live view page
-// (public/ready-live.html) cannot send a header. The link names one job and expires; it opens that job's live view and its "I submitted it", nothing else. Guard: test/unit/api/ready-link.test.js.
+// (public/ready-live.html) cannot send a header. The link names one job and expires; it opens that job's live view and its "I submitted it", nothing else. Guard: test/unit/api/ready/ready-link.test.js.
 import {equal, tokenFor} from '../shared/guard.js';
 
 export const LINK_MINUTES = 10;

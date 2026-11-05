@@ -1,7 +1,7 @@
 // Fill again (owner, 18 Oct 2026: "a button per row with fill again"; then "it doesn't work... it doesn't finish the job": the app looked the job up in its own list,
 // where an opened job no longer counts as finished): one form of a night is filled again from the night's own sealed copy, never from the app's list. Its row is queued
 // again (its result kept, to put back if it is stopped), the night's container is closed (a container fills a night once) and the night starts again; the container reads only the rows
-// still queued (ready.js, the batch GET), so the other forms keep their results and kept hand-offs. Guard: test/unit/api/ready-again.test.js.
+// still queued (ready.js, the batch GET), so the other forms keep their results and kept hand-offs. Guard: test/unit/api/ready/ready-again.test.js.
 import {requeue} from './ready-line.js';
 import {closeNight} from './ready-morning.js';
 import {startBatch} from './ready-tick.js';

@@ -1,5 +1,5 @@
 // What the Benchmark Form Filling page counts (owner, 15 Oct 2026): one summary row per scored run (a tool on a form) -> the scores per tool, the grid per form, our trend per build, for ONE applicant at a time
-// (thin and grown, and user mode and harness mode, are never added together). Pure functions: no names of tools, forms or sites live here, they arrive as data. Guard: test/unit/admin/benchmark.test.js.
+// (thin and grown, and user mode and harness mode, are never added together). Pure functions: no names of tools, forms or sites live here, they arrive as data. Guard: test/unit/admin/benchmark/benchmark.test.js.
 // raw = right / required; product = right / (required - not answerable - consent holds - reader duplicates); ceiling = (required - not answerable) / required (the most the applicant's facts allow).
 export const APPLICANTS = ['thin', 'grown'];
 // user = what real users run (the repair rung acts for every user since #873: a build that has it, or a run with it off); harness = a build before #873 run with the test harness's repair rung on (ladderAct); unknown = the run did not say. Only our extension has a mode; the other tools' rows carry 'any'. The page's headline is user mode.

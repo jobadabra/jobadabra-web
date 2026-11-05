@@ -1,6 +1,6 @@
 // /admin/ai/harness: how the CI fixer's harness is doing and, for each run, what happened (owner, 4 Nov 2026: a tab "Agent harness" with "some details about each run. What happened. Some logs, some achievements, errors...").
 // Data: the daily upload of kind "harness" (tools/harness-stats.mjs in the public repo, cleaned by admin/harness-clean.js): the plan's rows, the context layers, the sources and one record per run of ai-fixer.yml.
-// Every value is data: it is escaped here and never reaches the page as HTML. Report only; a page with no upload says so. Test: test/unit/admin/ai-harness.test.js.
+// Every value is data: it is escaped here and never reaches the page as HTML. Report only; a page with no upload says so. Test: test/unit/admin/ai/ai-harness.test.js.
 import {esc} from '../shared/html.js';
 import {shell, chip, tokensWord} from './ai-section.js';
 

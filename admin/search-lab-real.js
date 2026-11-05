@@ -1,7 +1,7 @@
 // The Lab Job Search "Real installs" tab (owner, 18 Oct 2026: "register real users' job searches and see their results"): what installs with Technical reports on
 // sent after each Find jobs run (kind 'search', shared/search-report.js): per role family, the median time to the first job, the 10th and the first 70+, jobs
 // in places and scoring 70+, how many searches it took to reach a 70+, set beside the lab's median so a real number has the lab's to be read against.
-// A city is shown only when 3+ installs share it (k >= 3, read time). Counts, seconds and fixed words only. Guard: test/unit/admin/search-lab-real.test.js.
+// A city is shown only when 3+ installs share it (k >= 3, read time). Counts, seconds and fixed words only. Guard: test/unit/admin/search/search-lab-real.test.js.
 import {esc} from '../shared/html.js';
 import {KIND_NAMES} from '../shared/pool-labels.js';
 import {TIME_NAMES} from './search-lab-judge.js';
