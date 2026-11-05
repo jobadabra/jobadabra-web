@@ -23,8 +23,10 @@ Releases 6 · Main & tests 7 · AI 5 · Users 6 · Site health 2 · Marketing & 
 |---|---|---|
 | 1 `[nt] 1/4` | Store, registry, `/ops/notify`, Operations menu, Notifications tab, Notify column, channels | ✅ merged #427 |
 | 2 `[nt] 2/4` | Site/Worker senders call `notify()`; hand-written Telegram fetches go | ✅ merged #429 (9 senders) |
-| 3 `[nt] 3/4` | (owner, 5 Nov: failed-release alerts first: event `release-failed`, registry here, sender in jobadabra) |
-| 3 `[nt] 3/4` | jobadabra: `ci-alert.mjs`, `telegram-post.mjs` and workflow senders post to `/ops/notify` (fail-open); public lists the route | |
+| 3 `[nt] 3/4a+b` | (owner, 5 Nov: failed-release alerts first: event `release-failed`, registry here, sender in jobadabra) | ✅ merged #434 + public #3293 |
+| 3 `[nt] 3/4c` | jobadabra: `ci-alert.mjs`, `telegram-post.mjs` and 13 workflow senders post to `/ops/notify` (fail-open) | ✅ merged public #3298 |
+| 3 `[nt] 3/4d` | The 12 events those senders use are marked `wired` here | ▶️ this PR |
+| 3 `[nt] 3/4e` | Left: `site-replays.yml` (needs its own event), the `ai-skipped-alert` action, `release_guard.py`, ai-fixer, ui-*, judge-exam, finder-review, scorecard, scout, daily, mail; broker fallback (after a8 is told); public lists `/ops/notify` | |
 | 4 `[nt] 4/4` | New alerts; old bot secrets retired after a week of switchboard sends | |
 
 ## Owner to do (secrets are never mine)
