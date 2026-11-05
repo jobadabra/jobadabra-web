@@ -84,7 +84,8 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
     // Why (jobadabra-web#431; 20 of 20 parallel sends went out in the review of #430): the room under both caps is CLAIMED in one statement before the provider is asked (D1 runs a statement alone,
     // as in sendTestMail), so calls that arrive together cannot all read the same count. A live claim counts like a sent mail; one older than CLAIM_MS is a Worker that died and counts for nothing.
     const since = new Date(now.getTime() - DAY).toISOString(), fresh = new Date(now.getTime() - CLAIM_MS).toISOString();
-    const live = "((status = 'sent' AND at >= ?) OR (status = 'claimed' AND at >= ?))";
+    // Only send()'s own claims (marked `claim:`) are mail in flight: sendTestMail's day-claim has no marker and must not take a second slot (Gitar on #438).
+    const live = "((status = 'sent' AND at >= ?) OR (status = 'claimed' AND message_id LIKE 'claim:%' AND at >= ?))";
     const marker = `claim:${crypto.randomUUID()}`;   // this call's claim row is found again by it (message_id until the provider answers): no driver's row id is needed
     const claim = await env.STATS.prepare(`INSERT INTO mail_log (at, addr, list, template, status, message_id) SELECT ?, ?, ?, ?, 'claimed', ? WHERE (SELECT COUNT(*) FROM mail_log WHERE addr = ? AND template NOT LIKE 'test:%' AND ${live}) < ? AND (SELECT COUNT(*) FROM mail_log WHERE ${live}) < ?`)
       .bind(now.toISOString(), addr, spec.list, logged, marker, addr, since, fresh, test ? Number.MAX_SAFE_INTEGER : DAILY_MAX, since, fresh, Number(env.MAIL_DAY_MAX || GLOBAL_DAY_MAX)).run();   // a test send takes no per-person room; the product-wide cap still counts it

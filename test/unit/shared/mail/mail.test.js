@@ -221,11 +221,19 @@ test('the product-wide cap holds under parallel calls too (20 addresses at once,
 test('a claim left by a Worker that died counts for two minutes only, then the person has the room back', async () => {
   const {e, sent} = setup();
   const addr = await addrOf('a@b.co');
-  const leftover = ago => e.STATS.db.prepare("INSERT INTO mail_log (at, addr, list, template, status) VALUES (?, ?, 'service', 'digest', 'claimed')").run(new Date(now.getTime() - ago).toISOString(), addr);
+  const leftover = ago => e.STATS.db.prepare("INSERT INTO mail_log (at, addr, list, template, status, message_id) VALUES (?, ?, 'service', 'digest', 'claimed', ?)").run(new Date(now.getTime() - ago).toISOString(), addr, `claim:${Math.random()}`);
   for (let i = 0; i < DAILY_MAX - 1; i++) leftover(60e3);
   assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).ok, true, 'nine fresh claims leave room for one');
   assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).reason, 'rate', 'ten are full');
   e.STATS.db.prepare("UPDATE mail_log SET at = ? WHERE status = 'claimed'").run(new Date(now.getTime() - 3 * 60e3).toISOString());
   assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).ok, true, 'a stale claim gives its room back');
   assert.equal(sent.length, 2);
+});
+
+test('the alert test mail takes one product-wide slot, not two: with one slot left the Test still goes out (Gitar on #438)', async () => {
+  const {e, sent} = setup({MAIL_DAY_MAX: '3'});
+  for (const who of ['p1@b.co', 'p2@b.co']) await send(e, 'digest', who, digest, {now});
+  const result = await sendTestMail(e, 'a@b.co', now);   // its day-claim (no marker) must not count as a second mail in flight
+  assert.equal(result.ok, true);
+  assert.equal(sent.length, 3);
 });
