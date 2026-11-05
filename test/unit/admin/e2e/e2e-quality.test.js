@@ -109,15 +109,16 @@ test('the prompt-case counts are read from one log line and dropped, not repaire
   assert.equal(cleanNight(night(5, 9, 9)).promptCases, null);
 });
 
-test('the site keeps the replay with its night, hands it back in the snapshot, and reads old rows as none', async () => {
+test('a replay sent with its night (the collector before #259) lands in the replay table, and an old damaged row reads as none', async () => {
   const e = {STATS: d1(), SELFHEAL_PUBLISH_KEY: 'pub'};
   const put = body => worker.fetch(new Request('https://www.jobpilotto.top/e2e/data', {method: 'PUT', headers: {Authorization: 'Bearer pub'}, body: JSON.stringify(body)}), e, {});
   const today = new Date().toISOString().slice(0, 10), promptCases = {status: 'asked', total: 63, right: 60, flipped: 1, noise: 2, newWrong: 0, unconfirmed: 0, calls: 66};
   assert.equal((await put({rules: 1, runs: [], fails: [], quality: [{...night(21, 9, 8, 0, today), promptCases}, night(20, 9, 8, 0, today)]})).status, 200);
-  e.STATS.db.prepare("UPDATE e2e_quality SET prompt_cases = '{broken' WHERE run_id = 20").run();
+  e.STATS.db.prepare("INSERT INTO e2e_prompt_cases (run_id, day, json) VALUES (19, ?, '{broken')").run(today);
   await put({rules: 1, runs: [], fails: [], quality: []});
   const snapshot = JSON.parse(e.STATS.db.prepare('SELECT body FROM e2e_snapshot WHERE id = 1').get().body);
-  assert.deepEqual(snapshot.quality.map(row => [row.runId, row.promptCases]), [[21, promptCases], [20, null]]);
+  assert.deepEqual(snapshot.promptNights, [{runId: 21, day: today, promptCases}], 'the damaged row is left out');
+  assert.equal(e.STATS.db.prepare('SELECT prompt_cases FROM e2e_quality WHERE run_id = 21').get().prompt_cases, null, 'the quality row no longer carries it');
 });
 
 test('the page shows the newest replay beside the score numbers: green when nothing got worse, red when a prompt did, grey when nothing changed, amber when not asked', () => {
