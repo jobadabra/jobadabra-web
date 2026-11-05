@@ -2,7 +2,7 @@
 // none is written here. Colours are the shared rule (admin/applying-tiles.js). Guard: test/unit/admin/benchmark/benchmark-search.test.js.
 import {esc} from '../shared/html.js';
 import {filterLinks} from './admin.js';
-import {chip} from './chip.js';
+import {CHIP_STYLE, chip} from './chip.js';
 import {kindsChart} from './jobsearch-charts.js';
 import {figure, VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 import {shareTone} from './applying-tiles.js';
@@ -62,7 +62,7 @@ export function page(snapshot, {round} = {}) {
   const body = !view ? `<section class="card"><h2>No data yet</h2><p class="muted">The bake-off's search-bench publish step sends every scored round here (<code>PUT /benchmark-search/data</code>); the first round fills this page.</p></section>`
     : `${keys.length > 1 ? filterLinks(keys.map(k => [k, k, `?round=${encodeURIComponent(k)}`]), key) : ''}${tiles(view)}${scoreboard(view)}${grid(view)}${kinds(view)}${missed(view)}${beyond(view)}${METHOD}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Benchmark Job Search · Admin</title>
-<link rel="icon" href="/favicon-32.png"><style>${CSS}${VIZ_STYLE}</style></head><body><main>
+<link rel="icon" href="/favicon-32.png"><style>${CSS}${CHIP_STYLE}${VIZ_STYLE}</style></head><body><main>
 <header><h1>🏁 Benchmark Job Search</h1><span class="muted">${snapshot ? `as of ${esc(snapshot.at.slice(0, 16).replace('T', ' '))} UTC${key ? ` · round ${esc(key)}` : ''}` : ''}</span></header>
 ${body}</main>${VIZ_TOOLTIP}</body></html>`;
 }
