@@ -25,10 +25,12 @@ Releases 7 · Main & tests 9 · AI 5 · Users 6 · Site health 2 · Marketing & 
 | 2 `[nt] 2/4` | Site/Worker senders call `notify()`; hand-written Telegram fetches go | ✅ merged #429 (9 senders) |
 | 3 `[nt] 3/4a+b` | (owner, 5 Nov: failed-release alerts first: event `release-failed`, registry here, sender in jobadabra) | ✅ merged #434 + public #3293 |
 | 3 `[nt] 3/4c` | jobadabra: `ci-alert.mjs`, `telegram-post.mjs` and 13 workflow senders post to `/ops/notify` (fail-open) | ✅ merged public #3298 |
-| 3 `[nt] 3/4d` | The 12 events those senders use are marked `wired` here | ▶️ this PR |
-| 3 `[nt] 3/4e-a` | Two new events for senders that had none: `replay-drift` (site-replays.yml), `pr-check-scorecard` (monthly scorecard) | ▶️ this PR |
-| 3 `[nt] 3/4e-b` | jobadabra: `release_guard.py`, the AI-fixer follow-up, the `ai-skipped-alert` action (ui-*, judge-exam, finder-review, ai-fixer), the scorecard, site-replays, `ai-refusal.mjs` post to `/ops/notify` (fail-open) | |
-| 3 `[nt] 3/4e-c` | Mark those events wired; broker fallback (after a8 is told); public lists `/ops/notify` | |
+| 3 `[nt] 3/4d` | The 12 events those senders use are marked `wired` here | ✅ merged #441 |
+| 3 `[nt] 3/4e-a` | Two new events for senders that had none: `replay-drift` (site-replays.yml), `pr-check-scorecard` (monthly scorecard) | ✅ merged #443 |
+| 3 `[nt] 3/4e-b` | jobadabra: `release_guard.py`, the AI-fixer follow-up, the `ai-skipped-alert` action (ui-*, judge-exam, ai-fixer), the scorecard and site-replays post to `/ops/notify` (fail-open) | ✅ merged public #3308 |
+| 3 `[nt] 3/4e-c` | Public route list names `/ops/notify` | ▶️ public #3313 |
+| 3 `[nt] 3/4f` | The four newest events marked wired; the broker fallback shown as parked | ▶️ this PR |
+| — | **Parked (coordinator, 5 Nov):** `workers/ai-broker/lib/fallback.mjs`'s once-a-day "Free AI cap reached" note stays on the brain bot; a new production secret on the broker is not worth it now; trigger: when the old bots retire (4/4). The page shows it as `parked` and leaves it out of the count; `finder-review.yml`'s AI-skipped alert also keeps the CI-alerts bot (its job runs Codex-edited code beside the alert) | |
 | — | **Out of scope (owner/coordinator, 5 Nov):** `daily.yml`, `mail.yml`, `scout.yml` send on each person's own bot (`TELEGRAM_BOT_TOKEN`), already switched by their Settings → Notifications (`JOBADABRA_NOTIFY`); they are not among the registry's alerts, so the page's "N of M senders moved over" never counts them as waiting | |
 | 4 `[nt] 4/4` | New alerts; old bot secrets retired after a week of switchboard sends | |
 

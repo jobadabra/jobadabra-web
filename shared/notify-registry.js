@@ -3,6 +3,7 @@
 // Why (5 Nov 2026, sketch Xo6tGKuwH7P86VcWq9eBv9): 3 channels, not today's 5 bots: Engineering = the CI alerts, build log and Sentry bots; Users = the Brain bot; Marketing = new.
 // Fields: id (what a sender posts), label, group, on (default), mode + modes (When), channel (default), jobs (workflow files whose row on Scheduled carries the switch: a bare name is in the public repo, 'jobadabra-web/<file>' in this one),
 //   status 'live' | 'new' (its sender is built in PR 4) | 'later', wired (true once its sender posts through /ops/notify: until then the switch is stored but changes nothing),
+//   parked (a reason string: a decided wait; the page shows it as parked and leaves it out of the "senders moved over" count),
 //   maxPerHour (a ceiling on top of the mode). Owner-facing alerts only: the 12 notifications each user gets about their own search are not here.
 export const CHANNELS = [
   {id: 'engineering', icon: '🛠', name: 'Engineering', about: 'CI, releases, tests, Sentry, AI credit', env: null},
@@ -21,22 +22,22 @@ export const ALERTS = [
   a('stable-promoted', '✅ Stable promoted', 'releases', 'every', 'engineering', {wired: true, jobs: ['canary-promote.yml']}),
   a('msstore-status', '🏪 Microsoft Store accepted / refused / recovered', 'releases', 'every', 'engineering', {wired: true, jobs: ['msix-store-watch.yml', 'msix-store.yml']}),
   a('chrome-store-failed', '🧩 Chrome Web Store publish failed', 'releases', 'problems', 'engineering', {wired: true, jobs: ['extension-store-publish.yml']}),
-  a('release-guard', '🛡 Release guard stopped a release', 'releases', 'every', 'engineering', {jobs: ['release-guard.yml']}),
+  a('release-guard', '🛡 Release guard stopped a release', 'releases', 'every', 'engineering', {wired: true, jobs: ['release-guard.yml']}),
   a('release-mail-draft', '📰 "What\'s new" mail draft ready', 'releases', 'every', 'marketing', {jobs: ['jobadabra-web/changelog-publish.yml'], wired: true}),
   a('main-red', '🔴 Main went red · back to green', 'main', 'changes', 'engineering', {wired: true, modes: ['every', 'changes'], jobs: ['e2e.yml', 'desktop.yml']}),
   a('nightly-skipped', '⏭ Nightly skipped (main e2e red)', 'main', 'every', 'engineering', {wired: true, jobs: ['e2e.yml']}),
   a('journey-failing', '🧭 A journey no longer passes', 'main', 'changes', 'engineering', {wired: true, modes: ['every', 'changes'], jobs: ['journeys.yml']}),
   a('harness-daily', '🧰 Harness daily: a check failed', 'main', 'problems', 'engineering', {wired: true, jobs: ['harness-daily.yml']}),
   a('replay-refill', '🔁 Replay refill needs a look', 'main', 'every', 'engineering', {wired: true, jobs: ['replay-refill.yml']}),
-  a('replay-drift', '🎞 Site replays: pinned rows differ from live', 'main', 'every', 'engineering', {modes: ['every', 'problems'], jobs: ['site-replays.yml']}),   // Why (5 Nov 2026, 3/4e): site-replays.yml was the one main-checks alert still on its own bot, so no switch could stop it; its sender is public node ci-alert.mjs (workflow -> event table)
-  a('pr-check-scorecard', '📊 PR check scorecard (monthly)', 'main', 'every', 'engineering', {jobs: ['pr-check-scorecard.yml']}),
+  a('replay-drift', '🎞 Site replays: pinned rows differ from live', 'main', 'every', 'engineering', {wired: true, modes: ['every', 'problems'], jobs: ['site-replays.yml']}),   // Why (5 Nov 2026, 3/4e): site-replays.yml was the one main-checks alert still on its own bot, so no switch could stop it; its sender is public node ci-alert.mjs (workflow -> event table)
+  a('pr-check-scorecard', '📊 PR check scorecard (monthly)', 'main', 'every', 'engineering', {wired: true, jobs: ['pr-check-scorecard.yml']}),
   a('daily-build-digest', '🗓 Daily build digest', 'main', 'daily', 'engineering', {on: false, jobs: ['jobadabra-web/daily-digest.yml']}),
   a('record-sites', '📼 Record sites / watch list: new failures', 'main', 'daily', 'engineering', {wired: true, on: false, modes: ['every', 'daily'], jobs: ['record-sites.yml', 'watch-live.yml']}),
-  a('ai-fixer-round', '🔧 AI fixer: PR ready / red / conflict', 'ai', 'every', 'engineering', {jobs: ['ai-fixer.yml', 'ai-fixer-follow.yml']}),
+  a('ai-fixer-round', '🔧 AI fixer: PR ready / red / conflict', 'ai', 'every', 'engineering', {wired: true, jobs: ['ai-fixer.yml', 'ai-fixer-follow.yml']}),
   a('ai-persona-night', '🧑‍💻 AI persona night report', 'ai', 'problems', 'engineering', {status: 'new', modes: ['every', 'problems'], jobs: ['ai-user-agents.yml']}),
   a('ai-credit', '🪫 AI credit ran out / AI refused a job / AI step skipped', 'ai', 'daily', 'engineering', {wired: true, modes: ['every', 'daily']}),
   a('free-ai-spend', '💸 Free AI spend over its day, month or neurons limit', 'ai', 'every', 'users', {wired: true}),
-  a('broker-fallback', '↩️ Broker fell back to Free AI', 'ai', 'daily', 'users', {modes: ['every', 'daily']}),
+  a('broker-fallback', '↩️ Broker fell back to Free AI', 'ai', 'daily', 'users', {modes: ['every', 'daily'], parked: 'a once-a-day note from the broker Worker; it moves with the old bots (4/4)'}),   // Why (5 Nov 2026, coordinator): parked, not built: the note still arrives once a day at most and a new production secret on the broker is not worth it now; trigger: when the old bots retire (4/4). Listed so the page does not count it as waiting
   a('feedback-received', '💬 Feedback received', 'users', 'every', 'users', {wired: true}),
   a('form-reported', '📝 A form was reported', 'users', 'every', 'users', {wired: true}),
   a('email-added', '✉️ An account added or changed its e-mail', 'users', 'every', 'users', {wired: true}),
