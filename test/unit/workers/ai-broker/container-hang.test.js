@@ -19,7 +19,7 @@ const STAND_IN = `const fs = require('node:fs'), cp = require('node:child_proces
     const turn = (fs.existsSync('turns') ? Number(fs.readFileSync('turns', 'utf8')) : 0) + 1;
     fs.writeFileSync('turns', String(turn));
     if (turn === Number(process.env.STALL_AT)) {
-      cp.spawn('sleep', ['4'], {stdio: 'inherit', detached: process.env.STRAY === 'own-group'});   // holds the pipes after codex itself is killed
+      cp.spawn('sleep', ['5'], {stdio: 'inherit', detached: process.env.STRAY === 'own-group'});   // holds the pipes after codex itself is killed
       setInterval(() => {}, 1000);   // codex waits for a reply that never comes
       return;
     }
@@ -37,7 +37,7 @@ function serverWith(dir, {stallAt, stray}) {
   vm.runInNewContext(fs.readFileSync(new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, ''), {
     http: {createServer(fn) { handler = fn; return {listen() {}}; }},
     fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, turnUsage, Buffer, setTimeout, clearTimeout, setInterval,
-    process: {env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: process.env.PATH, CALL_TIMEOUT_MS: '400', KILL_GRACE_MS: '600'}, kill: (pid, signal) => process.kill(pid, signal)},
+    process: {env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: process.env.PATH, CALL_TIMEOUT_MS: '1500', KILL_GRACE_MS: '500'}, kill: (pid, signal) => process.kill(pid, signal)},
   });
   return body => new Promise(resolve => {
     const request = new EventEmitter(); request.url = '/call'; request.method = 'POST';
@@ -56,11 +56,11 @@ for (const stray of ['same-group', 'own-group']) {
     assert.equal(first.status, 200); assert.equal(first.body.session.mode, 'opened');
     for (let turn = 2; turn <= 4; turn++) { const next = await call({prompt: 'full prompt', model: 'm', session: session('warm')}); assert.equal(next.status, 200, `turn ${turn}`); assert.equal(next.body.session.mode, 'resumed'); }
     const started = Date.now();
-    const stalled = await Promise.race([call({prompt: 'full prompt', model: 'm', session: session('warm')}), new Promise(resolve => setTimeout(() => resolve('no answer'), 3000))]);
-    assert.notEqual(stalled, 'no answer', 'the guard answered within 3 s (guard 0.4 s + grace 0.6 s)');
+    const stalled = await Promise.race([call({prompt: 'full prompt', model: 'm', session: session('warm')}), new Promise(resolve => setTimeout(() => resolve('no answer'), 3500))]);
+    assert.notEqual(stalled, 'no answer', 'the guard answered within 3.5 s (guard 1.5 s + at most 0.5 s grace); the old run() waited for the helper, about 5 s');
     assert.equal(stalled.status, 500);
-    assert.match(stalled.body.error, /^codex-failed:null .*killed after 0\.4 s/, 'the failure says it was the guard and what Codex had said by then');
-    assert.ok(Date.now() - started < 2500, `came back after ${Date.now() - started} ms`);
+    assert.match(stalled.body.error, /^codex-failed:null \[killed after 1\.5 s: codex did not finish\]/, 'the failure says it was the guard');
+    assert.ok(Date.now() - started < 3000, `came back after ${Date.now() - started} ms`);
     const after = await call({prompt: 'full prompt', model: 'm', session: session('none', {restart: 'gap'})});
     assert.equal(after.status, 200, 'the turn after a stalled one is a new conversation and answers');
     assert.equal(after.body.session.mode, 'restarted');
