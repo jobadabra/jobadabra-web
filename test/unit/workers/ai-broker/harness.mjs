@@ -24,6 +24,7 @@ export function harness(meter, env = {}) {
   const storage = {
     get: async key => structuredClone(values.get(key)),
     put: async (key, value) => { values.set(key, structuredClone(value)); },
+    delete: async key => values.delete(key),
     // Serialize admission and completion transactions; snapshots are independent, as in DO storage.
     transaction(fn) {
       const next = pending.then(() => fn(storage));

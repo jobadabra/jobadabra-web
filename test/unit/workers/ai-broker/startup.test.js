@@ -87,3 +87,24 @@ test('the probe is not a CI call: no meter, no tally, and a rotated login it bri
   assert.equal(await storage.get('login'), 'rotated login');   // the same write-through as a call: a refreshed token is never only in the container
   assert.equal((await (await broker.health()).json()).daily.drift, 0);
 });
+
+test('a probe that finds the login lost says so at once, and a new login upload is proven again before ready', async () => {
+  const {broker, storage, settled} = harness();
+  container(broker, () => new Response(JSON.stringify({error: 'login-lost'}), {status: 500}));
+  await broker.onStart(); await settled();
+  assert.equal(await stateOf(broker), 'login-lost');
+  container(broker, MCP_CLOSED);
+  assert.equal((await broker.setLogin('{"tokens":{}}')).status, 200);   // allowed: the login was lost
+  await settled();
+  assert.equal(await stateOf(broker), 'starting');   // never `ready` on the answers of the login it replaced
+  assert.equal(await storage.get('answered'), false);
+});
+
+test('a container start forgets the last start\'s probe failure', async () => {
+  const {broker, settled} = harness();
+  container(broker, MCP_CLOSED);
+  await broker.onStart(); await settled();
+  container(broker, () => new Promise(() => {}));   // the next probe is still running
+  await broker.onStart();
+  assert.equal((await (await broker.health()).json()).probe, undefined);
+});

@@ -50,6 +50,7 @@ export class CodexBroker extends Container {
     const login = await this.ctx.storage.get('login');
     // Why (#285, 5 Nov 2026, owner: "Fix readiness"): a new container has answered nothing yet, so /health stops saying `ready` until it has (markAnswered). The probe is handed to waitUntil, never awaited: this hook runs inside blockConcurrencyWhile and would hold /health and every call for the whole probe.
     await this.ctx.storage.put('answered', false);
+    await this.ctx.storage.put('probe', null);   // the last container's failure is not this one's
     if (!login) return;
     await this.containerFetch('http://c/auth', {method: 'POST', body: login});
     this.ctx.waitUntil(this.startupProbe());
@@ -64,6 +65,7 @@ export class CodexBroker extends Container {
       let answer; try { answer = JSON.parse(text); } catch { answer = {error: `container: ${text}`}; }
       if (answer.authFile) await this.ctx.storage.put('login', answer.authFile);
       if (await this.markIfAnswered(reply, answer)) return;
+      if (answer.error === 'login-lost') await this.ctx.storage.put('lost', true);   // the same verdict a call gives (codexStep): the owner must see it without waiting for a CI call
       const clean = String(answer.error || '').replace(/\s+/g, ' ').trim();
       await this.ctx.storage.put('probe', {at: Date.now(), error: (refuseReply(clean) ? '(detail withheld: token-shaped)' : clean).slice(0, 200)});
     } catch (error) { await this.ctx.storage.put('probe', {at: Date.now(), error: `call: ${String(error?.message || error).slice(0, 190)}`}).catch(() => {}); }
@@ -94,15 +96,19 @@ export class CodexBroker extends Container {
     await this.ctx.storage.put('login', text);
     await this.ctx.storage.delete('lost');
     await this.containerFetch('http://c/auth', {method: 'POST', body: text});
+    await this.ctx.storage.put('answered', false);   // a login never tried is not proven by the answers of the one it replaces; the running container gets its start-up call now
+    await this.ctx.storage.put('probe', null);
+    this.ctx.waitUntil(this.startupProbe());
     return json(200, {ok: true});
   }
 
   async health() {
     const meter = (await this.ctx.storage.get('meter')) || newMeter(0);
     // Daily counts describe today, even before the first call after UTC midnight.
-    // `ready` = a login is stored AND this container has answered since it started; `starting` = login stored, nothing answered yet (readers: the release gate accepts it, nobody else reads this field). `probe` = why the start-up call failed, if it did.
+    // `ready` = a login is stored AND the container has answered since its last start (a sleeping container keeps its last proof; its next wake starts over); `starting` = login stored, nothing answered yet (readers: the release gate accepts it, nobody else reads this field). `probe` = why the start-up call failed, if it did.
     const state = !(await this.ctx.storage.get('login')) ? 'no-login' : (await this.ctx.storage.get('lost')) ? 'login-lost' : (await this.ctx.storage.get('answered')) ? 'ready' : 'starting';
-    return json(200, {state, ...(state === 'starting' && (await this.ctx.storage.get('probe')) ? {probe: await this.ctx.storage.get('probe')} : {}), limits: this.limits, own: meter.tokens, daily: {drift: callsToday(meter, 'drift')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
+    const probe = state === 'starting' ? await this.ctx.storage.get('probe') : null;
+    return json(200, {state, ...(probe ? {probe} : {}), limits: this.limits, own: meter.tokens, daily: {drift: callsToday(meter, 'drift')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
   }
 
   // The owner-visible refusals of the Codex login: they stand when Codex is reached, another engine does not hide them.
