@@ -51,22 +51,20 @@ test('without a dispatch token the click is refused (503) and nothing changes', 
   assert.equal(log(e, ref).length, 0);
 });
 
-test('one at a time: a second click while a run is going is refused (409); the cap is 3 clicks a day (429) and counts again tomorrow', async () => {
-  const e = env(), [a, b, c, d] = [add(e), add(e), add(e), add(e)];
-  assert.equal((await click(e, a)).ok, true);
-  const second = await click(e, b);
-  assert.equal(second.status, 409);
-  assert.equal(row(e, b).state, 'new');
-  for (const [ref, runs] of [[a, 1], [b, 2], [c, 3]]) {   // each run ends, the next click is allowed, until the third has been used
-    if (ref !== a) assert.equal((await click(e, ref)).ok, true, `click ${runs}`);
+test('one at a time: a second click is refused (409); ten daily attempts are allowed, the eleventh is refused (429), and the count resets tomorrow', async () => {
+  const e = env(), refs = Array.from({length: 11}, () => add(e)), [first, second] = refs;
+  assert.equal((await click(e, first)).ok, true);
+  assert.equal((await click(e, second)).status, 409);
+  assert.equal(row(e, second).state, 'new');
+  for (const [index, ref] of refs.slice(0, 10).entries()) {
+    if (index) assert.equal((await click(e, ref)).ok, true, `click ${index + 1}`);
     await act(e, {ref, action: 'ai_none', verdict: 'needs-human', why: 'a person must look'}, 'ai (run 1)', NOW, {trusted: true});
   }
-  assert.equal(DAILY_RUNS, 3);
-  const fourth = await click(e, d);
-  assert.equal(fourth.status, 429);
-  assert.equal(row(e, d).state, 'new');
+  assert.equal(DAILY_RUNS, 10);
+  assert.equal((await click(e, refs[10])).status, 429);
+  assert.equal(row(e, refs[10]).state, 'new');
   const tomorrow = new Date('2026-11-04T00:00:01.000Z');
-  assert.equal((await click(e, d, {}, {start}, tomorrow)).ok, true, 'the day count restarts at 00:00 UTC');
+  assert.equal((await click(e, refs[10], {}, {start}, tomorrow)).ok, true, 'the day count restarts at 00:00 UTC');
 });
 
 test('a run that never answered is sent back to new after an hour (with the reason and a system log line) and no longer blocks the next click', async () => {
@@ -134,16 +132,16 @@ test('the brief carries the words, version, platform, screen and only the ticked
   assert.equal(await briefOf(e, '0000000000000fff'), null);
 });
 
-test('two clicks that both read an empty gate cannot both start: the caps are part of the write (one at a time, 3 a day)', async () => {
+test('two clicks that both read an empty gate cannot both start: the caps are part of the write (one at a time, 10 a day)', async () => {
   const stale = e => ({...e.STATS, prepare: sql => (/COUNT\(\*\) AS n FROM feedback/.test(sql) ? {bind: () => ({first: async () => ({n: 0})}), first: async () => ({n: 0})} : e.STATS.prepare(sql))});
   const e = env(), a = add(e), b = add(e), e2 = {...e, STATS: stale(e)};
   assert.equal((await click(e2, a)).ok, true);
   assert.equal((await click(e2, b)).status, 409, 'a second run while one goes, though the gate read said none');
   assert.equal(row(e, b).state, 'new');
-  const f = env(), refs = [add(f), add(f), add(f), add(f)], f2 = {...f, STATS: stale(f)};
-  for (const ref of refs.slice(0, 3)) { assert.equal((await click(f2, ref)).ok, true); await act(f, {ref, action: 'ai_none', verdict: 'none', why: 'x'}, 'ai (run 1)', NOW, {trusted: true}); }
-  assert.equal((await click(f2, refs[3])).status, 409, 'the 4th of the day, though the gate read said 0 so far');
-  assert.equal(row(f, refs[3]).state, 'new');
+  const f = env(), refs = Array.from({length: 11}, () => add(f)), f2 = {...f, STATS: stale(f)};
+  for (const ref of refs.slice(0, 10)) { assert.equal((await click(f2, ref)).ok, true); await act(f, {ref, action: 'ai_none', verdict: 'none', why: 'x'}, 'ai (run 1)', NOW, {trusted: true}); }
+  assert.equal((await click(f2, refs[10])).status, 409, 'the 11th of the day, though the gate read said 0 so far');
+  assert.equal(row(f, refs[10]).state, 'new');
 });
 
 test('a merged AI fix of a card that was deferred first does not reuse the deferral text as its Fixed reply', async () => {
