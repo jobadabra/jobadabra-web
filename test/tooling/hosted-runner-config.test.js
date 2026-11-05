@@ -23,6 +23,13 @@ test('the staging copy has its own name and queue, the same image, and few insta
   assert.equal(production.containers[0].max_instances, 20, 'the production config is not changed by making the copy');
 });
 
+test('the runner keeps its logs (production and the staging copy), so a run that never starts leaves a line', () => {
+  assert.deepEqual(production.observability, {enabled: true});
+  assert.deepEqual(stagingConfig(production).observability, {enabled: true});
+  const worker = readFileSync(new URL('workers/hosted-runner/worker.js', ROOT), 'utf8');
+  assert.ok(/onStop\(/.test(worker) && /onError\(/.test(worker), 'the container hooks say when it stops or fails');
+});
+
 test('a staging config that still names production fails loudly', () => {
   const same = {...production, queues: {consumers: [{queue: 'hosted-runs'}]}, containers: production.containers};
   assert.throws(() => stagingConfig({...same, name: STAGING.name, queues: {consumers: []}}), /production name or queue/, 'an input already named like staging with no consumer cannot hide the check');

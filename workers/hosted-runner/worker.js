@@ -6,6 +6,9 @@ import {consume} from '../../api/hosted-consume.js';
 export class HostedRunner extends Container {
   defaultPort = 8080;
   sleepAfter = '2m';   // billed only while it runs; it stops by itself after the run
+  // Why (5 Nov 2026, hr staging proof): a container that dies or never listens must leave a line (with observability on in wrangler.jsonc), not only a run stuck "running".
+  onStop(params) { console.log(`hosted runner container stopped: ${JSON.stringify(params)}`); }
+  onError(error) { console.error(`hosted runner container error: ${error instanceof Error ? error.message : String(error)}`); throw error; }
 }
 
 export default {
