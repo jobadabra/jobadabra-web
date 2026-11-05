@@ -4,6 +4,10 @@
 import {DARK, LIGHT as C} from './mail-palette.js';
 export const SITE = 'https://www.jobadabra.top';
 const LOGO = `${SITE}/images/logo-mark.png`;
+/** Where replies go and who answers (owner, 5 Nov 2026: "Questions? Just reply to this email. It comes straight to me."; support@ is forwarded to his inbox by Cloudflare Email Routing). shared/mail.js sends REPLY_TO as Reply-To. */
+export const REPLY_TO = 'support@jobadabra.top';
+const ASK = 'Questions? Just reply to this email. It comes straight to me.', SIGNED = 'Igor, builder of Jobadabra · Geneva';
+const PHOTO = `${SITE}/images/igor-footer.png`;   // 96 px round PNG, shown at 48 px (sharp on a phone)
 export const esc = text => String(text ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 export const link = (url, label) => `<a href="${esc(url)}" class="jp-link" style="color:${C.signal}">${esc(label)}</a>`;
 
@@ -34,6 +38,13 @@ export const jobText = (rows = []) => rows.map(job => `- ${job.title}${[job.comp
 
 export const codeBox = code => `<p class="jp-box jp-ink" style="font:700 30px ui-monospace,Menlo,monospace;letter-spacing:.3em;background:${C.quiet};border-radius:10px;padding:14px;text-align:center;margin:8px 0 14px">${esc(code)}</p>`;
 
+// The owner's personal footer: a round photo and a line, under the card of every mail (a table, no CSS a mail client may drop). Its text twin is frameText's "--" block.
+const personalHtml = () => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:18px auto 0"><tr><td align="center">`
+  + `<table role="presentation" align="center" cellpadding="0" cellspacing="0" style="margin:0 auto"><tr>`
+  + `<td width="48" valign="middle" style="width:48px;padding:0 12px 0 0"><img src="${PHOTO}" width="48" height="48" alt="" style="display:block;width:48px;height:48px;border:0;border-radius:50%"></td>`
+  + `<td valign="middle" style="text-align:left"><p class="jp-ink" style="margin:0;color:${C.ink};font:14px/1.45 ${FONT}">${ASK}</p>`
+  + `<p class="jp-muted" style="margin:1px 0 0;color:${C.muted};font:13px/1.4 ${FONT}">${SIGNED}</p></td></tr></table></td></tr></table>`;
+
 // html: {title, body (html), button: {label, url} | null, why, links: {stop, settings} | null}. links null = nothing to stop (a security mail): only the site link shows.
 export function frameHtml({title, body, button: action, why, links, hero}) {
   const foot = [links && link(links.stop, 'Stop these emails'), links && link(links.settings, 'Email settings'), link(SITE, 'jobadabra.top')].filter(Boolean).join(' · ');
@@ -42,11 +53,12 @@ export function frameHtml({title, body, button: action, why, links, hero}) {
     + `<table role="presentation" width="560" cellpadding="0" cellspacing="0" class="jp-card" style="width:100%;max-width:560px;background:${C.card};border:1px solid ${C.line};border-radius:12px;font:15px/1.55 ${FONT};color:${C.ink}">`
     + (hero || `<tr><td class="jp-line" style="padding:16px 22px;border-bottom:1px solid ${C.line}"><img src="${LOGO}" width="32" height="28" alt="" style="vertical-align:middle;border:0"> <b class="jp-ink" style="vertical-align:middle;margin-left:8px;font-size:15px">Jobadabra</b></td></tr>`)
     + `<tr><td class="jp-pad jp-ink" style="padding:22px">${hero ? '' : `<h1 class="jp-ink" style="margin:0 0 10px;font-size:20px;line-height:1.3">${esc(title)}</h1>`}${body}${action ? button(action) : ''}</td></tr></table>`
-    + `<p class="jp-muted" style="max-width:560px;margin:14px auto 0;color:${C.muted};font:12px/1.6 ${FONT};text-align:center">${esc(why)}<br>${foot}<br>Don't have the app? ${link(`${SITE}/download`, 'Download Jobadabra')}</p>`
+    + personalHtml()
+    + `<p class="jp-muted" style="max-width:560px;margin:10px auto 0;color:${C.muted};font:12px/1.5 ${FONT};text-align:center">${esc(why)}<br>${foot}<br>Don't have the app? ${link(`${SITE}/download`, 'Download Jobadabra')}</p>`
     + `</td></tr></table></body></html>`;
 }
 
 export function frameText({title, body, button: action, why, links}) {
-  return [title, '', body, action ? `\n${action.label}: ${action.url}` : '', '', '--', why,
+  return [title, '', body, action ? `\n${action.label}: ${action.url}` : '', '', '--', ASK, SIGNED, '', why,
     links ? `Stop these emails: ${links.stop}\nEmail settings: ${links.settings}` : '', SITE, `Don't have the app? Download Jobadabra: ${SITE}/download`].filter(part => part !== null && part !== undefined && part !== false).join('\n').replace(/\n{3,}/g, '\n\n');
 }

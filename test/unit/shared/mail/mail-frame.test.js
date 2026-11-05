@@ -50,6 +50,11 @@ test('every template goes through the frame: logo, title, footer with stop + set
     assert.ok(html.includes('https://www.jobadabra.top/images/logo-mark.png') && !html.includes('data:'), `${name}: hosted logo`);
     assert.ok(html.includes('>jobadabra.top</a>') && text.split('\n').includes('https://www.jobadabra.top'), `${name}: site link`);
     assert.ok(html.includes('>Download Jobadabra</a>') && html.includes('href="https://www.jobadabra.top/download"') && text.includes('Download Jobadabra: https://www.jobadabra.top/download'), `${name}: permanent download footer`);
+    // The owner's personal footer and Reply-To (owner, 5 Nov 2026: "Questions? Just reply to this email. It comes straight to me."): every mail, security ones too, through the one frame.
+    assert.ok(html.includes('Questions? Just reply to this email. It comes straight to me.') && html.includes('Igor, builder of Jobadabra · Geneva') && html.includes('src="https://www.jobadabra.top/images/igor-footer.png"'), `${name}: the owner's footer`);
+    assert.ok(text.includes('Questions? Just reply to this email. It comes straight to me.\nIgor, builder of Jobadabra · Geneva'), `${name}: the text twin has the footer`);
+    assert.equal(sent[0].replyTo, 'support@jobadabra.top', `${name}: replies go to support@`);
+    assert.match(sent[0].from, /no-reply@jobadabra\.top/, `${name}: From stays no-reply@`);
     assert.ok(html.split(`background:${LIGHT.fill}`).length - 1 <= 1, `${name}: at most one yellow button`);   // the app's yellow (shared/mail-palette.js); it counted the old orange until 28 Oct 2026 and so could never fail (Gitar, #220)
     assert.ok(!/<(script|form|iframe)/i.test(html), `${name}: email-safe`);
     if (spec.essential) { assert.ok(!html.includes('Stop these emails') && !sent[0].headers, `${name}: a security mail has nothing to stop`); continue; }
@@ -92,4 +97,11 @@ test('a template without a title is not sent, and no code sends mail except thro
   } finally { delete TEMPLATES.rogue; }
   const callers = sourceFiles().filter(({path}) => /EMAIL\.send\(/.test(readFileSync(path, 'utf8'))).map(({name}) => name);
   assert.deepEqual(callers, ['mail.js'], 'only shared/mail.js hands mail to the sender, so every mail is framed');
+});
+
+test("the owner's footer photo is a small round PNG served by the site (96 px, transparent corners: a mail client may ignore border-radius)", () => {
+  const png = readFileSync(new URL('../../../../web/public/images/igor-footer.png', import.meta.url));
+  assert.equal(png.readUInt32BE(16), 96); assert.equal(png.readUInt32BE(20), 96);   // IHDR width, height
+  assert.equal(png[25], 6, 'RGBA, so the corners can be transparent');
+  assert.ok(png.length < 40_000, 'small enough for a mail');
 });
