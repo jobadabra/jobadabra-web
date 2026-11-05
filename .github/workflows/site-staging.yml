@@ -45,7 +45,8 @@ jobs:
           have="$(npx --yes wrangler@4 secret list --config wrangler.staging.toml --format json)"
           for name in STATS_SALT HOSTED_KEK; do
             echo "$have" | grep -q "\"$name\"" && { echo "$name: already set"; continue; }
-            openssl rand -hex 32 | ../../tools/cf-retry.sh npx --yes wrangler@4 secret put "$name" --config wrangler.staging.toml
+            # The generator is inside the retried command: a retry makes a fresh value, never reads an emptied pipe and stores a blank secret (Gitar on #371).
+            ../../tools/cf-retry.sh bash -c 'openssl rand -hex 32 | npx --yes wrangler@4 secret put "$0" --config wrangler.staging.toml' "$name"
           done
       - name: Ask every route on staging and on production
         run: |
