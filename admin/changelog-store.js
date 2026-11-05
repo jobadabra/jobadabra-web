@@ -38,8 +38,8 @@ export async function ingest(request, env) {
     ...redraft.map(entry => rewrite.bind(JSON.stringify(entry.groups), at, entry.version)),
     ...hidden.filter(note).map(item => write.bind(item.version, item.date, item.channel, 1, '[]', at, 0)),
     ...Object.entries(data?.channels || {}).filter(([version, channel]) => /^\d+\.\d+\.\d+$/.test(version) && channel === 'stable').map(([version]) => promote.bind(version))]);
-  // Why (28 Oct 2026, owner: a mail "every time we publish a new stable version"): CI sends this when a version goes stable, so a stable version here starts its held release-mail draft (once per version, admin/release-mail.js).
-  const stable = [...entries.filter(entry => entry.channel === 'stable').map(entry => entry.version), ...Object.entries(data?.channels || {}).filter(([, channel]) => channel === 'stable').map(([version]) => version)];
+  // Why (5 Nov 2026, owner): every stable release drafts changes since the previous stable, even when the final build has no notes of its own.
+  const stable = [...entries.filter(entry => entry.channel === 'stable').map(entry => entry.version), ...hidden.filter(note).filter(entry => entry.channel === 'stable').map(entry => entry.version), ...Object.entries(data?.channels || {}).filter(([, channel]) => channel === 'stable').map(([version]) => version)];
   for (const version of new Set(stable)) await draft(env, version).catch(error => console.error(`release mail draft ${version}: ${error.message}`));
   return json({ok: true, stored: entries.length, hidden: hidden.length});
 }

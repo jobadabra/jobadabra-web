@@ -30,3 +30,13 @@ The release review page uses the shared admin main container, with responsive ca
 Legacy drafts without category metadata read the complete changelog through the same adapter for preview, test and broadcast, including previously omitted fixes. No production data rewrite or AI generation is needed.
 
 All email footers include “Don't have the app? Download Jobadabra”. The release CTA says “Download latest version” while installed apps do not yet register an open/update URL handler; email links must not promise to open an update dialog until that desktop support ships (5 Nov 2026).
+
+## Stable interval (owner, 5 Nov 2026)
+
+Release emails are available only for versions recorded as stable. Both drafting and sending verify that channel; a beta cannot send even if a draft row was created earlier. Content is every visible changelog entry after the previous stable version through the target stable version, including intermediate betas and excluding the previous stable and later versions. Exact repeated changes are included once. Numeric version ordering determines the boundary, and a stable with no visible changes of its own still bounds the interval and triggers a draft when its beta interval has changes.
+
+The same calculation serves new drafts, existing drafts, previews, tests and broadcasts. The email shows “Changes since version …”. A broadcast stores its complete content when claiming the draft; sending/sent previews and subsequent test copies retain that snapshot even if the public changelog is redrafted. No AI redraft or automatic send is needed.
+
+## Finding drafts and testing templates (owner, 5 Nov 2026)
+
+The Email overview starts with stable release draft links. Template titles open dedicated full-page sample previews with back navigation. Both sample-send buttons return to an anchored result inside the selected template, preserve detail mode, identify whether the destination was the test inbox or the entered address, and show readable failure reasons. Email inputs and buttons share the responsive admin styling. An accepted send is distinct from a received copy in Test inbox.

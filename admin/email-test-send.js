@@ -22,5 +22,5 @@ export async function testSend(request, env) {
   if (mine && !validAddress(to)) return new Response('Enter an email address like you@example.com.', {status: 400});
   if (!mine && !isTestAddress(to)) return new Response('Test mail goes only to a test-account-*@jobpilotto.top address.', {status: 400});
   const result = await send(env, template, to, SAMPLES[template]);
-  return new Response(null, {status: 303, headers: {Location: `/admin/growth/email?test=${template}:${result.ok ? 'sent' : result.reason}`, 'Cache-Control': 'no-store'}});
+  return new Response(null, {status: 303, headers: {Location: `/admin/growth/email?test=${template}:${result.ok ? 'sent' : result.reason}&destination=${mine ? 'personal' : 'inbox'}${form.get('detail') === '1' ? `&template=${template}` : ''}#test-result-${template}`, 'Cache-Control': 'no-store'}});
 }

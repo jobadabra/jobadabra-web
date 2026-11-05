@@ -15,7 +15,7 @@ import {view} from '../../../admin/email.js';
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0078_test_mail.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql']) db.exec(sql(file));
+  for (const file of ['0078_test_mail.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql', '0093_changelog.sql', '0105_changelog_plain.sql', '0117_release_mail.sql']) db.exec(sql(file));
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values), run: async () => db.prepare(text).run(...args),
     all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
   return {db, prepare: text => statement(text)};
@@ -85,13 +85,13 @@ test('the page shows each template in a sandboxed frame', async () => {
 
 // ---- send to test inbox ----
 const post = (fields, {origin = 'https://www.jobadabra.top', key = 'script-key'} = {}) => new Request('https://www.jobadabra.top/admin/growth/email', {method: 'POST', headers: {Origin: origin, ...(key && {Authorization: `Bearer ${key}`})}, body: new URLSearchParams(fields)});
-const live = async () => { const sent = [], {env} = await fill(); return {sent, env: {...env, STATS_KEY: 'browser-key', STATS_API_KEY: 'script-key', EMAIL: {send: async m => { sent.push(m); return {messageId: 'm1'}; }}}}; };
+const live = async () => { const sent = [], {env} = await fill(); return {sent, env: {...env, STATS_KEY: 'browser-key', STATS_API_KEY: 'script-key', WAITLIST: {list: async () => ({keys: [], list_complete: true})}, EMAIL: {send: async m => { sent.push(m); return {messageId: 'm1'}; }}}}; };
 
 test('a test send mails only the test inbox, through the real sender, and says so on the page', async () => {
   const {env, sent} = await live();
   const response = await view(post({template: 'welcome'}), env);
   assert.equal(response.status, 303);
-  assert.equal(response.headers.get('Location'), '/admin/growth/email?test=welcome:sent');
+  assert.equal(response.headers.get('Location'), '/admin/growth/email?test=welcome:sent&destination=inbox#test-result-welcome');
   assert.deepEqual(sent.map(m => m.to), [TEST_INBOX]);
   assert.match(sent[0].subject, /Confirm your email/);
   assert.match(page(await collect(env, {now}), null, '<p>x</p>'), /test-account-admin@jobpilotto\.top/);
@@ -110,10 +110,10 @@ test('a test send refuses any other address, an unknown template, a stranger and
 
 test('with the MAIL switch off, or for a list the address stopped, the result says why and nothing is sent', async () => {
   const {env, sent} = await live();
-  assert.equal((await view(post({template: 'welcome'}), {...env, MAIL: 'off'})).headers.get('Location'), '/admin/growth/email?test=welcome:off');
-  assert.equal((await view(post({template: 'pro-launch'}), {...env, MARKETING_MAIL: 'off'})).headers.get('Location'), '/admin/growth/email?test=pro-launch:marketing_off');
+  assert.equal((await view(post({template: 'welcome'}), {...env, MAIL: 'off'})).headers.get('Location'), '/admin/growth/email?test=welcome:off&destination=inbox#test-result-welcome');
+  assert.equal((await view(post({template: 'pro-launch'}), {...env, MARKETING_MAIL: 'off'})).headers.get('Location'), '/admin/growth/email?test=pro-launch:marketing_off&destination=inbox#test-result-pro-launch');
   env.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'marketing', 'unsubscribe', 'x')").run(await addrOf('test-account-admin@jobpilotto.top'));   // product news are opt-out (28 Oct 2026): stopped is what refuses
-  assert.equal((await view(post({template: 'pro-launch'}), {...env, MARKETING_MAIL: 'on'})).headers.get('Location'), '/admin/growth/email?test=pro-launch:unsubscribed');
+  assert.equal((await view(post({template: 'pro-launch'}), {...env, MARKETING_MAIL: 'on'})).headers.get('Location'), '/admin/growth/email?test=pro-launch:unsubscribed&destination=inbox#test-result-pro-launch');
   assert.equal(sent.length, 0);
 });
 
@@ -121,4 +121,37 @@ test('every template card has its own button, and only a known notice word is pr
   const {env} = await fill();
   const html = page(await collect(env, {now}));
   assert.equal((html.match(/<button type="submit">Send to test inbox/g) || []).length, Object.keys(TEMPLATES).length);
+});
+
+test('template sends return to their card and distinguish the personal destination', async () => {
+  const {env} = await live();
+  const inbox = new URL((await view(post({template: 'welcome'}), env)).headers.get('Location'), 'https://www.jobadabra.top');
+  assert.equal(inbox.hash, '#test-result-welcome');
+  const personal = new URL((await view(post({template: 'welcome', mine: '1', to: 'reviewer@example.com', detail: '1'}), env)).headers.get('Location'), 'https://www.jobadabra.top');
+  assert.equal(personal.searchParams.get('template'), 'welcome');
+  assert.equal(personal.searchParams.get('destination'), 'personal');
+  assert.equal(personal.hash, '#test-result-welcome');
+  const html = await (await view(new Request(personal, {headers: {Authorization: 'Bearer script-key'}}), env)).text();
+  assert.equal((html.match(/<iframe sandbox/g) || []).length, 1);
+  assert.match(html, /Sent to the email address you entered/);
+  assert.doesNotMatch(html, /sent to the test inbox/);
+});
+
+test('the template full-page view shows a visible failure and a back link', async () => {
+  const {env} = await live();
+  const html = await (await view(new Request('https://www.jobadabra.top/admin/growth/email?template=welcome&test=welcome:off', {headers: {Authorization: 'Bearer script-key'}}), env)).text();
+  assert.equal((html.match(/<iframe sandbox/g) || []).length, 1);
+  assert.match(html, /role="alert"/);
+  assert.doesNotMatch(html, /sent 0 in the window/);
+  assert.match(html, /Email sending is switched off/);
+  assert.match(html, /href="\/admin\/growth\/email"/);
+});
+
+test('the email overview links to stable release drafts and template detail pages', async () => {
+  const {env} = await live();
+  env.STATS.db.prepare('INSERT INTO release_mail (version,data,created_at) VALUES (?,?,?)').run('0.9.9', '{}', 'x');
+  env.STATS.db.prepare('INSERT INTO changelog_entries (version,date,channel,hidden,body,at) VALUES (?,?,?,?,?,?)').run('0.9.9', '2026-11-05', 'stable', 0, '[]', 'x');
+  const html = await (await view(new Request('https://www.jobadabra.top/admin/growth/email', {headers: {Authorization: 'Bearer script-key'}}), env)).text();
+  assert.match(html, /href="\/admin\/growth\/email\?release=0\.9\.9"/);
+  assert.match(html, /href="\/admin\/growth\/email\?template=welcome"/);
 });

@@ -15,12 +15,13 @@ const picture = image => (image?.url ? `<p style="margin:12px 0 0"><img src="${e
 export const releaseSubject = ({version, test = false}) => `${test ? '[TEST] ' : ''}Jobadabra ${version} · What's new`;
 
 /** Renders a short version heading; only an explicitly saved introduction adds introductory prose. */
-export function releaseHero({version, month, intro, hero, test = false}) {
+export function releaseHero({version, previousStable, month, intro, hero, test = false}) {
   return `<tr><td style="background:${C.hero};padding:24px;color:${C.onHero};border-radius:12px 12px 0 0">`
     + (test ? `<p style="margin:0 0 12px;color:${C.onHero};font-weight:700">Test email · Release ${esc(version)} · Sent only to your test address</p>` : '')
     + `<p style="margin:0 0 12px;font-size:13px;color:${C.onHeroMuted}"><img src="${SITE}/images/logo-mark.png" width="22" height="19" alt="" style="vertical-align:middle;border:0"> &nbsp;What's new in Jobadabra</p>`
     + `<h1 style="margin:0;font:700 24px/1.25 ${FONT};color:${C.onHero}">Version ${esc(version)}</h1>`
     + `<p style="margin:8px 0 0;font-size:13px;color:${C.onHeroMuted}">${esc(month)}</p>`
+    + (previousStable ? `<p style="margin:8px 0 0;font-size:13px;color:${C.onHeroMuted}">Changes since version ${esc(previousStable)}</p>` : '')
     + (intro ? `<p style="margin:16px 0 0;font-size:15px;line-height:1.55;color:${C.onHero}">${esc(intro)}</p>` : '')
     + picture(hero) + '</td></tr>';
 }
@@ -37,8 +38,8 @@ export function releaseHtml({sections = [], updateUrl}) {
 }
 
 /** Provides the same version, categories and changes to clients that display plain text. */
-export function releaseText({version, month, intro, sections = [], updateUrl, test = false}) {
+export function releaseText({version, previousStable, month, intro, sections = [], updateUrl, test = false}) {
   const parts = sections.map(section => [`${labelOf(section)}: ${section.title}. ${plain(section.text)}`, ...(section.steps || []).map(plain)].join('\n'));
-  return [...(test ? [`Test email · Release ${version} · Sent only to your test address`, ''] : []), `What's new in Jobadabra · Version ${version}`, month, '', ...(intro ? [intro, ''] : []), ...parts.flatMap(part => [part, '']),
+  return [...(test ? [`Test email · Release ${version} · Sent only to your test address`, ''] : []), `What's new in Jobadabra · Version ${version}`, month, ...(previousStable ? [`Changes since version ${previousStable}`] : []), '', ...(intro ? [intro, ''] : []), ...parts.flatMap(part => [part, '']),
     'Open Jobadabra and choose Update from the menu.', updateUrl ? `Or download it: ${updateUrl}` : ''].join('\n');
 }
