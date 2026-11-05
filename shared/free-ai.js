@@ -10,6 +10,7 @@ import {FREE_NEURONS_PER_DAY, costUsd, modelFor, neuronsOf} from './free-ai-mode
 import {PRO_PER_MINUTE, chargeCall, proLane} from './pro-ai.js';
 import {claudeCall, proRoute} from './pro-claude.js';
 import {aiAccess} from './hosted-budget.js';
+import {alertOwner} from './notify-send.js';
 import {runOf} from './hosted.js';
 import {WEB_ACTION, webSearch} from './free-ai-web.js';
 
@@ -133,22 +134,31 @@ export async function freeAi(request, env, now = new Date(), ctx = null, fetcher
   return Response.json(message);
 }
 
+// The one send of the three spend alerts: the switchboard (switch, channel) first, the Brain bot as before when it cannot deliver. Never throws: an alert must not fail a Free AI answer.
+// Why (5 Nov 2026, nt 2/4, code review): the day, month and neuron alerts are three different things on one event, and each already fires once through its KV flag, so the event's mode is "every"
+// (a "once a day" mode would hold the month alert behind the day one and lose it); when nothing could deliver, the flag is removed so the next call tries again.
+async function tellSpend(env, kv, flag, text, fetcher) {
+  const told = await alertOwner(env, 'free-ai-spend', {text, html: true, fetcher,
+    legacy: env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null}).catch(() => null);
+  // Nothing configured at all (no bot, no store) is not a failed send: keep the flag, or every later call would redo the KV write and the log row (Gitar on #429).
+  const unconfigured = told?.via === 'none' && (told.why === 'no-bot' || told.why === 'channel-not-connected' || told.why === 'no-store');
+  if (!unconfigured && (!told || (!told.sent && told.via !== 'switchboard'))) await Promise.resolve(kv.delete?.(flag)).catch(() => {});
+}
+
 // One Telegram line the day the global spend first crosses the alert line.
 async function alertOnce(env, kv, day, before, after, fetcher) {
   const line = num(env.FREE_AI_ALERT_USD, LIMITS.alertUsd) * 1e6;
-  if (before >= line || after < line || !env.BRAIN_BOT_TOKEN || !env.BRAIN_CHAT_ID || await kv.get(`freeai:alerted:${day}`)) return;
+  if (before >= line || after < line || await kv.get(`freeai:alerted:${day}`)) return;
   await kv.put(`freeai:alerted:${day}`, '1', {expirationTtl: 2 * 86400});
-  await fetcher(`https://api.telegram.org/bot${env.BRAIN_BOT_TOKEN}/sendMessage`, {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text: `⚠️ <b>Free AI</b> spend today passed $${line / 1e6} (stops at $${num(env.FREE_AI_STOP_USD, LIMITS.stopUsd)}). /admin/ai/costs has the steps.`, parse_mode: 'HTML'})}).catch(() => {});
+  await tellSpend(env, kv, `freeai:alerted:${day}`, `⚠️ <b>Free AI</b> spend today passed $${line / 1e6} (stops at $${num(env.FREE_AI_STOP_USD, LIMITS.stopUsd)}). /admin/ai/costs has the steps.`, fetcher);
 }
 
 // One Telegram line the month the global spend first crosses the month alert line ($40 of the $60 stop).
 async function monthAlert(env, kv, month, before, after, fetcher) {
   const line = num(env.FREE_AI_MONTH_ALERT_USD, LIMITS.monthAlertUsd) * 1e6;
-  if (before >= line || after < line || !env.BRAIN_BOT_TOKEN || !env.BRAIN_CHAT_ID || await kv.get(`freeai:monalerted:${month}`)) return;
+  if (before >= line || after < line || await kv.get(`freeai:monalerted:${month}`)) return;
   await kv.put(`freeai:monalerted:${month}`, '1', {expirationTtl: 40 * 86400});
-  await fetcher(`https://api.telegram.org/bot${env.BRAIN_BOT_TOKEN}/sendMessage`, {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text: `⚠️ <b>Free AI</b> spend this month passed $${line / 1e6} (stops at $${num(env.FREE_AI_MONTH_STOP_USD, LIMITS.monthStopUsd)}). /admin/ai/costs has the installs.`, parse_mode: 'HTML'})}).catch(() => {});
+  await tellSpend(env, kv, `freeai:monalerted:${month}`, `⚠️ <b>Free AI</b> spend this month passed $${line / 1e6} (stops at $${num(env.FREE_AI_MONTH_STOP_USD, LIMITS.monthStopUsd)}). /admin/ai/costs has the installs.`, fetcher);
 }
 
 const isJson = text => { try { JSON.parse(text); return true; } catch { return false; } };
@@ -156,8 +166,7 @@ const isJson = text => { try { JSON.parse(text); return true; } catch { return f
 // One Telegram line the first time today that 80% of the free plan's allowance is used (counted from the account's own usage when it can be read) (Free AI then stops at 100% until 00:00 UTC).
 async function neuronAlert(env, kv, day, after, allowance, fetcher) {
   const line = allowance * 0.8;
-  if (!Number.isFinite(allowance) || after < line || !env.BRAIN_BOT_TOKEN || !env.BRAIN_CHAT_ID || await kv.get(`freeai:neualert:${day}`)) return;
+  if (!Number.isFinite(allowance) || after < line || await kv.get(`freeai:neualert:${day}`)) return;
   await kv.put(`freeai:neualert:${day}`, '1', {expirationTtl: 2 * 86400});
-  await fetcher(`https://api.telegram.org/bot${env.BRAIN_BOT_TOKEN}/sendMessage`, {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text: `⚠️ <b>Free AI</b> used 80% of today's free allowance (${Math.round(line)} of ${allowance} neurons). It stops at 100% until 00:00 UTC. /admin/ai/costs has the day.`, parse_mode: 'HTML'})}).catch(() => {});
+  await tellSpend(env, kv, `freeai:neualert:${day}`, `⚠️ <b>Free AI</b> used 80% of today's free allowance (${Math.round(line)} of ${allowance} neurons). It stops at 100% until 00:00 UTC. /admin/ai/costs has the day.`, fetcher);
 }

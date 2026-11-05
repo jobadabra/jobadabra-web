@@ -5,11 +5,11 @@ import {authorize, digestOf, equal, tokenFor} from '../shared/guard.js';
 import {installOfTrialKey} from '../shared/trial-key.js';
 import {addrOf, confirmLink, send, validAddress, clean} from '../shared/mail.js';
 import {fromTelegram} from './mail-html.js';
-import {CADENCES, deliver, hold} from './mail-held.js';
+import {CADENCES, deliver, hold, testAlert} from './mail-held.js';
 import {page, switchOff} from './mail-unsub.js';
 import {accountOf, createAccount, link} from '../shared/pro.js';
 import {escTags} from '../shared/html.js';
-import {telegram} from '../shared/telegram.js';
+import {alertOwner} from '../shared/notify-send.js';
 
 const parseKey = key => { const [tag, install, token] = String(key || '').split('.'); return tag === 'JPF1' && install && token ? {install, token} : null; };
 const json = (status, body) => Response.json(body, {status});
@@ -33,14 +33,15 @@ async function setMarketing(env, account, on, now) {
 // or changed ("User e-mail changed"); a re-save of the same address is not fresh, so it never pings. It runs after the account is written and never throws, so Telegram can never fail the save
 // (a bad answer or no BRAIN_* secrets = one log line without the token, or nothing). The address goes to the owner's own chat, as api/feedback.js does with a reporter's optional e-mail; no other personal data.
 async function tellOwner(env, fetcher, {email, install, changed}) {
-  if (!(env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID)) return;
   try {
     const total = (await env.STATS.prepare("SELECT COUNT(*) AS n FROM pro_accounts WHERE email IS NOT NULL AND email != ''").first().catch(() => null))?.n;
-    const text = `📧 <b>${changed ? 'User e-mail changed' : 'New user e-mail'}</b> · ${escTags(email)} · install ${escTags(install.slice(0, 8))}${total ? ` · ${total} with an e-mail` : ''}`;
-    const sent = await telegram(fetcher, env, 'sendMessage', {chat_id: env.BRAIN_CHAT_ID, text, parse_mode: 'HTML', disable_web_page_preview: true});
-    if (sent.why) console.log('account e-mail ping failed', sent.why.slice(0, 200));
+    // Why (5 Nov 2026, owner: an alert never carries a name or e-mail address): the address is on /admin/growth/email; the ping says that one came and links there.
+    const text = `📧 <b>${changed ? 'User e-mail changed' : 'New user e-mail'}</b> · install ${escTags(install.slice(0, 8))}${total ? ` · ${total} with an e-mail` : ''}`;
+    const legacy = env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null;
+    const sent = await alertOwner(env, 'email-added', {text, html: true, link: `${env.SITE_URL || 'https://www.jobadabra.top'}/admin/growth/email`, legacy, fetcher});
+    if (!sent.sent && sent.via !== 'switchboard') console.log('account e-mail ping failed', String(sent.why).slice(0, 200));
   } catch (error) {
-    console.log('account e-mail ping failed', String(error.message).split(env.BRAIN_BOT_TOKEN).join('<token>'));
+    console.log('account e-mail ping failed', String(error.message).split(env.BRAIN_BOT_TOKEN || '\u0000').join('<token>'));
   }
 }
 
@@ -119,7 +120,8 @@ export async function resend(request, env, now = new Date()) {
   return json(200, {ok: false, error: sent.reason === 'off' ? 'off' : sent.reason === 'rate' ? 'wait' : 'not_sent'});
 }
 
-// POST /api/notify/email {subject, html, buttons?: [{text, url}], kind?: 'activity'}: 'activity' is held for the digest, anything else goes at once; `html` is the Telegram HTML the engine built (tgcard.py); only a safe subset reaches the mail (mail-html.js).
+// POST /api/notify/email {subject, html, buttons?: [{text, url}], kind?: 'activity' | 'test'}: 'activity' is held for the digest; 'test' (the GitHub way's Test) sends the
+// alert test mail instead of the body, once a day, outside the per-address cap (api/mail-held.js testAlert: a stolen repo key gets one mail a day); anything else goes at once; `html` is the Telegram HTML the engine built (tgcard.py); only a safe subset reaches the mail (mail-html.js).
 export async function notify(request, env, now = new Date()) {
   const install = (await installOfTrialKey(request.headers.get('x-api-key'), env))?.install;   // also the JPT1 key an Always-on repo holds: it reaches only this route and the trial status
   if (!install || !env.STATS) return json(401, {ok: false, error: 'unauthorized'});
@@ -127,6 +129,7 @@ export async function notify(request, env, now = new Date()) {
   const account = await accountOf(env, install);
   if (!account?.email) return json(200, {ok: false, reason: 'no_address'});
   const body = await request.json().catch(() => ({}));
+  if (body.kind === 'test') { const sent = await testAlert(env, account, now); return json(200, sent.ok ? {ok: true, earlier: !!sent.earlier} : {ok: false, reason: sent.reason}); }
   const {html, text} = fromTelegram(body.html);
   if (!text) return json(400, {ok: false, reason: 'empty'});
   const buttons = (Array.isArray(body.buttons) ? body.buttons : []).slice(0, 6).filter(b => b && /^https:\/\//.test(b.url) && b.text).map(b => ({text: String(b.text).slice(0, 80), url: String(b.url).slice(0, 500)}));

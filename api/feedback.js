@@ -6,7 +6,8 @@
 import {escTags} from '../shared/html.js';
 import {TEXT_FILES} from '../shared/feedback.js';
 import {suggestImpact} from '../shared/feedback-impact.js';
-import {telegram} from '../shared/telegram.js';
+import {alertOwner} from '../shared/notify-send.js';
+import {sendPhoto} from '../shared/notify-telegram.js';
 
 const PER_INSTALL_PER_DAY = 10;
 // Why (2 Nov 2026, owner: "the app version, the OS platform, the installation id"): the platform field carries the OS version and architecture too ("win32 10.0.19045 x64"), so 40 characters, not 20.
@@ -31,22 +32,24 @@ export function decodeShot(value) {
 
 // Messages to the owner: the words first (with the logs link), then the screenshot as a photo under it. -> 'sent' | 'off' | 'failed: <why>'
 async function tell(env, fetcher, row, shot) {
-  if (!(env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID)) return 'off';
+  const legacy = env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null;
   const cut = row.text.length > TELEGRAM_TEXT;
-  const have = [cut && 'Full text', row.shot && 'Screenshot', row.logs && 'Logs', row.page && 'Screen data', row.profile && 'Profile'].filter(Boolean);
+  const have = [cut && 'Full text', row.shot && 'Screenshot', row.logs && 'Logs', row.page && 'Screen data', row.profile && 'Profile', row.contact && 'Reply address'].filter(Boolean);
   const link = have.length ? `\n\n📎 <a href="https://www.jobadabra.top/admin/feedback/inbox#${row.ref}">${have.join(' · ')} on /admin</a>` : '';
   const message = `💬 <b>Feedback</b> · v${escTags(row.version)} · ${escTags(row.platform)}${row.screen ? ` · ${escTags(row.screen)}` : ''} · install ${escTags(row.install.slice(0, 8))}\n\n${escTags(cut ? `${row.text.slice(0, TELEGRAM_TEXT).replace(/[\uD800-\uDBFF]$/, '').trimEnd()}…` : row.text)}` +
-    (row.contact ? `\n\n↩︎ ${escTags(row.contact)}` : '') + link;
-  const first = await telegram(fetcher, env, 'sendMessage', {chat_id: env.BRAIN_CHAT_ID, text: message, parse_mode: 'HTML', disable_web_page_preview: true});
-  if (first.why) return `failed: ${first.why}`.slice(0, 200);
-  if (!shot) return 'sent';
+    link;   // Why (5 Nov 2026, owner: an alert never carries a name or e-mail address): the reporter's optional address is read on /admin, not in Telegram
+  // The switchboard (the owner's switch, channel) first; the Brain bot as before when it cannot deliver (shared/notify-send.js).
+  const first = await alertOwner(env, 'feedback-received', {text: message, html: true, legacy, fetcher});
+  if (first.via === 'none' && !first.sent) return first.why === 'no-bot' || first.why === 'channel-not-connected' ? 'off' : `failed: ${first.why}`.slice(0, 200);
+  if (!first.sent) return first.via === 'switchboard' ? 'held' : `failed: ${first.why}`.slice(0, 200);
+  if (!shot || !first.bot) return 'sent';
   const form = new FormData();
-  form.set('chat_id', String(env.BRAIN_CHAT_ID));
+  form.set('chat_id', String(first.bot.chat));
   form.set('photo', new Blob([shot.bytes], {type: shot.type === 'jpg' ? 'image/jpeg' : 'image/png'}), `screen.${shot.type}`);
   form.set('caption', `📸 ${row.screen || 'the app window'}`);
   if (first.id) form.set('reply_to_message_id', String(first.id));
-  const photo = await telegram(fetcher, env, 'sendPhoto', form);
-  return photo.why ? `failed: photo ${photo.why}`.slice(0, 200) : 'sent';
+  const photo = await sendPhoto(fetcher, first.bot.token, form);
+  return photo.ok ? 'sent' : `failed: photo ${photo.why}`.slice(0, 200);
 }
 
 export async function feedback(request, env, fetcher = fetch, now = new Date(), ctx = null) {

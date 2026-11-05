@@ -212,7 +212,7 @@ const make = row => {
     if (row.impact_why) box.append(el('span', row.impact_ai ? '' : 'warn', (row.impact_ai ? '' : '⚠ ') + row.impact_why));
     card.append(box);
   }
-  if (row.notified === 'sent') { /* delivered: nothing to say */ } else if (row.notified) {
+  if (row.notified === 'sent' || row.notified === 'held') { /* delivered, or held back on purpose by the owner's switch (Operations → Notifications): nothing to say */ } else if (row.notified) {
     const flag = el('div', 'warn reply', row.notified === 'off' ? '⚠ Telegram is not set up: you were not told about this one.' : '⚠ Not delivered to Telegram (' + row.notified.replace(/^failed: /, '') + ')');
     card.append(flag);
   }
