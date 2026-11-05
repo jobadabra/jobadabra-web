@@ -28,6 +28,8 @@ export const ALERTS = [
   a('journey-failing', '🧭 A journey no longer passes', 'main', 'changes', 'engineering', {wired: true, modes: ['every', 'changes'], jobs: ['journeys.yml']}),
   a('harness-daily', '🧰 Harness daily: a check failed', 'main', 'problems', 'engineering', {wired: true, jobs: ['harness-daily.yml']}),
   a('replay-refill', '🔁 Replay refill needs a look', 'main', 'every', 'engineering', {wired: true, jobs: ['replay-refill.yml']}),
+  a('replay-drift', '🎞 Site replays: pinned rows differ from live', 'main', 'every', 'engineering', {modes: ['every', 'problems'], jobs: ['site-replays.yml']}),   // Why (5 Nov 2026, 3/4e): site-replays.yml was the one main-checks alert still on its own bot, so no switch could stop it; its sender is public node ci-alert.mjs (workflow -> event table)
+  a('pr-check-scorecard', '📊 PR check scorecard (monthly)', 'main', 'every', 'engineering', {jobs: ['pr-check-scorecard.yml']}),
   a('daily-build-digest', '🗓 Daily build digest', 'main', 'daily', 'engineering', {on: false, jobs: ['jobadabra-web/daily-digest.yml']}),
   a('record-sites', '📼 Record sites / watch list: new failures', 'main', 'daily', 'engineering', {wired: true, on: false, modes: ['every', 'daily'], jobs: ['record-sites.yml', 'watch-live.yml']}),
   a('ai-fixer-round', '🔧 AI fixer: PR ready / red / conflict', 'ai', 'every', 'engineering', {jobs: ['ai-fixer.yml', 'ai-fixer-follow.yml']}),
