@@ -19,6 +19,7 @@ const STAND_IN = `const fs = require('node:fs'), cp = require('node:child_proces
     const turn = (fs.existsSync('turns') ? Number(fs.readFileSync('turns', 'utf8')) : 0) + 1;
     fs.writeFileSync('turns', String(turn));
     if (turn === Number(process.env.STALL_AT)) {
+      console.log(JSON.stringify({type: 'thread.started', thread_id: 't1'})); console.log(JSON.stringify({type: 'turn.started'}));
       cp.spawn('sleep', ['5'], {stdio: 'inherit', detached: process.env.STRAY === 'own-group'});   // holds the pipes after codex itself is killed
       setInterval(() => {}, 1000);   // codex waits for a reply that never comes
       return;
@@ -60,6 +61,7 @@ for (const stray of ['same-group', 'own-group']) {
     assert.notEqual(stalled, 'no answer', 'the guard answered within 3.5 s (guard 1.5 s + at most 0.5 s grace); the old run() waited for the helper, about 5 s');
     assert.equal(stalled.status, 500);
     assert.match(stalled.body.error, /^codex-failed:null \[killed after 1\.5 s: codex did not finish\]/, 'the failure says it was the guard');
+    assert.match(stalled.body.error, /\[codex events: 2, last: thread\.started > turn\.started\]/, 'and what codex had printed before it stalled');
     assert.ok(Date.now() - started < 3000, `came back after ${Date.now() - started} ms`);
     const after = await call({prompt: 'full prompt', model: 'm', session: session('none', {restart: 'gap'})});
     assert.equal(after.status, 200, 'the turn after a stalled one is a new conversation and answers');
