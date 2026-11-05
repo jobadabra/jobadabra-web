@@ -1,6 +1,7 @@
 // The e-mail digest of everything that is not a new-matches mail (owner, 17 Oct 2026): mail-check results, insights, finished jobs wait here, and the daily cron sends each account
 // ONE mail (weekly on Mondays for an account that chose weekly). New matches and interview notices never wait: api/account-email.js sends them at once. Guard: test/unit/api/account-email.test.js.
-import {addrOf, confirmLink, send} from '../shared/mail.js';
+import {addrOf, confirmLink, send, sendTestMail} from '../shared/mail.js';
+import {TEMPLATES} from '../shared/mail-templates.js';
 
 const HOLD_MAX = 100;            // per account: a stuck mailbox cannot grow the table
 const KEEP_DAYS = 14;
@@ -24,6 +25,17 @@ export async function deliver(env, account, {subject, html, text, buttons = []},
     confirmUrl = await confirmLink(env, account.email);
   }
   return send(env, 'message', account.email, {subject: String(subject || '').slice(0, 150), html, text, buttons, confirmUrl}, {now});
+}
+
+/**
+ * The Test's alert mail for `account` ({email, email_confirmed_at}): {ok: true, at, earlier?} or a refusal. Once a day (shared/mail.js sendTestMail).
+ * Why (review of hr-23, 5 Nov 2026): an address nobody confirmed may be a stranger's, so it gets the test through deliver(): the confirm link, one mail a day, the 14-day stop.
+ */
+export async function testAlert(env, account, now = new Date()) {
+  if (account.email_confirmed_at) return sendTestMail(env, account.email, now);
+  const spec = TEMPLATES['always-on-test'];
+  const sent = await sendTestMail(env, account.email, now, () => deliver(env, account, {subject: spec.subject(), html: spec.html(), text: spec.text()}, now));
+  return sent.reason === 'unconfirmed' ? {ok: true, at: now.toISOString(), earlier: true} : sent;   // today's one mail with the confirm link already went
 }
 
 export async function hold(env, account, item, now = new Date()) {

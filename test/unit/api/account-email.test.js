@@ -83,14 +83,28 @@ test('a message is mailed in the Telegram layout with a confirm link; an unconfi
   assert.ok(!sent[last].html.includes('/confirm?a='));
 });
 
-test('kind "test" (the GitHub way\'s Test) sends the alert test mail once a day, outside the per-address cap, whatever the body', async () => {
+test('kind "test" (the GitHub way\'s Test): a confirmed address gets the alert test mail once a day, on a full address too, whatever the body or the number of calls', async () => {
   // Why (owner, 5 Nov 2026: "Still, test emmail are aside of this cap"); once a day so a stolen repo key cannot flood the inbox.
   const {e, sent} = setup();
   await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});
+  e.STATS.db.prepare('UPDATE pro_accounts SET email_confirmed_at = ?').run('2026-10-16T09:00:00Z');
+  for (let i = 0; i < 12; i++) e.STATS.db.prepare("INSERT INTO mail_log (at, addr, list, template, status) VALUES (?, ?, 'service', 'digest', 'sent')").run('2026-10-16T09:30:00Z', await addrOf('me@example.com'));
   sent.length = 0;
-  assert.deepEqual(await call(notify, e, 'install-aaaa', 'POST', {kind: 'test'}), {status: 200, ok: true, earlier: false});
-  assert.deepEqual(await call(notify, e, 'install-aaaa', 'POST', {kind: 'test', subject: 'x', html: card}), {status: 200, ok: true, earlier: true});
+  const all = await Promise.all(Array.from({length: 20}, () => call(notify, e, 'install-aaaa', 'POST', {kind: 'test', subject: 'x', html: card})));
+  assert.ok(all.every(r => r.ok));
   assert.deepEqual(sent.map(m => m.subject), ['Always on test: your alerts reach you']);
+  assert.deepEqual(await call(notify, e, 'install-aaaa', 'POST', {kind: 'test'}), {status: 200, ok: true, earlier: true});
+});
+
+test('kind "test" to an unconfirmed address follows the unconfirmed rules: the confirm link, one mail a day; it may be a stranger\'s', async () => {
+  // Why (review of hr-23, 5 Nov 2026): sent bare, a stranger's address would get a mail a day for ever, with no confirm link and no 14-day stop.
+  const {e, sent} = setup();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});
+  sent.length = 0;
+  await Promise.all(Array.from({length: 5}, () => call(notify, e, 'install-aaaa', 'POST', {kind: 'test'})));
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].subject, 'Always on test: your alerts reach you');
+  assert.match(sent[0].html, /confirm/i);
 });
 
 test('an empty message and a person who switched the service list off send nothing', async () => {

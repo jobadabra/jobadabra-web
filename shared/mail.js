@@ -81,7 +81,7 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
     const addr = await addrOf(to);
     if (!verdict.ok) { if (verdict.reason !== 'bad_address' && verdict.reason !== 'marketing_off') await record(env, now, addr, spec.list, logged, verdict.reason); return verdict; }
     const since = new Date(now.getTime() - DAY).toISOString();
-    const mine = await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE addr = ? AND status = 'sent' AND at >= ? AND template NOT LIKE 'test:%'").bind(addr, since).first();
+    const mine = test ? {n: 0} : await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE addr = ? AND status = 'sent' AND at >= ? AND template NOT LIKE 'test:%'").bind(addr, since).first();
     const all = await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'sent' AND at >= ?").bind(since).first();
     if ((!test && mine.n >= DAILY_MAX) || all.n >= Number(env.MAIL_DAY_MAX || GLOBAL_DAY_MAX)) { await record(env, now, addr, spec.list, logged, 'rate'); return {ok: false, reason: 'rate'}; }
     const appVersion = await appVersionOf(env, addr);
@@ -98,16 +98,35 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
 }
 
 /**
- * The alert test mail ('always-on-test') to `to`, at most once a rolling day per address: {ok: true, at, earlier?} or send()'s refusal.
- * Every Test that proves "your alerts reach you" uses it (our servers: api/hosted-test.js; the person's GitHub: POST /api/notify/email kind 'test'),
- * so five presses send one mail, never five.
+ * The alert test mail, at most once a rolling day per address, whatever comes in parallel: {ok: true, at, earlier?} or a refusal; never throws.
+ * Every Test that proves "your alerts reach you" goes here (through api/mail-held.js testAlert), so five presses or a stolen repo key get one mail, never five.
+ * The list rules run first: an address that bounced or stopped our mail since the last test is told, not "ok". `mail` sends it; the default is the test template.
+ * Why (review of hr-23, 5 Nov 2026): a read then a send let 20 parallel calls send 20 mails. One INSERT ... WHERE NOT EXISTS claims the day (D1 runs a statement alone);
+ * send() logs 'sent' before the claim goes, so a later call always sees one of the two.
  */
-export async function sendTestMail(env, to, now = new Date()) {
-  const today = env.STATS && validAddress(to) ? await env.STATS.prepare("SELECT at FROM mail_log WHERE addr = ? AND template = 'test:always-on-test' AND status = 'sent' AND at >= ? LIMIT 1")
-    .bind(await addrOf(to), new Date(now.getTime() - DAY).toISOString()).first() : null;
-  if (today) return {ok: true, at: today.at, earlier: true};
-  const sent = await send(env, 'always-on-test', to, {}, {now, test: true});
-  return sent.ok ? {...sent, at: now.toISOString()} : sent;
+export async function sendTestMail(env, to, now = new Date(), mail = () => send(env, 'always-on-test', to, {}, {now, test: true})) {
+  if (env.MAIL !== 'on' || !env.EMAIL || !env.STATS) return {ok: false, reason: 'off'};
+  try {
+    const spec = TEMPLATES['always-on-test'];
+    const allowed = await mailAllowed(env, to, spec.list, spec);
+    if (!allowed.ok) return allowed;
+    const addr = await addrOf(to), since = new Date(now.getTime() - DAY).toISOString();
+    const claim = await env.STATS.prepare("INSERT INTO mail_log (at, addr, list, template, status) SELECT ?, ?, ?, 'test:always-on-test', 'claimed' WHERE NOT EXISTS (SELECT 1 FROM mail_log WHERE addr = ? AND template = 'test:always-on-test' AND status IN ('sent', 'claimed') AND at >= ?)")
+      .bind(now.toISOString(), addr, spec.list, addr, since).run();
+    if ((claim.meta?.changes ?? claim.changes) !== 1) {
+      const today = await env.STATS.prepare("SELECT at FROM mail_log WHERE addr = ? AND template = 'test:always-on-test' AND status IN ('sent', 'claimed') AND at >= ? ORDER BY at LIMIT 1").bind(addr, since).first();
+      return {ok: true, at: today?.at || now.toISOString(), earlier: true};
+    }
+    try {
+      const sent = await mail();
+      return sent.ok ? {...sent, at: now.toISOString()} : sent;
+    } finally {
+      await env.STATS.prepare("DELETE FROM mail_log WHERE addr = ? AND template = 'test:always-on-test' AND status = 'claimed'").bind(addr).run();
+    }
+  } catch (error) {
+    console.error(`mail test: ${error.message}`);
+    return {ok: false, reason: 'failed'};
+  }
 }
 
 // Daily: the mail log keeps 90 days (the per-address limit only reads the last day).
