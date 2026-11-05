@@ -1,4 +1,4 @@
-// The "over time" forms of the admin chart module (admin/viz.js). Today: grouped columns per day. Pure: rows in, an SVG string out. Guard: test/unit/admin/viz.test.js.
+// The "over time" forms of the admin chart module (admin/viz.js): grouped columns per day, one line per day. Pure: rows in, an SVG string out. Guard: test/unit/admin/viz.test.js.
 import {esc, tipOf} from './viz-core.js';
 
 /** Round tick values from 0 to a top at or above `max`: a step of 1, 2 or 5 times a power of ten, fractions allowed (daily cents), about `want` ticks.
@@ -36,4 +36,23 @@ export function columns(days, series, {unit = '', labelEvery = 5} = {}) {
   const hollow = days.some(day => day.values.includes(null));
   return `<svg class="vz-cols" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map(s => s.name).join(' and '))} per day">${grid}${groups}</svg>`
     + `<div class="vz-legend">${series.map(s => `<span><i style="background:var(--${s.tone})"></i>${esc(s.name)}</span>`).join('')}${hollow ? '<span><i class="dash"></i>not reported yet</span>' : ''}</div>`;
+}
+
+/**
+ * One series as a line with a dot per day; the page's one tooltip gives each day's numbers. points: [{day: 'YYYY-MM-DD', value: number | null, tip}] oldest first.
+ * `percent`: the axis is fixed 0-100% (a share of something); else it is a money/count axis from 0. A null value breaks the line: a day where nothing ran is a gap, never 0%.
+ * Why (owner, 5 Nov 2026, sketch: "line: green % per kind"; no second axis): a share and a minutes count are two charts, so this draws one series on its own axis.
+ */
+export function line(points, {tone = 's1', percent = true, name = '', labelEvery = 5} = {}) {
+  if (!points.some(point => point.value != null)) return '';
+  const ticks = percent ? [0, 25, 50, 75, 100] : moneyTicks(Math.max(...points.map(point => point.value || 0))), max = ticks[ticks.length - 1] || 1, suffix = percent ? '%' : '';
+  const pw = W - M.l - M.r, ph = H - M.t - M.b, y = value => M.t + ph - (ph * value) / max, slot = pw / points.length, x = index => M.l + slot * index + slot / 2;
+  const grid = ticks.map(tick => `<line x1="${M.l}" x2="${W - M.r}" y1="${y(tick).toFixed(1)}" y2="${y(tick).toFixed(1)}" class="vz-grid"/><text x="${M.l - 6}" y="${(y(tick) + 4).toFixed(1)}" text-anchor="end" class="vz-axis">${+tick.toFixed(2)}${suffix}</text>`).join('');
+  const runs = [];   // consecutive days with a value; a gap starts a new run
+  points.forEach((point, index) => { if (point.value == null) runs.push([]); else { if (!runs.length) runs.push([]); runs[runs.length - 1].push(`${x(index).toFixed(1)},${y(point.value).toFixed(1)}`); } });
+  const strokes = runs.filter(run => run.length > 1).map(run => `<polyline points="${run.join(' ')}" fill="none" stroke="var(--${tone})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`).join('');
+  const dots = points.map((point, index) => `<g${tipOf(point.tip)}><rect x="${(x(index) - slot / 2).toFixed(1)}" y="${M.t}" width="${slot.toFixed(1)}" height="${ph}" fill="transparent"/>`
+    + (point.value == null ? '' : `<circle cx="${x(index).toFixed(1)}" cy="${y(point.value).toFixed(1)}" r="3.5" fill="var(--${tone})" stroke="var(--vz-card,#14181d)" stroke-width="2"/>`)
+    + (index % labelEvery === 0 || index === points.length - 1 ? `<text x="${x(index).toFixed(1)}" y="${H - 6}" text-anchor="middle" class="vz-axis">${points[index].day.slice(5).replace('-', '/')}</text>` : '') + '</g>').join('');
+  return `<svg class="vz-cols" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(name)} per day">${grid}${strokes}${dots}</svg>`;
 }

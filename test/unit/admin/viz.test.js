@@ -84,3 +84,23 @@ test('code review of 5 Nov 2026: cents get a fractional axis, an idle engine dra
   assert.doesNotMatch(jobFigure({total: 1, jobs: [{job: 'x', usd: 1, runs: 0, calls: 0, last: '2026-11-05T01:00'}]}, {}, ''), /Infinity|NaN/);
   assert.doesNotMatch(proFigure([{action: 'refund', calls: 0, creditEur: 0.1, estimatedUsd: 0.05}], ''), /Infinity|NaN/);
 });
+
+test('line: dots on a 0-100% axis, a day with no value breaks the line and has no dot, nothing to draw is empty (owner, 5 Nov 2026: PR e2e cost vs catch)', async () => {
+  const {line} = await import('../../../admin/viz.js');
+  const html = line([{day: '2026-10-01', value: 100, tip: 'a'}, {day: '2026-10-02', value: null, tip: 'b'}, {day: '2026-10-03', value: 50, tip: 'c'}, {day: '2026-10-04', value: 75, tip: 'd'}], {name: 'Green'});
+  assert.match(html, /100%/); assert.equal((html.match(/<circle/g) || []).length, 3, 'a dot for each day with a value'); assert.equal((html.match(/<polyline/g) || []).length, 1, 'the lone first day draws no segment; the gap splits the line');
+  assert.match(html, /data-tip="b"/, 'the empty day still has its tooltip');
+  assert.equal(line([{day: '2026-10-01', value: null, tip: 'x'}]), '');
+});
+
+test('ranges: whisker, median dot and a limit tick on one shared scale; no items is empty', async () => {
+  const {ranges} = await import('../../../admin/viz.js');
+  const html = ranges([{label: 'apply', hint: '24 runs', low: 100, mid: 200, high: 400, text: '3m20s', tip: 'apply tip'}], {limit: {value: 480, words: 'PR job budget 8 min'}});
+  assert.match(html, /class="vz-whisk" style="left:20\.8%/); assert.match(html, /vz-dot" style="left:41\.7%/); assert.match(html, /vz-tick" style="left:100\.0%/); assert.match(html, /PR job budget 8 min/); assert.match(html, /data-tip="apply tip"/);
+  assert.equal(ranges([]), '');
+});
+
+test('the rows share one set of columns, so every track has the same length (Speed shot, 5 Nov 2026: the budget tick sat 4 px apart)', async () => {
+  const {VIZ_STYLE} = await import('../../../admin/viz.js');
+  assert.match(VIZ_STYLE, /\.vz-row\{display:grid;grid-template-columns:subgrid/); assert.match(VIZ_STYLE, /\.vz-bars\{display:grid;grid-template-columns:minmax\(110px,200px\) 1fr auto/);
+});

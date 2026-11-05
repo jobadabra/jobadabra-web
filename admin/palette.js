@@ -172,7 +172,10 @@ function client(scan, rank) {
     if (!el) { if (tries > 0) setTimeout(() => land(id, tries - 1), 100); return; }
     await reveal(el);
     const box = el.closest('section, .card, details') || el;
-    box.scrollIntoView({block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+    // Why (5 Nov 2026, admin charts: the E2E page's Speed and Scorecard cards grew past one screen, so "PR suite jobs" and "Missed, no suite plays it" landed below the fold): a heading that sits further down its card than the
+    // screen holds (minus the ~110 px the sticky bar takes) scrolls to the heading itself, not to the card's top.
+    const deep = el !== box && el.getBoundingClientRect().bottom - box.getBoundingClientRect().top > innerHeight - 140;
+    (deep ? el : box).scrollIntoView({block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
     box.classList.remove('palette-flash'); void box.offsetWidth; box.classList.add('palette-flash');
   }
   document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); open(); } });

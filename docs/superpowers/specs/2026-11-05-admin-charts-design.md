@@ -239,8 +239,8 @@ Owner (5 Nov 2026): "Please find all the sections/tables like this in the entire
 
 | Section | Answers | | Chart, or why it stays |
 |---|---|---|---|
-| Numbers per day (by kind) | How often is e2e green, by kind? | 📊 chart · PR 2 | line: green % per kind, 14 days |
-| Top causes | Why do suites go red? | 📊 chart · PR 2 | bars |
+| Numbers per day (by kind) | How often is e2e green, by kind? | ✅ already a line chart (`admin/e2e-green.js`), numbers in a toggle | line: green % per kind |
+| Top causes | Why do suites go red? | ✅ already bar rows (public `e2e-top.mjs`) | bars |
 | PR e2e: cost vs catch | Is e2e on PRs worth its minutes? | 📊 chart · PR 2 | columns: minutes; line: green % (two charts, no second axis) |
 | How steady the AI is | Does the AI judge the same every night? | 📊 chart · PR 2 | split per night: within 8 | over 20 | invented |
 | Grey suites | Which suite is grey and when does it return? | 📋 stays | a work list with dates |
@@ -393,8 +393,8 @@ AI → Costs was shared with session `ca`; its per-job PR (#379) is merged, so t
 - [x] Inventory (41 pages, 114 tables on demo data, 28 more found in source)
 - [x] Spec
 - [x] Sketch and the owner's yes (5 Nov 2026: "Yes, as sketched"; https://claude.ai/artifact/GdfzfegP7Xz1H93f5ffKv5)
-- [ ] 1/7 Module + AI → Costs
-- [ ] 2/7 Testing: E2E, Integrations, PR checks
+- [x] 1/7 Module + AI → Costs (#384, merged 5 Nov 2026)
+- [x] 2/7 Testing: E2E, Integrations, PR checks (built; 'Numbers per day' and 'Top causes' were already charts, so 10 new charts, not 12)
 - [ ] 3/7 Testing: Overview, Synthetics, GTM, Self-healing
 - [ ] 4/7 Agent Coding
 - [ ] 5/7 Growth
