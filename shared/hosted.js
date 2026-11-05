@@ -31,11 +31,16 @@ export async function runOf(env, bearer, now = new Date()) {
   return run && !run.finished_at && Date.parse(run.expires_at) > now.getTime() ? run : null;
 }
 
-// Starts a run for a schedule: the row that dedupes the slot, and the token the container gets. -> {id, token} or null when the slot already has a run.
-export async function startRun(env, schedule, now = new Date()) {
-  const id = `run_${(await digestOf(`${schedule.account}:${slotOf(Date.parse(schedule.next_run_at))}`))}`;
-  const made = await env.STATS.prepare('INSERT OR IGNORE INTO hosted_runs (id, account, slot, started_at, expires_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(id, schedule.account, slotOf(Date.parse(schedule.next_run_at)), now.toISOString(), iso(now.getTime() + RUN_TOKEN_MINUTES * MINUTE)).run();
+// Starts a run for a schedule: the row that dedupes the slot, and the token the container gets. -> {id, token} or null when the slot already has a run (or, with `exclusive`, when a run is open).
+// `slot` names a run that is not the schedule's own (the person's Test press: `test-<minute>`); omitted, it is the hour the schedule was due.
+// `exclusive`: one run at a time per account, decided by the insert itself (a double press or a tick beside a Test cannot start two; review of hr 4/6, 5 Nov 2026).
+export async function startRun(env, schedule, now = new Date(), slot = slotOf(Date.parse(schedule.next_run_at)), exclusive = false) {
+  const id = `run_${(await digestOf(`${schedule.account}:${slot}`))}`;
+  const values = [id, schedule.account, slot, now.toISOString(), iso(now.getTime() + RUN_TOKEN_MINUTES * MINUTE)];
+  const made = await env.STATS.prepare(exclusive
+    ? "INSERT OR IGNORE INTO hosted_runs (id, account, slot, started_at, expires_at) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM hosted_runs WHERE account = ? AND finished_at IS NULL AND expires_at > ?)"
+    : 'INSERT OR IGNORE INTO hosted_runs (id, account, slot, started_at, expires_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(...values, ...(exclusive ? [schedule.account, now.toISOString()] : [])).run();
   if ((made.meta?.changes ?? made.changes) === 0) return null;
   return {id, token: await runToken(env, id)};
 }
@@ -100,8 +105,11 @@ export async function result(request, env, now = new Date()) {
   if (!failed) await chargeCompute(env, run, now);   // the run's compute comes out of the trial budget (a run that failed before the crawl costs the person nothing)
   // The inbox keeps the newest INBOX_MAX per account.
   await env.STATS.prepare('DELETE FROM hosted_inbox WHERE account = ? AND id NOT IN (SELECT id FROM hosted_inbox WHERE account = ? ORDER BY id DESC LIMIT ?)').bind(run.account, run.account, INBOX_MAX).run();
-  const next = iso(now.getTime() + (await env.STATS.prepare('SELECT freq_hours FROM hosted_schedules WHERE account = ?').bind(run.account).first())?.freq_hours * HOUR);
-  await env.STATS.prepare("UPDATE hosted_schedules SET next_run_at = ? WHERE account = ? AND state = 'on'").bind(next, run.account).run();
+  // A test run (slot test-…) leaves the schedule's own time alone: pressing Test never moves tomorrow's run.
+  if (!String(run.slot).startsWith('test-')) {
+    const next = iso(now.getTime() + (await env.STATS.prepare('SELECT freq_hours FROM hosted_schedules WHERE account = ?').bind(run.account).first())?.freq_hours * HOUR);
+    await env.STATS.prepare("UPDATE hosted_schedules SET next_run_at = ? WHERE account = ? AND state = 'on'").bind(next, run.account).run();
+  }
   const mailed = await digest(env, run.account, matches, now);   // one digest e-mail per run with new matches (shared/hosted-notify.js)
   return Response.json({ok: true, stored: matches.length, mailed: mailed.sent});
 }
