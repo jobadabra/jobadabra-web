@@ -3,6 +3,7 @@
 // and the Testing → Scheduled rows only draw it, so there is no second reader of either table. Report only: no verdict here blocks anything, no AI, no new table. Guard: test/unit/admin/nightly-summary.test.js.
 //
 // A job = {id, title, value, sub, status: good|warn|bad|none, bar: {value, label}|null, series: [{day, value: number|null, ok: boolean|null}] (NIGHTS entries, oldest first), files: [workflow files it belongs to]}.
+// `unit: 'count'` (optional) = whole things counted, drawn on a 0..3 floor scale, never as a rate even when every value is 0 or 1.
 // What has no number yet says so (value '–' and the reason in `sub`); nothing here invents a night.
 import {BARS, rateOf} from './e2e-quality.js';
 import {readSnapshot} from './e2e-intel.js';
@@ -11,6 +12,9 @@ import {promptNightsOf} from './e2e-prompt.js';
 export const NIGHTS = 14, DAY = 86400000;
 const dayOf = value => new Date(value).toISOString().slice(0, 10);
 const pct = value => `${Math.round(value * 100)}%`;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** A UTC day in words for the page ("2026-11-05" → "5 Nov"); anything else comes back unchanged. */
+export const dayWords = day => { const match = /^\d{4}-(\d\d)-(\d\d)$/.exec(String(day)); return match && MONTHS[+match[1] - 1] ? `${+match[2]} ${MONTHS[+match[1] - 1]}` : String(day); };
 const shortName = suite => String(suite).replace(/-\d+of\d+$/, '');
 const isNight = row => ['nightly', 'scheduled'].includes(row.kind);
 const json = value => { try { return typeof value === 'string' ? JSON.parse(value) || {} : value || {}; } catch { return {}; } };
@@ -44,7 +48,7 @@ function promptCases(snapshot, days) {
   const series = days.map(day => { const p = byDay.get(day); return p && p.total ? {day, value: p.right / p.total, ok: p.status === 'not-asked' ? null : p.flipped === 0} : {day, value: null, ok: null}; });
   const last = [...byDay].at(-1)[1], when = [...byDay].at(-1)[0];
   const detail = last.status === 'not-asked' ? 'the broker said no; last baseline kept' : last.status === 'carried' ? 'no prompt changed, nothing asked' : `${last.noise} model noise · ${last.unconfirmed} unconfirmed · ${last.calls} calls`;
-  return {id: 'prompt-cases', title, value: `${last.right}/${last.total}`, sub: `${last.flipped ? `${last.flipped} got worse` : 'none got worse'} · ${detail} (${when})`,
+  return {id: 'prompt-cases', title, value: `${last.right}/${last.total}`, sub: `${last.flipped ? `${last.flipped} got worse` : 'none got worse'} · ${detail} (${dayWords(when)})`,
     status: last.flipped ? 'bad' : last.status === 'not-asked' ? 'warn' : 'good', bar, series, files};
 }
 
@@ -71,7 +75,7 @@ function interactions(snapshot, days) {
   const last = newestWithValue(series), night = byDay.get(last.day);
   const parts = [night.rates.clean != null && `${pct(night.rates.clean)} controls clean`, night.rates.still != null && `${pct(night.rates.still)} pages still`].filter(Boolean);
   return {id: 'interactions', title, value: night.rates.recall != null ? pct(night.rates.recall) : worded(night.green), status: night.green === false ? 'bad' : night.green ? 'good' : 'none', bar: null, series, files,
-    sub: `${night.rates.recall != null ? 'recall of planted bugs' : hasRates ? 'night without rates' : 'rates start with the next night'}${parts.length ? ` · ${parts.join(' · ')}` : ''} · ${last.day}`};
+    sub: `${night.rates.recall != null ? 'recall of planted bugs' : hasRates ? 'night without rates' : 'rates start with the next night'}${parts.length ? ` · ${parts.join(' · ')}` : ''} · ${dayWords(last.day)}`};
 }
 
 // Wander and the real-Notion suite print no number: a 14-night green/red trend.
@@ -80,7 +84,7 @@ function greenRed(snapshot, suite, title, days) {
   if (!byDay.size) return empty(suite, title, files, 'no night stored yet');
   const series = days.map(day => ({day, value: null, ok: byDay.has(day) ? byDay.get(day).green : null}));
   const last = newestWithValue(series), seen = series.filter(point => point.ok != null);
-  return {id: suite, title, value: worded(last.ok), sub: `${seen.filter(point => point.ok).length} of ${seen.length} nights green · ${last.day}`, status: last.ok ? 'good' : last.ok === false ? 'bad' : 'none', bar: null, series, files};
+  return {id: suite, title, value: worded(last.ok), sub: `${seen.filter(point => point.ok).length} of ${seen.length} nights green · ${dayWords(last.day)}`, status: last.ok ? 'good' : last.ok === false ? 'bad' : 'none', bar: null, series, files};
 }
 
 // ---- Wall clocks: minutes from start to end of a run, per run, per day (e2e_runs.minutes summed in the snapshot's days rows) ----
@@ -95,7 +99,7 @@ function wallClock(snapshot, id, title, kinds, files, days) {
   const series = days.map(day => { const at = perDay.get(day); return at ? {day, value: Math.round((at.min / at.runs) * 10) / 10, ok: null} : {day, value: null, ok: null}; });
   const last = newestWithValue(series), values = series.filter(point => point.value != null).map(point => point.value).sort((a, b) => a - b);
   const median = values.length % 2 ? values[(values.length - 1) / 2] : (values[values.length / 2 - 1] + values[values.length / 2]) / 2;
-  return {id, title, value: `${last.value} min`, sub: `per run on ${last.day} · median of ${values.length} day${values.length === 1 ? '' : 's'}: ${Math.round(median * 10) / 10} min`, status: 'none',
+  return {id, title, value: `${last.value} min`, sub: `per run on ${dayWords(last.day)} · median of ${values.length} day${values.length === 1 ? '' : 's'}: ${Math.round(median * 10) / 10} min`, status: 'none',
     bar: null, higherIsBetter: false, median, series, files};
 }
 
@@ -113,7 +117,7 @@ function agentCoding(rows, days) {
   const series = days.map(day => (ci.has(day) ? {day, value: circles(day), ok: circles(day) === 0} : {day, value: null, ok: null}));
   const last = newestWithValue(series);
   if (!last) return empty('agent-coding', title, files, 'no daily upload in the last 14 days', bar);   // rows are loaded for 21 days (the 7-day window); none inside the 14 shown is not a number
-  return {id: 'agent-coding', title, value: String(last.value), sub: `areas going in circles on ${last.day}`, status: last.value ? 'bad' : 'good', bar, higherIsBetter: false, series, files};
+  return {id: 'agent-coding', title, value: String(last.value), sub: `areas going in circles on ${dayWords(last.day)}`, status: last.value ? 'bad' : 'good', bar, unit: 'count', higherIsBetter: false, series, files};
 }
 
 /**

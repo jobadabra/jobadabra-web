@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import worker from '../../../../workers/www/index.js';
 import {PAGES} from '../../../../admin/admin.js';
-import {lastDays, nightlySummary} from '../../../../admin/nightly-summary.js';
-import {finderJobs} from '../../../../admin/report-only-finders.js';
+import {dayWords, lastDays, nightlySummary} from '../../../../admin/nightly-summary.js';
+import {FINDERS, finderJobs} from '../../../../admin/report-only-finders.js';
 import {GROUPS, OPEN_ON_LINK, model, page} from '../../../../admin/report-only.js';
 import {qualityModel} from '../../../../admin/product-quality-areas.js';
 import {page as overviewPage} from '../../../../admin/testing-overview.js';
 import {resolve} from '../../../../admin/testing-overview-data.js';
-import {reportLine} from '../../../../admin/nightly-summary-html.js';
+import {reportLine, trendHtml} from '../../../../admin/nightly-summary-html.js';
+import {DETECTORS} from '../../../../desktop/e2e/lib/selfheal-stats.mjs';
 
 const now = new Date('2026-11-02T10:00:00Z');
 const D = back => new Date(now.getTime() - back * 86400000).toISOString().slice(0, 10);
@@ -38,6 +39,20 @@ test('finders: real bugs filed in the 7 days up to each stored day (fixed + queu
   for (const item of none) assert.deepEqual([item.value, item.status, item.series.length], ['–', 'none', 0], item.id);
   assert.match(none[0].sub, /no self-healing snapshot/);
   assert.deepEqual(finderJobs([snap(20)], days).map(item => item.value), ['–', '–', '–', '–', '–'], 'a snapshot older than the 14 days shown is not a number');
+});
+
+test('finders: a finder that filed nothing is 0 to the newest snapshot, and the row says when it last filed (5 Nov 2026: layout 1 Nov, probe 24 Oct)', () => {
+  // The writer (selfheal-stats.mjs) lists only detectors that filed in the window, so a silent finder has no row in a stored snapshot: that is 0, not "no data".
+  const only = detector => ({periods: {last7: {byDetector: [{detector, filed: 2, fixed: 2, queued: 0}]}}});
+  const jobs = finderJobs([snap(0, only('AI screenshot review')), snap(3, only('Layout and DOM checks'))], days);
+  const layout = jobs.find(item => item.id === 'finder-layout'), probe = jobs.find(item => item.id === 'finder-interactions');
+  assert.equal(layout.value, '0');
+  assert.equal(layout.sub, 'real bugs in the last 7 days');
+  assert.match(layout.note, new RegExp(`^last filed by ${dayWords(D(3))}$`), 'nothing this week: the note says when it last filed, in words, not ISO');
+  assert.equal(jobs.find(item => item.id === 'finder-review').note, '', 'a finder with a bug this week gets no "last filed" note');
+  assert.equal(layout.series.at(-1).value, 0, 'the newest stored day is a 0 point');
+  assert.equal(probe.note, '', 'filed nothing in the 14 days: the chart says "none in 14 days", the note adds nothing');
+  assert.equal(probe.series[days.indexOf(D(1))].value, null, 'a day with no snapshot stays grey');
 });
 
 test('planted bugs: caught of planted per snapshot day, "watch" when one is missed; the mutation run as a share', () => {
@@ -118,4 +133,24 @@ test('plumbing toggle (owner, 5 Nov 2026): with the board the nightly cards hide
   const bare = page(built, null);
   assert.doesNotMatch(bare, /<details class="plumb"|<script>/, 'a failed board leaves the nightly cards in the open, as before');
   assert.match(bare, /<a href="#r-quality-ai"><span class="chip bad">Quality AI/);
+});
+
+test('finders, drawn: a silent finder is a zero with no column on a 0-3 scale, an all-zero finder says so, a snapshot that measured nothing is grey (owner, 5 Nov 2026; code-review)', () => {
+  const only = detector => ({periods: {last7: {byDetector: [{detector, filed: 2, fixed: 1, queued: 0}]}}});
+  const layout = finderJobs([snap(0, only('AI screenshot review')), snap(3, only('Layout and DOM checks'))], days).find(item => item.id === 'finder-layout');
+  const html = trendHtml(layout);
+  assert.match(html, /<span>3<\/span><span>0<\/span>/, 'a count: 0-3 at least, never a 100% rate (unit: count)');
+  assert.doesNotMatch(html, /100%/);
+  assert.match(html, /class="num zero"/, 'the newest day is a zero cell, drawn with no column');
+  assert.match(html, /last filed by/);
+  const quiet = finderJobs(days.map((_, i) => snap(i, {periods: {last7: {byDetector: []}}})), days).find(item => item.id === 'finder-layout');
+  assert.match(trendHtml(quiet), /none in 14 days/);
+  assert.equal(quiet.note, '', 'nothing in 14 days: the chart says it, no "last filed" note');
+  const unmeasured = finderJobs([snap(1), snap(0, {periods: {last7: {}}})], days).find(item => item.id === 'finder-layout');
+  assert.equal(unmeasured.series.at(-1).value, null, 'a snapshot with no byDetector list measured nothing: grey, not 0');
+});
+
+test('every finder names a detector label the writer still uses, or a rename would read as a silent finder', () => {
+  const labels = new Set(Object.values(DETECTORS));
+  for (const [id, , detector] of FINDERS) assert.ok(labels.has(detector), `${id}: "${detector}" is not in selfheal-stats DETECTORS`);
 });

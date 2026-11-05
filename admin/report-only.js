@@ -20,7 +20,7 @@ export const GROUPS = [
   {id: 'ai', icon: '🎯', title: 'AI quality', note: 'Are the answers of the AI right and steady?', jobs: ['quality-ai', 'prompt-cases']},
   {id: 'speed', icon: '⏱️', title: 'Wall clock', note: 'Minutes from start to end of a run, per day.', jobs: ['beta-clock', 'night-clock']},
   {id: 'explorers', icon: '🧭', title: 'Explorers', note: 'Clicks every safe control and walks the app at random.', jobs: ['interactions', 'wander']},
-  {id: 'finders', icon: '📐', title: 'Finders', note: 'Real bugs each finder filed in the 7 days to that day.', jobs: ['finder-layout', 'finder-review', 'finder-interactions']},
+  {id: 'finders', icon: '📐', title: 'Finders', note: 'Real bugs each finder filed in the last 7 days, one column a day.', jobs: ['finder-layout', 'finder-review', 'finder-interactions']},
   {id: 'planted', icon: '🧬', title: 'Planted bugs', note: 'Plant a bug: does the Finder or a suite still notice?', jobs: ['planted-ui', 'planted-code']},
   {id: 'real', icon: '🌍', title: 'Real services', note: 'The suite that talks to the real Notion.', jobs: ['notion-real']},
   {id: 'agents', icon: '🤖', title: 'Agent coding', note: 'Areas with 3+ fix PRs in 7 days (going in circles).', jobs: ['agent-coding']},
