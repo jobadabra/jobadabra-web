@@ -16,6 +16,9 @@ export const seeds = {
     await env.STATS.prepare('INSERT INTO release_mail (version, data, created_at) VALUES (?, ?, ?)').bind('0.9.9', JSON.stringify(data), '2026-11-05T01:53:00Z').run();
     const {createAccount} = await import('../shared/pro.js');
     await createAccount(env, 'alex@example.com', new Date('2026-11-05T01:00:00Z'), {plan: 'trial'});
+    const groups = data.sections.map(section => ({kind: section.kind, items: [{lead: section.title, text: section.text}]}));
+    await env.STATS.prepare('INSERT INTO changelog_entries (version,date,channel,hidden,body,at) VALUES (?,?,?,?,?,?)').bind('0.9.6', '2026-11-03', 'stable', 1, '[]', 'x').run();
+    await env.STATS.prepare('INSERT INTO changelog_entries (version,date,channel,hidden,body,at) VALUES (?,?,?,?,?,?)').bind('0.9.9', '2026-11-05', 'stable', 0, JSON.stringify(groups), 'x').run();
   },
   feedback: feedbackSeed,
   'feedback-stuck': context => feedbackRunSeed(context),

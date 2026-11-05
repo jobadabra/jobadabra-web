@@ -18,7 +18,9 @@ export async function releaseView(request, env) {
   if (!await viewer(request, env)) return notFound();
   const row = await env.STATS.prepare('SELECT status, data, sent_count, sent_at FROM release_mail WHERE version = ?').bind(version).first();
   if (!row) return new Response('No release mail draft for this version.', {status: 404});
-  const data = await releaseData(env, JSON.parse(row.data)), mail = compose('release', {...data, name: ''}, {stop: '#', settings: '#'}), n = await reach(env), draft = row.status === 'draft', on = env.MARKETING_MAIL === 'on';
+  const data = await releaseData(env, {...JSON.parse(row.data), version}, {status: row.status});
+  if (!data) return new Response('Release emails are available only for stable versions.', {status: 409});
+  const mail = compose('release', {...data, name: ''}, {stop: '#', settings: '#'}), n = await reach(env), draft = row.status === 'draft', on = env.MARKETING_MAIL === 'on';
   const note = url.searchParams.get('done') ? `<p class="notice" role="status">${esc(url.searchParams.get('done'))}</p>` : '';
   return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Release mail ${esc(version)} · Admin</title>
 <style>
@@ -60,10 +62,11 @@ ${!on ? '<p class="muted">Product news sending is switched off.</p>' : ''}
 async function releasePost(request, env, url) {
   if (!(await isOwner(request, env)) || request.headers.get('Origin') !== url.origin) return notFound();
   const version = url.searchParams.get('release') || '', form = await request.formData().catch(() => new FormData()), action = String(form.get('action') || '');
-  const row = await env.STATS.prepare('SELECT data FROM release_mail WHERE version = ?').bind(version).first(), draft = await env.STATS.prepare('SELECT 1 AS y FROM release_mail WHERE version = ? AND status = ?').bind(version, 'draft').first();
+  const row = await env.STATS.prepare('SELECT data, status FROM release_mail WHERE version = ?').bind(version).first(), draft = await env.STATS.prepare('SELECT 1 AS y FROM release_mail WHERE version = ? AND status = ?').bind(version, 'draft').first();
   let done = 'Nothing to do: this mail is not a draft.';
   if (row && action === 'test') {   // the real draft, to one address the owner types; sends nothing else
-    const to = String(form.get('to') || '').trim(), data = await releaseData(env, JSON.parse(row.data));
+    const to = String(form.get('to') || '').trim(), data = await releaseData(env, {...JSON.parse(row.data), version}, {status: row.status});
+    if (!data) return new Response('Release emails are available only for stable versions.', {status: 409});
     const result = validAddress(to) ? await send(env, 'release', to, {...data, name: '', test: true}) : {ok: false, reason: 'bad_address'};
     done = result.ok ? `Test of release ${version} sent to ${to}. Subject: ${compose('release', {...data, test: true}).subject}. This test did not send the release to your audience.` : `Test of release ${version} not sent (${result.reason}).`;
   } else if (row && draft && action === 'headline') {

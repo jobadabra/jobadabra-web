@@ -19,7 +19,7 @@ import {view as emailView} from '../../../admin/email.js';
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0093_changelog.sql', '0117_release_mail.sql']) db.exec(sql(file));
+  for (const file of ['0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0093_changelog.sql', '0105_changelog_plain.sql', '0117_release_mail.sql']) db.exec(sql(file));
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values),
     run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
     all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
@@ -47,7 +47,7 @@ test('a version is drafted once; a second promotion call changes nothing; an unk
   const {e} = setup();
   assert.deepEqual(await draft(e, '0.8.42', now), {drafted: true});
   assert.deepEqual(await draft(e, '0.8.42', now), {exists: true});
-  assert.deepEqual(await draft(e, '9.9.9', now), {empty: true});
+  assert.deepEqual(await draft(e, '9.9.9', now), {refused: 'not stable'});
   assert.equal(e.STATS.db.prepare('SELECT COUNT(*) n FROM release_mail').get().n, 1);
 });
 
@@ -268,4 +268,80 @@ test('release emails always offer a download link even without an update URL', (
   assert.match(mail.html, /Don't have the app/);
   assert.match(mail.html, /href="https:\/\/www\.jobadabra\.top\/download"/);
   assert.match(mail.text, /Don't have the app\? Download Jobadabra: https:\/\/www\.jobadabra\.top\/download/);
+});
+
+test('direct draft, test and broadcast calls refuse a beta, even if a draft row already exists', async () => {
+  const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
+  e.STATS.db.exec("UPDATE changelog_entries SET channel = 'beta' WHERE version = '0.8.42'");
+  assert.deepEqual(await draft(e, '0.8.42', now), {refused: 'not stable'});
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) n FROM release_mail').get().n, 0);
+  e.STATS.db.prepare('INSERT INTO release_mail (version, data, created_at) VALUES (?, ?, ?)').run('0.8.42', JSON.stringify(dataFrom({version: '0.8.42', date: '2026-10-27', groups})), 'x');
+  await e.WAITLIST.put('signup:audience@example.com', '1');
+  assert.deepEqual(await sendAll(e, '0.8.42', {now}), {refused: 'not stable'});
+  assert.equal(e.STATS.db.prepare('SELECT status FROM release_mail').get().status, 'draft');
+  const response = await emailView(new Request('https://www.jobadabra.top/admin/growth/email?release=0.8.42', {method: 'POST', headers: {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'}, body: new URLSearchParams({action: 'test', to: 'reviewer@example.com'})}), e);
+  assert.equal(response.status, 409);
+  assert.equal(sent.length, 0);
+});
+
+test('stable mail includes all intervening beta changes, excludes both boundaries and later versions, and removes exact duplicates', async () => {
+  const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
+  e.STATS.db.exec('DELETE FROM changelog_entries');
+  const add = (version, channel, title, hidden = 0) => e.STATS.db.prepare('INSERT INTO changelog_entries (version,date,channel,hidden,body,at) VALUES (?,?,?,?,?,?)')
+    .run(version, '2026-11-05', channel, hidden, JSON.stringify([{kind: 'fixes', items: [{lead: title, text: `${title} works.`}]}]), 'x');
+  add('0.9.4', 'stable', 'Old stable');
+  add('0.9.6', 'stable', 'Previous stable');
+  add('0.9.7', 'beta', 'Beta one');
+  add('0.9.8', 'beta', 'Beta two');
+  add('0.9.9', 'stable', 'Beta two');
+  e.STATS.db.prepare("UPDATE changelog_entries SET body=? WHERE version='0.9.9'").run(JSON.stringify([{kind: 'fixes', items: [{lead: 'Beta two', text: 'Beta two works.'}, {lead: 'Target stable change', text: 'The stable build adds this change.'}]}]));
+  add('0.9.10', 'beta', 'Future beta');
+  await draft(e, '0.9.9', now);
+  const data = JSON.parse(e.STATS.db.prepare("SELECT data FROM release_mail WHERE version='0.9.9'").get().data);
+  assert.equal(data.previousStable, '0.9.6');
+  assert.deepEqual(data.sections.map(s => s.title), ['Beta one', 'Beta two', 'Target stable change']);
+  await e.WAITLIST.put('signup:audience@example.com', '1');
+  const post = fields => emailView(new Request('https://www.jobadabra.top/admin/growth/email?release=0.9.9', {method: 'POST', headers: {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'}, body: new URLSearchParams(fields)}), e);
+  // Already stored drafts with category metadata must also be rebuilt from the stable window.
+  e.STATS.db.prepare("UPDATE release_mail SET data=? WHERE version='0.9.9'").run(JSON.stringify({...data, sections: [{kind: 'fixes', title: 'Beta two', text: 'Beta two works.'}]}));
+  const view = await emailView(new Request('https://www.jobadabra.top/admin/growth/email?release=0.9.9', {headers: {Authorization: 'Bearer owner-key'}}), e);
+  assert.match(await view.text(), /Beta one/);
+  await post({action: 'test', to: 'reviewer@example.com'});
+  await post({action: 'send'});
+  assert.equal(sent.length, 2);
+  for (const mail of sent) {
+    assert.match(mail.html, /Beta one/);
+    assert.match(mail.text, /Beta two/);
+    assert.match(mail.text, /Target stable change/);
+    assert.match(mail.text, /since.*0\.9\.6/i);
+    assert.doesNotMatch(mail.text, /Previous stable|Old stable|Future beta/);
+  }
+});
+
+test('a stable with no final-build notes still includes beta changes; a hidden previous stable is the boundary', async () => {
+  const {e} = setup();
+  e.STATS.db.exec('DELETE FROM changelog_entries');
+  const put = (version, channel, hidden, body) => e.STATS.db.prepare('INSERT INTO changelog_entries (version,date,channel,hidden,body,at) VALUES (?,?,?,?,?,?)').run(version, '2026-11-05', channel, hidden, JSON.stringify(body), 'x');
+  put('0.9.6', 'stable', 1, []);
+  put('0.9.7', 'beta', 0, groups);
+  const response = await changelogIngest(new Request('https://x/changelog/data', {method: 'PUT', headers: {Authorization: 'Bearer k'}, body: JSON.stringify({hidden: [{version: '0.9.9', date: '2026-11-05', channel: 'stable'}]})}), e);
+  assert.equal(response.status, 200);
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) n FROM release_mail').get().n, 1);
+  const data = JSON.parse(e.STATS.db.prepare('SELECT data FROM release_mail').get().data);
+  assert.equal(data.previousStable, '0.9.6');
+  assert.deepEqual(data.sections.map(s => s.title), ['Faster jobs', 'Calendar', 'A fix']);
+});
+
+
+test('sent release previews and test copies retain the sent snapshot after changelog edits', async () => {
+  const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
+  await e.WAITLIST.put('signup:audience@example.com', '1');
+  await draft(e, '0.8.42', now); await sendAll(e, '0.8.42', {now});
+  e.STATS.db.prepare('UPDATE changelog_entries SET body=?').run(JSON.stringify([{kind: 'fixes', items: [{lead: 'Replacement notes', text: 'Later edited words.'}]}]));
+  const url = 'https://www.jobadabra.top/admin/growth/email?release=0.8.42', headers = {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'};
+  const html = await (await emailView(new Request(url, {headers}), e)).text();
+  assert.match(html, /Faster jobs/); assert.doesNotMatch(html, /Replacement notes/);
+  await emailView(new Request(url, {method: 'POST', headers, body: new URLSearchParams({action: 'test', to: 'reviewer@example.com'})}), e);
+  assert.equal(sent.length, 2);
+  assert.match(sent[1].html, /Faster jobs/); assert.doesNotMatch(sent[1].html, /Replacement notes/);
 });
