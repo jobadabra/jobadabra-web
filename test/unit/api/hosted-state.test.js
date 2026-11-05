@@ -10,7 +10,7 @@ import {config, own, state} from '../../../api/hosted-state.js';
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0130_hosted_test_checks.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE IF NOT EXISTS revoked (who TEXT PRIMARY KEY, reason TEXT, at TEXT)');
   const statement = (text, args = []) => ({bind: (...v) => statement(text, v), run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
@@ -76,4 +76,12 @@ test('export gives the person their data; delete removes objects, schedule, runs
   assert.equal(e.HOSTED_STATE.m.size, 0);
   for (const table of ['hosted_schedules', 'hosted_runs', 'hosted_inbox']) assert.equal(e.STATS.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n, 0);
   assert.equal((await own(req('GET', undefined, {'x-api-key': 'JPF1.nobody1.bad'}), e)).status, 401);
+});
+
+test('a missing read_at column (migration not applied yet) never stops the container reading its profile', async t => {
+  t.mock.method(console, 'error', () => {});
+  const {e, headers, app} = await setup();
+  await config(req('PUT', JSON.stringify({search: {}, profile: 'P'}), app), e, now);
+  e.STATS.db.exec('ALTER TABLE hosted_runs DROP COLUMN read_at');
+  assert.equal((await config(req('GET', undefined, headers), e, now)).status, 200);
 });

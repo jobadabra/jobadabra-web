@@ -54,6 +54,10 @@ export async function config(request, env, now = new Date()) {
   if (request.method === 'GET') {
     const run = await runOf(env, request.headers.get('authorization'), now);
     if (!run) return deny();
+    // The Test's "Our server started and read your profile" (api/hosted-test.js): the first read with this run's token. A failed stamp (site.yml's
+    // migration step may fail without stopping the deploy) costs the Test its step, never the run its profile.
+    await env.STATS.prepare('UPDATE hosted_runs SET read_at = COALESCE(read_at, ?) WHERE id = ?').bind(now.toISOString(), run.id).run()
+      .catch(error => console.error(`hosted read_at not stamped for ${run.id}: ${error.message}`));
     const bytes = await read(env, run.account, 'config.json');
     return bytes ? new Response(bytes, {headers: {'content-type': 'application/json'}}) : new Response('No config yet', {status: 404});
   }

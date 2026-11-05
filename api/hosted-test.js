@@ -1,14 +1,64 @@
-// Hosted Always on, "Test it" (owner, 4 Nov 2026: "the test button should be both for easiest (our servers) and for Advanced"; 5 Nov: "One real run"): the person presses Test on our servers' card and one real
-// run starts now, the same run the cron tick would start, with each step answered in words. POST /api/hosted/test starts it; GET /api/hosted/test[?run=<id>] reads it (the install key).
+// Hosted Always on, "Test it" (owner, 4 Nov 2026: "the test button should be both for easiest (our servers) and for Advanced"): the person presses Test on our servers' card and one real
+// run starts now, the same run the cron tick would start. POST /api/hosted/test starts it; GET /api/hosted/test[?run=<id>] reads it (the install key).
+// Design (owner, 5 Nov 2026: "a test shuold not take more than 10 seconds"; replaces 5 Nov "One real run", whose verdict waited for the whole search):
+//   the Test's verdict = four steps the site sees within seconds: Always on is on, the profile is held, our server started and read it (hosted_runs.read_at,
+//   api/hosted-state.js), the AI answered one short call made with the run's own token (ai_at / ai_error, at the press). Any failed -> failed; all ok -> ok.
+//   The search goes on after the verdict and is reported apart (run.search: finished, jobs found, the e-mail), never as the Test's state.
 // It counts like a normal run: the trial budget, the month's compute guard, the day caps and the Free AI stop all apply, plus TESTS_PER_DAY presses a day, one run at a time and COOLDOWN_MS apart.
 // The schedule's own next run is never moved by a test (shared/hosted.js result()).
 import {accountOf} from '../shared/pro.js';
+import {freeAi} from '../shared/free-ai.js';
 import {digestOf} from '../shared/guard.js';
-import {hostedOn, installOf, startRun} from '../shared/hosted.js';
-import {addrOf} from '../shared/mail.js';
+import {hostedOn, installOf, runToken, startRun} from '../shared/hosted.js';
+import {addrOf, send} from '../shared/mail.js';
 import {dayCaps, freeStopped, MONTH_COMPUTE_MICRO, monthSpent, openRun, runsToday, SITE, trialSpent} from './hosted-tick.js';
 
-export const COOLDOWN_MS = 10 * 60 * 1000, TESTS_PER_DAY = 5, MAIL_WAIT_MS = 30 * 1000;
+// READ_WAIT_MS: a container starts and reads the profile in ~10 s (production, 5 Nov 2026: 10 s); past this it did not start. AI_WAIT_MS: the AI's one short answer.
+export const COOLDOWN_MS = 10 * 60 * 1000, TESTS_PER_DAY = 5, MAIL_WAIT_MS = 30 * 1000, READ_WAIT_MS = 60 * 1000, AI_WAIT_MS = 8 * 1000;
+
+/** One short call through the Free AI route with the run's token, as the container's engine makes them. -> {ok} or {ok: false, error}, within AI_WAIT_MS. */
+export async function aiAnswers(env, token, now, wait = AI_WAIT_MS) {
+  const books = [];   // the route's counting and billing, awaited after the verdict: slow KV is not a slow AI (review of hr21)
+  const ask = freeAi(new Request(`${SITE}/api/ai/v1/messages`, {method: 'POST', headers: {'x-api-key': token, 'content-type': 'application/json', 'x-jp-action': 'hosted-test'},
+    body: JSON.stringify({model: 'claude-haiku-5-5', max_tokens: 5, messages: [{role: 'user', content: 'Answer with the word ok.'}]})}), env, now, {waitUntil: work => books.push(work)})
+    .then(async reply => (reply.ok ? {ok: true} : {ok: false, error: (await reply.json().catch(() => ({})))?.error?.message || `The AI answered ${reply.status}.`}), () => ({ok: false, error: 'The AI did not answer.'}));
+  let timer;
+  const late = new Promise(done => { timer = setTimeout(() => done({ok: false, error: 'The AI is slow right now.'}), wait); });
+  try { return await Promise.race([ask, late]); } finally { clearTimeout(timer); await Promise.allSettled(books); }
+}
+
+// The Test's alert step, at the press (owner, 5 Nov 2026: "The test should include also a notification test... telegram or email, whatever the user built"):
+// a run on our servers alerts by e-mail only (shared/hosted-notify.js), so one short mail to the account's address, through the mail module's limits.
+const MAIL_WHY = {no_channel: 'E-mail alerts are off. Turn them on in Settings → Notifications.', off: 'E-mail is not available right now.', rate: 'Too many e-mails today. Try again tomorrow.',
+  suppressed: 'Your address bounced or marked us as spam, so e-mail alerts are off. Check the address in Settings → Notifications.', unsubscribed: 'You stopped our e-mails. Turn alerts back on in Settings → Notifications.'};
+async function checkMail(env, account, id, now) {
+  if (!await claim(env, id, 'mail')) return;
+  const row = await env.STATS.prepare('SELECT a.email, s.email_channel FROM hosted_schedules s JOIN pro_accounts a ON a.id = s.account WHERE s.account = ?').bind(account).first();
+  // Once a day: the address gets 6 mails a day at most (shared/mail.js DAILY_MAX); five presses must not use up the digest's room.
+  const today = row?.email && row.email_channel ? await env.STATS.prepare("SELECT at FROM mail_log WHERE addr = ? AND template = 'always-on-test' AND status = 'sent' AND at >= ? LIMIT 1")
+    .bind(await addrOf(row.email), new Date(now.getTime() - 24 * 3600 * 1000).toISOString()).first() : null;
+  const sent = today ? {ok: true, earlier: true} : row?.email && row.email_channel ? await send(env, 'always-on-test', row.email, {}, {now}) : {ok: false, reason: 'no_channel'};
+  await env.STATS.prepare('UPDATE hosted_runs SET mail_at = ?, mail_error = ? WHERE id = ?').bind(sent.ok ? (today ? today.at : now.toISOString()) : null, sent.ok ? null : MAIL_WHY[sent.reason] || 'The e-mail could not be sent.', id).run()
+    .catch(error => console.error(`hosted mail_at not stamped for ${id}: ${error.message}`));
+}
+
+// Both checks a press makes, side by side (each once per run): the Test's AI and e-mail steps.
+// Best effort (Gitar on #417): a schema or D1 error (site.yml's migration step may fail without stopping the deploy) costs the Test its steps, never the press.
+/** Claims the `step` ('ai' | 'mail') check of run `id` for this press; true for exactly one press per run.
+ * Why (Gitar on #417, 5 Nov 2026): two quick presses both read "not checked" before either stamped, and both sent a mail (one of the address's 6 a day).
+ * The claim is '' in `<step>_error`: report() reads it as running, and the check's own stamp replaces it. */
+const claim = async (env, id, step) => (await env.STATS.prepare(`UPDATE hosted_runs SET ${step}_error = '' WHERE id = ? AND ${step}_at IS NULL AND ${step}_error IS NULL`).bind(id).run()).meta?.changes === 1;
+const safely = (step, id) => step.catch(error => console.error(`hosted test check not stamped for ${id}: ${error.message}`));
+const checks = (env, account, id, now) => Promise.all([safely(checkAi(env, id, now), id), safely(checkMail(env, account, id, now), id)]);
+
+// The Test's AI step for run `id`, once: a press that joins an open run (the schedule's own, or a test already running) checks it too (review of hr21:
+// a joined run returned before the check and its AI step failed at 60 s while everything worked). A failed stamp costs the Test its step, not the press.
+async function checkAi(env, id, now) {
+  if (!await claim(env, id, 'ai')) return;
+  const ai = await aiAnswers(env, await runToken(env, id), now);
+  await env.STATS.prepare('UPDATE hosted_runs SET ai_at = ?, ai_error = ? WHERE id = ?').bind(ai.ok ? new Date().toISOString() : null, ai.ok ? null : ai.error, id).run()
+    .catch(error => console.error(`hosted ai_at not stamped for ${id}: ${error.message}`));
+}
 const say = (status, error, extra = {}) => Response.json({ok: false, error, ...extra}, {status});
 const PAUSED = {'trial-over': 'Your free trial is used up.', inactive: 'Always on paused after two weeks without opening the app. Open the app to resume it.', guard: 'Always on is paused for this month.'};
 
@@ -26,7 +76,7 @@ export async function test(request, env, now = new Date()) {
   const stamp = now.toISOString();
   await env.STATS.prepare("UPDATE hosted_runs SET status = 'failed', finished_at = ? WHERE finished_at IS NULL AND expires_at < ?").bind(stamp, stamp).run();   // a run that never reported is over, as the tick treats it
   const open = await openRun(env, account.id, stamp);
-  if (open) return Response.json({ok: true, run: open.id, joined: true});   // one run at a time: pressing again watches the one that is running
+  if (open) { await checks(env, account.id, open.id, now); return Response.json({ok: true, run: open.id, joined: true}); }   // one run at a time: pressing again watches the one that is running
   // The gap is read from a window that reaches back past UTC midnight; only the daily count starts at midnight (Gitar on #372).
   const tests = await env.STATS.prepare("SELECT SUM(CASE WHEN started_at >= ? THEN 1 ELSE 0 END) AS n, MAX(started_at) AS last FROM hosted_runs WHERE account = ? AND slot LIKE 'test-%' AND started_at >= ?")
     .bind(`${stamp.slice(0, 10)}T00:00:00`, account.id, new Date(Math.min(now.getTime() - COOLDOWN_MS, Date.parse(`${stamp.slice(0, 10)}T00:00:00Z`))).toISOString()).first();
@@ -38,17 +88,20 @@ export async function test(request, env, now = new Date()) {
   const today = await runsToday(env, stamp.slice(0, 10)), caps = dayCaps(env);
   if (!env.HOSTED_QUEUE || today.all >= caps.all || (trial && (today.trial >= caps.trial || await freeStopped(env, stamp)))) return say(503, 'Always on is busy right now. Try again later.', {reason: 'busy'});
   const run = await startRun(env, {account: account.id}, now, `test-${stamp.slice(0, 16)}`, true);
-  if (!run) { const again = await openRun(env, account.id, stamp); return again ? Response.json({ok: true, run: again.id, joined: true}) : say(429, 'A test ran a moment ago. Try again in a few minutes.', {reason: 'cooldown'}); }
+  if (!run) { const again = await openRun(env, account.id, stamp); if (again) await checks(env, account.id, again.id, now); return again ? Response.json({ok: true, run: again.id, joined: true}) : say(429, 'A test ran a moment ago. Try again in a few minutes.', {reason: 'cooldown'}); }
   try {
     await env.HOSTED_QUEUE.send({run: run.id, token: run.token, site: env.HOSTED_SITE || SITE, account: await digestOf(account.id), test: true});
   } catch (error) {   // a row nothing will ever post to would block the next press for 30 minutes
     await env.STATS.prepare("UPDATE hosted_runs SET status = 'failed', finished_at = ? WHERE id = ?").bind(stamp, run.id).run();
     return say(503, 'Always on is busy right now. Try again later.', {reason: 'busy'});
   }
+  await checks(env, account.id, run.id, now);
   return Response.json({ok: true, run: run.id});
 }
 
-// The steps of one run, each as {key, label, state: ok | running | failed | skipped, note?}. Only what the site recorded is claimed.
+const verdict = steps => (steps.some(s => s.state === 'failed') ? 'failed' : steps.every(s => s.state === 'ok') ? 'ok' : 'running');
+
+// One Test: {status (the verdict of `steps`), steps, search: {status, found, steps}}; each step {key, label, state: ok | running | failed | skipped, note?}. Only what the site recorded is claimed.
 async function report(env, account, schedule, runId, now) {
   const run = account && await env.STATS.prepare(runId ? 'SELECT * FROM hosted_runs WHERE account = ? AND id = ?' : "SELECT * FROM hosted_runs WHERE account = ? AND slot LIKE 'test-%' ORDER BY started_at DESC LIMIT 1")
     .bind(...(runId ? [account.id, runId] : [account.id])).first();
@@ -60,17 +113,25 @@ async function report(env, account, schedule, runId, now) {
   const mailed = status === 'ok' && found ? await digestSent(env, account, run) : false;
   // The result post closes the run first and sends the digest last: a read in between is not an answer yet.
   const settling = status === 'ok' && found > 0 && !mailed && now.getTime() - Date.parse(run.finished_at) < MAIL_WAIT_MS;
+  const age = now.getTime() - Date.parse(run.started_at);
+  const notStarted = !run.read_at && (age > READ_WAIT_MS || status !== 'running');
   const steps = [
     {key: 'on', label: 'Always on is on for you', state: schedule?.state === 'on' ? 'ok' : 'failed'},
     {key: 'profile', label: 'Your profile is held on our servers', state: held ? 'ok' : 'failed'},
-    {key: 'started', label: 'The search started', state: 'ok'},
+    {key: 'started', label: 'Our server started and read it', state: run.read_at ? 'ok' : notStarted ? 'failed' : 'running', ...(notStarted ? {note: 'Our server did not start. Press Test again in a few minutes.'} : {})},
+    {key: 'ai', label: 'The AI answers', state: run.ai_at ? 'ok' : run.ai_error ? 'failed' : age > READ_WAIT_MS ? 'failed' : 'running', ...(run.ai_error ? {note: run.ai_error} : !run.ai_at && age > READ_WAIT_MS ? {note: 'The AI did not answer.'} : {})},
+    {key: 'mail', label: 'A test e-mail was sent to you', state: run.mail_at ? 'ok' : run.mail_error ? 'failed' : age > READ_WAIT_MS ? 'failed' : 'running',
+      ...(run.mail_error ? {note: run.mail_error, settings: true} : run.mail_at ? {note: run.mail_at < run.started_at ? 'A test e-mail went to you today. Check your inbox (and spam).' : 'Check your inbox (and spam).', settings: true} : {})},
+  ];
+  const search = [
     {key: 'finished', label: 'The search finished', state: status === 'running' ? 'running' : status === 'ok' ? 'ok' : 'failed', ...(over ? {note: 'It did not report back.'} : {})},
   ];
   if (status === 'ok') {
-    steps.push({key: 'found', label: 'New jobs found', state: 'ok', note: `${found}`});
-    steps.push({key: 'mail', label: 'The e-mail was sent', state: mailed ? 'ok' : settling ? 'running' : 'skipped', ...(mailed || settling ? {} : {note: found ? 'No e-mail went out (one every 4 hours, or the address is off).' : 'Nothing new, so no e-mail.'})});
+    search.push({key: 'found', label: 'New jobs found', state: 'ok', note: `${found}`});
+    search.push({key: 'mail', label: 'The e-mail was sent', state: mailed ? 'ok' : settling ? 'running' : 'skipped', ...(mailed || settling ? {} : {note: found ? 'No e-mail went out (one every 4 hours, or the address is off).' : 'Nothing new, so no e-mail.'})});
   }
-  return Response.json({ok: true, run: {id: run.id, startedAt: run.started_at, status: settling ? 'running' : status, found: status === 'ok' ? found : null, steps}});
+  return Response.json({ok: true, run: {id: run.id, startedAt: run.started_at, status: verdict(steps), steps,
+    search: {status: settling ? 'running' : status, found: status === 'ok' ? found : null, steps: search}, found: status === 'ok' ? found : null}});
 }
 
 // A digest sent to this account's address while this run was open or just after it: not a later run's.
