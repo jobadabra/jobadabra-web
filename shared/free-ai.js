@@ -140,7 +140,9 @@ export async function freeAi(request, env, now = new Date(), ctx = null, fetcher
 async function tellSpend(env, kv, flag, text, fetcher) {
   const told = await alertOwner(env, 'free-ai-spend', {text, html: true, fetcher,
     legacy: env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null}).catch(() => null);
-  if (!told || (!told.sent && told.via !== 'switchboard')) await kv.delete?.(flag);
+  // Nothing configured at all (no bot, no store) is not a failed send: keep the flag, or every later call would redo the KV write and the log row (Gitar on #429).
+  const unconfigured = told?.via === 'none' && (told.why === 'no-bot' || told.why === 'channel-not-connected' || told.why === 'no-store');
+  if (!unconfigured && (!told || (!told.sent && told.via !== 'switchboard'))) await Promise.resolve(kv.delete?.(flag)).catch(() => {});
 }
 
 // One Telegram line the day the global spend first crosses the alert line.

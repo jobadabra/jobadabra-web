@@ -57,6 +57,16 @@ test('the daily line: an alert once when $3 is crossed, a stop at $10, and FREE_
   assert.equal((await call({...e, FREE_AI: 'off'}, apiKey)).status, 503);
 });
 
+test('the daily line with no bot configured anywhere: nothing is posted and the once-a-day flag stays, so later calls do not redo the write (Gitar on #429)', async () => {
+  const sent = [], e = env(), apiKey = await key();
+  e.WAITLIST.m.set('freeai:usd:2026-10-16', String(2.9999 * 1e6));
+  const fetcher = async (url, init) => { sent.push(init.body); return new Response('{}'); };
+  const request = () => new Request('https://www.jobpilotto.top/api/ai/v1/messages', {method: 'POST', headers: {'x-api-key': apiKey}, body: JSON.stringify({max_tokens: 5, messages: [{role: 'user', content: 'x'}]})});
+  await freeAi(request(), e, new Date('2026-10-16T10:00:30Z'), null, fetcher);
+  assert.equal(sent.length, 0);
+  assert.equal(e.WAITLIST.m.get('freeai:alerted:2026-10-16'), '1');
+});
+
 test('per install: $3 in a month is refused with the month words, and a call adds its cost to the day and the month', async () => {
   const e = env(), apiKey = await key();
   await call(e, apiKey);
