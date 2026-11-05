@@ -32,6 +32,12 @@ function trustEnv() {
 const KILL_GRACE_MS = Number(process.env.KILL_GRACE_MS) || 2000;
 function killTree(child) { try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); } }   // -pid = the group (codex is its leader: detached); a helper that left the group is covered by the grace answer
 
+// Why (5 Nov 2026, a8; ag run 42064112764: calls 6 and its restart stalled, and the 900-character tail was only the "stale rollout path" stderr line): a killed call says what codex had printed, so the next stall shows whether it reached `turn.started` or the model's first item.
+function lastEvents(out) {
+  const types = out.split('\n').flatMap(line => { try { const m = JSON.parse(line); return m && typeof m.type === 'string' ? [m.type] : []; } catch { return []; } });
+  return types.length ? `[codex events: ${types.length}, last: ${types.slice(-4).join(' > ')}]` : '[codex events: none]';
+}
+
 function run(args, cwd, prompt) {
   return new Promise(resolve => {
     const child = spawn('codex', args, {cwd, detached: true, stdio: ['pipe', 'pipe', 'pipe'], env: {PATH: process.env.PATH, HOME: process.env.HOME, CODEX_HOME: HOME, ...trustEnv()}});
@@ -121,7 +127,7 @@ async function call({prompt, schema, images = [], model, search, effort, session
     const reply = fs.existsSync(path.join(dir, 'out.txt')) ? fs.readFileSync(path.join(dir, 'out.txt'), 'utf8') : '';
     if (code !== 0 || !reply) {
       opened = readTurn(out).thread;
-      throw new Error(/401 Unauthorized|please log in|not logged in|token (is )?(expired|invalid|revoked)|refresh token/i.test(err) ? 'login-lost' : `codex-failed:${code} ${guard ? `${guard} ` : ''}${(err || out).replace(/\s+/g, ' ').slice(-900)}`);   // the worker refuses a token-shaped tail (lib/guard.mjs); Why (1 Nov 2026, after the transfer): 300/200 characters showed only Codex's MCP noise, never the line that made it exit 1
+      throw new Error(/401 Unauthorized|please log in|not logged in|token (is )?(expired|invalid|revoked)|refresh token/i.test(err) ? 'login-lost' : `codex-failed:${code} ${guard ? `${guard} ${lastEvents(out)} ` : ''}${(err || out).replace(/\s+/g, ' ').slice(-900)}`);   // the worker refuses a token-shaped tail (lib/guard.mjs); Why (1 Nov 2026, after the transfer): 300/200 characters showed only Codex's MCP noise, never the line that made it exit 1
     }
     const {thread, usage: total} = readTurn(out), turn = turnUsage(total, resumable ? held.total : null);
     let mode;
