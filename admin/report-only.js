@@ -34,7 +34,7 @@ export function model(summary, healing, now = new Date()) {
   return {groups, unlisted: jobs.filter(job => !listed.has(job.id)).map(job => job.id), jobs};
 }
 
-const STYLE = `${CHIP_STYLE}${BAND_STYLE}${NIGHTLY_STYLE}${VIZ_STYLE}${QUALITY_STYLE}.band{margin-bottom:12px}
+const STYLE = `${CHIP_STYLE}${BAND_STYLE}${NIGHTLY_STYLE}${VIZ_STYLE}${QUALITY_STYLE}.band{margin-bottom:12px}.qgrid+.band{margin-top:18px}
 .group{margin:22px 0 8px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8d949c}.group .muted{text-transform:none;letter-spacing:0;font-weight:400}
 .rjob:target{outline:2px solid #f5b54a}
 .rjob .src{margin-top:6px;font-size:12px}
