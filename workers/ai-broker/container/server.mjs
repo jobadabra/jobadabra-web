@@ -27,14 +27,17 @@ function trustEnv() {
   return (trust = {SSL_CERT_FILE: BUNDLE, CODEX_CA_CERTIFICATE: CF_CA});
 }
 
-function run(args, cwd) {
+function run(args, cwd, prompt) {
   return new Promise(resolve => {
-    const child = spawn('codex', args, {cwd, stdio: ['ignore', 'pipe', 'pipe'], env: {PATH: process.env.PATH, HOME: process.env.HOME, CODEX_HOME: HOME, ...trustEnv()}});   // stdin ignored: codex exec waits on stdin otherwise (measured 28 Oct)
+    const child = spawn('codex', args, {cwd, stdio: ['pipe', 'pipe', 'pipe'], env: {PATH: process.env.PATH, HOME: process.env.HOME, CODEX_HOME: HOME, ...trustEnv()}});
     let out = '', err = '';
     child.stdout.on('data', d => { out += d; });
     child.stderr.on('data', d => { err += d; });
     const timer = setTimeout(() => child.kill('SIGKILL'), CALL_TIMEOUT_MS);
     child.on('close', code => { clearTimeout(timer); resolve({code, out, err}); });
+    child.on('error', e => { clearTimeout(timer); resolve({code: -1, out, err: `spawn: ${e.message}`}); });
+    child.stdin.on('error', () => {});   // an early CLI exit can close the pipe before the whole prompt is written
+    child.stdin.end(String(prompt));   // EOF is required: Codex waits for the complete prompt before starting
   });
 }
 
@@ -82,9 +85,9 @@ async function call({prompt, schema, images = [], model, search, effort}) {
       fs.writeFileSync(path.join(dir, name), Buffer.from(img.base64, 'base64'));
       return name;
     });
-    const args = buildArgs({prompt, schema, imageNames, model, search, effort});
+    const args = buildArgs({schema, imageNames, model, search, effort});
     const started = Date.now();
-    const {code, out, err} = await run(args, dir);
+    const {code, out, err} = await run(args, dir, prompt);
     const reply = fs.existsSync(path.join(dir, 'out.txt')) ? fs.readFileSync(path.join(dir, 'out.txt'), 'utf8') : '';
     if (code !== 0 || !reply) throw new Error(/401 Unauthorized|please log in|not logged in|token (is )?(expired|invalid|revoked)|refresh token/i.test(err) ? 'login-lost' : `codex-failed:${code} ${(err || out).replace(/\s+/g, ' ').slice(-900)}`);   // the worker refuses a token-shaped tail (lib/guard.mjs); Why (1 Nov 2026, after the transfer): 300/200 characters showed only Codex's MCP noise, never the line that made it exit 1
     const usage = [...out.matchAll(/"usage":(\{[^}]*\})/g)].map(m => JSON.parse(m[1])).pop() || {};
