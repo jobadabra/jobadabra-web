@@ -8,6 +8,8 @@ import {TEXT_FILES} from './feedback.js';
 
 export const AUDIENCE = 'jobadabra-feedback';
 export const WORKFLOW = 'feedback-ai.yml';
+/** The file that tells the site an fd-ai/ pull request was merged or closed (pull_request_target), apart so a normal PR's close draws one row (jobadabra plan 2026-11-05-check-names, 3/4). */
+export const CLOSE_WORKFLOW = 'feedback-ai-closed.yml';
 export const DAILY_RUNS = 3;
 export const STALE_MS = 60 * 60 * 1000;   // a run that has not answered in an hour is dead: the brief and the callbacks are only served inside this window
 export const VERDICTS = ['fixed-already', 'not-reproducible', 'needs-human', 'false-positive', 'none'];

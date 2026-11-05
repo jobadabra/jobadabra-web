@@ -99,6 +99,24 @@ test('only the run that owns the card, inside its hour, can end it; a PR report 
   assert.equal((await post({ref: '0000000000000fff', status: 'none'}, await kit.token())).status, 404);
 });
 
+test('merged and closed are trusted from feedback-ai-closed.yml as merged on main, and only those two steps; a branch copy or a dispatch step from it is refused', async () => {
+  // Owner, 5 Nov 2026: "Yes, rename + fold": the close notice moves to its own file so a normal PR's close draws one row, not seven.
+  const closeFile = branch => `${REPO}/.github/workflows/feedback-ai-closed.yml@refs/heads/${branch}`;
+  const fromMain = await kit.token({event_name: 'pull_request_target', workflow_ref: closeFile('main')});
+  const e = env(), ref = add(e, {state: 'ai_pr', pr_url: prUrl(3100)});
+  env_ = e;
+  assert.equal((await post({ref, status: 'merged', pr: prUrl(3100)}, await kit.token({event_name: 'pull_request_target', workflow_ref: closeFile('evil')}))).status, 401, 'a branch copy of the close file');
+  assert.equal(row(e, ref).state, 'ai_pr');
+  assert.equal((await post({ref, status: 'merged', pr: prUrl(3100)}, fromMain)).status, 200, 'positive control: the close file on main');
+  const run = running({ai_run: '9001'});
+  assert.equal((await post({ref: run, status: 'pr', pr: prUrl(3101)}, await kit.token({workflow_ref: closeFile('main')}))).status, 401, 'a PR report must come from feedback-ai.yml');
+  assert.equal((await get(run, await kit.token({workflow_ref: closeFile('main')}))).status, 401, 'the brief only for feedback-ai.yml');
+  assert.equal((await post({ref: run, status: 'none'}, await kit.token({event_name: 'pull_request_target'}))).status, 401, 'a pull_request_target run of feedback-ai.yml cannot end a run');
+  const open = add(env_, {state: 'ai_pr', pr_url: prUrl(3102)});
+  assert.equal((await post({ref: open, status: 'closed', pr: prUrl(3102)}, await kit.token({workflow_ref: closeFile('main')}))).status, 401, 'a dispatch token from the close file is not a close');
+  assert.equal((await post({ref: open, status: 'closed', pr: prUrl(3102)}, fromMain)).status, 200, 'closed from the close file on main');
+});
+
 test('the run ends without a PR: the card is new again and shows the verdict and the reason, with the run id in the log', async () => {
   const ref = running({ai_run: '9001', ai_run_url: 'u'});
   const done = await post({ref, status: 'none', verdict: 'false-positive', why: 'the button exists; the report was about another app'}, await kit.token());

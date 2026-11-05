@@ -4,23 +4,27 @@
 // Spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md (PR 7/7). Guarded by test/unit/admin/feedback-ai.test.js.
 // Authenticity (owner's rule: a run is trusted only when GitHub says so): the token's audience is `jobadabra-feedback`, its repository the public repo (env.TIMERS_REPO), its workflow_ref exactly
 // `<repo>/.github/workflows/feedback-ai.yml@refs/heads/main` (the file as merged, never a branch's copy), its event workflow_dispatch (the run the owner's click started) or, for merged/closed,
-// pull_request_target (runs main's file, never a PR's). And the card must be in the state the step needs, inside the hour. A fork's run has no token at all.
+// pull_request_target from feedback-ai-closed.yml (or feedback-ai.yml until it moves) (runs main's file, never a PR's). And the card must be in the state the step needs, inside the hour. A fork's run has no token at all.
 import {act} from '../shared/feedback-actions.js';
-import {AUDIENCE, STALE_MS, WORKFLOW, briefOf} from '../shared/feedback-ai.js';
+import {AUDIENCE, CLOSE_WORKFLOW, STALE_MS, WORKFLOW, briefOf} from '../shared/feedback-ai.js';
 import {releasePr} from '../shared/feedback-reply.js';
 import {githubJwks, verifyRunToken} from '../shared/github-oidc.js';
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json', 'Cache-Control': 'no-store'}});
 const jwks = githubJwks();   // GitHub's signing keys, cached an hour per isolate
-const STEPS = {pr: ['ai_pr', 'workflow_dispatch'], none: ['ai_none', 'workflow_dispatch'], failed: ['ai_failed', 'workflow_dispatch'], merged: ['ai_merged', 'pull_request_target'], closed: ['ai_closed', 'pull_request_target']};
+// Why (5 Nov 2026, owner: "Yes, rename + fold"): merged and closed come from feedback-ai-closed.yml, so a normal PR's close draws one row, not seven.
+// TODO(AI): drop WORKFLOW from merged and closed once jobadabra's close job has moved to CLOSE_WORKFLOW (plan 2026-11-05-check-names, 3/4).
+const CLOSES = [CLOSE_WORKFLOW, WORKFLOW];
+const STEPS = {pr: ['ai_pr', 'workflow_dispatch', [WORKFLOW]], none: ['ai_none', 'workflow_dispatch', [WORKFLOW]], failed: ['ai_failed', 'workflow_dispatch', [WORKFLOW]],
+  merged: ['ai_merged', 'pull_request_target', CLOSES], closed: ['ai_closed', 'pull_request_target', CLOSES]};
 
-/** The run's verified claims, or null (no token, wrong token, wrong repo/workflow/event). `events`: the event names this step accepts. Never says which check failed. */
-async function claimsOf(request, env, events, deps) {
+/** The run's verified claims, or null (no token, wrong token, wrong repo/workflow/event). `events`: the event names this step accepts; `files`: the workflow files it trusts, each only as merged on main. Never says which check failed. */
+async function claimsOf(request, env, events, deps, files = [WORKFLOW]) {
   const jwt = /^Bearer (.+)$/.exec(request.headers.get('Authorization') || '')?.[1];
   if (!jwt || !env.TIMERS_REPO) return null;
   try {
     const claims = await verifyRunToken(jwt, {jwks: deps.jwks || jwks, audience: AUDIENCE, repository: env.TIMERS_REPO, now: deps.now?.getTime() ?? Date.now()});
-    return claims.workflow_ref === `${env.TIMERS_REPO}/.github/workflows/${WORKFLOW}@refs/heads/main` && events.includes(claims.event_name) ? claims : null;
+    return files.some(file => claims.workflow_ref === `${env.TIMERS_REPO}/.github/workflows/${file}@refs/heads/main`) && events.includes(claims.event_name) ? claims : null;
   } catch { return null; }
 }
 
@@ -54,7 +58,7 @@ export async function status(request, env, now = new Date(), deps = {}) {
   const body = await request.json().catch(() => null);
   const step = body && typeof body === 'object' && Object.hasOwn(STEPS, body.status) ? STEPS[body.status] : null;
   if (!step) return json({ok: false, error: 'status is pr, none, failed, merged or closed'}, 400);
-  const [action, event] = step, claims = await claimsOf(request, env, [event], {...deps, now});
+  const [action, event, files] = step, claims = await claimsOf(request, env, [event], {...deps, now}, files);
   if (!claims) return json({ok: false, error: 'unauthorized'}, 401);
   const ref = String(body.ref || '');
   if (!/^[0-9a-f]{16}$/.test(ref)) return json({ok: false, error: 'unknown feedback'}, 400);
