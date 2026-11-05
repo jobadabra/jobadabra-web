@@ -1,5 +1,6 @@
 // Compact release emails: a prominent version, dated header and complete New / Improved / Fixed changelog rows.
 // Email-safe tables and inline styles keep the preview and delivered email consistent. Test copies identify themselves in HTML, text and subject.
+import {appButton} from './app-needs.js';
 import {button, esc, SITE} from './mail-frame.js';
 import {LIGHT as C} from './mail-palette.js';
 
@@ -7,6 +8,8 @@ const FONT = '-apple-system,\'Segoe UI\',Helvetica,Arial,sans-serif';
 const emphasis = text => esc(text).replace(/\*([^*]+)\*/g, '<strong style="font-weight:600">$1</strong>');
 // Why (5 Nov 2026, owner): recipients already have the app; opening it is primary, downloading stays in the footer.
 const OPEN_APP = `${SITE}/open?view=jobs`;
+// An app known to be too old is sent to the download page instead (shared/app-needs.js).
+const openAction = version => appButton({label: 'Open Jobadabra App', url: OPEN_APP}, version);
 const plain = text => String(text ?? '').replace(/\*([^*]+)\*/g, '$1');
 const LABELS = {features: 'New', improvements: 'Improved', fixes: 'Fixed'};
 const labelOf = section => LABELS[section.kind] || 'Improved';
@@ -28,7 +31,7 @@ export function releaseHero({version, previousStable, month, intro, hero, test =
 }
 
 /** Separates change headings, descriptions and ordered instructions for comfortable email reading. */
-export function releaseHtml({sections = []}) {
+export function releaseHtml({sections = [], appVersion}) {
   const rows = sections.map((section, index) => `<tr><td style="padding:${index ? 22 : 0}px 0 22px;${index ? `border-top:1px solid ${C.line};` : ''}" class="jp-line">`
     + `<p class="jp-sig" style="margin:0 0 6px;font:600 12px/1.4 ${FONT};color:${C.signal}">${labelOf(section)}</p>`
     + `<h2 class="jp-ink" style="margin:0 0 8px;font:600 18px/1.35 ${FONT};color:${C.ink}">${esc(section.title).replace(/\.$/, '')}</h2>`
@@ -38,12 +41,13 @@ export function releaseHtml({sections = []}) {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed">${rows}</table>`
     + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="jp-line" style="padding-top:20px;border-top:1px solid ${C.line}">`
     + `<p class="jp-muted" style="margin:0;font:400 14px/1.6 ${FONT};color:${C.muted}">Open Jobadabra and choose <strong style="font-weight:600">Update</strong> to get this release.</p>`
-    + button({label: 'Open Jobadabra App', url: OPEN_APP}) + '</td></tr></table>';
+    + button(openAction(appVersion)) + '</td></tr></table>';
 }
 
 /** Provides the same version, categories and changes to clients that display plain text. */
-export function releaseText({version, previousStable, month, intro, sections = [], test = false}) {
+export function releaseText({version, previousStable, month, intro, sections = [], test = false, appVersion}) {
+  const action = openAction(appVersion);
   const parts = sections.map(section => [`${labelOf(section)}: ${section.title}. ${plain(section.text)}`, ...(section.steps || []).map((step, index) => `${index + 1}. ${plain(step)}`)].join('\n'));
   return [...(test ? [`Test email · Release ${version} · Sent only to your test address`, ''] : []), `What's new in Jobadabra · Version ${version}`, month, ...(previousStable ? [`Changes since version ${previousStable}`] : []), '', ...(intro ? [intro, ''] : []), ...parts.flatMap(part => [part, '']),
-    'Open Jobadabra and choose Update to get this release.', `Open Jobadabra App: ${OPEN_APP}`].join('\n');
+    'Open Jobadabra and choose Update to get this release.', `${action.label}: ${action.url}`].join('\n');
 }
