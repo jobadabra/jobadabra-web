@@ -118,10 +118,12 @@ function agentCoding(rows, days) {
 /**
  * The summary of every nightly report-only job.
  * @param {{snapshot: object|null, agentRows?: {kind: string, day: string, card: string|object}[]}} input the e2e snapshot row and the agent_coding_days rows of the last 21 days
+ * @param {Date} [now]
+ * @param {number} [nights] how many days the series cover (default 14; the product-quality board asks for 30, the length the snapshot keeps)
  * @returns {{at: string, days: string[], jobs: object[]}}
  */
-export function nightlySummary({snapshot = null, agentRows = []} = {}, now = new Date()) {
-  const days = lastDays(now);
+export function nightlySummary({snapshot = null, agentRows = []} = {}, now = new Date(), nights = NIGHTS) {
+  const days = lastDays(now, nights);
   return {at: now.toISOString(), days, jobs: [qualityAi(snapshot, days), promptCases(snapshot, days), interactions(snapshot, days), greenRed(snapshot, 'wander', 'Wander', days),
     greenRed(snapshot, 'notion-real', 'Real Notion', days), agentCoding(agentRows, days),
     wallClock(snapshot, 'beta-clock', 'Beta wall clock', ['beta'], ['desktop.yml'], days), wallClock(snapshot, 'night-clock', 'Night wall clock', ['nightly', 'scheduled'], ['e2e.yml'], days)]};
@@ -136,9 +138,9 @@ export const summaryForCard = (summary, cardId) => (summary?.jobs || []).filter(
 export const summaryFor = (summary, file) => (summary?.jobs || []).filter(job => job.files.includes(file));
 
 /** The ONE reader: the e2e snapshot row and the agent-coding rows, each failing to nothing; the pages call this once and draw the result. */
-export async function loadNightlySummary(env, now = new Date()) {
-  const since = dayOf(now.getTime() - 20 * DAY);
+export async function loadNightlySummary(env, now = new Date(), nights = NIGHTS) {
+  const since = dayOf(now.getTime() - (nights + 6) * DAY);   // the 7-day window of the oldest night shown (14 nights: 20 days, as before)
   let agentRows = [];
   try { agentRows = env.STATS ? (await env.STATS.prepare("SELECT kind, day, card FROM agent_coding_days WHERE kind = 'ci' AND day >= ? ORDER BY day").bind(since).all()).results || [] : []; } catch { agentRows = []; }
-  return nightlySummary({snapshot: await readSnapshot(env.STATS), agentRows}, now);
+  return nightlySummary({snapshot: await readSnapshot(env.STATS), agentRows}, now, nights);
 }
