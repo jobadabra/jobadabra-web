@@ -11,8 +11,7 @@ import {loadNightlySummary, lastDays} from './nightly-summary.js';
 import {NIGHTLY_STYLE, trendHtml} from './nightly-summary-html.js';
 import {finderJobs} from './report-only-finders.js';
 import {QUALITY_STYLE, board} from './product-quality-html.js';
-import {loadInputs} from './product-quality-data.js';
-import {qualityModel} from './product-quality-areas.js';
+import {loadQuality} from './product-quality-data.js';
 import {snapshots} from './selfheal.js';
 
 /** The groups, in page order; `jobs` are job ids (admin/nightly-summary.js, admin/report-only-finders.js). A job in no group is a failing test, so a new measurement cannot be forgotten. */
@@ -58,6 +57,6 @@ export async function view(request, env, now = new Date()) {
   if (!await viewer(request, env)) return new Response('Not found', {status: 404});
   const url = new URL(request.url);
   if (url.searchParams.has('key')) return remember(url, env, request);
-  const [summary, healing, inputs] = await Promise.all([loadNightlySummary(env, now), snapshots(env).catch(() => []), loadInputs(env, now)]);
-  return new Response(page(model(summary, healing, now), qualityModel(inputs)), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
+  const [summary, healing] = await Promise.all([loadNightlySummary(env, now), snapshots(env).catch(() => [])]);
+  return new Response(page(model(summary, healing, now), await loadQuality(env, now, healing)), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
 }

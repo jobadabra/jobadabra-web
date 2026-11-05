@@ -7,7 +7,9 @@ import {test} from 'node:test';
 import {lastDays, nightlySummary} from '../../../../admin/nightly-summary.js';
 import {judge, median, pooled, verdictOf, weeks} from '../../../../admin/product-quality.js';
 import {aiQuality, areasOf, bugs, formFilling, reliability, speed} from '../../../../admin/product-quality-areas.js';
-import {loadInputs} from '../../../../admin/product-quality-data.js';
+import {loadInputs, loadQuality} from '../../../../admin/product-quality-data.js';
+import {areaCard, board} from '../../../../admin/product-quality-html.js';
+import worker from '../../../../workers/www/index.js';
 
 const now = new Date('2026-11-05T10:00:00Z');
 const days = lastDays(now, 30), DAYS = back => days[29 - back];
@@ -160,4 +162,33 @@ test('the reader: one pass over the site tables gives the inputs; a broken sourc
   assert.equal(broken.probes, null);
   assert.equal(broken.fill.rows.length, 3, 'the other sources still answer');
   assert.equal(areasOf(broken)[3].tone, 'none');
+});
+
+test('the board draws every value escaped, and an unknown tone never prints "undefined"', () => {
+  const hostile = {id: 'x', area: '<b>Area</b>', question: '<i>q</i>', value: '9<script>', unit: '<u>', label: '<img src=x onerror=1>', trend: 'better', word: '<w>', tone: 'mystery', delta: '<d>', subs: ['<s>'], src: '<src>'};
+  const html = areaCard(hostile) + board({verdict: {icon: '🟢', headline: '<h>', chips: [{area: '<a>', tone: 'mystery', word: '<w>'}]}, areas: [hostile], gaps: [{area: '<g>', question: '<q>', why: '<y>'}]});
+  assert.doesNotMatch(html, /<script>|<img |<b>Area|<i>q|<h>|<s>|<d>|<w>|<src>|<g>|<y>/, 'a value in a tag');
+  assert.doesNotMatch(html, /undefined/);
+  assert.match(html, /&lt;b&gt;Area&lt;\/b&gt;/);
+});
+
+test('a card with no number is dashed: "not measured" says why, "too few installs" shows its count', () => {
+  const area = (extra) => ({id: 'a', area: 'A', question: 'q?', value: null, unit: '', label: 'why', trend: 'none', word: 'not measured', tone: 'none', delta: 'd', subs: [], src: '', ...extra});
+  assert.match(areaCard(area({})), /class="card qc nm"[\s\S]*not measured<\/div><div class="lbl">why/);
+  assert.match(areaCard(area({trend: 'thin', label: 'Too few installs (2)'})), /class="card qc nm"[\s\S]*<div class="num">Too few installs \(2\)<\/div>/);
+  assert.match(areaCard(area({value: '9', unit: '%', trend: 'same'})), /class="card qc"[\s\S]*9<small>%<\/small>/);
+});
+
+test('the page never goes down with the board: a failing board is null, the page keeps its nightly cards, and a broken source is logged by name', async t => {
+  const errors = t.mock.method(console, 'error', () => {});
+  assert.equal(await loadQuality(null), null, 'a throw anywhere in the board gives null');
+  assert.match(String(errors.mock.calls.at(-1).arguments[0]), /board failed/);
+  const boom = () => { throw new Error('boom'); };
+  const env = {STATS_KEY: 'k3y', STATS_SALT: 's', STATS: {prepare: boom, batch: boom}, WAITLIST: {get: async () => null, put: async () => {}, list: async () => ({keys: []})}, ASSETS: {fetch: () => new Response('asset')}};
+  const response = await worker.fetch(new Request('https://www.jobpilotto.top/admin/testing/report-only', {headers: {Cookie: 'jp_stats=k3y'}}), env, {});
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Did the nightly jobs run/);
+  assert.match(html, /0 of 5 areas on target/);
+  assert.ok(errors.mock.calls.some(call => /fill cards unreadable: boom/.test(String(call.arguments[0]))), 'the broken source is named in the log');
 });
