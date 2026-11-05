@@ -52,8 +52,11 @@ test('the page needs the login; the owner sees every alert grouped, three channe
   for (const channel of CHANNELS) assert.ok(html.includes(channel.name.replace('&', '&amp;')), channel.name);
   assert.match(html, /Connect bot/);
   assert.match(html, new RegExp(`${ALERTS.filter(alert => alert.on).length} alerts on`), 'the count follows the registry (it is not a literal that breaks with each new alert)');
-  assert.match(html, new RegExp(`${ALERTS.filter(alert => alert.wired).length} of ${ALERTS.length} senders moved over`), 'the page counts the senders that already use the switchboard (2/4: the nine Worker-side ones)');
+  assert.match(html, new RegExp(`${ALERTS.filter(alert => alert.wired).length} of ${ALERTS.filter(alert => !alert.parked).length} senders moved over`), 'the page counts the senders that already use the switchboard (2/4: the nine Worker-side ones)');
   assert.match(html, /sender not moved yet/);
+  const parked = ALERTS.filter(alert => alert.parked);
+  assert.ok(parked.some(alert => alert.id === 'broker-fallback'), 'positive control: the broker fallback is parked (coordinator, 5 Nov 2026)');
+  assert.ok(html.includes('<span title="a once-a-day note from the broker Worker') && html.includes('>parked</span>'), 'a parked alert says so in its row instead of "sender not moved yet"');
   const group = await get(e, `/admin/${groupSlug(GROUPS.find(([name]) => name === 'Operations'))}`);
   assert.deepEqual([group.status, group.headers.get('Location')], [301, '/admin/operations/scheduled'], 'the group address leads to its first page');
 });

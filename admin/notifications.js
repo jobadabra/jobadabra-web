@@ -45,19 +45,19 @@ const chanCard = (channel, bot, rows, canEdit, now) => {
 /** The page. `data` = load(); `canEdit` = the super admin; `said` = a key of SAID after a redirect; `bad` = why the last change was refused. */
 export function page(data, {canEdit = false, said = '', bad = '', now = new Date()} = {}) {
   const rows = ALERTS.map(alert => ({alert, mine: effective(alert, data.settings.get(alert.id)), stat: data.stats.get(alert.id)}));
-  const on = rows.filter(row => row.mine.on).length, wired = ALERTS.filter(alert => alert.wired).length, fallback = rows.reduce((sum, row) => sum + (row.stat?.fallback || 0), 0);
+  const on = rows.filter(row => row.mine.on).length, wired = ALERTS.filter(alert => alert.wired).length, counted = ALERTS.filter(alert => !alert.parked).length, fallback = rows.reduce((sum, row) => sum + (row.stat?.fallback || 0), 0);
   const connected = CHANNELS.filter(channel => data.channels[channel.id]?.connected).length;
   const body = GROUPS.map(([id, title]) => {
     const mine = rows.filter(row => row.alert.group === id);
     return `<tr class="grp"><td colspan="5">${esc(title)}</td></tr>${mine.map(({alert, mine: m, stat}) => `<tr class="${m.on ? '' : 'nt-off'}"><td>${esc(alert.label)}${alert.status === 'new' ? '<span class="nt-chip new">NEW</span>' : alert.status === 'later' ? '<span class="nt-chip later">LATER</span>' : ''}</td>
 <td>${toggle(alert, m, NOTIFY_PATH, canEdit)}</td><td>${when(alert, m, NOTIFY_PATH, canEdit)}</td><td>${where(alert, m, NOTIFY_PATH, canEdit)}</td>
-<td class="nt-last">${stat?.last ? `${esc(whenWords(new Date(stat.last), now))}${stat.week ? ` · ${stat.week} in 7 d` : ''}` : alert.wired ? 'never' : 'sender not moved yet'}</td></tr>`).join('')}`;
+<td class="nt-last">${stat?.last ? `${esc(whenWords(new Date(stat.last), now))}${stat.week ? ` · ${stat.week} in 7 d` : ''}` : alert.wired ? 'never' : alert.parked ? `<span title="${esc(alert.parked)}">parked</span>` : 'sender not moved yet'}</td></tr>`).join('')}`;
   }).join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Notifications · Admin</title><link rel="icon" href="/favicon-32.png"><style>${NOTIFY_STYLE}${CSS}</style></head>
 <body><main><header><h1>🔔 Notifications</h1></header>
 ${said && SAID[said] ? `<section class="card nt-flash" role="status">${esc(SAID[said])}</section>` : ''}${bad ? `<section class="card nt-flash bad" role="alert">${esc(bad)}</section>` : ''}
 <div class="nt-top"><span class="big">${on} alerts on</span><span class="muted">· ${rows.length - on} off · ${connected} of ${CHANNELS.length} channels connected</span>
-${wired < ALERTS.length ? `<span class="nt-chip warn" title="A switch is saved at once and takes effect as each alert's sender moves over to the switchboard">⚠ ${wired} of ${ALERTS.length} senders moved over</span>` : '<span class="nt-chip ok">✓ every sender uses the switchboard</span>'}
+${wired < counted ? `<span class="nt-chip warn" title="A switch is saved at once and takes effect as each alert's sender moves over to the switchboard">⚠ ${wired} of ${counted} senders moved over</span>` : '<span class="nt-chip ok">✓ every sender uses the switchboard</span>'}
 ${fallback ? `<span class="nt-chip bad" title="A sender could not reach the switchboard and used its old bot">✕ ${fallback} sent without switchboard (7 d)</span>` : ''}</div>
 <div class="nt-chans">${CHANNELS.map(channel => chanCard(channel, data.channels[channel.id] || {connected: false}, rows, canEdit, now)).join('')}</div>
 <section class="card" style="overflow-x:auto"><table class="nt-t"><thead><tr><th>Alert</th><th>On</th><th>When</th><th>Channel</th><th>Last sent</th></tr></thead><tbody>${body}</tbody></table>
