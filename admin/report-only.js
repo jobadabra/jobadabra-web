@@ -40,8 +40,8 @@ const STYLE = `${CHIP_STYLE}${BAND_STYLE}${NIGHTLY_STYLE}${VIZ_STYLE}${QUALITY_S
 .rjob .src{margin-top:6px;font-size:12px}
 .plumb>summary{cursor:pointer;list-style:none}.plumb>summary::-webkit-details-marker{display:none}.plumb>summary::before{content:'▸ ';color:#f5b54a}.plumb[open]>summary::before{content:'▾ '}
 .plumb>summary:hover{color:#e6e9ec}.plumb>summary:focus-visible{outline:2px solid #f5b54a;outline-offset:2px}`;
-// Why (5 Nov 2026, code-review of 3/3): the band's red chips stay OUTSIDE the closed toggle and link to a card inside it; a link into it opens it first (not every browser does that for <details>).
-export const OPEN_ON_LINK = `<script>(function(){function show(){var t=document.getElementById(decodeURIComponent(location.hash.slice(1))),d=t&&t.closest('details');if(d){d.open=true;t.scrollIntoView()}}addEventListener('hashchange',show);show()})()</script>`;
+// Why (5 Nov 2026, code-review of 3/3): the band's red chips stay OUTSIDE the closed toggle and link to a card inside it; a link into it opens it first (not every browser does that for <details>), also a second click on the same chip after the toggle was closed (no hashchange then; Gitar, #415).
+export const OPEN_ON_LINK = `<script>(function(){function show(hash){var id;try{id=decodeURIComponent((hash||location.hash).slice(1))}catch(e){return}var t=id&&document.getElementById(id),d=t&&t.closest('details');if(d){d.open=true;t.scrollIntoView()}}addEventListener('hashchange',function(){show()});document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href^="#"]');if(a)show(a.getAttribute('href'))});show()})()</script>`;
 
 const jobHtml = job => `<section class="card rjob" id="r-${esc(job.id)}">${trendHtml(job)}${job.files?.length ? `<div class="muted src">from ${job.files.map(file => `<code>${esc(file)}</code>`).join(' · ')}</div>` : ''}</section>`;
 

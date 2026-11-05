@@ -98,14 +98,23 @@ test('plumbing toggle (owner, 5 Nov 2026): with the board the nightly cards hide
   const inside = html.slice(toggle, html.indexOf('</details>', toggle) + 10);
   assert.equal((inside.match(/class="card rjob"/g) || []).length, GROUPS.flatMap(group => group.jobs).length, 'every nightly card is inside the toggle');
   assert.equal((html.match(/<\/?details/g) || []).filter(tag => tag === '<details').length, (html.match(/<\/details>/g) || []).length, 'every details closes');
-  // The script, run against a stub DOM: a hash on a card inside the toggle opens it and scrolls to it; no hash does nothing.
+  // The script, run against a stub DOM: a hash on a card inside the toggle opens it and scrolls to it; no hash does nothing; a click on a chip opens it again after it was closed (no hashchange then).
   const run = hash => {
     const calls = [], details = {open: false}, card = {closest: sel => (sel === 'details' ? details : null), scrollIntoView: () => calls.push('scroll')}, handlers = {};
-    new Function('document', 'location', 'addEventListener', OPEN_ON_LINK.replace(/^<script>|<\/script>$/g, ''))({getElementById: id => (id === 'r-quality-ai' ? card : null)}, {hash}, (name, fn) => { handlers[name] = fn; });
-    return {open: details.open, calls, handlers: Object.keys(handlers)};
+    const doc = {getElementById: id => (id === 'r-quality-ai' ? card : null), addEventListener: (name, fn) => { handlers[`doc:${name}`] = fn; }};
+    new Function('document', 'location', 'addEventListener', OPEN_ON_LINK.replace(/^<script>|<\/script>$/g, ''))(doc, {hash}, (name, fn) => { handlers[name] = fn; });
+    return {details, calls, handlers};
   };
-  assert.deepEqual(run('#r-quality-ai'), {open: true, calls: ['scroll'], handlers: ['hashchange']});
-  assert.deepEqual(run(''), {open: false, calls: [], handlers: ['hashchange']});
+  const loaded = run('#r-quality-ai');
+  assert.deepEqual([loaded.details.open, loaded.calls, Object.keys(loaded.handlers)], [true, ['scroll'], ['hashchange', 'doc:click']]);
+  assert.deepEqual([run('').details.open, run('').calls], [false, []]);
+  assert.deepEqual([run('#%E0%A4%A').details.open, run('#%E0%A4%A').calls], [false, []], 'a malformed hash ends quietly');
+  const again = run('');
+  again.handlers['doc:click']({target: {closest: () => ({getAttribute: () => '#r-quality-ai'})}});
+  assert.deepEqual([again.details.open, again.calls], [true, ['scroll']], 'the second click on the same chip, with the toggle closed, opens it');
+  again.details.open = false;
+  again.handlers['doc:click']({target: {closest: () => null}});
+  assert.equal(again.details.open, false, 'a click that is not on an in-page link does nothing');
   const bare = page(built, null);
   assert.doesNotMatch(bare, /<details class="plumb"|<script>/, 'a failed board leaves the nightly cards in the open, as before');
   assert.match(bare, /<a href="#r-quality-ai"><span class="chip bad">Quality AI/);
