@@ -1,4 +1,4 @@
-// /admin/schedules/all-jobs and /admin/testing/scheduled: workflow parsing, cron words and next/previous start, areas, health, the collector on a fake GitHub, the ingest, and the page in each state.
+// /admin/operations/scheduled (and its Notify column): workflow parsing, cron words and next/previous start, areas, health, the collector on a fake GitHub, the ingest, and the page in each state.
 import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
@@ -115,12 +115,12 @@ test('the ingest needs the key, cuts unknown fields and keeps one row; the page 
   assert.equal((await put(snapshot)).status, 200);
   assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM schedules_snapshot').get().n, 1);
   assert.equal(clean({...snapshot, jobs: [{...snapshot.jobs[0], evil: 1}]}).jobs[0].evil, undefined);
-  assert.equal((await call(e, '/admin/schedules/all-jobs')).status, 404, 'no login, no page');
-  const res = await call(e, '/admin/schedules/all-jobs', owner), html = await res.text();
+  assert.equal((await call(e, '/admin/operations/scheduled')).status, 404, 'no login, no page');
+  const res = await call(e, '/admin/operations/scheduled', owner), html = await res.text();
   assert.equal(res.status, 200);
   assert.match(html, /Ops overview/);
   assert.match(html, /Scheduled jobs/);
-  const filtered = await (await call(e, '/admin/schedules/all-jobs?state=off', owner)).text();
+  const filtered = await (await call(e, '/admin/operations/scheduled?state=off', owner)).text();
   assert.ok(!/CI · Ops overview/.test(filtered.split('Run by hand only')[0].split('<table>')[1] || ''), 'the state filter hides green jobs');
 });
 
@@ -137,35 +137,38 @@ test('the page in each state: no data, grouped by area with counts, escaped text
   assert.match(html, /missed a run|green|red/);
 });
 
-test('the aggregate is its own top-level Schedules section, Testing has a Scheduled tab, and the old address still answers', async () => {
-  const entry = PAGES.find(item => item.path === '/admin/schedules/all-jobs');
-  assert.equal(entry.group, 'Schedules');
-  assert.equal(PAGES.find(item => item.path === '/admin/testing/scheduled').group, 'Testing');
-  const [old] = entry.old;   // the old address comes from the page's own entry (test/unit/website/form-pages.test.js lets only the redirect list name it)
-  assert.equal(PAGES.some(item => item.path === old), false, 'not an Agent Coding page any more');
-  for (const path of ['/admin/schedules/all-jobs', '/admin/testing/scheduled']) assert.equal(typeof HEADLINES[path], 'function', path);
-  const moved = await call(env(), `${old}?state=red`, owner);
-  assert.deepEqual([moved.status, moved.headers.get('Location')], [301, '/admin/schedules/all-jobs?state=red']);
+test('Scheduled is a page of the Operations section, and the old addresses (Schedules, Testing → Scheduled) still answer', async () => {
+  const entry = PAGES.find(item => item.path === '/admin/operations/scheduled');
+  assert.equal(entry.group, 'Operations');
+  assert.deepEqual(PAGES.filter(item => item.group === 'Testing' && item.name === 'Scheduled'), [], 'the Testing tab of the same page went (5 Nov 2026)');
+  assert.equal(typeof HEADLINES['/admin/operations/scheduled'], 'function');
+  assert.ok(entry.old.length >= 4, 'the Schedules and the Testing → Scheduled addresses are kept as old ones');   // they are named only in the page's own entry (test/unit/website/form-pages.test.js)
+  for (const old of entry.old) {
+    const moved = await call(env(), `${old}?state=red`, owner);
+    assert.deepEqual([moved.status, moved.headers.get('Location')], [301, '/admin/operations/scheduled?state=red'], old);
+  }
 });
 
-test('Testing → Scheduled lists only the testing jobs and the aggregate filters by area, both from the one snapshot reader', async () => {
+test('the Area filter narrows the page; Testing shows its start-time graph; the Notify column carries the job\'s alert switch', async () => {
   const snapshot = {at: '2026-10-20T17:00:00Z', repos: [], jobs: [
     {repo: 'jobadabra/jobadabra', file: 'e2e.yml', name: 'CI · E2E', about: '', crons: ['0 2 * * *'], recent: []},
     {repo: 'jobadabra/jobadabra', file: 'product-brain.yml', name: 'Product brain', about: '', crons: ['0 6 * * *'], recent: []},
     {repo: 'jobadabra/jobadabra-web', file: 'ops-overview.yml', name: 'CI · Ops overview', about: '', crons: ['17 * * * *'], recent: []}]};
-  const only = page(snapshot, {only: 'testing', now});
-  assert.ok(only.includes('CI · E2E') && !only.includes('Product brain') && !only.includes('CI · Ops overview'), 'the Testing tab holds testing jobs only');
-  assert.ok(only.includes('<h1>⏰ Scheduled</h1>') && only.includes('Scheduled · Testing · Admin'));
-  assert.ok(!only.includes('aria-label="Area"'), 'no area filter on a page that is one area');
-  const all = page(snapshot, {now}), search = page(snapshot, {area: 'search', now});
-  assert.ok(all.includes('CI · E2E') && all.includes('Product brain') && all.includes('CI · Ops overview') && all.includes('aria-label="Area"'));
-  assert.ok(search.includes('Product brain') && !search.includes('CI · E2E'), 'the Area filter narrows the aggregate');
+  const all = page(snapshot, {now}), search = page(snapshot, {area: 'search', now}), testing = page(snapshot, {area: 'testing', now});
+  assert.ok(all.includes('CI · E2E') && all.includes('Product brain') && all.includes('CI · Ops overview') && all.includes('aria-label="Area"') && all.includes('<h1>⏰ Scheduled</h1>'));
+  assert.ok(search.includes('Product brain') && !search.includes('CI · E2E'), 'the Area filter narrows the page');
+  assert.ok(testing.includes('CI · E2E') && !testing.includes('Product brain'));
+  assert.ok(testing.length > search.length && /<th>Notify<\/th>/.test(all));
+  assert.match(all, /aria-label="Main went red[^"]*: on"/, 'e2e.yml carries the main-red switch, on by default');
+  assert.match(all, /sends nothing/, 'a job with no alert says so');
+  const owned = page(snapshot, {now, notify: {settings: new Map([['main-red', {enabled: 0}]]), canEdit: true, back: '/admin/operations/scheduled'}});
+  assert.match(owned, /name="action" value="toggle"[^>]*><input type="hidden" name="event" value="main-red"><input type="hidden" name="on" value="1"/, 'off is shown, and its button turns it on');
+  assert.ok(!/<form[^>]*>[^]*value="main-red"/.test(all.split('Run by hand only')[0]), 'a read-only viewer gets no form');
   const e = env();
   e.STATS.db.prepare('INSERT INTO schedules_snapshot (id, at, body) VALUES (1, ?, ?)').run(snapshot.at, JSON.stringify(snapshot));
-  const res = await call(e, '/admin/testing/scheduled', owner), html = await res.text();
+  const res = await call(e, '/admin/operations/scheduled?area=testing', owner), html = await res.text();
   assert.equal(res.status, 200);
-  assert.ok(html.includes('CI · E2E') && !html.includes('Product brain'));
-  assert.equal((await call(e, '/admin/testing/scheduled')).status, 404, 'no login, no page');
+  assert.ok(html.includes('CI · E2E') && !html.includes('Product brain') && html.includes('action="/admin/operations/notifications"'), 'the owner gets switches');
 });
 
 test('Billed min / week is a lower bound, with the repo named, when a private repo was not read (1 Nov 2026: a confident 0 while jobadabra-lab was unreadable)', () => {

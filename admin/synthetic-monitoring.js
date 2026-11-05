@@ -92,7 +92,7 @@ ${band}
 <div class="scroll"><table><thead><tr><th class="m">Check</th><th>How often</th><th>Last result</th>${dayHeads(days)}</tr></thead>
 <tbody>${group('📡 Live services · every 15 min')}${ownRows.map(row => rowHtml(row, now)).join('')}
 ${group('⏰ Scheduled jobs on live things')}${flowRows.map(row => rowHtml(row, now)).join('')}</tbody></table></div>
-<p class="muted small">Fixed or recorded inputs are on <a href="/admin/testing/scheduled">Scheduled</a>.</p></section>
+<p class="muted small">Fixed or recorded inputs are on <a href="/admin/operations/scheduled">Scheduled</a>.</p></section>
 </main></body></html>`;
 }
 

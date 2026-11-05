@@ -6,10 +6,10 @@ import {aiPersona} from './page-shot-seed-ai-persona.mjs';
 import {aiCostFull} from './page-shot-seed-ai-cost.mjs';
 import {healFull, testingFull} from './page-shot-seed-testing.mjs';
 import {qualityBoard} from './page-shot-seed-quality.mjs';
-import {redMainRows, stateFields, stateRows} from './page-shot-seed-state.mjs';
+import {redMainRows, stateFields, stateRows} from './page-shot-seed-state.mjs'; import {notifySeeds} from './page-shot-seed-notify.mjs';
 const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields)});
 
-export const seeds = {
+export const seeds = {...notifySeeds,
   'release-mail': async ({env}) => {
     env.MAIL = 'on'; env.MARKETING_MAIL = 'on';
     const data = {version: '0.9.9', month: 'November 2026', headline: 'Locations update as soon as you choose them',

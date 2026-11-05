@@ -27,7 +27,7 @@ export const METHODS = [
   {id: 'smoke', ring: 'prove', icon: '💨', title: 'Smoke', proves: 'The app starts and draws every Settings section.', href: '/admin/testing/pr-checks',
     lines: [{label: 'Pull request and merge', wf: 'smoke.yml', when: 'every pull request'}, {label: 'Windows', wf: 'windows-smoke.yml'}],
     bugs: {checks: ['smoke.yml']}},
-  {id: 'upgrade', ring: 'prove', icon: '⬆️', title: 'Upgrade and data test', proves: 'Update an older install; nothing may be lost.', href: '/admin/testing/scheduled',
+  {id: 'upgrade', ring: 'prove', icon: '⬆️', title: 'Upgrade and data test', proves: 'Update an older install; nothing may be lost.', href: '/admin/operations/scheduled',
     lines: [{label: 'Weekly and monthly, report only', wf: 'upgrade-data.yml'}], bugs: {none: 'a red run is a finding, not yet a bug'}},
   {id: 'fresh-install', ring: 'prove', icon: '📦', title: 'Daily fresh-install smoke', proves: 'The published download installs and opens.', href: '/admin/testing/synthetic-monitoring',
     lines: [{label: 'Daily, report only', wf: 'fresh-install-smoke.yml'}], bugs: {none: 'a red run is a finding, not yet a bug'}},
@@ -53,7 +53,7 @@ export const METHODS = [
 
   {id: 'sentry', ring: 'real', icon: '🐞', title: 'Sentry', proves: 'Crashes and errors from real installs.', href: '/admin/testing/sentry',
     lines: [{label: 'Sentry fixer', wf: 'sentry-fix.yml'}], bugs: {sentry: true}},
-  {id: 'canary', ring: 'real', icon: '🐤', title: 'Canary → stable', proves: 'A release reaches a few installs first.', href: '/admin/testing/scheduled',
+  {id: 'canary', ring: 'real', icon: '🐤', title: 'Canary → stable', proves: 'A release reaches a few installs first.', href: '/admin/operations/scheduled',
     lines: [{label: 'Promote to stable', wf: 'canary-promote.yml'}, {label: 'Stable canary', wf: 'stable-canary.yml'}], bugs: {none: 'not counted as a bug yet'}},
   {id: 'synthetic', ring: 'real', icon: '📡', title: 'Synthetic monitoring', proves: 'Probes the live site and services every 15 min.', href: '/admin/testing/synthetic-monitoring',
     lines: [{label: 'Probe round', when: 'every 15 min', last: {synthetic: true}}], bugs: {none: 'a probe finds outages, not bugs'}},

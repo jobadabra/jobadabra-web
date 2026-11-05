@@ -17,7 +17,7 @@ import {PUBLIC_REPO} from '../shared/repos.js';
 
 const DAY = 86400000, DEFAULT_REPO = PUBLIC_REPO;
 const REPORT_PAGE = '/admin/testing/report-only';   // the Report only tab (owner, 2 Nov 2026): the proof cards keep a one-line link to it, not the nightly charts
-const SCHEDULED_PAGE = '/admin/testing/scheduled';   // the Testing → Scheduled tab (session ac): each cadence links to it once it is in the menu
+const SCHEDULED_PAGE = '/admin/operations/scheduled';   // Operations → Scheduled (the Testing tab of that name went on 5 Nov 2026: one page, the Area filter)
 const DONE = {success: 'green', failure: 'red', timed_out: 'red'};
 
 /** Every stored row the cards read; a reader that fails gives null, and the cards that need it say so. */

@@ -1,8 +1,8 @@
-// Pure parts of /admin/schedules/all-jobs: read a workflow file (name, first comment, crons, hand-only, runner), say a cron in words, find its next and previous start,
+// Pure parts of /admin/operations/scheduled: read a workflow file (name, first comment, crons, hand-only, runner), say a cron in words, find its next and previous start,
 // group a job into an area, judge its health. No network, no D1; the collector (jobs/schedules-snapshot.mjs) and the page (src/schedules.js) both use it. Guard: test/schedules.test.js.
 
 export const AREAS = [
-  {id: 'testing', label: 'Testing', hint: 'Suites, canaries, the Finder and fixers, labs and reviews', link: '/admin/testing/scheduled'},
+  {id: 'testing', label: 'Testing', hint: 'Suites, canaries, the Finder and fixers, labs and reviews', link: ''},
   {id: 'search', label: 'Job search & scouting', hint: 'Scouting, random draws, daily digest', link: '/admin/job-search/lab'},
   {id: 'other', label: 'Everything else', hint: 'Builds, watchdogs, cost and site jobs', link: ''}];
 // File names (without .yml) per area; a new job lands in "Everything else" until it is listed here (test/schedules.test.js lists the unlisted ones in its failure text).

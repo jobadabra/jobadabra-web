@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Collects every workflow of our repos (files, schedules, latest runs) into ONE snapshot and sends it to /admin/schedules/all-jobs (schedules-snapshot.yml, hourly).
+// Collects every workflow of our repos (files, schedules, latest runs) into ONE snapshot and sends it to /admin/operations/scheduled (schedules-snapshot.yml, hourly).
 // A job that moves to another repo just shows under its new repo. Needs gh with SCHEDULES_READ_TOKEN (read-only: Actions + Contents on each repo; the Actions token reads only its own repo)
 // and SELFHEAL_PUBLISH_KEY to publish. Pure parts: site/src/schedules-model.js. Guard: test/schedules.test.js.
 //   node jobs/schedules-snapshot.mjs [--dry [--out snapshot.json]]     --dry reads and prints the counts without publishing
