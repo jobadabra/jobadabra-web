@@ -159,3 +159,73 @@ test('a failing sender is logged as failed and reported, not thrown', async () =
   assert.deepEqual(await send(e, 'digest', 'a@b.co', digest, {now}), {ok: false, reason: 'failed'});
   assert.equal(rows(e, 'SELECT status FROM mail_log')[0].status, 'failed');
 });
+
+// The per-person cap under parallel calls (jobadabra-web#431; measured in the review of #430: 20 of 20 parallel sends went out). A send claims its room in one statement BEFORE the provider answers.
+const room = e => e.STATS.db.prepare("SELECT status, COUNT(*) AS n FROM mail_log GROUP BY status").all().reduce((all, row) => ({...all, [row.status]: row.n}), {});
+
+test('20 mails to one person at once: only DAILY_MAX go out, the rest are refused as "rate", and no claim is left behind', async () => {
+  const {e, sent} = setup();
+  const all = await Promise.all(Array.from({length: 20}, () => send(e, 'digest', 'a@b.co', digest, {now})));
+  assert.equal(sent.length, DAILY_MAX);
+  assert.equal(all.filter(r => r.ok).length, DAILY_MAX);
+  assert.deepEqual(all.filter(r => !r.ok).map(r => r.reason), Array(20 - DAILY_MAX).fill('rate'));
+  assert.deepEqual(room(e), {sent: DAILY_MAX, rate: 20 - DAILY_MAX}, 'one row per mail and per refusal, no claim kept');
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'sent' AND message_id LIKE 'm%'").get().n, DAILY_MAX, 'a sent row carries the provider\'s id, never the claim marker');
+});
+
+test('a mail the provider fails gives its room back, in parallel too: twelve fail at once, then the person still gets DAILY_MAX', async () => {
+  const {e, sent} = setup();
+  e.EMAIL = {send: async () => { throw new Error('provider down'); }};
+  const failed = await Promise.all(Array.from({length: 12}, () => send(e, 'digest', 'a@b.co', digest, {now})));
+  assert.equal(failed.every(r => r.reason === 'failed' || r.reason === 'rate'), true);
+  e.EMAIL = {send: async message => { sent.push(message); return {messageId: `m${sent.length}`}; }};
+  const after = [];
+  for (let i = 0; i < DAILY_MAX + 1; i++) after.push(await send(e, 'digest', 'a@b.co', digest, {now}));
+  assert.equal(after.filter(r => r.ok).length, DAILY_MAX, 'every claim of the failed ones was released: nothing is held');
+  assert.equal(after.at(-1).reason, 'rate');
+  assert.equal(room(e).claimed, undefined);
+  assert.ok(room(e).failed >= 1, 'a failure is still logged');
+});
+
+test('a mail that went out is counted even when its claim row is gone or cannot be settled', async () => {
+  const {e, sent} = setup();
+  e.EMAIL = {send: async message => { e.STATS.db.prepare("DELETE FROM mail_log WHERE status = 'claimed'").run(); sent.push(message); return {messageId: 'm1'}; }};
+  assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).ok, true);
+  assert.deepEqual(room(e), {sent: 1}, 'the UPDATE matched nothing: the mail is logged as sent anyway');
+});
+
+test('a database that reports no changes count stops the send loudly, it is never read as a full cap', async () => {
+  const {e, sent} = setup();
+  const real = e.STATS.prepare;
+  e.STATS = {...e.STATS, prepare: text => { const statement = real(text); return text.startsWith('INSERT INTO mail_log') && text.includes("'claimed'") ? {bind: (...v) => ({...statement.bind(...v), run: async () => { await statement.bind(...v).run(); return {}; }})} : statement; }};
+  const refused = await send(e, 'digest', 'a@b.co', digest, {now});
+  assert.equal(refused.reason, 'failed');
+  assert.equal(sent.length, 0);
+});
+
+test('test sends stay outside the per-person cap, in parallel too: 20 at once, then the person still gets DAILY_MAX', async () => {
+  const {e, sent} = setup();
+  await Promise.all(Array.from({length: 20}, () => send(e, 'digest', 'a@b.co', digest, {now, test: true})));
+  assert.equal(sent.length, 20);
+  const real = await Promise.all(Array.from({length: 20}, () => send(e, 'digest', 'a@b.co', digest, {now})));
+  assert.equal(real.filter(r => r.ok).length, DAILY_MAX);
+});
+
+test('the product-wide cap holds under parallel calls too (20 addresses at once, MAIL_DAY_MAX 5)', async () => {
+  const {e, sent} = setup({MAIL_DAY_MAX: '5'});
+  const all = await Promise.all(Array.from({length: 20}, (_, i) => send(e, 'digest', `p${i}@b.co`, digest, {now})));
+  assert.equal(sent.length, 5);
+  assert.equal(all.filter(r => r.reason === 'rate').length, 15);
+});
+
+test('a claim left by a Worker that died counts for two minutes only, then the person has the room back', async () => {
+  const {e, sent} = setup();
+  const addr = await addrOf('a@b.co');
+  const leftover = ago => e.STATS.db.prepare("INSERT INTO mail_log (at, addr, list, template, status) VALUES (?, ?, 'service', 'digest', 'claimed')").run(new Date(now.getTime() - ago).toISOString(), addr);
+  for (let i = 0; i < DAILY_MAX - 1; i++) leftover(60e3);
+  assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).ok, true, 'nine fresh claims leave room for one');
+  assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).reason, 'rate', 'ten are full');
+  e.STATS.db.prepare("UPDATE mail_log SET at = ? WHERE status = 'claimed'").run(new Date(now.getTime() - 3 * 60e3).toISOString());
+  assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).ok, true, 'a stale claim gives its room back');
+  assert.equal(sent.length, 2);
+});

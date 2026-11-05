@@ -13,10 +13,10 @@ export const hashOf = addr => String(addr || '').slice(0, 8);   // addr is alrea
 export async function collect(env, {days = 7, now = new Date()} = {}) {
   const since = new Date(now.getTime() - days * DAY).toISOString();
   const [perDay, byTemplate, refused, recent, offReasons, confirmed, unconfirmed, optIn, held, heldOldest, today] = await Promise.all([
-    many(env, "SELECT substr(at, 1, 10) AS day, SUM(status = 'sent') AS sent, SUM(status != 'sent') AS refused FROM mail_log WHERE at >= ? GROUP BY day ORDER BY day", since),
-    many(env, "SELECT template, SUM(status = 'sent') AS sent, SUM(status != 'sent') AS refused, MAX(CASE WHEN status = 'sent' THEN at END) AS last FROM mail_log WHERE at >= ? GROUP BY template ORDER BY sent DESC", since),
-    many(env, "SELECT status AS reason, COUNT(*) AS n FROM mail_log WHERE status != 'sent' AND at >= ? GROUP BY status ORDER BY n DESC", since),
-    many(env, "SELECT at, addr, template, status FROM mail_log WHERE status != 'sent' ORDER BY at DESC LIMIT 10"),
+    many(env, "SELECT substr(at, 1, 10) AS day, SUM(status = 'sent') AS sent, SUM(status NOT IN ('sent', 'claimed')) AS refused FROM mail_log WHERE at >= ? GROUP BY day ORDER BY day", since),
+    many(env, "SELECT template, SUM(status = 'sent') AS sent, SUM(status NOT IN ('sent', 'claimed')) AS refused, MAX(CASE WHEN status = 'sent' THEN at END) AS last FROM mail_log WHERE at >= ? GROUP BY template ORDER BY sent DESC", since),
+    many(env, "SELECT status AS reason, COUNT(*) AS n FROM mail_log WHERE status NOT IN ('sent', 'claimed') AND at >= ? GROUP BY status ORDER BY n DESC", since),
+    many(env, "SELECT at, addr, template, status FROM mail_log WHERE status NOT IN ('sent', 'claimed') ORDER BY at DESC LIMIT 10"),
     many(env, 'SELECT reason, list, COUNT(*) AS n FROM mail_off GROUP BY reason, list ORDER BY n DESC'),
     one(env, 'SELECT COUNT(*) AS n FROM pro_accounts WHERE email_confirmed_at IS NOT NULL'),
     one(env, 'SELECT COUNT(*) AS n FROM pro_accounts WHERE email_confirmed_at IS NULL'),
