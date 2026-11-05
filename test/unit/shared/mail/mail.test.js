@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
-import {DAILY_MAX, addrOf, mailAllowed, send, stopLink} from '../../../../shared/mail.js';
+import {DAILY_MAX, addrOf, mailAllowed, send, sendTestMail, stopLink} from '../../../../shared/mail.js';
 import {handleEvent, unsubscribe} from '../../../../api/mail-unsub.js';
 import {TEMPLATES} from '../../../../shared/mail-templates.js';
 import {createAccount} from '../../../../shared/pro.js';
@@ -43,7 +43,23 @@ test('nothing is sent when MAIL is off, the binding is missing, the address is b
   assert.equal(sent.length, 0);
 });
 
-test('the 7th mail to one address in a day is refused; another address and the next day are fine', async () => {
+test('a test mail is outside the per-address cap: sent when the address is full, never takes its room; the alert test goes once a day', async () => {
+  // Why (owner, 5 Nov 2026: "Still, test emmail are aside of this cap"): the owner's own Test failed with "Too many e-mails today".
+  const {e, sent} = setup();
+  for (let i = 0; i < 3; i++) assert.equal((await send(e, 'digest', 'a@b.co', digest, {now, test: true})).ok, true);
+  for (let i = 0; i < DAILY_MAX; i++) assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).ok, true, `real mail ${i + 1} after 3 tests`);
+  assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).reason, 'rate');
+  assert.equal((await sendTestMail(e, 'a@b.co', now)).ok, true, 'the alert test goes on a full address');
+  assert.deepEqual(await sendTestMail(e, 'a@b.co', new Date(now.getTime() + 3600e3)), {ok: true, at: now.toISOString(), earlier: true}, 'and once a day');
+  assert.equal(sent.length, 3 + DAILY_MAX + 1);
+  assert.deepEqual(e.STATS.db.prepare("SELECT template FROM mail_log WHERE template LIKE 'test:%' GROUP BY template").all().map(r => r.template), ['test:always-on-test', 'test:digest']);
+  const capped = setup({MAIL_DAY_MAX: '2'});
+  for (let i = 0; i < 2; i++) await send(capped.e, 'digest', `p${i}@b.co`, digest, {now, test: true});
+  assert.equal((await send(capped.e, 'digest', 'q@b.co', digest, {now, test: true})).reason, 'rate', 'the product-wide cap still counts tests');
+});
+
+test('the 11th mail to one address in a day is refused; another address and the next day are fine', async () => {
+  assert.equal(DAILY_MAX, 10, 'owner, 5 Nov 2026: "10 a day"');
   const {e, sent} = setup();
   for (let i = 0; i < DAILY_MAX; i++) assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).ok, true);
   assert.equal((await send(e, 'digest', 'a@b.co', digest, {now})).reason, 'rate');

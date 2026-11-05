@@ -104,10 +104,35 @@ test('the Test sends one short e-mail to the alert address and says why when it 
   const off = env(); await turnOn(off);
   off.STATS.db.prepare('UPDATE hosted_schedules SET email_channel = 0').run();
   await call(off, 'POST', later(5));
-  const none = (await (await call(off, 'GET', later(6))).json()).run;
+  const none = (await (await call(off, 'GET', new Date(later(5).getTime() + 61000))).json()).run;
   assert.equal(off.EMAIL.sent.length, 0);
   assert.equal(none.status, 'failed');
   assert.match(none.steps.find(s => s.key === 'mail').note, /E-mail alerts are off.*Settings → Notifications/);
+});
+
+test('a failed step does not end the Test while another still runs: the server\'s read still shows (the owner\'s press, run_1e97a4cc)', async () => {
+  // Why (owner's press, 5 Nov 2026): the mail failed at the press, the verdict said "Failed" at once, the app stopped reading,
+  // and "Our server started and read it" stayed on Checking though the server read the profile 7 s later.
+  const e = env({HOSTED_KEK: 'kek'}); await turnOn(e);
+  e.HOSTED_STATE.m.set(`hosted/${rows(e, 'SELECT account FROM hosted_schedules')[0].account}/config.json`, 1);
+  e.HOSTED_STATE.get = async () => null;
+  e.STATS.db.prepare('UPDATE hosted_schedules SET email_channel = 0').run();
+  await call(e, 'POST', later(5));
+  const early = (await (await call(e, 'GET', new Date(later(5).getTime() + 3000))).json()).run;
+  assert.deepEqual([early.status, early.steps.find(s => s.key === 'mail').state, early.steps.find(s => s.key === 'started').state], ['running', 'failed', 'running']);
+  await config(new Request('https://x/api/hosted/config', {headers: {authorization: `Bearer ${e.HOSTED_QUEUE.sent.at(-1).token}`}}), e, new Date(later(5).getTime() + 7000));
+  const settled = (await (await call(e, 'GET', new Date(later(5).getTime() + 8000))).json()).run;
+  assert.deepEqual([settled.status, settled.steps.find(s => s.key === 'started').state], ['failed', 'ok']);
+});
+
+test('a full address still gets the Test e-mail: test mails are outside the per-address cap', async () => {
+  // Why (owner, 5 Nov 2026: "Still, test emmail are aside of this cap"): the owner's Test failed with "Too many e-mails today".
+  const e = env(); await turnOn(e);
+  const addr = await addrOf('a@example.com');
+  for (let i = 0; i < 12; i++) e.STATS.db.prepare("INSERT INTO mail_log (at, addr, list, template, status) VALUES (?, ?, 'service', 'digest', 'sent')").run(later(-60).toISOString(), addr);
+  await call(e, 'POST', later(5));
+  assert.equal(e.EMAIL.sent.length, 1);
+  assert.equal((await (await call(e, 'GET', later(6))).json()).run.steps.find(s => s.key === 'mail').state, 'ok');
 });
 
 test('a double press checks once: one test e-mail and one AI call, not one per press', async () => {
@@ -151,8 +176,9 @@ test('an AI that fails or hangs fails its step with what it said, within the wai
   const e = env({AI: {run: async () => { throw new Error('upstream down'); }}}); await turnOn(e);
   await call(e, 'POST', later(5));
   const run = (await (await call(e, 'GET', new Date(later(5).getTime() + 5000))).json()).run;
-  assert.equal(run.status, 'failed');
+  assert.equal(run.steps.find(s => s.key === 'ai').state, 'failed');
   assert.match(run.steps.find(s => s.key === 'ai').note, /Free AI could not answer/);
+  assert.equal((await (await call(e, 'GET', new Date(later(5).getTime() + 61000))).json()).run.status, 'failed', 'the verdict once every step settled');
   e.AI = {run: () => new Promise(() => {})};   // hangs, as two production calls did for ~170 s
   const began = Date.now();
   assert.deepEqual(await aiAnswers(e, e.HOSTED_QUEUE.sent.at(-1).token, later(5), 50), {ok: false, error: 'The AI is slow right now.'});

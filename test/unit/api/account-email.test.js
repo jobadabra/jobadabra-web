@@ -83,6 +83,16 @@ test('a message is mailed in the Telegram layout with a confirm link; an unconfi
   assert.ok(!sent[last].html.includes('/confirm?a='));
 });
 
+test('kind "test" (the GitHub way\'s Test) sends the alert test mail once a day, outside the per-address cap, whatever the body', async () => {
+  // Why (owner, 5 Nov 2026: "Still, test emmail are aside of this cap"); once a day so a stolen repo key cannot flood the inbox.
+  const {e, sent} = setup();
+  await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});
+  sent.length = 0;
+  assert.deepEqual(await call(notify, e, 'install-aaaa', 'POST', {kind: 'test'}), {status: 200, ok: true, earlier: false});
+  assert.deepEqual(await call(notify, e, 'install-aaaa', 'POST', {kind: 'test', subject: 'x', html: card}), {status: 200, ok: true, earlier: true});
+  assert.deepEqual(sent.map(m => m.subject), ['Always on test: your alerts reach you']);
+});
+
 test('an empty message and a person who switched the service list off send nothing', async () => {
   const {e, sent} = setup();
   await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});

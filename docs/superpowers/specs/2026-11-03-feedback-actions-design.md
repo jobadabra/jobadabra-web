@@ -13,7 +13,7 @@ Outcome: the owner clears the list in one pass (today it only grows), reporters 
 | The page (`admin/feedback.js`) | read-only list, polls every 60 s; no state, no actions; guests (`viewer`) can read it |
 | D1 `feedback` (migrations 0003, 0124, 0125) | words, install id, version, platform, contact (free text), screen, file flags, `notified`; no state column |
 | Files | R2 `feedback-files`, keys `feedback/<ref>/{screen.*,logs.txt,page.json,profile.json}`, purged after 90 days |
-| E-mail sender | exists: `send(env,'<template>',to,data)` in `shared/mail.js` (Cloudflare Email Sending from `no-reply@jobadabra.top`, kill switch `MAIL`, 6 mails a day per address, honours unsubscribe, logs a hash). **No new provider.** |
+| E-mail sender | exists: `send(env,'<template>',to,data)` in `shared/mail.js` (Cloudflare Email Sending from `no-reply@jobadabra.top`, kill switch `MAIL`, 10 mails a day per address (test mails aside), honours unsubscribe, logs a hash). **No new provider.** |
 | Starting a GitHub workflow from the Worker | exists: `dispatch(env, inputs, workflow)` (`workers/www/index.js`) with `TIMERS_GITHUB_TOKEN` + `TIMERS_REPO` (the public repo). **No new secret.** |
 | An agent that edits files on the broker | exists: `jobadabra:desktop/e2e/edit-codex.mjs` (two broker calls, **no tools**, edits come back as data; the workflow's later steps validate paths, run the tests, push, open the PR) and `ui-fix.yml` is the template. The broker is one prompt in, one answer out, container with no internet. |
 | App ↔ site by install id | the app already sends `install` (`app-feedback.js`); nothing reads anything back for feedback |
