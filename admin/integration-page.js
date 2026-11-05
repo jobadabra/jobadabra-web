@@ -70,12 +70,7 @@ export function greenRows(snapshot, now = new Date()) {
 function layersCard(stats, name) {
   const rows = stats.map(row => `<tr><td><span class="sw" style="background:${LAYER_COLORS[row.layer]}"></span><b>${esc(LAYER_NAMES[row.layer])}</b><div class="muted">${esc(LAYER_HINTS[row.layer])}</div></td><td class="num">${num(row.tests)}<div class="muted">in ${num(row.files)} files</div></td>
 <td class="num">${row.median === null ? '–' : seconds(row.median)}</td><td class="num">${pct(row.greens, row.runs)}</td><td>${chip(row.runs ? `${num(row.greens)} of ${num(row.runs)} runs` : 'no run', tone(row.greens, row.runs))}</td></tr>`).join('');
-  const table = `<div class="scroll"><table><tr><th>Layer</th><th class="num">Tests</th><th class="num">Median run time</th><th class="num">Main green</th><th>Runs</th></tr>${rows}</table></div>`;
-  // Why (owner, 5 Nov 2026, sketch): bars of the tests per layer, with each layer's median time and main green as chips.
-  const lead = stats.filter(row => row.runs).map(row => [`${LAYER_NAMES[row.layer]} ${pct(row.greens, row.runs)} green · ${row.median === null ? '–' : seconds(row.median)}`, tone(row.greens, row.runs)]);
-  const chart = bars(stats.map(row => ({label: LAYER_NAMES[row.layer], hint: `in ${num(row.files)} files`, value: row.tests, text: `${num(row.tests)} tests`,
-    tip: `${LAYER_NAMES[row.layer]} · ${num(row.tests)} tests in ${num(row.files)} files · median run ${row.median === null ? 'no run' : seconds(row.median)} · main green ${pct(row.greens, row.runs)} (${num(row.greens)} of ${num(row.runs)} runs)`})));
-  return `<section class="card"><h2>The three layers · ${esc(name)}</h2>${figure({lead, chart: stats.some(row => row.tests) ? chart : '', table})}</section>`;
+  return `<section class="card"><h2>The three layers · ${esc(name)}</h2><div class="scroll"><table><tr><th>Layer</th><th class="num">Tests</th><th class="num">Median run time</th><th class="num">Main green</th><th>Runs</th></tr>${rows}</table></div></section>`;
 }
 
 function flakyCard(snapshot, repo, name, keys) {

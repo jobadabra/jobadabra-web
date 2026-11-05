@@ -21,9 +21,8 @@ import {BETA_CSS, betaCard} from './e2e-beta.js';
 import {PR_JOB_BUDGET_SECONDS, PR_SPLIT_SECONDS, speedSummary, speedTime} from './e2e-speed.js';
 import {PUBLIC_REPO} from '../shared/repos.js';
 import {VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
-import {filesChart, prCostChart, qualityChart, scoreChart, speedFigure, suiteCostFigure, swapTable} from './testing-charts.js';
+import {filesChart, prCostChart, swapTable} from './testing-charts.js';
 import {summary as topSummary} from './e2e-top.js';
-import {scoreRows} from './e2e-scorecard.js';
 
 const DAY = 86400000;
 export const RANGES = {'7d': {name: 'Last 7 days', days: 7}, '30d': {name: 'Last 30 days', days: 30}};
@@ -111,7 +110,7 @@ export function qualityCard(nights = [], repo = PUBLIC_REPO) {
 ${promptTile(nights.find(night => night.promptCases)?.promptCases)}</div>
 <div class="scroll"><table><tr><th>Night</th><th>Run</th><th class="num">Pairs</th><th class="num">Within ${BARS.within}</th><th class="num">Over ${BARS.jump}</th><th class="num">Facts exact</th><th class="num">Invented</th><th class="num">Prompt cases</th></tr>${nights.slice(0, 14).map(night =>
   `<tr><td>${esc(night.day)}</td><td><a href="https://github.com/${esc(repo)}/actions/runs/${Number(night.runId)}">#${Number(night.runId)}</a></td><td class="num">${night.pairs}</td><td class="num">${chip(`${night.within8}`, night.within8 / night.pairs >= BARS.agree ? 'good' : 'warn')}</td><td class="num">${night.over20 ? chip(`${night.over20}`, 'bad') : chip('0', 'good')}</td><td class="num">${night.factsExact}/${night.factsTotal}</td><td class="num">${night.invented}/${night.judged}</td><td class="num">${chip(esc(promptWords(night.promptCases).text), promptWords(night.promptCases).tone)}</td></tr>`).join('')}</table></div></section>`;
-  return swapTable(html, '<div class="scroll"><table><tr><th>Night</th>', qualityChart(nights));
+  return html;
 }
 
 function greyCard(snapshot, now, repo) {
@@ -135,7 +134,7 @@ function speedCard(snapshot, now = new Date()) {
 <td>${row.n} run${row.n === 1 ? '' : 's'}</td><td>${row.median === null ? '–' : `${speedTime(row.p25)}–${speedTime(row.p95)}`}</td><td>${row.median === null ? '–' : budgetBar(row.median)}</td></tr>`).join('');
   return `<section class="card"><h2>Speed · last 30 days</h2>
 <p class="muted">Successful suite jobs on main (after merge, nightly and scheduled), slowest first. At least 3 runs for a median. Each run counts once per suite using its longest successful job; shard names stay separate. Old rows without timings do not count.</p>
-${rows ? speedFigure(speed.main, `<div class="scroll"><table><tr><th>Suite</th><th>Main median</th><th>n</th><th>p25–p95</th><th>PR job budget · ${PR_JOB_BUDGET_SECONDS / 60} min</th></tr>${rows}</table></div>`, {budgetSeconds: PR_JOB_BUDGET_SECONDS}) : '<p class="muted">No suite job timings stored yet. The hourly collector adds timings as new runs finish.</p>'}
+${rows ? `<div class="scroll"><table><tr><th>Suite</th><th>Main median</th><th>n</th><th>p25–p95</th><th>PR job budget · ${PR_JOB_BUDGET_SECONDS / 60} min</th></tr>${rows}</table></div>` : '<p class="muted">No suite job timings stored yet. The hourly collector adds timings as new runs finish.</p>'}
 <p class="muted">Job time includes setup and teardown. User promise step timings are not collected yet.</p>
 <h3>PR suite jobs · ${PR_SPLIT_SECONDS / 60}-minute early warning</h3>
 ${speed.slowPr.length ? `<ul>${speed.slowPr.map(row => `<li><code>${esc(row.suite)}</code> · ${speedTime(row.median)} · ${row.n} runs ${chip('split it', 'warn')}</li>`).join('')}</ul>`
@@ -158,8 +157,8 @@ ${qualityCard(snapshot.quality || [], repo)}
 ${greyCard(snapshot, now, repo)}
 ${speedCard(snapshot, now)}
 <section class="card"><h2>Red suites per day, by cause · ${esc(name)}</h2>${w.reds ? bars(w) : '<p class="muted">No red suites in this range.</p>'}</section>
-<section class="card"><h2>Which suites cost the most · ${esc(name)}</h2>${suiteCostFigure(suiteRows(w), suiteTable(w), label)}</section>
-${swapTable(scorecardCard(w, name, {now, repo}), '<div class="scroll"><table><tr><th>Suite</th><th class="num">Caught a bug</th>', scoreChart(scoreRows(w.fails, w.escapes || [])))}
+<section class="card"><h2>Which suites cost the most · ${esc(name)}</h2>${suiteTable(w)}</section>
+${scorecardCard(w, name, {now, repo})}
 ${withFilesChart(workCard(snapshot, now), snapshot, now)}
 <section class="card"><h2>What each cause means</h2><table>${CAUSES.map(cause => `<tr><td class="nowrap">${swatch(cause.id)}${esc(cause.label)}</td><td class="muted">${esc(cause.hint)}</td></tr>`).join('')}</table></section>
 <section class="card"><h2>Latest ${(snapshot.latest || []).length} runs</h2><div class="scroll"><table><tr><th>Run</th><th>Day</th><th>Kind</th><th>Result</th><th class="num">Minutes</th></tr>${(snapshot.latest || []).map(run =>

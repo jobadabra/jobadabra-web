@@ -1,5 +1,7 @@
 # Admin tables become charts
 
+> **Rule (owner, 5 Nov 2026, after PR 1 and 2 were built):** only PLAIN tables of raw numbers become charts. A table whose value cells already carry colour (chips, bars, dots, strips) stays: "these 2 tables were not that bad. They were giving some visual feedback (colors)… only this type of tables should be the target right now" (shown: Speed and Scorecard stay; "Main's green share per day", a colourless table, is the target). The inventory below was triaged before this rule: PRs 3–7 re-triage each row by it; a row marked 📊 whose table is colour-coded becomes 📋 stays.
+
 > **Verdict:** 143 sections on 8 admin groups were checked. **94 are summaries and become charts**, 41 are lookups and stay tables, 8 are already visual and stay. One shared chart module draws all of them, and the exact numbers stay one click away ("Show table"). Seven PRs, AI → Costs first.
 
 Owner (5 Nov 2026): "Please find all the sections/tables like this in the entire Admin UI and transform them into a more visual representation. Preferably graphs. Something that is easy to digest. Nobody reads tables and raw data. There can be exceptions where…" — his pick for the exceptions: **"Lookup tables stay."** A list you search for one row in stays a table (a run log, feedback, a key you look up). Summaries become charts.
@@ -394,7 +396,7 @@ AI → Costs was shared with session `ca`; its per-job PR (#379) is merged, so t
 - [x] Spec
 - [x] Sketch and the owner's yes (5 Nov 2026: "Yes, as sketched"; https://claude.ai/artifact/GdfzfegP7Xz1H93f5ffKv5)
 - [x] 1/7 Module + AI → Costs (#384, merged 5 Nov 2026)
-- [x] 2/7 Testing: E2E, Integrations, PR checks (built; 'Numbers per day' and 'Top causes' were already charts, so 10 new charts, not 12)
+- [x] 2/7 Testing: E2E, Integrations, PR checks (rescoped by the rule above: 4 charts; Speed, Scorecard, AI steadiness, suite cost and layers stay tables)
 - [ ] 3/7 Testing: Overview, Synthetics, GTM, Self-healing
 - [ ] 4/7 Agent Coding
 - [ ] 5/7 Growth

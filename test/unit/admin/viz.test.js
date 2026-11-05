@@ -93,13 +93,6 @@ test('line: dots on a 0-100% axis, a day with no value breaks the line and has n
   assert.equal(line([{day: '2026-10-01', value: null, tip: 'x'}]), '');
 });
 
-test('ranges: whisker, median dot and a limit tick on one shared scale; no items is empty', async () => {
-  const {ranges} = await import('../../../admin/viz.js');
-  const html = ranges([{label: 'apply', hint: '24 runs', low: 100, mid: 200, high: 400, text: '3m20s', tip: 'apply tip'}], {limit: {value: 480, words: 'PR job budget 8 min'}});
-  assert.match(html, /class="vz-whisk" style="left:20\.8%/); assert.match(html, /vz-dot" style="left:41\.7%/); assert.match(html, /vz-tick" style="left:100\.0%/); assert.match(html, /PR job budget 8 min/); assert.match(html, /data-tip="apply tip"/);
-  assert.equal(ranges([]), '');
-});
-
 test('the rows share one set of columns, so every track has the same length (Speed shot, 5 Nov 2026: the budget tick sat 4 px apart)', async () => {
   const {VIZ_STYLE} = await import('../../../admin/viz.js');
   assert.match(VIZ_STYLE, /\.vz-row\{display:grid;grid-template-columns:subgrid/); assert.match(VIZ_STYLE, /\.vz-bars\{display:grid;grid-template-columns:minmax\(110px,200px\) 1fr auto/);
