@@ -101,3 +101,11 @@ test('the menu lists Agent coding under Agents and the overview headline counts 
   assert.equal(circling.value, '1');
   assert.equal(circling.status, 'bad');
 });
+
+test('CI minutes per push: the weeks are columns (median, slowest 1 in 10) with the table behind "Show table"; the tooltip script is on the page once', () => {
+  const now = new Date();
+  const html = page([{kind: 'ci', day: today, card: JSON.stringify(ciDay(today)), updated_at: now.toISOString()}], now);
+  assert.match(html, /id="minutes"[\s\S]*class="vz"[\s\S]*Median[\s\S]*Slowest 1 in 10[\s\S]*<summary>Show table<\/summary>[\s\S]*<th class="num">Pushes<\/th>/);
+  assert.match(html, /data-tip="week of [A-Z][a-z]{2} \d+ · 3 pushes · median 12 min/);
+  assert.equal((html.match(/id="tip"/g) || []).length, 1);
+});

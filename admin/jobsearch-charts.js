@@ -9,7 +9,7 @@ const group = (title, chart) => (chart ? `<p class="muted vz-cap2">${title}</p>$
 /** Tech and non-tech: relevant jobs per tool as the share of what it showed, one bar chart per kind of role. view = {tools: [{tool, ours}], kinds: {tech: {tool: {relevant, relevantShare}}, 'non-tech': {…}}}. */
 export function kindsChart(view) {
   const of = kind => bars(view.tools.filter(tool => view.kinds?.[kind]?.[tool.tool]).map(tool => { const x = view.kinds[kind][tool.tool], share = Number(x.relevantShare);
-    return {label: tool.tool, hint: tool.ours ? 'ours' : '', value: share || 0, text: x.relevantShare == null ? '–' : `${share}%`, tip: `${tool.tool} · ${kind} · ${num(x.relevant)} relevant jobs${x.relevantShare == null ? '' : ` · ${share}% of the jobs shown`}`}; }), {max: 100});
+    return {label: tool.tool, hint: tool.ours && !/ours/i.test(tool.tool) ? 'ours' : '', value: share || 0, text: x.relevantShare == null ? '–' : `${share}%`, tip: `${tool.tool} · ${kind} · ${num(x.relevant)} relevant jobs${x.relevantShare == null ? '' : ` · ${share}% of the jobs shown`}`}; }), {max: 100});
   return group('Tech roles: relevant share of the jobs shown', of('tech')) + group('Non-tech roles: relevant share of the jobs shown', of('non-tech'));
 }
 
