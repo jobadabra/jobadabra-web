@@ -3,21 +3,22 @@
 //   POST /api/feedback/ai-status {ref, status: pr|none|failed|merged|closed, pr?, verdict?, why?}   the run reports; the card moves (shared/feedback-actions.js, internal actions)
 // Spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md (PR 7/7). Guarded by test/unit/admin/feedback-ai.test.js.
 // Authenticity (owner's rule: a run is trusted only when GitHub says so): the token's audience is `jobadabra-feedback`, its repository the public repo (env.TIMERS_REPO), its workflow_ref exactly
-// `<repo>/.github/workflows/feedback-ai.yml@refs/heads/main` (the file as merged, never a branch's copy), its event workflow_dispatch (the run the owner's click started) or, for merged/closed,
+// `<repo>/.github/workflows/feedback-ai.yml@refs/heads/main` or ai-fixer.yml@refs/heads/main (the file as merged, never a branch's copy), its event workflow_dispatch (the run the owner's click started) or, for merged/closed,
 // pull_request_target from feedback-ai-closed.yml (or feedback-ai.yml until it moves) (runs main's file, never a PR's). And the card must be in the state the step needs, inside the hour. A fork's run has no token at all.
 import {act} from '../shared/feedback-actions.js';
-import {AUDIENCE, CLOSE_WORKFLOW, STALE_MS, WORKFLOW, briefOf} from '../shared/feedback-ai.js';
+import {AUDIENCE, CLOSE_WORKFLOW, FIXER_WORKFLOW, STALE_MS, WORKFLOW, briefOf} from '../shared/feedback-ai.js';
 import {releasePr} from '../shared/feedback-reply.js';
 import {githubJwks, verifyRunToken} from '../shared/github-oidc.js';
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json', 'Cache-Control': 'no-store'}});
 const jwks = githubJwks();   // GitHub's signing keys, cached an hour per isolate
 // Why (5 Nov 2026, owner: "Yes, rename + fold"): merged and closed come only from feedback-ai-closed.yml since jobadabra's close job left feedback-ai.yml (plan 2026-11-05-check-names 3/4), so a normal PR's close draws one row, not seven.
-const STEPS = {pr: ['ai_pr', 'workflow_dispatch', [WORKFLOW]], none: ['ai_none', 'workflow_dispatch', [WORKFLOW]], failed: ['ai_failed', 'workflow_dispatch', [WORKFLOW]],
+const RUNNERS = [WORKFLOW, FIXER_WORKFLOW];   // the two workflows a card's click may start; each only as merged on main, only the dispatch event
+const STEPS = {pr: ['ai_pr', 'workflow_dispatch', RUNNERS], none: ['ai_none', 'workflow_dispatch', RUNNERS], failed: ['ai_failed', 'workflow_dispatch', RUNNERS],
   merged: ['ai_merged', 'pull_request_target', [CLOSE_WORKFLOW]], closed: ['ai_closed', 'pull_request_target', [CLOSE_WORKFLOW]]};
 
 /** The run's verified claims, or null (no token, wrong token, wrong repo/workflow/event). `events`: the event names this step accepts; `files`: the workflow files it trusts, each only as merged on main. Never says which check failed. */
-async function claimsOf(request, env, events, deps, files = [WORKFLOW]) {
+async function claimsOf(request, env, events, deps, files = RUNNERS) {
   const jwt = /^Bearer (.+)$/.exec(request.headers.get('Authorization') || '')?.[1];
   if (!jwt || !env.TIMERS_REPO) return null;
   try {

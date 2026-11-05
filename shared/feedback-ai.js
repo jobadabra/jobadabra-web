@@ -8,6 +8,8 @@ import {TEXT_FILES} from './feedback.js';
 
 export const AUDIENCE = 'jobadabra-feedback';
 export const WORKFLOW = 'feedback-ai.yml';
+/** The AI fixer's workflow (public repo): trusted for the brief and for the pr/none/failed reports like WORKFLOW, never for merged/closed. Why (5 Nov 2026, owner: "Button starts the new agent"; plan ci-agent-until-green, web 4/5): the first card run of ai-fixer.yml got HTTP 401 because only WORKFLOW was trusted. */
+export const FIXER_WORKFLOW = 'ai-fixer.yml';
 /** The file that tells the site an fd-ai/ pull request was merged or closed (pull_request_target), apart so a normal PR's close draws one row (jobadabra plan 2026-11-05-check-names, 3/4). */
 export const CLOSE_WORKFLOW = 'feedback-ai-closed.yml';
 export const DAILY_RUNS = 3;

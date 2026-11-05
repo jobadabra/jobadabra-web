@@ -158,3 +158,39 @@ test('the page\'s own poll sends a run that never answered back to new, so a dea
   assert.equal(row(e, ref).state_note, '🤖 failed: the run did not answer in an hour');
   assert.deepEqual(log(e, ref).map(l => l.who), ['system']);
 });
+
+const fixerRef = branch => `${REPO}/.github/workflows/ai-fixer.yml@refs/heads/${branch}`;
+
+test('ai-fixer.yml is trusted for the brief and the pr/none/failed reports exactly like feedback-ai.yml, as merged on main and only for a dispatch; nothing else changes', async () => {
+  const ref = running();
+  const fixer = run => kit.token({workflow_ref: fixerRef('main'), run_id: run});
+  assert.equal((await get(ref, await fixer('7001'))).status, 200, 'positive control: the brief goes to the agent run');
+  assert.equal(row(env_, ref).ai_run, '7001');
+  assert.equal((await get(ref, await fixer('7002'))).status, 409, 'a second run (a round) is not the first');
+  const refused = {
+    'a branch copy': {workflow_ref: fixerRef('evil')}, 'a pull_request event': {workflow_ref: fixerRef('main'), event_name: 'pull_request'},
+    'a pull_request_target event': {workflow_ref: fixerRef('main'), event_name: 'pull_request_target'}, 'another repository': {workflow_ref: fixerRef('main'), repository: 'someone/else'},
+    'another audience': {workflow_ref: fixerRef('main'), aud: 'jobadabra-ai-broker'}, 'a longer file name': {workflow_ref: `${REPO}/.github/workflows/ai-fixer.yml.evil@refs/heads/main`},
+  };
+  const fresh = running();
+  for (const [what, claims] of Object.entries(refused)) assert.equal((await get(fresh, await kit.token({...claims, run_id: '7003'}))).status, 401, what);
+  assert.deepEqual([row(env_, fresh).ai_run, row(env_, fresh).state], ['', 'ai_running'], 'none of them bound the card');
+  const idle = running({state: 'new'}), old = running({state_at: '2026-11-03T10:00:00.000Z'});
+  assert.equal((await get(idle, await fixer('7004'))).status, 409, 'a card that was not clicked');
+  assert.equal((await get(old, await fixer('7005'))).status, 409, 'a stale hour');
+});
+
+test('the agent run reports its own card: pr, none and failed from the bound run only; merged and closed never come from ai-fixer.yml', async () => {
+  const ref = running({ai_run: '7001'}), own = await kit.token({workflow_ref: fixerRef('main'), run_id: '7001'}), other = await kit.token({workflow_ref: fixerRef('main'), run_id: '7002'});
+  assert.equal((await post({ref, status: 'pr', pr: prUrl(3300)}, other)).status, 409, 'a run that does not own the card');
+  assert.equal(row(env_, ref).state, 'ai_running');
+  assert.equal((await post({ref, status: 'pr', pr: prUrl(3300)}, own)).status, 200);
+  assert.equal(row(env_, ref).state, 'ai_pr');
+  for (const closing of ['merged', 'closed']) {
+    assert.equal((await post({ref, status: closing, pr: prUrl(3300)}, await kit.token({workflow_ref: fixerRef('main'), event_name: 'pull_request_target', run_id: '7001'}))).status, 401, `${closing} from ai-fixer.yml`);
+    assert.equal((await post({ref, status: closing, pr: prUrl(3300)}, own)).status, 401, `${closing} from a dispatch`);
+  }
+  const none = running({ai_run: '7001'});
+  assert.equal((await post({ref: none, status: 'none', verdict: 'needs-human', why: 'tests-failed'}, own)).status, 200);
+  assert.equal(row(env_, none).state, 'new', 'the card is new again with the verdict');
+});
