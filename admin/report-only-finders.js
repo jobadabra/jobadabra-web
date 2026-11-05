@@ -8,15 +8,23 @@ const FINDERS = [['finder-layout', 'Layout checks', 'Layout and DOM checks'], ['
 const byDay = snapshots => new Map((snapshots || []).filter(item => item?.day).map(item => [item.day, item]));
 
 // Real bugs (fixed or queued) the finder filed in the 7 days up to each day: one point per stored snapshot.
+// Why (5 Nov 2026, owner: layout 1 Nov, probe 24 Oct): the writer lists only detectors that filed in the window (selfheal-stats.mjs `by`), so a stored snapshot with no row for a finder means
+// it filed nothing = 0. Read as "no data" the point went grey and the row printed the last day the finder had filed, not the day of the numbers.
 function finder(snapshots, days, [id, title, detector]) {
-  const stored = byDay(snapshots), files = ['self-heal-stats.yml'];
+  const stored = byDay(snapshots), files = ['self-heal-stats.yml'], filedOn = new Set();
   const series = days.map(day => {
-    const row = stored.get(day)?.periods?.last7?.byDetector?.find(item => item.detector === detector);
-    return row ? {day, value: (Number(row.fixed) || 0) + (Number(row.queued) || 0), ok: null} : {day, value: null, ok: null};
+    const last7 = stored.get(day)?.periods?.last7;
+    if (!last7) return {day, value: null, ok: null};
+    const row = (last7.byDetector || []).find(item => item.detector === detector);
+    if (row && (Number(row.filed) || 0) + (Number(row.fixed) || 0) + (Number(row.queued) || 0) > 0) filedOn.add(day);
+    return {day, value: (Number(row?.fixed) || 0) + (Number(row?.queued) || 0), ok: null};
   });
   const last = newestWithValue(series);
   if (!last) return empty(id, title, files, 'no self-healing snapshot in the last 14 days');
-  return {id, title, value: String(last.value), sub: `real bugs filed in the 7 days to ${last.day} (fixed + queued)`, status: 'none', bar: null, higherIsBetter: false, series, files};
+  const lastFiled = days.filter(day => filedOn.has(day)).at(-1);
+  // A snapshot's window is 7 days, so the newest day whose window held a filing is when it last filed, give or take a week.
+  const when = lastFiled ? `last filed in the week to ${lastFiled}` : `none filed in the ${days.length} days shown`;
+  return {id, title, value: String(last.value), sub: `real bugs filed in the 7 days to ${last.day} (fixed + queued) · ${when}`, status: 'none', bar: null, higherIsBetter: false, series, files};
 }
 
 // Planted UI bugs: how many of the planted bugs the Finder caught, per snapshot day.

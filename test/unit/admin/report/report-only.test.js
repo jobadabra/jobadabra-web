@@ -40,6 +40,19 @@ test('finders: real bugs filed in the 7 days up to each stored day (fixed + queu
   assert.deepEqual(finderJobs([snap(20)], days).map(item => item.value), ['–', '–', '–', '–', '–'], 'a snapshot older than the 14 days shown is not a number');
 });
 
+test('finders: a finder that filed nothing is 0 to the newest snapshot, and the row says when it last filed (5 Nov 2026: layout 1 Nov, probe 24 Oct)', () => {
+  // The writer (selfheal-stats.mjs) lists only detectors that filed in the window, so a silent finder has no row in a stored snapshot: that is 0, not "no data".
+  const only = detector => ({periods: {last7: {byDetector: [{detector, filed: 2, fixed: 0, queued: 0}]}}});
+  const jobs = finderJobs([snap(0, only('AI screenshot review')), snap(3, only('Layout and DOM checks'))], days);
+  const layout = jobs.find(item => item.id === 'finder-layout'), probe = jobs.find(item => item.id === 'finder-interactions');
+  assert.equal(layout.value, '0');
+  assert.match(layout.sub, new RegExp(`in the 7 days to ${D(0)}\\b`), 'the date is the newest snapshot, not the last day this finder had a row');
+  assert.match(layout.sub, new RegExp(`last filed in the week to ${D(3)}`));
+  assert.equal(layout.series.at(-1).value, 0, 'the newest stored day is a 0 point');
+  assert.match(probe.sub, /none filed in the 14 days/);
+  assert.equal(probe.series[days.indexOf(D(1))].value, null, 'a day with no snapshot stays grey');
+});
+
 test('planted bugs: caught of planted per snapshot day, "watch" when one is missed; the mutation run as a share', () => {
   const jobs = finderJobs([snap(1), snap(0, {recall: {planted: 13, caught: 13, missed: []}, quality: {mutation: {rate: 92, note: '11 of 12 planted code bugs caught'}}})], days);
   const ui = jobs.find(item => item.id === 'planted-ui'), code = jobs.find(item => item.id === 'planted-code');
