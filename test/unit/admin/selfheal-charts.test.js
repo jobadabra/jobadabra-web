@@ -26,3 +26,9 @@ test('the Self-healing page keeps both tables behind their charts', () => {
   assert.match(finder, /class="vz"/); assert.match(finder, /<details class="vz-more">[\s\S]*<th>Detector<\/th>/);
   assert.match(why, /class="vz"/); assert.match(why, /<details class="vz-more">[\s\S]*<th>Resolution<\/th>/);
 });
+
+test('the "real" chip prints the same number as the "Real bugs caught" tile (totals.real), not a sum of its own', () => {
+  const html = finderFigure([{detector: 'A', filed: 8, fixed: 2, queued: 1}], {real: 5, fixed: 2, queued: 1}, '<table></table>');
+  assert.match(html, /5 real/);
+  assert.match(finderFigure([{detector: 'A', filed: 3, fixed: 2, queued: 1}], {fixed: 2, queued: 1}, '<table></table>'), /3 real/);   // an older snapshot without `real`
+});

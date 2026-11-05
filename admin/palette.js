@@ -57,6 +57,7 @@ export function scan(doc, path, page = {}, withMenu = false) {
   // Headings, and the summary of a folded card (a details that is not inside another one or a table).
   doc.querySelectorAll('main h2, main h3, body > section h2, #app h2, #app h3, main details > summary, #app details > summary').forEach(h => {
     if (h.closest('.admin-nav, .admin-menu, dialog, table')) return;
+    if (h.matches('.vz-more > summary')) return;   // Why (owner rule, 5 Nov 2026, admin charts): "Show table" is a toggle under a chart, not a place to go; listed, it fills ⌘K with one "Show table" per chart and cannot be opened inside a hidden period block
     if (h.tagName === 'SUMMARY' && (h.parentElement.parentElement.closest('details') || h.querySelector('h2, h3'))) return;
     const title = text(h);
     if (!title) return;
