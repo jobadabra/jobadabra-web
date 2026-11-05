@@ -3,40 +3,66 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
-import {appNameOf, checkOnce, rolledOut} from '../../tools/wait-container-rollout.mjs';
+import {appNameOf, checkOnce, pushedDigest, rolledOut} from '../../tools/wait-container-rollout.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
 const image = digest => `registry.cloudflare.com/acct/www-hosted-runner-staging-hostedrunner@sha256:${digest}`;
 const version = (number, digest) => ({version: number, configuration: {image: image(digest)}});
-const app = (number, digest) => ({version: number, configuration: {image: image(digest)}, health: {instances: {scheduling: 0, starting: 0}}});
 const instance = (digest, state = 'running') => ({image: image(digest), status: {state}});
+// A rollout as GET /containers/applications/{id}/rollouts answers it (5 Nov 2026, staging).
+const rollout = (target, status, step = 2, percent = 100, starting = 0) => ({target_version: target, status, progress: {current_step: step, total_steps: 2, version_distribution: {target_version_percentage: percent}}, health: {instances: {starting, scheduling: 0, failed: 0}}});
 
 test('the application name is the Worker name and the lower-cased container class', () => {
   assert.equal(appNameOf({name: 'www-hosted-runner-staging', containers: [{class_name: 'HostedRunner'}]}), 'www-hosted-runner-staging-hostedrunner');
   assert.equal(appNameOf({name: 'www-hosted-runner', containers: [{class_name: 'HostedRunner'}]}), 'www-hosted-runner-hostedrunner');
 });
 
-test('not rolled out while the application is still on an older version than the newest', () => {
-  const answer = rolledOut(app(2, 'aaa'), [version(3, 'bbb'), version(2, 'aaa')], []);   // the try-3 state at 00:54:19
+test('the 01:27 false DONE: the version with the pushed image is not listed yet, so it waits', () => {
+  // Why (5 Nov 2026, hr 6/6 try 5): #380 compared "newest listed 3 = application 3" and said DONE on the old image.
+  const answer = rolledOut([version(3, 'aaa')], [rollout(3, 'replaced')], [instance('aaa', 'inactive')], 'sha256:bbb');
   assert.equal(answer.done, false);
-  assert.match(answer.why, /version 2 of 3/);
+  assert.equal(answer.failed, undefined);
+  assert.match(answer.why, /pushed image bbb not listed yet/);
 });
 
-test('not rolled out while an instance still runs another image than the application\'s', () => {
-  const answer = rolledOut(app(3, 'bbb'), [version(3, 'bbb'), version(2, 'aaa')], [instance('aaa', 'inactive')]);
+test('the 01:30 state: the rollout to the pushed version sits at step 1 of 2 (50%), one instance starting: waiting, and the line says so', () => {
+  const answer = rolledOut([version(4, 'bbb'), version(3, 'aaa')], [rollout(4, 'progressing', 1, 50, 1), rollout(3, 'replaced')], [instance('aaa', 'inactive')], 'sha256:bbb');
   assert.equal(answer.done, false);
-  assert.match(answer.why, /1 instance.*old image/);
+  assert.match(answer.why, /rollout to version 4 progressing, step 1 of 2 \(50% on it; starting 1, failed 0\)/);
 });
 
-test('not rolled out while the application\'s image is not the newest version\'s, or an instance is starting', () => {
-  assert.equal(rolledOut(app(3, 'aaa'), [version(3, 'bbb')], []).done, false);
-  const starting = {...app(3, 'bbb'), health: {instances: {scheduling: 1, starting: 0}}};
-  assert.equal(rolledOut(starting, [version(3, 'bbb')], [instance('bbb')]).done, false);
+test('rolled out only when the rollout to the pushed version completed AND every instance runs that digest', () => {
+  const versions = [version(4, 'bbb'), version(3, 'aaa')];
+  assert.equal(rolledOut(versions, [rollout(4, 'completed')], [instance('aaa', 'inactive')], 'sha256:bbb').done, false);
+  const done = rolledOut(versions, [rollout(4, 'completed')], [instance('bbb'), instance('bbb', 'inactive')], 'sha256:bbb');
+  assert.deepEqual(done, {done: true, why: 'version 4 (bbb) rolled out'});
+  assert.equal(rolledOut(versions, [rollout(4, 'completed')], [], 'sha256:bbb').done, true);   // no instance yet: the next one starts on it
 });
 
-test('rolled out: the newest version applied and every instance on its image (or none exist yet)', () => {
-  assert.equal(rolledOut(app(3, 'bbb'), [version(3, 'bbb'), version(2, 'aaa')], [instance('bbb'), instance('bbb', 'inactive')]).done, true);
-  assert.equal(rolledOut(app(3, 'bbb'), [version(3, 'bbb')], []).done, true);
+test('a rollout Cloudflare reverted or replaced fails the wait at once (no 10-minute wait for a rollout that will never come)', () => {
+  for (const status of ['reverted', 'replaced']) {
+    const answer = rolledOut([version(4, 'bbb')], [rollout(4, status)], [], 'sha256:bbb');
+    assert.equal(answer.failed, true, status);
+    assert.match(answer.why, new RegExp(`${status} the rollout to version 4`));
+  }
+});
+
+test('no image pushed: the target is the latest rollout, with the same verdict', () => {
+  assert.equal(rolledOut([version(3, 'aaa')], [rollout(3, 'completed')], [instance('aaa')]).done, true);
+  assert.equal(rolledOut([version(4, 'bbb'), version(3, 'aaa')], [rollout(4, 'pending', 1, 0)], [instance('aaa')]).done, false);
+  assert.match(rolledOut([], [], []).why, /no rollout listed yet/);
+});
+
+test('images without a digest (a tag reference) are compared as whole strings, never as equal-because-empty', () => {
+  const tagged = (number, tag) => ({version: number, configuration: {image: `registry.cloudflare.com/acct/www-hosted-runner-hostedrunner:${tag}`}});
+  assert.equal(rolledOut([tagged(4, 'new')], [rollout(4, 'completed')], [{image: 'registry.cloudflare.com/acct/www-hosted-runner-hostedrunner:old'}]).done, false);   // Gitar on #380
+  assert.equal(rolledOut([tagged(4, 'new')], [rollout(4, 'completed')], [{image: tagged(4, 'new').configuration.image}]).done, true);
+});
+
+test('the pushed digest is read from the deploy output, the last one wins; none when no image was pushed', () => {
+  const out = 'abc: digest: sha256:aaa size: 1\n3b871bcf: digest: sha256:f381f5c9d114 size: 2412\n SUCCESS  Modified application';
+  assert.equal(pushedDigest(out), 'sha256:f381f5c9d114');
+  assert.equal(pushedDigest('Deployed www-hosted-runner-staging triggers'), '');
 });
 
 test('the deploy workflow waits for the rollout after wrangler deploy, with the same config and token', () => {
@@ -46,12 +72,11 @@ test('the deploy workflow waits for the rollout after wrangler deploy, with the 
   assert.match(flow.slice(wait - 200, wait + 200), /\$CONFIG|wrangler\.(staging\.)?jsonc/, 'it reads the config that was deployed');
 });
 
-test('images without a digest (a tag reference) are compared as whole strings, never as equal-because-empty', () => {
-  const tagged = (number, tag) => ({version: number, configuration: {image: `registry.cloudflare.com/acct/www-hosted-runner-hostedrunner:${tag}`}});
-  const old = {image: 'registry.cloudflare.com/acct/www-hosted-runner-hostedrunner:old'};
-  assert.equal(rolledOut(tagged(3, 'new'), [tagged(3, 'new')], [old]).done, false);   // Gitar on #380: both reduced to '' and passed
-  assert.equal(rolledOut(tagged(3, 'new'), [tagged(3, 'other')], []).done, false);
-  assert.equal(rolledOut(tagged(3, 'new'), [tagged(3, 'new')], [{image: tagged(3, 'new').configuration.image}]).done, true);
+test('the workflow keeps the deploy output and hands its pushed digest to the wait', () => {
+  const flow = readFileSync(new URL('.github/workflows/release-hosted-runner.yml', ROOT), 'utf8');
+  assert.match(flow, /wrangler@4 deploy --config "\$CONFIG"[^\n]*\| tee [^\n]*deploy\.out/);
+  assert.match(flow, /set -o pipefail/);
+  assert.match(flow, /wait-container-rollout\.mjs "\$CONFIG"[^\n]*--deploy-output=[^\n]*deploy\.out/);
 });
 
 test('one failed API call counts as "waiting" with its reason, it does not throw out of the wait (a green deploy must not turn red on a 502)', async () => {
@@ -61,4 +86,11 @@ test('one failed API call counts as "waiting" with its reason, it does not throw
   assert.match(answer.why, /API error: .*502/);
   const none = await checkOnce('www-hosted-runner-staging-hostedrunner', async () => []);
   assert.match(none.why, /no application www-hosted-runner-staging-hostedrunner yet/);
+});
+
+test('one look asks the versions, the rollouts and the instances of the named application', async () => {
+  const asked = [];
+  const get = async path => { asked.push(path); return path === '/containers/applications' ? [{name: 'x-hostedrunner', id: 'A'}] : []; };
+  await checkOnce('x-hostedrunner', get, 'sha256:bbb');
+  assert.deepEqual(asked, ['/containers/applications', '/containers/applications/A/versions', '/containers/applications/A/rollouts', '/containers/applications/A/instances-v2']);
 });

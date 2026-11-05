@@ -1,8 +1,11 @@
-// Waits until a Cloudflare container application runs the image that was just deployed, then exits 0; exits 1 on timeout.
-// Usage: node tools/wait-container-rollout.mjs <path to the deployed wrangler config> [--timeout-min=10]   (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID in the environment)
-// Why (5 Nov 2026, hr 6/6): `wrangler deploy` printed "Modified application" and the job went green, but the application moved to the new version 54 s later and the instance kept the old
-// image until then. The staging proof's third press ran in that gap and tested the old code. Done = the application is on the newest version, its image is that version's, and no instance
-// runs another image or is still starting.
+// Waits until a Cloudflare container application runs the image that was just deployed, then exits 0; exits 1 on timeout or when Cloudflare ends the rollout without it.
+// Usage: node tools/wait-container-rollout.mjs <path to the deployed wrangler config> [--timeout-min=10] [--deploy-output=<wrangler deploy's output>]   (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID in the environment)
+// Design (5 Nov 2026, hr 6/6; the 3rd fix on this path in a day, so one owner per state and no extra cases):
+//   1. target   = the digest `wrangler deploy` pushed (owner: the deploy output); none pushed -> the latest rollout's version (owner: Cloudflare).
+//   2. version  = the version whose image is that digest (owner: the versions list); not listed yet -> waiting.
+//   3. rollout  = Cloudflare's rollout to that version (owner: the rollouts list): pending/progressing -> waiting at its step; reverted/replaced -> failed at once; completed -> 4.
+//   4. verdict "rolled out" = that rollout completed AND every instance runs the target digest (owner: instances-v2).
+// Why: #380 judged "newest listed version = the application's" and said DONE while the new version was not listed yet (01:27, try 5); try 3 had pressed into the old image after a green deploy.
 import {readFileSync} from 'node:fs';
 import {readConfig} from './runner-config.mjs';
 
@@ -11,18 +14,26 @@ export const appNameOf = config => `${config.name}-${config.containers[0].class_
 
 // Why (5 Nov 2026, Gitar on #380): a reference without @sha256 (a tag) reduced to '' on both sides and passed as "equal"; compare the whole reference then.
 const digestOf = image => { const ref = String(image || ''); return ref.split('@')[1] || ref; };
+const short = digest => digest.replace(/^sha256:/, '').slice(0, 12);
 
-/** Pure: {done, why} from the application, its versions and its instances as the API returns them. */
-export function rolledOut(app, versions, instances) {
-  const newest = [...versions].sort((a, b) => b.version - a.version)[0];
-  if (!newest) return {done: false, why: 'no version listed yet'};
-  if (app.version !== newest.version) return {done: false, why: `the application is on version ${app.version} of ${newest.version}`};
-  if (digestOf(app.configuration?.image) !== digestOf(newest.configuration?.image)) return {done: false, why: 'the application\'s image is not the newest version\'s'};
-  const old = instances.filter(item => digestOf(item.image) !== digestOf(app.configuration?.image));
-  if (old.length) return {done: false, why: `${old.length} instance(s) still on the old image`};
-  const {scheduling = 0, starting = 0} = app.health?.instances || {};
-  if (scheduling + starting) return {done: false, why: `${scheduling + starting} instance(s) still starting`};
-  return {done: true, why: `version ${app.version} is running`};
+/** The image digest `wrangler deploy` pushed ("<tag>: digest: sha256:… size: n"), the last one (cf-retry may deploy twice); '' when it pushed none. */
+export const pushedDigest = output => (String(output).match(/digest: (sha256:[0-9a-f]+)/g) || []).map(line => line.split(' ')[1]).pop() || '';
+
+/** Pure: {done, failed?, why} from the versions, rollouts (newest first) and instances as the API returns them; `expected` = the pushed digest ('' = none). */
+export function rolledOut(versions, rollouts, instances, expected = '') {
+  const version = expected ? versions.find(item => digestOf(item.configuration?.image) === expected) : versions.find(item => item.version === rollouts[0]?.target_version);
+  if (!version) return {done: false, why: expected ? `version with the pushed image ${short(expected)} not listed yet` : 'no rollout listed yet'};
+  const target = digestOf(version.configuration?.image), rollout = rollouts.find(item => item.target_version === version.version);
+  if (!rollout) return {done: false, why: `no rollout to version ${version.version} yet`};
+  if (rollout.status === 'reverted' || rollout.status === 'replaced') return {done: false, failed: true, why: `Cloudflare ${rollout.status} the rollout to version ${version.version}`};
+  if (rollout.status !== 'completed') {
+    const {current_step: step = '?', total_steps: steps = '?', version_distribution: split = {}} = rollout.progress || {};
+    const {starting = 0, scheduling = 0, failed = 0} = rollout.health?.instances || {};
+    return {done: false, why: `rollout to version ${version.version} ${rollout.status || 'pending'}, step ${step} of ${steps} (${split.target_version_percentage ?? 0}% on it; starting ${starting + scheduling}, failed ${failed})`};
+  }
+  const old = instances.filter(item => digestOf(item.image) !== target);
+  if (old.length) return {done: false, why: `rollout to version ${version.version} completed, ${old.length} instance(s) still on another image`};
+  return {done: true, why: `version ${version.version} (${short(target)}) rolled out`};
 }
 
 async function api(path) {
@@ -32,12 +43,13 @@ async function api(path) {
   return body.result;
 }
 
-/** One look at the application: {done, why}. An API error is "waiting" with its reason, never a throw (about 180 calls per wait; one 502 must not turn a good deploy red; Gitar on #380). `get(path)` -> the API's result. */
-export async function checkOnce(name, get) {
+/** One look: {done, failed?, why}. An API error is "waiting" with its reason, never a throw (one 502 must not turn a good deploy red; Gitar on #380). `get(path)` -> the API's result. */
+export async function checkOnce(name, get, expected = '') {
   try {
     const app = (await get('/containers/applications')).find(item => item.name === name);
     if (!app) return {done: false, why: `no application ${name} yet`};
-    return rolledOut(app, await get(`/containers/applications/${app.id}/versions`), await get(`/containers/applications/${app.id}/instances-v2`));
+    const base = `/containers/applications/${app.id}`;
+    return rolledOut(await get(`${base}/versions`), await get(`${base}/rollouts`), await get(`${base}/instances-v2`), expected);
   } catch (error) {
     return {done: false, why: `API error: ${error.message}`};
   }
@@ -45,14 +57,18 @@ export async function checkOnce(name, get) {
 
 if (process.argv[1] && import.meta.url === new URL(process.argv[1], 'file://').href) {
   const file = process.argv[2], minutes = Number((process.argv.find(arg => arg.startsWith('--timeout-min=')) || '--timeout-min=10').split('=')[1]);
-  if (!file) { console.error('usage: node tools/wait-container-rollout.mjs <wrangler config> [--timeout-min=10]'); process.exit(2); }
+  if (!file) { console.error('usage: node tools/wait-container-rollout.mjs <wrangler config> [--timeout-min=10] [--deploy-output=<file>]'); process.exit(2); }
   const name = appNameOf(readConfig(readFileSync(file, 'utf8'))), until = Date.now() + minutes * 60 * 1000;
+  const output = (process.argv.find(arg => arg.startsWith('--deploy-output=')) || '').split('=')[1];
+  const expected = output ? pushedDigest(readFileSync(output, 'utf8')) : '';
+  console.log(`rollout ${name}: target ${expected ? `the pushed image ${short(expected)}` : 'the latest rollout (no image pushed)'}`);
   let last = '';
   while (true) {
-    const answer = await checkOnce(name, api);
-    if (answer.why !== last) console.log(`rollout ${name}: ${answer.done ? 'DONE' : 'waiting'}: ${answer.why}`);
+    const answer = await checkOnce(name, api, expected);
+    if (answer.why !== last) console.log(`rollout ${name}: ${answer.done ? 'DONE' : answer.failed ? 'FAILED' : 'waiting'}: ${answer.why}`);
     last = answer.why;
     if (answer.done) break;
+    if (answer.failed) process.exit(1);
     if (Date.now() > until) { console.error(`rollout ${name}: still not done after ${minutes} min: ${answer.why}`); process.exit(1); }
     await new Promise(done => setTimeout(done, 10000));
   }

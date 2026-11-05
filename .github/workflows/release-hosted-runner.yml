@@ -54,11 +54,14 @@ jobs:
         working-directory: workers/hosted-runner
         env:
           CONFIG: ${{ inputs.target == 'staging' && 'wrangler.staging.jsonc' || 'wrangler.jsonc' }}
-        run: npm install --no-audit --no-fund && ../../tools/cf-retry.sh npx --yes wrangler@4 deploy --config "$CONFIG"
+        # Why (5 Nov 2026, hr 6/6 try 5): the output names the image digest it pushed; the wait below waits for THAT digest (the newest listed version lagged and gave a false DONE).
+        run: |
+          set -o pipefail
+          npm install --no-audit --no-fund && ../../tools/cf-retry.sh npx --yes wrangler@4 deploy --config "$CONFIG" 2>&1 | tee "$RUNNER_TEMP/deploy.out"
       - name: Wait until the container application runs the new image
         if: env.CLOUDFLARE_API_TOKEN != ''
         working-directory: workers/hosted-runner
         env:
           CONFIG: ${{ inputs.target == 'staging' && 'wrangler.staging.jsonc' || 'wrangler.jsonc' }}
-        # Why (5 Nov 2026, hr 6/6): "deploy" succeeds before the application moves to the new image; a run started in that gap tested the old code.
-        run: node ../../tools/wait-container-rollout.mjs "$CONFIG" --timeout-min=10
+        # Why (5 Nov 2026, hr 6/6, try 3 and 5): "deploy" succeeds before the application moves to the new image (try 3 tested the old code); the target is the digest the deploy pushed, since the newest listed version can lag (try 5: a false DONE).
+        run: node ../../tools/wait-container-rollout.mjs "$CONFIG" --timeout-min=10 --deploy-output="$RUNNER_TEMP/deploy.out"
