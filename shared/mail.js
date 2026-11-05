@@ -11,7 +11,7 @@ import {TEMPLATES} from './mail-templates.js';
 // (once every 4 hours), so 6 refused the trial-ending, paused and Test mails on a digest day; 10 sits just above normal use.
 export const DAILY_MAX = 10;
 const GLOBAL_DAY_MAX = 3000;                // a safety net over every address; env.MAIL_DAY_MAX overrides
-const DAY = 24 * 60 * 60 * 1000;
+const DAY = 24 * 60 * 60 * 1000, CLAIM_MS = 2 * 60 * 1000;
 const ADDRESS = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/;
 const FROM = {service: 'Jobadabra <no-reply@jobadabra.top>', marketing: 'Igor from Jobadabra <no-reply@jobadabra.top>'};   // owner, 26 Oct 2026: "The sender email address should be no-reply@jobadabra.top"; 28 Oct 2026: product news come from "Igor from Jobadabra"
 
@@ -111,10 +111,11 @@ export async function sendTestMail(env, to, now = new Date(), mail = () => send(
     const allowed = await mailAllowed(env, to, spec.list, spec);
     if (!allowed.ok) return allowed;
     const addr = await addrOf(to), since = new Date(now.getTime() - DAY).toISOString();
-    const claim = await env.STATS.prepare("INSERT INTO mail_log (at, addr, list, template, status) SELECT ?, ?, ?, 'test:always-on-test', 'claimed' WHERE NOT EXISTS (SELECT 1 FROM mail_log WHERE addr = ? AND template = 'test:always-on-test' AND status IN ('sent', 'claimed') AND at >= ?)")
-      .bind(now.toISOString(), addr, spec.list, addr, since).run();
+    const fresh = new Date(now.getTime() - CLAIM_MS).toISOString();   // Why (Gitar on #430): a Worker that dies leaves its claim; past this it is no call at work and no mail sent
+    const claim = await env.STATS.prepare("INSERT INTO mail_log (at, addr, list, template, status) SELECT ?, ?, ?, 'test:always-on-test', 'claimed' WHERE NOT EXISTS (SELECT 1 FROM mail_log WHERE addr = ? AND template = 'test:always-on-test' AND ((status = 'sent' AND at >= ?) OR (status = 'claimed' AND at >= ?)))")
+      .bind(now.toISOString(), addr, spec.list, addr, since, fresh).run();
     if ((claim.meta?.changes ?? claim.changes) !== 1) {
-      const today = await env.STATS.prepare("SELECT at FROM mail_log WHERE addr = ? AND template = 'test:always-on-test' AND status IN ('sent', 'claimed') AND at >= ? ORDER BY at LIMIT 1").bind(addr, since).first();
+      const today = await env.STATS.prepare("SELECT at FROM mail_log WHERE addr = ? AND template = 'test:always-on-test' AND ((status = 'sent' AND at >= ?) OR (status = 'claimed' AND at >= ?)) ORDER BY at LIMIT 1").bind(addr, since, fresh).first();
       return {ok: true, at: today?.at || now.toISOString(), earlier: true};
     }
     try {

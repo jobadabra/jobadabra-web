@@ -72,6 +72,20 @@ test('the alert test mail goes once a day even when 20 calls arrive at once, and
   assert.equal((await sendTestMail(flaky.e, 'a@b.co', now)).earlier, undefined, 'a refused mail does not use up the day');
 });
 
+test('a claim left by a Worker that died counts for two minutes only: the next Test sends, it does not claim a mail that never went', async () => {
+  // Why (Gitar on #430, 5 Nov 2026): a leftover claim read as "a test e-mail went to you today" for 24 h with nothing sent.
+  const {e, sent} = setup();
+  const leftover = async ago => e.STATS.db.prepare("INSERT INTO mail_log (at, addr, list, template, status) VALUES (?, ?, 'service', 'test:always-on-test', 'claimed')").run(new Date(now.getTime() - ago).toISOString(), await addrOf('a@b.co'));
+  await leftover(60e3);
+  assert.equal((await sendTestMail(e, 'a@b.co', now)).earlier, true, 'a fresh claim is another call at work');
+  assert.equal(sent.length, 0);
+  e.STATS.db.prepare('DELETE FROM mail_log').run();
+  await leftover(3 * 60e3);
+  assert.equal((await sendTestMail(e, 'a@b.co', now)).earlier, undefined);
+  assert.equal(sent.length, 1);
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'claimed'").get().n, 0);
+});
+
 test('the alert test mail says the truth: an address that stopped mail since the last test is refused, mail off is off, a D1 error never throws', async () => {
   const {e} = setup();
   await sendTestMail(e, 'a@b.co', now);
