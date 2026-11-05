@@ -57,7 +57,11 @@ jobs:
         # Why (5 Nov 2026, hr 6/6 try 5): the output names the image digest it pushed; the wait below waits for THAT digest (the newest listed version lagged and gave a false DONE).
         run: |
           set -o pipefail
-          npm install --no-audit --no-fund && ../../tools/cf-retry.sh npx --yes wrangler@4 deploy --config "$CONFIG" 2>&1 | tee "$RUNNER_TEMP/deploy.out"
+          # Why (5 Nov 2026, hr 6/6 try 6, owner: "Each run checks"): the stamp this tree builds; the runner compares it with each container's GET / before a run.
+          HOSTED_BUILD=$(python3 -P ../../src/build_stamp.py ../../src)   # -P: no src/ module can shadow the standard library
+          [ -n "$HOSTED_BUILD" ] || { echo "::error::no engine build stamp from src/build_stamp.py: the runs could not check their container" >&2; exit 1; }
+          echo "deploying engine build $HOSTED_BUILD"
+          npm install --no-audit --no-fund && ../../tools/cf-retry.sh npx --yes wrangler@4 deploy --config "$CONFIG" --var "HOSTED_BUILD:$HOSTED_BUILD" 2>&1 | tee "$RUNNER_TEMP/deploy.out"
       - name: Wait until the container application runs the new image
         if: env.CLOUDFLARE_API_TOKEN != ''
         working-directory: workers/hosted-runner

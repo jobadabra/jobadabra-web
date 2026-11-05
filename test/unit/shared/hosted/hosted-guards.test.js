@@ -163,6 +163,78 @@ test('a look that gets the platform\'s failure text (not the container) logs tha
   assert.doesNotMatch(errors.join('\n'), /unknown/);
 });
 
+test('each run checks the container\'s stamp against the deployed one: a stale container is restarted once, then runs', async () => {
+  // Why (5 Nov 2026, hr 6/6 try 6, owner: "Each run checks"): after the v5 rollout "completed", the run met try 5's process (build afc5ddf67461,
+  // started 01:33:13Z) with old code; it ignored ten stop signals. The deploy passes the stamp it built; the run is the one place that meets the container.
+  const logs = [], errors = [], posts = [];
+  let build = 'afc5ddf67461', destroyed = 0;
+  const msg = {body: {run: 'r1', token: 'HR1.r1.secret', site: 'https://s.test', account: 'a1'}, ack: () => {}};
+  const container = {
+    fetch: async request => { if (request.method === 'GET') return new Response(JSON.stringify({ok: true, build, started: '2026-11-05T01:33:13Z'})); posts.push(build); return new Response('{}'); },
+    destroy: async () => { destroyed++; build = '51bbcdf2027b'; },
+  };
+  const done = await consume({messages: [msg]}, () => container, {log: line => logs.push(line), error: line => errors.push(line)}, {build: '51bbcdf2027b'});
+  assert.deepEqual(done, {ok: 1, failed: 0});
+  assert.equal(destroyed, 1);
+  assert.deepEqual(posts, ['51bbcdf2027b']);   // the run went to the new code, never to the stale one
+  assert.match(errors.join('\n'), /hosted run r1: container build afc5ddf67461 is not the deployed 51bbcdf2027b: restarting it/);
+});
+
+test('a container still on another stamp after the restart is not run: the run fails and names both stamps', async () => {
+  const errors = [], posts = [];
+  const msg = {body: {run: 'r1', token: 'HR1.r1.secret', site: 'https://s.test', account: 'a1'}, ack: () => {}};
+  const container = {fetch: async request => { if (request.method === 'GET') return new Response(JSON.stringify({ok: true, build: 'afc5ddf67461'})); posts.push(1); return new Response('{}'); }, destroy: async () => {}};
+  const done = await consume({messages: [msg]}, () => container, {log: () => {}, error: line => errors.push(line)}, {build: '51bbcdf2027b'});
+  assert.deepEqual(done, {ok: 0, failed: 1});
+  assert.deepEqual(posts, []);
+  assert.match(errors.at(-1), /hosted run r1: still build afc5ddf67461 after a restart, not the deployed 51bbcdf2027b: not run/);
+});
+
+test('no deployed stamp given, or the look failed: the run goes on as before (the check never blocks on missing data)', async () => {
+  const posts = [];
+  const msg = {body: {run: 'r1', token: 'HR1.r1.secret', site: 'https://s.test', account: 'a1'}, ack: () => {}};
+  const stale = {fetch: async request => { if (request.method === 'GET') return new Response(JSON.stringify({ok: true, build: 'old'})); posts.push('stale'); return new Response('{}'); }, destroy: async () => { throw new Error('must not restart'); }};
+  assert.deepEqual(await consume({messages: [msg]}, () => stale, {log: () => {}, error: () => {}}), {ok: 1, failed: 0});
+  const blind = {fetch: async request => { if (request.method === 'GET') throw new Error('no answer'); posts.push('blind'); return new Response('{}'); }, destroy: async () => { throw new Error('must not restart'); }};
+  assert.deepEqual(await consume({messages: [msg]}, () => blind, {log: () => {}, error: () => {}}, {build: 'new'}), {ok: 1, failed: 0});
+  assert.deepEqual(posts, ['stale', 'blind']);
+});
+
+test('a stale container that is busy with a run is never restarted: this run is not sent, the other run goes on', async () => {
+  // Why (5 Nov 2026, review): right after a deploy the Worker knows the new stamp before the rollout ends; destroy() would kill a run mid-search.
+  const errors = [], posts = [];
+  let destroyed = 0;
+  const msg = {body: {run: 'r1', token: 'HR1.r1.secret', site: 'https://s.test', account: 'a1'}, ack: () => {}};
+  const busy = {fetch: async request => { if (request.method === 'GET') return new Response(JSON.stringify({ok: true, build: 'old', busy: true})); posts.push(1); return new Response('{}'); }, destroy: async () => { destroyed++; }};
+  assert.deepEqual(await consume({messages: [msg]}, () => busy, {log: () => {}, error: line => errors.push(line)}, {build: 'new'}), {ok: 0, failed: 1});
+  assert.equal(destroyed, 0);
+  assert.deepEqual(posts, []);
+  assert.match(errors.at(-1), /hosted run r1: container build old is busy with a run, not the deployed new: not run/);
+});
+
+test('two messages for one account in a batch restart its stale container once, and a failing destroy() still looks again', async () => {
+  const posts = [];
+  let build = 'old', destroyed = 0;
+  const msg = n => ({body: {run: `r${n}`, token: `HR1.r${n}.secret`, site: 'https://s.test', account: 'a1'}, ack: () => {}});
+  const container = {
+    fetch: async request => { if (request.method === 'GET') return new Response(JSON.stringify({ok: true, build})); posts.push(build); return new Response('{}'); },
+    destroy: async () => { destroyed++; build = 'new'; throw new Error('the container had already exited'); },   // it stopped on its own between the look and the restart
+  };
+  const done = await consume({messages: [msg(1), msg(2)]}, () => container, {log: () => {}, error: () => {}}, {build: 'new'});
+  assert.equal(destroyed, 1);
+  assert.deepEqual(done, {ok: 2, failed: 0});
+  assert.deepEqual(posts, ['new', 'new']);
+});
+
+test('the runner Worker hands the deployed stamp to consume(), and the deploy computes it from the tree and passes it as HOSTED_BUILD', () => {
+  const worker = readFileSync(new URL('../../../../workers/hosted-runner/worker.js', import.meta.url), 'utf8');
+  assert.match(worker, /consume\(batch, [^\n]*\{build: env\.HOSTED_BUILD\}/);
+  const flow = readFileSync(new URL('../../../../.github/workflows/release-hosted-runner.yml', import.meta.url), 'utf8');
+  assert.match(flow, /python3 -P \.\.\/\.\.\/src\/build_stamp\.py \.\.\/\.\.\/src/);
+  assert.match(flow, /wrangler@4 deploy --config "\$CONFIG" --var "HOSTED_BUILD:\$HOSTED_BUILD"/);
+  assert.match(flow, /\[ -n "\$HOSTED_BUILD" \] \|\| \{/, 'an empty stamp fails the deploy instead of turning the check off');
+});
+
 test('wrangler.toml binds the state bucket and the queue, and the runner config consumes that queue', () => {
   const toml = readFileSync(new URL('../../../../workers/www/wrangler.toml', import.meta.url), 'utf8'), runner = readFileSync(new URL('../../../../workers/hosted-runner/wrangler.jsonc', import.meta.url), 'utf8');
   assert.match(toml, /binding = "HOSTED_STATE"\nbucket_name = "hosted-state"/);
