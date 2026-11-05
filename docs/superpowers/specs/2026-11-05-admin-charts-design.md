@@ -403,7 +403,7 @@ AI → Costs was shared with session `ca`; its per-job PR (#379) is merged, so t
 - [x] Inventory, spec, sketch and the owner's yes
 - [x] Rule from the owner: only plain colourless number tables become charts (re-triage above)
 - [x] 1/7 Module + AI → Costs (#384, merged)
-- [ ] 2/7 Testing: four plain tables (#386, ready, kept as rescoped)
-- [ ] 3/5 Self-healing (2)
-- [ ] 4/5 Growth (5)
-- [ ] 5/5 Job search + Agent coding (6)
+- [x] 2/7 Testing: four plain tables (#386, merged)
+- [x] 3/5 Self-healing (2) (#390, merged)
+- [x] 4/5 Growth (5) (#401, merged)
+- [x] 5/5 Job search + Agent coding (6) (#402, merged)
