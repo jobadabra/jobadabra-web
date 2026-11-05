@@ -7,6 +7,15 @@ import {healFull, testingFull} from './page-shot-seed-testing.mjs';
 const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields)});
 
 export const seeds = {
+  'release-mail': async ({env}) => {
+    env.MAIL = 'on'; env.MARKETING_MAIL = 'on';
+    const data = {version: '0.9.9', month: 'November 2026', headline: 'Locations update as soon as you choose them',
+      sections: [{kind: 'improvements', title: 'Faster location updates', text: 'Locations update as soon as you choose them or undo a change.'},
+        {kind: 'features', title: 'Search by recruiter', text: 'Find jobs using the recruiter or agency name.'}, {kind: 'fixes', title: 'Keep reply status', text: 'A reply copied to your inbox stays marked as Replied.'}], updateUrl: 'https://www.jobadabra.top/download'};
+    await env.STATS.prepare('INSERT INTO release_mail (version, data, created_at) VALUES (?, ?, ?)').bind('0.9.9', JSON.stringify(data), '2026-11-05T01:53:00Z').run();
+    const {createAccount} = await import('../shared/pro.js');
+    await createAccount(env, 'alex@example.com', new Date('2026-11-05T01:00:00Z'), {plan: 'trial'});
+  },
   feedback: async ({env}) => {   // /admin/feedback/inbox (2 Nov 2026): one with a screenshot, logs, screen data and a profile snapshot, one text-only, one the bot refused (the red counter); the screenshot is a real app shot from the public tree
     const fs = await import('node:fs'), kept = new Map(), shot = fs.readFileSync('desktop/docs/ui/actions.jpg');
     env.FEEDBACK_FILES = {put: async (key, value) => { kept.set(key, value); }, get: async key => (kept.has(key) ? {body: kept.get(key)} : null),

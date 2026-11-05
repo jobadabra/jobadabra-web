@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
-import {dataFrom, draft, sendAll, audience, ingest} from '../../../admin/release-mail.js';
+import {dataFrom, draft, sendAll, audience, ingest, releaseRoute} from '../../../admin/release-mail.js';
 import {ingest as changelogIngest} from '../../../admin/changelog-store.js';
 import {SAMPLES} from '../../../admin/email-preview.js';
 import {compose, stopLink, settingsLink, addrOf} from '../../../shared/mail.js';
@@ -35,11 +35,12 @@ function setup(extra = {}) {
   return {e, sent};
 }
 
-test('the draft comes from the changelog entry: first feature is the headline, fixes stay out', () => {
+test('the draft comes from the changelog entry: keeps new, improved and fixed changes', () => {
   const data = dataFrom({version: '0.8.42', date: '2026-10-27', groups});
   assert.equal(data.headline, 'Open a job and see why it fits');
   assert.equal(data.month, 'October 2026');
-  assert.deepEqual(data.sections.map(s => s.title), ['Faster jobs', 'Calendar']);
+  assert.deepEqual(data.sections.map(s => s.title), ['Faster jobs', 'Calendar', 'A fix']);
+  assert.deepEqual(data.sections.map(s => s.kind), ['features', 'features', 'fixes']);
 });
 
 test('a version is drafted once; a second promotion call changes nothing; an unknown version drafts nothing', async () => {
@@ -92,10 +93,10 @@ test('every promotional template carries the unsubscribe link in its html and te
   }
 });
 
-test('the release mail renders: pills, numbered sections, the stop link', () => {
+test('the release mail renders: pills, categorized changes, the stop link', () => {
   const mail = compose('release', SAMPLES.release, {stop: 'https://s/stop', settings: 'https://s/set'});
-  assert.match(mail.subject, /^New in Jobadabra: Apply to a job/);
-  assert.ok(mail.html.includes('01') && mail.html.includes('02') && mail.html.includes('Update in one click') && mail.html.includes('https://s/stop'));
+  assert.equal(mail.subject, `Jobadabra ${SAMPLES.release.version} · What's new`);
+  assert.ok(mail.html.includes('Improved') && mail.html.includes('Download latest version') && mail.html.includes('https://s/stop'));
   assert.match(mail.html, /<span[^>]*>Jobs<\/span>/);
   assert.ok(!mail.text.includes('*'));
 });
@@ -141,7 +142,8 @@ test('the review page shows the mail and "Send to N people" (N = who would get i
   assert.equal(JSON.parse(e.STATS.db.prepare('SELECT data FROM release_mail').get().data).headline, 'A better headline');
   await post('send'); await post('send');
   assert.equal(sent.length, 2);
-  assert.match(sent[0].subject, /A better headline/);
+  assert.equal(sent[0].subject, "Jobadabra 0.8.42 · What's new");
+  assert.match(sent[0].html, /A better headline/);
 });
 
 test('the product news list shows every address with its source and whether it gets news; only the owner sees addresses', async () => {
@@ -166,7 +168,7 @@ test('"Send to my email" mails the typed address the sample of a template; a bad
   assert.equal((await post({template: 'release', mine: '1', to: 'me@example.com'})).status, 303);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, 'me@example.com');
-  assert.match(sent[0].subject, /^New in Jobadabra:/);
+  assert.equal(sent[0].subject, `Jobadabra ${SAMPLES.release.version} · What's new`);
   assert.equal((await post({template: 'release', mine: '1', to: 'not-an-address'})).status, 400);
   assert.equal((await post({template: 'release', to: 'me@example.com'})).status, 400, 'without "mine" only test inboxes');
   assert.equal((await post({template: 'release', mine: '1', to: 'me@example.com'}, {})).status, 404);
@@ -188,4 +190,82 @@ test('the draft ping uses the Brain bot the site Worker already has when no buil
   const {e} = setup({BRAIN_BOT_TOKEN: 'brain-token', BRAIN_CHAT_ID: '42'}), urls = [], chats = [];
   await draft(e, '0.8.42', now, {fetch: async (url, init) => { urls.push(url); chats.push(JSON.parse(init.body).chat_id); return {ok: true}; }});
   assert.deepEqual([urls.length, urls[0].includes('botbrain-token'), chats[0]], [1, true, '42']);
+});
+
+
+test('release test sends the selected edited draft to one address, labels it as a test and leaves the broadcast pending', async () => {
+  const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
+  await draft(e, '0.8.42', now);
+  await e.WAITLIST.put('signup:audience@example.com', '1');
+  const post = fields => emailView(new Request('https://www.jobadabra.top/admin/growth/email?release=0.8.42', {
+    method: 'POST', headers: {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'}, body: new URLSearchParams(fields),
+  }), e);
+  await post({action: 'headline', headline: 'The edited release headline'});
+  const response = await post({action: 'test', to: 'reviewer@example.com'});
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, 'reviewer@example.com');
+  assert.equal(sent[0].subject, "[TEST] Jobadabra 0.8.42 · What's new");
+  assert.match(sent[0].html, /Test email/);
+  assert.match(sent[0].html, /Faster jobs/);
+  assert.match(sent[0].text, /Test email/);
+  const notice = new URL(response.headers.get('Location'), 'https://www.jobadabra.top').searchParams.get('done');
+  assert.match(notice, /0\.8\.42/);
+  assert.match(notice, /reviewer@example\.com/);
+  assert.match(notice, /Subject: \[TEST\] Jobadabra/);
+  assert.match(sent[0].html, /The edited release headline/);
+  assert.equal(e.STATS.db.prepare('SELECT status FROM release_mail').get().status, 'draft');
+  assert.equal(e.STATS.db.prepare('SELECT sent_count FROM release_mail').get().sent_count, 0);
+  await post({action: 'send'});
+  assert.equal(sent.length, 2);
+  assert.equal(sent[1].subject, "Jobadabra 0.8.42 · What's new");
+  assert.doesNotMatch(sent[1].html, /Test email/);
+});
+
+
+test('a saved old draft picks up the complete changelog in preview, test and broadcast', async () => {
+  const {e, sent} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
+  const old = {version: '0.8.42', month: 'October 2026', headline: 'An old long headline', sections: [{title: 'Faster jobs', text: 'Open a job and see why it fits.'}]};
+  e.STATS.db.prepare('INSERT INTO release_mail (version, data, created_at) VALUES (?, ?, ?)').run('0.8.42', JSON.stringify(old), 'x');
+  await e.WAITLIST.put('signup:audience@example.com', '1');
+  const request = (fields) => new Request('https://www.jobadabra.top/admin/growth/email?release=0.8.42', {headers: {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'}, ...(fields ? {method: 'POST', body: new URLSearchParams(fields)} : {})});
+  const html = await (await emailView(request(), e)).text();
+  assert.match(html, /Version 0\.8\.42/);
+  assert.match(html, /A fix/);
+  await emailView(request({action: 'test', to: 'reviewer@example.com'}), e);
+  await emailView(request({action: 'send'}), e);
+  for (const mail of sent) {
+    assert.match(mail.html, /Version 0\.8\.42/);
+    for (const label of ['New', 'Fixed', 'A fix', 'Calendar']) assert.ok(mail.html.includes(label));
+    assert.match(mail.text, /Fixed: A fix/);
+  }
+  assert.equal(sent.length, 2);
+});
+
+
+test('an interrupted broadcast is shown as sending rather than completed', async () => {
+  const {e} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
+  await draft(e, '0.8.42', now);
+  e.STATS.db.exec("UPDATE release_mail SET status = 'sending'");
+  const response = await emailView(new Request('https://www.jobadabra.top/admin/growth/email?release=0.8.42', {headers: {Authorization: 'Bearer owner-key'}}), e);
+  const html = await response.text();
+  assert.match(html, /Sending is in progress/);
+  assert.doesNotMatch(html, /already been sent|Sent to 0 on/);
+});
+
+
+test('the owner API introduction edit appears in the versioned email', async () => {
+  const {e} = setup({STATS_API_KEY: 'owner-key', STATS_KEY: 'stats-key'});
+  await draft(e, '0.8.42', now);
+  const response = await releaseRoute(new Request('https://www.jobadabra.top/admin/mail/release?version=0.8.42&headline=An%20owner%20introduction', {method: 'POST', headers: {Authorization: 'Bearer owner-key'}}), e);
+  assert.equal(response.status, 200);
+  const data = JSON.parse(e.STATS.db.prepare('SELECT data FROM release_mail').get().data);
+  assert.match(compose('release', data).html, /An owner introduction/);
+});
+
+
+test('release emails always offer a download link even without an update URL', () => {
+  const mail = compose('release', {version: '0.9.9', month: 'November 2026', sections: []});
+  assert.match(mail.html, /Don't have the app/);
+  assert.match(mail.html, /href="https:\/\/www\.jobadabra\.top\/download"/);
+  assert.match(mail.text, /Don't have the app\? Download Jobadabra: https:\/\/www\.jobadabra\.top\/download/);
 });

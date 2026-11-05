@@ -4,7 +4,7 @@ import {isOwner, viewer} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {compose, send, validAddress} from '../shared/mail.js';
 import {audienceRows} from './email-audience.js';
-import {sendAll} from './release-mail.js';
+import {sendAll, releaseData} from './release-mail.js';
 
 const notFound = () => new Response('Not found', {status: 404});
 const HEAD = {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'};
@@ -18,19 +18,42 @@ export async function releaseView(request, env) {
   if (!await viewer(request, env)) return notFound();
   const row = await env.STATS.prepare('SELECT status, data, sent_count, sent_at FROM release_mail WHERE version = ?').bind(version).first();
   if (!row) return new Response('No release mail draft for this version.', {status: 404});
-  const data = JSON.parse(row.data), mail = compose('release', {...data, name: ''}, {stop: '#', settings: '#'}), n = await reach(env), draft = row.status === 'draft', on = env.MARKETING_MAIL === 'on';
-  const note = url.searchParams.get('done') ? `<p class="pill on">${esc(url.searchParams.get('done'))}</p>` : '';
+  const data = await releaseData(env, JSON.parse(row.data)), mail = compose('release', {...data, name: ''}, {stop: '#', settings: '#'}), n = await reach(env), draft = row.status === 'draft', on = env.MARKETING_MAIL === 'on';
+  const note = url.searchParams.get('done') ? `<p class="notice" role="status">${esc(url.searchParams.get('done'))}</p>` : '';
   return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Release mail ${esc(version)} · Admin</title>
-<style>body{font:15px/1.5 -apple-system,Segoe UI,Helvetica,sans-serif;background:#0f1218;color:#e8ebf0;margin:0;padding:20px;max-width:760px;margin-inline:auto}iframe{width:100%;height:720px;border:1px solid #252b36;border-radius:8px;background:#fff}
-input[type=text]{font:inherit;width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid #252b36;background:#161b23;color:inherit}button{font:inherit;font-weight:600;color:#fff;background:#d0612b;border:0;border-radius:8px;padding:10px 18px;cursor:pointer}button[disabled]{opacity:.45;cursor:default}
-.muted{color:#9aa3b2}.pill{display:inline-block;padding:1px 10px;border-radius:99px;border:1px solid #4cc38a;color:#4cc38a}form{margin:14px 0}</style></head><body>
-<h1>What's new mail · ${esc(version)} <span class="muted">· ${esc(row.status)}</span></h1>${note}
-<p class="muted">Subject: ${esc(mail.subject)}</p>
-${draft ? `<form method="post"><input type="hidden" name="action" value="headline"><label>Headline<br><input type="text" name="headline" maxlength="120" value="${esc(data.headline)}"></label> <button>Save headline</button></form>` : ''}
-<iframe title="The mail" srcdoc="${esc(mail.html)}"></iframe>
-<form method="post"><input type="hidden" name="action" value="test"><label>Test it on your own email<br><input type="email" name="to" placeholder="you@example.com" required></label> <button type="submit">Send me a test</button></form>
-<form method="post"><input type="hidden" name="action" value="send"><button${draft && on && n ? '' : ' disabled'}>Send to ${n} ${n === 1 ? 'person' : 'people'}</button>
-<p class="muted">${draft ? (on ? 'Everyone with an account or on the waitlist who has not stopped product news. This sends real mail, once.' : 'MARKETING_MAIL is off, so nothing can be sent yet.') : `Sent to ${row.sent_count} on ${esc(String(row.sent_at || '').slice(0, 10))}.`}</p></form>
+<style>
+.release-review{box-sizing:border-box;max-width:840px;margin:0 auto}
+.release-review *{box-sizing:border-box}
+.release-review header{display:block;margin-bottom:20px}
+.release-review h1{margin:8px 0 12px}.release-review h2{margin:0 0 12px}
+.release-review p{overflow-wrap:anywhere}.release-review .card{margin-bottom:20px}
+.release-review iframe{display:block;width:100%;height:720px;border:1px solid #262c33;border-radius:8px;background:#fff}
+.release-review label{display:block;font-weight:600;margin-bottom:6px}
+.release-review input[type=text],.release-review input[type=email]{font:inherit;width:100%;min-width:0;padding:10px 12px;border-radius:8px;border:1px solid #46505d;background:#1a1f26;color:#f4efe3}
+.release-review input:focus-visible,.release-review button:focus-visible{outline:2px solid #f5b54a;outline-offset:3px}
+.release-review button{font:inherit;font-weight:600;min-height:44px;color:#0b0d10;background:#f5b54a;border:0;border-radius:8px;padding:10px 18px;cursor:pointer}
+.release-review button[disabled]{opacity:.45;cursor:default}
+.release-review form{margin:0}.release-review form>button{margin-top:12px}
+.release-review .test-row{display:flex;align-items:end;gap:12px;flex-wrap:wrap}
+.release-review .test-address{flex:1 1 240px;min-width:0}
+.release-review .notice{padding:12px 16px;border:1px solid #4cc38a;border-radius:8px;color:#4cc38a}
+@media(max-width:600px){.release-review button{width:100%}.release-review iframe{height:640px}.release-review .test-address{flex-basis:100%}}
+</style></head><body><main><div class="release-review">
+<header><a href="/admin/growth/email">← All email</a>
+<h1>What's new mail · ${esc(version)} <span class="muted">· ${esc(row.status)}</span></h1>
+<p class="muted">${draft ? 'Waiting for your approval. A test sends only to the address you enter; use Send to everyone below to publish this email.' : row.status === 'sending' ? 'Sending is in progress. Do not send this release again.' : 'This release email has already been sent.'}</p></header>${note}
+<section class="card"><h2>Release preview</h2><p class="muted">Subject: ${esc(mail.subject)}</p>
+${draft ? `<form method="post"><input type="hidden" name="action" value="headline"><label for="release-headline">Introduction (optional)</label><input id="release-headline" type="text" name="headline" maxlength="120" value="${esc(data.intro || '')}"><button>Save introduction</button></form><p class="muted">Save introduction changes before sending a test.</p>` : ''}
+<iframe title="Release ${esc(version)} email preview" sandbox srcdoc="${esc(mail.html)}"></iframe></section>
+<section class="card"><h2>Send yourself a test</h2>
+<p class="muted">The saved release ${esc(version)} draft, with a TEST label. Check your inbox for this subject:</p>
+<p>${esc(compose('release', {...data, name: '', test: true}).subject)}</p>
+<form method="post"><input type="hidden" name="action" value="test"><div class="test-row"><div class="test-address"><label for="release-test-address">Your email address</label><input id="release-test-address" type="email" name="to" placeholder="you@example.com" autocomplete="email" required></div><button type="submit">Send test · ${esc(version)}</button></div></form></section>
+<section class="card"><h2>Send to everyone</h2>
+<p class="muted">${draft ? 'The release email stays a draft until you send it here. Everyone with an account or on the waitlist who has not stopped product news will receive it, once.' : row.status === 'sending' ? 'Sending is in progress. The final recipient count will appear when it finishes.' : `Sent to ${row.sent_count} on ${esc(String(row.sent_at || '').slice(0, 10))}.`}</p>
+${!on ? '<p class="muted">Product news sending is switched off.</p>' : ''}
+<form method="post"><input type="hidden" name="action" value="send"><button${draft && on && n ? '' : ' disabled'}>Send to ${n} ${n === 1 ? 'person' : 'people'}</button></form></section>
+</div></main>
 </body></html>`, {headers: HEAD});
 }
 
@@ -40,13 +63,13 @@ async function releasePost(request, env, url) {
   const row = await env.STATS.prepare('SELECT data FROM release_mail WHERE version = ?').bind(version).first(), draft = await env.STATS.prepare('SELECT 1 AS y FROM release_mail WHERE version = ? AND status = ?').bind(version, 'draft').first();
   let done = 'Nothing to do: this mail is not a draft.';
   if (row && action === 'test') {   // the real draft, to one address the owner types; sends nothing else
-    const to = String(form.get('to') || '').trim();
-    const result = validAddress(to) ? await send(env, 'release', to, {...JSON.parse(row.data), name: ''}) : {ok: false, reason: 'bad_address'};
-    done = result.ok ? 'Test sent to your address.' : `Test not sent (${result.reason}).`;
+    const to = String(form.get('to') || '').trim(), data = await releaseData(env, JSON.parse(row.data));
+    const result = validAddress(to) ? await send(env, 'release', to, {...data, name: '', test: true}) : {ok: false, reason: 'bad_address'};
+    done = result.ok ? `Test of release ${version} sent to ${to}. Subject: ${compose('release', {...data, test: true}).subject}. This test did not send the release to your audience.` : `Test of release ${version} not sent (${result.reason}).`;
   } else if (row && draft && action === 'headline') {
-    const data = JSON.parse(row.data); data.headline = String(form.get('headline') || '').trim().slice(0, 120) || data.headline;
+    const data = JSON.parse(row.data); data.intro = String(form.get('headline') || '').trim().slice(0, 120); data.headline = data.intro;
     await env.STATS.prepare('UPDATE release_mail SET data = ? WHERE version = ?').bind(JSON.stringify(data), version).run();
-    done = 'Headline saved.';
+    done = 'Introduction saved.';
   } else if (row && draft && action === 'send') {
     if (env.MARKETING_MAIL !== 'on') done = 'MARKETING_MAIL is off: nothing sent.';
     else { const result = await sendAll(env, version); done = result.sent !== undefined ? `Sent to ${result.sent}; ${result.skipped} skipped (stopped or refused).` : 'Not sent.'; }

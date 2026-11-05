@@ -1,6 +1,5 @@
-// The "What's new" mail at a stable release (spec docs/superpowers/specs/2026-10-28-release-mail-design.md): a navy hero with the one main change, then numbered
-// sections, each with plain words, the app's own words as light-blue pills (*Find* in the text), optional steps and an app screenshot (demo data, hosted on the site).
-// Email-safe: tables, inline styles, alt text. Data: {name?, version, month, headline, intro, hero?: {url, alt}, sections: [{title, text, steps?: [string], image?: {url, alt}}], updateUrl}.
+// Compact release emails: a prominent version, dated header and complete New / Improved / Fixed changelog rows.
+// Email-safe tables and inline styles keep the preview and delivered email consistent. Test copies identify themselves in HTML, text and subject.
 import {button, esc, SITE} from './mail-frame.js';
 import {LIGHT as C} from './mail-palette.js';
 
@@ -8,34 +7,38 @@ const FONT = '-apple-system,\'Segoe UI\',Helvetica,Arial,sans-serif';
 const pill = text => `<span class="jp-pill" style="background:${C.soft};color:${C.softInk};border-radius:4px;padding:1px 6px;font-weight:600;white-space:nowrap">${esc(text)}</span>`;
 export const withPills = text => esc(text).replace(/\*([^*]+)\*/g, (_, word) => pill(word.replace(/&amp;/g, '&')));
 const plain = text => String(text ?? '').replace(/\*([^*]+)\*/g, '$1');
+const LABELS = {features: 'New', improvements: 'Improved', fixes: 'Fixed'};
+const labelOf = section => LABELS[section.kind] || 'Improved';
 const picture = image => (image?.url ? `<p style="margin:12px 0 0"><img src="${esc(image.url)}" alt="${esc(image.alt || '')}" width="100%" style="display:block;width:100%;height:auto;border:1px solid ${C.line};border-radius:8px"></p>` : '');
 
-export const releaseSubject = ({headline}) => `New in Jobadabra: ${plain(headline)}`;
+/** Keeps the version visible in inboxes regardless of the length of any release description. */
+export const releaseSubject = ({version, test = false}) => `${test ? '[TEST] ' : ''}Jobadabra ${version} · What's new`;
 
-export function releaseHero({name, version, month, headline, intro, hero}) {
-  const hi = name ? `Hi ${esc(name)}, ` : 'Hi, ';
-  return `<tr><td style="background:${C.hero};padding:26px 24px 0;color:${C.onHero};border-radius:12px 12px 0 0">`
-    + `<p style="margin:0 0 14px;font-size:12px;letter-spacing:.04em;color:${C.onHeroMuted}"><img src="${SITE}/images/logo-mark.png" width="22" height="19" alt="" style="vertical-align:middle;border:0"> &nbsp;What's new in Jobadabra · ${esc(month)}</p>`
-    + `<h1 style="margin:0 0 12px;font:700 22px/1.25 ${FONT};color:${C.onHero}">${withPills(headline).replace(/<span[^>]*>/g, '').replace(/<\/span>/g, '')}</h1>`
-    + `<p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:${C.onHero}">${hi}Jobadabra ${esc(version)} is out. Here is what changed, and at the end, how to update in one click.</p>`
-    + `${intro ? `<p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:${C.onHero}">${esc(intro)}</p>` : ''}`
-    + `${hero?.url ? `<img src="${esc(hero.url)}" alt="${esc(hero.alt || '')}" width="100%" style="display:block;width:100%;height:auto;border-radius:8px 8px 0 0;border:0">` : '<div style="height:6px"></div>'}</td></tr>`;
+/** Renders a short version heading; only an explicitly saved introduction adds introductory prose. */
+export function releaseHero({version, month, intro, hero, test = false}) {
+  return `<tr><td style="background:${C.hero};padding:24px;color:${C.onHero};border-radius:12px 12px 0 0">`
+    + (test ? `<p style="margin:0 0 12px;color:${C.onHero};font-weight:700">Test email · Release ${esc(version)} · Sent only to your test address</p>` : '')
+    + `<p style="margin:0 0 12px;font-size:13px;color:${C.onHeroMuted}"><img src="${SITE}/images/logo-mark.png" width="22" height="19" alt="" style="vertical-align:middle;border:0"> &nbsp;What's new in Jobadabra</p>`
+    + `<h1 style="margin:0;font:700 24px/1.25 ${FONT};color:${C.onHero}">Version ${esc(version)}</h1>`
+    + `<p style="margin:8px 0 0;font-size:13px;color:${C.onHeroMuted}">${esc(month)}</p>`
+    + (intro ? `<p style="margin:16px 0 0;font-size:15px;line-height:1.55;color:${C.onHero}">${esc(intro)}</p>` : '')
+    + picture(hero) + '</td></tr>';
 }
 
+/** Lists every change with its category, keeping long text within the email's table width. */
 export function releaseHtml({sections = [], updateUrl}) {
-  const rows = sections.map((section, i) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="jp-line" style="${i ? `border-top:1px solid ${C.line};` : ''}margin-top:${i ? 22 : 0}px"><tr><td style="padding-top:${i ? 22 : 0}px">`
-    + `<p class="jp-sig" style="margin:0 0 4px;font:700 13px ${FONT};color:${C.signal}">${String(i + 1).padStart(2, '0')}</p>`
-    + `<h2 class="jp-ink" style="margin:0 0 8px;font:700 19px/1.3 ${FONT}">${esc(section.title)}</h2>`
-    + `<p style="margin:0 0 8px;line-height:1.7">${withPills(section.text)}</p>`
-    + (section.steps?.length ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 0">${section.steps.map((step, n) => `<tr><td valign="top" class="jp-sig" style="padding:3px 10px 3px 0;font-weight:700;color:${C.signal}">${n + 1}</td><td style="padding:3px 0;line-height:1.6">${withPills(step)}</td></tr>`).join('')}</table>` : '')
-    + picture(section.image) + `</td></tr></table>`).join('');
-  return `${rows}<p style="margin:26px 0 0;font-weight:700;font-size:17px" class="jp-ink">Update in one click</p>`
-    + `<p style="margin:4px 0 0;line-height:1.6">Open Jobadabra and choose <b>Update</b> from the menu, or download the new version below. Your searches and settings stay as they are.</p>`
-    + (updateUrl ? button({label: 'Get the new version', url: updateUrl}) : '');
+  const rows = sections.map(section => `<tr><td width="78" style="width:78px;padding:3px 12px 18px 0;vertical-align:top;font:700 11px ${FONT};color:${C.signal}">${labelOf(section)}</td><td style="padding:0 0 18px;vertical-align:top">`
+    + `<p style="margin:0;line-height:1.6;overflow-wrap:anywhere"><b>${esc(section.title)}.</b> ${withPills(section.text)}</p>`
+    + (section.steps?.length ? `<p style="margin:8px 0 0;line-height:1.6">${section.steps.map(step => withPills(step)).join('<br>')}</p>` : '')
+    + picture(section.image) + '</td></tr>').join('');
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed">${rows}</table>`
+    + `<p style="margin:8px 0 0;line-height:1.6">Open Jobadabra and choose <b>Update</b>, or download the new version below. Your searches and settings stay as they are.</p>`
+    + (updateUrl ? button({label: 'Download latest version', url: updateUrl}) : '');
 }
 
-export function releaseText({name, version, month, headline, sections = [], updateUrl}) {
-  const parts = sections.map((s, i) => [`${String(i + 1).padStart(2, '0')}  ${s.title}`, plain(s.text), ...(s.steps || []).map((step, n) => `  ${n + 1}. ${plain(step)}`)].join('\n'));
-  return [`What's new in Jobadabra · ${month}`, '', plain(headline), '', `${name ? `Hi ${name}, ` : 'Hi, '}Jobadabra ${version} is out. Here is what changed.`, '', ...parts.flatMap(p => [p, '']),
-    'Update in one click: open Jobadabra and choose Update from the menu.', updateUrl ? `Or download it: ${updateUrl}` : ''].join('\n');
+/** Provides the same version, categories and changes to clients that display plain text. */
+export function releaseText({version, month, intro, sections = [], updateUrl, test = false}) {
+  const parts = sections.map(section => [`${labelOf(section)}: ${section.title}. ${plain(section.text)}`, ...(section.steps || []).map(plain)].join('\n'));
+  return [...(test ? [`Test email · Release ${version} · Sent only to your test address`, ''] : []), `What's new in Jobadabra · Version ${version}`, month, '', ...(intro ? [intro, ''] : []), ...parts.flatMap(part => [part, '']),
+    'Open Jobadabra and choose Update from the menu.', updateUrl ? `Or download it: ${updateUrl}` : ''].join('\n');
 }

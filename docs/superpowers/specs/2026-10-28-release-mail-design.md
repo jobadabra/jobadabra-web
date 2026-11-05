@@ -9,12 +9,12 @@
 | Consent | Opt-out. Joining the waitlist or giving an address in the wizard counts as agreeing to product news ("a user who puts himself on the waiting list is considered as wanting promotional emails"). `marketing_opt_in` stops gating; `mail_off` (list marketing/all) and the new `pro_accounts.marketing_off_at` do. |
 | Switch | `MARKETING_MAIL=on` is turned on by the owner (his 28 Oct yes); the first real send is still his click only. |
 | Unsubscribe | The footer of **every** promotional mail carries the one-click "stop" link + the `List-Unsubscribe` headers (already added by `shared/mail.js` for any non-essential template). A test loops over every `marketing` template and fails if one lacks it. |
-| Content | The CI-written `changelog_entries` row for the version (first change = headline). Owner edits the headline in the draft. |
+| Content | The complete `changelog_entries` row for the version: New / Improved / Fixed rows. Short subject `Jobadabra <version> · What's new`, prominent version heading; owner may add an introduction (5 Nov 2026). |
 | Trigger | `release-stable.sh` / `canary-promote.yml` call the site once with the version; idempotent per version (`release_mail` row, primary key version). |
 | Sender | `Igor from Jobadabra <news@jobadabra.top>`. |
 
 ## Pieces
-1. `shared/mail-templates.js`: template `release` (list marketing), our mail frame, numbered sections, pills, update button.
+1. `shared/mail-templates.js`: template `release` (list marketing), our mail frame, categorized changelog rows, pills, update button.
 2. `db/migrations/0105_release_mail.sql`: `release_mail(version PK, status draft|sent, headline, created_at, sent_at, sent_count)`; `pro_accounts.marketing_off_at`.
 3. `admin/release-mail.js`: draft from changelog, list on /admin/email, "Send test", "Send to everyone" (batches under the 3000/day cap and 6/day/address).
 4. `api/release-mail-ingest.js`: the promotion call (Bearer key), idempotent.
@@ -22,3 +22,11 @@
 
 ## Open risk
 Unconfirmed wizard addresses may be mistyped; bounces and complaints suppress automatically (`mail_off`). Audience may be tightened to confirmed addresses if the owner prefers.
+
+## Review and test clarity (owner, 5 Nov 2026)
+
+The release review page uses the shared admin main container, with responsive cards for preview, test and broadcast. Both text and email inputs use the admin theme. A test sends the saved draft to one entered address, adds `[TEST]` to its short versioned subject and identifies itself in HTML and text. The confirmation names the version, recipient and subject. It leaves the broadcast pending; sending to everyone remains the owner's explicit action. `sending` is shown as in progress, never completed.
+
+Legacy drafts without category metadata read the complete changelog through the same adapter for preview, test and broadcast, including previously omitted fixes. No production data rewrite or AI generation is needed.
+
+All email footers include “Don't have the app? Download Jobadabra”. The release CTA says “Download latest version” while installed apps do not yet register an open/update URL handler; email links must not promise to open an update dialog until that desktop support ships (5 Nov 2026).

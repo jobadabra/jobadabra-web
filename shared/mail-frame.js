@@ -1,5 +1,5 @@
 // The one frame every e-mail goes through (owner, 17 Oct 2026): a branded card with the logo, a title, the content, at most one yellow button and a footer saying why the person gets it,
-// with "Stop these emails", "Email settings" and jobadabra.top. Email-safe: a table layout, inline styles, a hosted https logo, light colours inline with a dark-mode override in <style>.
+// with download, "Stop these emails", "Email settings" and jobadabra.top. Email-safe: a table layout, inline styles, a hosted https logo, light colours inline with a dark-mode override in <style>.
 // shared/mail.js applies it in send(), so no template can skip it; each template supplies only its content. A plain-text twin comes from frameText(). Guard: test/unit/shared/mail/mail-frame.test.js.
 import {DARK, LIGHT as C} from './mail-palette.js';
 export const SITE = 'https://www.jobadabra.top';
@@ -42,11 +42,11 @@ export function frameHtml({title, body, button: action, why, links, hero}) {
     + `<table role="presentation" width="560" cellpadding="0" cellspacing="0" class="jp-card" style="width:100%;max-width:560px;background:${C.card};border:1px solid ${C.line};border-radius:12px;font:15px/1.55 ${FONT};color:${C.ink}">`
     + (hero || `<tr><td class="jp-line" style="padding:16px 22px;border-bottom:1px solid ${C.line}"><img src="${LOGO}" width="32" height="28" alt="" style="vertical-align:middle;border:0"> <b class="jp-ink" style="vertical-align:middle;margin-left:8px;font-size:15px">Jobadabra</b></td></tr>`)
     + `<tr><td class="jp-pad jp-ink" style="padding:22px">${hero ? '' : `<h1 class="jp-ink" style="margin:0 0 10px;font-size:20px;line-height:1.3">${esc(title)}</h1>`}${body}${action ? button(action) : ''}</td></tr></table>`
-    + `<p class="jp-muted" style="max-width:560px;margin:14px auto 0;color:${C.muted};font:12px/1.6 ${FONT};text-align:center">${esc(why)}<br>${foot}</p>`
+    + `<p class="jp-muted" style="max-width:560px;margin:14px auto 0;color:${C.muted};font:12px/1.6 ${FONT};text-align:center">${esc(why)}<br>${foot}<br>Don't have the app? ${link(`${SITE}/download`, 'Download Jobadabra')}</p>`
     + `</td></tr></table></body></html>`;
 }
 
 export function frameText({title, body, button: action, why, links}) {
   return [title, '', body, action ? `\n${action.label}: ${action.url}` : '', '', '--', why,
-    links ? `Stop these emails: ${links.stop}\nEmail settings: ${links.settings}` : '', SITE].filter(part => part !== null && part !== undefined && part !== false).join('\n').replace(/\n{3,}/g, '\n\n');
+    links ? `Stop these emails: ${links.stop}\nEmail settings: ${links.settings}` : '', SITE, `Don't have the app? Download Jobadabra: ${SITE}/download`].filter(part => part !== null && part !== undefined && part !== false).join('\n').replace(/\n{3,}/g, '\n\n');
 }

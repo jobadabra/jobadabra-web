@@ -47,7 +47,8 @@ test('every template goes through the frame: logo, title, footer with stop + set
     const {html, text} = sent[0];
     assert.ok(html.includes('data-jp-frame="1"') && html.includes('<title>'), `${name}: framed`);
     assert.ok(html.includes('https://www.jobadabra.top/images/logo-mark.png') && !html.includes('data:'), `${name}: hosted logo`);
-    assert.ok(html.includes('>jobadabra.top</a>') && text.trim().endsWith('https://www.jobadabra.top'), `${name}: site link`);
+    assert.ok(html.includes('>jobadabra.top</a>') && text.split('\n').includes('https://www.jobadabra.top'), `${name}: site link`);
+    assert.ok(html.includes('>Download Jobadabra</a>') && html.includes('href="https://www.jobadabra.top/download"') && text.includes('Download Jobadabra: https://www.jobadabra.top/download'), `${name}: permanent download footer`);
     assert.ok(html.split(`background:${LIGHT.fill}`).length - 1 <= 1, `${name}: at most one yellow button`);   // the app's yellow (shared/mail-palette.js); it counted the old orange until 28 Oct 2026 and so could never fail (Gitar, #220)
     assert.ok(!/<(script|form|iframe)/i.test(html), `${name}: email-safe`);
     if (spec.essential) { assert.ok(!html.includes('Stop these emails') && !sent[0].headers, `${name}: a security mail has nothing to stop`); continue; }
