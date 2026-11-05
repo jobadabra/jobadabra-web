@@ -45,21 +45,21 @@ test('signupKind: the website form and the app once its dialog names release mai
   assert.deepEqual(['web', 'app-news', 'app', 'unknown', ''].map(signupKind), ['news', 'news', 'pro', 'pro', '']);
 });
 
-test('migration 0134: the old box becomes a yes or a stop for both news types; the old marketing stop covers both; service stays', () => {
+test('migration 0135: the old box becomes a yes or a stop for both news types; the old marketing stop covers both; service stays', () => {
   const db = new DatabaseSync(':memory:');
   for (const file of ['0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql']) db.exec(sql(file));
   const account = db.prepare('INSERT INTO pro_accounts (id, email_hash, email, created_at, plan, marketing_opt_in, marketing_opt_in_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
   account.run('a', 'hash-ticked', 'a@example.com', '2026-10-01', 'trial', 1, '2026-10-05');
   account.run('b', 'hash-none', 'b@example.com', '2026-10-01', 'trial', 0, null);
   db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES ('hash-stopped', 'marketing', 'unsubscribe', 'x'), ('hash-stopped', 'service', 'unsubscribe', 'x'), ('hash-bounced', 'all', 'bounce', 'x')").run();
-  db.exec(sql('0134_mail_on.sql'));
-  db.exec(sql('0134_mail_on.sql'));   // twice: a re-run changes nothing
+  db.exec(sql('0135_mail_on.sql'));
+  db.exec(sql('0135_mail_on.sql'));   // twice: a re-run changes nothing
   const rows = text => db.prepare(text).all().map(row => ({...row}));
   assert.deepEqual(rows('SELECT addr, list, via, at FROM mail_on ORDER BY list'), ['releases', 'tips'].map(list => ({addr: 'hash-ticked', list, via: 'tick', at: '2026-10-05'})));
   assert.deepEqual(rows('SELECT addr, list FROM mail_off ORDER BY addr, list'), [{addr: 'hash-bounced', list: 'all'}, {addr: 'hash-stopped', list: 'releases'}, {addr: 'hash-stopped', list: 'service'}, {addr: 'hash-stopped', list: 'tips'}]);
 });
 
-test('a stop made under the old single list still holds for both news types when migration 0134 has not run (CI only warns on a failed migration)', async () => {
+test('a stop made under the old single list still holds for both news types when migration 0135 has not run (CI only warns on a failed migration)', async () => {
   const db = new DatabaseSync(':memory:');
   for (const file of ['0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql']) db.exec(sql(file));   // no mail_on table
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values), all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
