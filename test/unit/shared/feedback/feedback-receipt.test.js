@@ -6,6 +6,7 @@ import {feedbackList} from '../../../../shared/feedback.js';
 import {RECEIVED, markSeen, repliesFor, replyClock} from '../../../../shared/feedback-reply.js';
 import {pingOverdue} from '../../../../shared/feedback-overdue.js';
 import {ALERTS, alertOf} from '../../../../shared/notify-registry.js';
+import worker from '../../../../workers/www/index.js';
 import {add, env, row} from './feedback-kit.js';
 
 const NOW = new Date('2026-11-05T12:00:00.000Z'), hoursAgo = hours => new Date(NOW.getTime() - hours * 3600000).toISOString();
@@ -130,4 +131,20 @@ test('a send that really failed is tried again next tick; nothing configured and
   const none = env(), quiet = add(none, at(30));   // no bot, no store: not a failed send
   assert.equal(await pingOverdue(none, NOW, async () => { throw new Error('no call expected'); }), 1);
   assert.notEqual(row(none, quiet).overdue_told_at, '', 'unconfigured keeps the flag, or every tick would redo it');
+});
+
+// Why (Gitar on #439, 5 Nov 2026): the ping first sat in the daily block, so a report was warned about up to a day late. The Worker's real triggers are played here: only the 5-minute trigger at minute 10 pings.
+test('the Worker pings within the hour: the 5-minute trigger at :10 does, :05 and the daily trigger do not', async () => {
+  const {e, sent} = pingEnv(), realFetch = globalThis.fetch, realError = console.error, ref = add(e, at(30));
+  globalThis.fetch = async (url, init) => { if (/telegram/.test(String(url))) { sent.push(JSON.parse(init.body).text); return Response.json({ok: true, result: {message_id: 1}}); } return new Response(null, {status: 204}); };
+  console.error = () => {};
+  const tick = async (cron, minute) => { const tasks = []; await worker.scheduled({cron, scheduledTime: Date.UTC(2026, 10, 5, 12, minute)}, {...e, ASSETS: {fetch: () => new Response('asset')}}, {waitUntil: task => tasks.push(task)}); await Promise.allSettled(tasks); };
+  try {
+    await tick('*/5 * * * *', 5);
+    await tick('30 5 * * *', 30);
+    assert.deepEqual(sent, [], 'not at :05, not from the daily trigger');
+    await tick('*/5 * * * *', 10);
+    assert.equal(sent.length, 1);
+    assert.match(sent[0], new RegExp(ref));
+  } finally { globalThis.fetch = realFetch; console.error = realError; }
 });

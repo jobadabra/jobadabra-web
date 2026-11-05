@@ -1,5 +1,5 @@
 // The owner's ping when a report is 24 hours old and nobody has answered it (docs/superpowers/specs/2026-11-05-report-instead-of-leaving-design.md in jobadabra, PR 1/7; the promise is "within 24 hours").
-// Run by the Worker's hourly tick. Once per report: the row's own overdue_told_at is the flag (it survives a KV eviction), claimed before the send. The text carries no name, e-mail or words of the reporter.
+// Run by the Worker's 5-minute trigger once an hour (minute 10, workers/www/index.js). Once per report: the row's own overdue_told_at is the flag (it survives a KV eviction), claimed before the send. The text carries no name, e-mail or words of the reporter.
 // Guarded by test/unit/shared/feedback/feedback-receipt.test.js.
 import {CLOCK_DAYS, REPLY_HOURS, UNANSWERED} from './feedback-reply.js';
 import {alertOwner} from './notify-send.js';
