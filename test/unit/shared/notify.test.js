@@ -196,3 +196,13 @@ test('a link carries no e-mail address either, and a job\'s switch belongs to it
   assert.deepEqual(alertsForJob('e2e.yml', 'jobadabra-web'), [], 'the same file name in another repo is another job');
   assert.deepEqual(alertsForJob('daily-digest.yml', 'jobadabra-web').map(alert => alert.id), ['daily-build-digest']);
 });
+
+test('release-failed: a registered, switched-on Engineering alert that sends every time and sits on the desktop and promote workflows (owner, 5 Nov 2026: "I didn\'t get any notification. I should have")', async () => {
+  const alert = alertOf('release-failed');
+  assert.deepEqual([alert.on, alert.mode, alert.channel, alert.group], [true, 'every', 'engineering', 'releases']);
+  assert.ok(alertsForJob('desktop.yml').some(item => item.id === 'release-failed') && alertsForJob('canary-promote.yml').some(item => item.id === 'release-failed'));
+  const e = env(), tg = await withBot(e);
+  const sent = await notify(e, {event: 'release-failed', text: '🔴 Beta 0.9.12 did not ship', html: true}, {fetcher: tg.fetcher, now: NOW});
+  assert.deepEqual([sent.status, sent.body.sent], [200, true]);
+  assert.equal((await notify(e, {event: 'release-failed', text: 'again', html: true}, {fetcher: tg.fetcher, now: NOW})).body.sent, true, 'every failure, not once a day');
+});

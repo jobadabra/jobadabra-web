@@ -51,8 +51,8 @@ test('the page needs the login; the owner sees every alert grouped, three channe
   for (const alert of ALERTS) assert.ok(html.includes(alert.label.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')), alert.id);
   for (const channel of CHANNELS) assert.ok(html.includes(channel.name.replace('&', '&amp;')), channel.name);
   assert.match(html, /Connect bot/);
-  assert.match(html, /28 alerts on/);
-  assert.match(html, /9 of 30 senders moved over/, 'the page counts the senders that already use the switchboard (2/4: the nine Worker-side ones)');
+  assert.match(html, new RegExp(`${ALERTS.filter(alert => alert.on).length} alerts on`), 'the count follows the registry (it is not a literal that breaks with each new alert)');
+  assert.match(html, new RegExp(`${ALERTS.filter(alert => alert.wired).length} of ${ALERTS.length} senders moved over`), 'the page counts the senders that already use the switchboard (2/4: nine Worker-side ones; 3/4: the failed-release alert)');
   assert.match(html, /sender not moved yet/);
   const group = await get(e, `/admin/${groupSlug(GROUPS.find(([name]) => name === 'Operations'))}`);
   assert.deepEqual([group.status, group.headers.get('Location')], [301, '/admin/operations/scheduled'], 'the group address leads to its first page');
@@ -81,7 +81,7 @@ test('every control saves its setting and returns to the page it came from; both
   const notifications = await (await get(e, '/admin/operations/notifications')).text();
   assert.match(notifications, /aria-label="Beta published: off"/);
   assert.match(notifications, /<option value="every" selected>Every time/);
-  assert.match(notifications, /27 alerts on/);
+  assert.match(notifications, new RegExp(`${ALERTS.filter(alert => alert.on).length - 1} alerts on`), 'one switched off');
   e.STATS.db.prepare('INSERT INTO schedules_snapshot (id, at, body) VALUES (1, ?, ?)').run(NOW.toISOString(), JSON.stringify({at: NOW.toISOString(), repos: [], jobs: [{repo: 'jobadabra/jobadabra', file: 'beta-approve.yml', name: 'Beta approve', about: '', crons: ['0 2 * * *'], recent: []}]}));
   assert.match(await (await get(e, '/admin/operations/scheduled')).text(), /aria-label="Beta published: off"[^>]*aria-pressed="false"|aria-pressed="false"[^>]*aria-label="Beta published: off"/, 'Scheduled\'s Notify column shows the same switch');
 });
