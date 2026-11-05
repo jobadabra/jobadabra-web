@@ -2,11 +2,12 @@
 // Report only. Test: test/unit/admin/ai/ai-section.test.js.
 import {shell, chip} from './ai-section.js';
 import {brokerCard} from './ai-broker-card.js';
+import {VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 import {problem} from '../shared/ai-broker.js';
 
 /** The Engines page from the broker read ({chain, fallback, tally} or null when the broker could not be read). */
 export function enginesPage(broker, now = new Date()) {
   const chain = broker?.chain || null, trouble = chain ? problem(chain) : null;
   const verdict = `<section class="card"><h2>Engines <span class="muted">· tried in this order; the next one answers when one is used up or fails</span></h2><div class="ai-chips">${!chain ? chip('wait', '… broker not readable') : trouble ? chip('warn', `▲ ${trouble}`) : chip('good', '🟢 every engine ready')}</div></section>`;
-  return shell({title: 'Engines', icon: '🔌', heading: 'AI engines', age: now.toISOString(), verdict, body: brokerCard(chain, now.getTime())});
+  return shell({title: 'Engines', icon: '🔌', heading: 'AI engines', age: now.toISOString(), verdict, body: brokerCard(chain, now.getTime()) + VIZ_TOOLTIP, style: VIZ_STYLE});
 }

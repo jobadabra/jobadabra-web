@@ -14,6 +14,8 @@ import {brokerCard} from './ai-broker-card.js';
 import {chainOf, fetchHealth, jobsOf, subscriptionOf, tallyOf} from '../shared/ai-broker.js';
 import {LIMITS_CSS, limitsCard} from './ai-limits-card.js';
 import {workflowCard} from './ai-workflow-tokens.js';
+import {dayFigure, groupFigure, jobFigure, keyFigure, providerFigure} from './jobcost-charts.js';
+import {VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 
 export const JOBS = {   // job id -> [label, group]; an unknown id still shows, under "other"
   'central-scout': ['Central scout', 'Discovery'],
@@ -103,6 +105,24 @@ export function page(rows, billed = [], keyRows = [], start = '', now = new Date
     ['📈 Per day', money(s.perDay), daily ? `rate over the last ${r.label}` : `average over ${s.span} day${s.span === 1 ? '' : 's'}`],
     ['🧾 Billed by Anthropic', billed.length ? money(s.billedTotal) : '–', billed.length ? `${daily ? 'today + yesterday (daily figure); ' : ''}the jobs explain ${s.covered === null ? '–' : s.covered + '%'} of it` : 'no billing report yet (ANTHROPIC_ADMIN_KEY)'],
   ];
+  // The tables the sections drew before the charts (5 Nov 2026): kept as they were, behind each chart's "Show table" (exact numbers, sort and search).
+  const providerTable = `<div class="wrap"><table><tr><th>Provider</th><th>Today</th><th>${last}</th><th>Share</th><th>Runs</th></tr>
+${s.providers.map(p => `<tr><td>${esc(PROVIDERS[p.id])}</td><td class="n">${money(p.today)}</td><td class="n">${money(p.usd)}</td><td class="n">${s.total ? Math.round(100 * p.usd / s.total) : 0}%</td><td class="n">${p.runs}</td></tr>`).join('')}
+<tr class="total"><td>Total</td><td class="n">${money(s.today)}</td><td class="n">${money(s.total)}</td><td class="n">${s.total ? '100%' : '–'}</td><td class="n">${s.runs}</td></tr>
+</table></div>`;
+  const groupTable = `<div class="wrap"><table><tr><th>Group</th><th>${last}</th></tr>
+${Object.entries(groups).sort((a, b) => b[1] - a[1]).map(([group, usd]) => `<tr><td>${esc(group)}</td><td class="n">${money(usd)}</td></tr>`).join('') || '<tr><td colspan="2" class="muted">Nothing reported yet: each job reports at the end of its run.</td></tr>'}
+</table></div>`;
+  const dayTable = `<div class="wrap"><table><tr><th>Day</th><th>Jobs</th><th>Billed</th></tr>
+${s.days.slice(0, 30).map(d => `<tr><td>${esc(d.day)}</td><td class="n">${money(d.tracked)}</td><td class="n">${d.billed === null ? '–' : money(d.billed)}</td></tr>`).join('')}
+</table></div>`;
+  const keyTable = (rows, empty) => `<div class="wrap"><table><tr><th>${empty.what}</th><th>Today</th><th>${daily ? 'Today + yesterday' : last}</th><th>Last used</th></tr>
+${rows.map(k => `<tr><td>${esc(k.key)}</td><td class="n">${money(k.today)}</td><td class="n">${money(k.range)}</td><td class="muted">${esc(k.last)}</td></tr>`).join('') || `<tr><td colspan="4" class="muted">${empty.text}</td></tr>`}
+</table></div>`;
+  const jobTable = `<div class="wrap"><table><tr><th>Job</th><th>Group</th><th>Runs</th><th>Calls</th><th>Cost</th><th>Per run</th><th>Last run (UTC)</th></tr>
+${s.jobs.map(job => `<tr><td>${esc((JOBS[job.job] || [job.job])[0])}</td><td class="muted">${esc((JOBS[job.job] || [])[1] || 'Other')}</td><td class="n">${job.runs}</td><td class="n">${job.calls}</td><td class="n">${money(job.usd)}</td><td class="n">$${(job.usd / job.runs).toFixed(3)}</td><td class="muted">${esc(job.last.slice(0, 16).replace('T', ' '))}</td></tr>`).join('')}
+<tr class="total"><td>Total</td><td></td><td class="n">${s.runs}</td><td class="n">${s.jobs.reduce((sum, job) => sum + job.calls, 0)}</td><td class="n">${money(s.total)}</td><td></td><td></td></tr>
+</table></div>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>AI cost · Admin</title><link rel="icon" href="/favicon-32.png">
 <style>
@@ -116,6 +136,7 @@ a{color:var(--amber)}.muted{color:var(--muted)}header{display:flex;justify-conte
 .wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:8px}th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;padding:6px 4px}
 td{padding:6px 4px;border-top:1px solid var(--line)}td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}tr.total td{font-weight:700}
 ${LIMITS_CSS}
+${VIZ_STYLE}
 </style></head><body><main>
 <header><h1>💸 AI cost</h1><span class="muted">${filterLinks(Object.entries(RANGES).map(([id, item]) => [id, item.label, `?range=${id}`]), range)}</span></header>
 <div class="tiles">${tiles.map(([label, value, note]) => `<div class="card tile"><span class="muted">${label}</span><b>${esc(value)}</b><small class="muted">${esc(note)}</small></div>`).join('')}</div>
@@ -124,31 +145,17 @@ ${LIMITS_CSS}
 ${limitsCard(subscriptions, fallback, now.getTime())}
 ${brokerCard(chain)}
 ${workflowCard(tally, now.toISOString().slice(0, 10), jobs)}
-<section class="card"><h2>🏷️ By provider</h2><small class="muted">Claude and OpenAI separately, and together</small><div class="wrap"><table><tr><th>Provider</th><th>Today</th><th>${last}</th><th>Share</th><th>Runs</th></tr>
-${s.providers.map(p => `<tr><td>${esc(PROVIDERS[p.id])}</td><td class="n">${money(p.today)}</td><td class="n">${money(p.usd)}</td><td class="n">${s.total ? Math.round(100 * p.usd / s.total) : 0}%</td><td class="n">${p.runs}</td></tr>`).join('')}
-<tr class="total"><td>Total</td><td class="n">${money(s.today)}</td><td class="n">${money(s.total)}</td><td class="n">${s.total ? '100%' : '–'}</td><td class="n">${s.runs}</td></tr>
-</table></div></section>
+<section class="card"><h2>🏷️ By provider</h2><small class="muted">Claude and OpenAI separately, and together</small>${providerFigure(s, PROVIDERS, providerTable)}</section>
 ${freeSection(freeSummary(freeRows, now, Math.max(1, Math.round(r.hours / 24))), r.label, accountToday, trial, lines)}
 ${webSection(web)}
 ${proSection(pro, r.label)}
-<div class="grid">
-<section class="card"><h2>🧩 By group</h2><div class="wrap"><table><tr><th>Group</th><th>${last}</th></tr>
-${Object.entries(groups).sort((a, b) => b[1] - a[1]).map(([group, usd]) => `<tr><td>${esc(group)}</td><td class="n">${money(usd)}</td></tr>`).join('') || '<tr><td colspan="2" class="muted">Nothing reported yet: each job reports at the end of its run.</td></tr>'}
-</table></div></section>
-<section class="card"><h2>📅 By day</h2><small class="muted">Always the last 30 days · Jobs = reported by the jobs · Billed = Anthropic's cost report</small><div class="wrap"><table><tr><th>Day</th><th>Jobs</th><th>Billed</th></tr>
-${s.days.slice(0, 30).map(d => `<tr><td>${esc(d.day)}</td><td class="n">${money(d.tracked)}</td><td class="n">${d.billed === null ? '–' : money(d.billed)}</td></tr>`).join('')}
-</table></div></section></div>
-<section class="card"><h2>🔑 By API key</h2><small class="muted">Anthropic's usage per key, priced and scaled to the day's bill (lags a few hours)${daily ? '; stored per UTC day, so this range shows today + yesterday' : ''}</small><div class="wrap"><table><tr><th>Key</th><th>Today</th><th>${daily ? 'Today + yesterday' : last}</th><th>Last used</th></tr>
-${keys.map(k => `<tr><td>${esc(k.key)}</td><td class="n">${money(k.today)}</td><td class="n">${money(k.range)}</td><td class="muted">${esc(k.last)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No key figures yet: ai-cost-billed.yml sends them every 6 hours (ANTHROPIC_ADMIN_KEY).</td></tr>'}
-</table></div></section>
-<section class="card"><h2>🗂️ By workspace</h2><small class="muted">The sum of each workspace's keys; a workspace's monthly limit is shared by all its keys</small><div class="wrap"><table><tr><th>Workspace</th><th>Today</th><th>${daily ? 'Today + yesterday' : last}</th><th>Last used</th></tr>
-${spaces.map(k => `<tr><td>${esc(k.key)}</td><td class="n">${money(k.today)}</td><td class="n">${money(k.range)}</td><td class="muted">${esc(k.last)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No workspace figures yet: they arrive with the key figures.</td></tr>'}
-</table></div></section>
-<section class="card"><h2>⚙️ By job</h2><div class="wrap"><table><tr><th>Job</th><th>Group</th><th>Runs</th><th>Calls</th><th>Cost</th><th>Per run</th><th>Last run (UTC)</th></tr>
-${s.jobs.map(job => `<tr><td>${esc((JOBS[job.job] || [job.job])[0])}</td><td class="muted">${esc((JOBS[job.job] || [])[1] || 'Other')}</td><td class="n">${job.runs}</td><td class="n">${job.calls}</td><td class="n">${money(job.usd)}</td><td class="n">$${(job.usd / job.runs).toFixed(3)}</td><td class="muted">${esc(job.last.slice(0, 16).replace('T', ' '))}</td></tr>`).join('')}
-<tr class="total"><td>Total</td><td></td><td class="n">${s.runs}</td><td class="n">${s.jobs.reduce((sum, job) => sum + job.calls, 0)}</td><td class="n">${money(s.total)}</td><td></td><td></td></tr>
-</table></div>
+<section class="card"><h2>🧩 By group</h2>${groupFigure(groups, groupTable)}</section>
+<section class="card"><h2>📅 By day</h2><small class="muted">Always the last 30 days · Jobs = reported by the jobs · Billed = Anthropic's cost report</small>${dayFigure(s, dayTable)}</section>
+<section class="card"><h2>🔑 By API key</h2><small class="muted">Anthropic's usage per key, priced and scaled to the day's bill (lags a few hours)${daily ? '; stored per UTC day, so this range shows today + yesterday' : ''}</small>${keyFigure(keys, 'keys', keyTable(keys, {what: 'Key', text: 'No key figures yet: ai-cost-billed.yml sends them every 6 hours (ANTHROPIC_ADMIN_KEY).'}))}</section>
+<section class="card"><h2>🗂️ By workspace</h2><small class="muted">The sum of each workspace's keys; a workspace's monthly limit is shared by all its keys</small>${keyFigure(spaces, 'workspaces', keyTable(spaces, {what: 'Workspace', text: 'No workspace figures yet: they arrive with the key figures.'}))}</section>
+<section class="card"><h2>⚙️ By job</h2>${jobFigure(s, JOBS, jobTable)}
 <small class="muted">${last}: runs reported by the jobs (a local run that does not report, e.g. a bake-off on the Tests key, is missing). Billed fills about a day later. Not counted: the users' Always-on runs (their own keys), and any job that does not report. A growing gap between Jobs and Billed means a job is missing.</small></section>
+${VIZ_TOOLTIP}
 </main></body></html>`;
 }
 
