@@ -20,7 +20,7 @@ test('filter links: the current one is the amber pill', () => {
 });
 
 test('Overview: a series with no history is just its number; no series says where to look', () => {
-  const html = overview({cards: {'/admin/testing/self-healing': [{label: 'precision', values: [null, null, 0.38], format: v => `${Math.round(v * 100)}%`}]}, attention: [], recall: null, from: 'a', to: 'b'});
+  const html = overview({cards: {'/admin/testing/bug-loop': [{label: 'precision', values: [null, null, 0.38], format: v => `${Math.round(v * 100)}%`}]}, attention: [], recall: null, from: 'a', to: 'b'});
   assert.match(html, /<span>38%<\/span>/);
   assert.doesNotMatch(html, /3800%/);
   assert.match(html, /Real Form Filling<\/h2><p class="muted">No weekly numbers here: open the page →/);

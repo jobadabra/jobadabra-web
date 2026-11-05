@@ -34,11 +34,11 @@ export const METHODS = [
   {id: 'gtm', ring: 'prove', icon: '🗺️', title: 'GTM readiness', proves: 'How stable each journey is.', href: '/admin/testing/gtm-readiness', linkOnly: true,
     lines: [{label: 'Own page', last: {none: 'this page only links to it'}}], bugs: {none: 'the page measures readiness, not bugs'}},
 
-  {id: 'review', ring: 'find', icon: '🖼️', title: 'AI screenshot review', proves: 'An AI reads each screen like a job seeker.', href: '/admin/testing/self-healing',
+  {id: 'review', ring: 'find', icon: '🖼️', title: 'AI screenshot review', proves: 'An AI reads each screen like a job seeker.', href: '/admin/testing/bug-loop',
     lines: [{label: 'Files what the review found', wf: 'ui-findings.yml', when: 'after each merge + night pass 1'}], bugs: {detector: 'AI screenshot review'}},
-  {id: 'layout', ring: 'find', icon: '📐', title: 'Layout checks', proves: 'Clipped or off-screen text, no AI.', href: '/admin/testing/self-healing',
+  {id: 'layout', ring: 'find', icon: '📐', title: 'Layout checks', proves: 'Clipped or off-screen text, no AI.', href: '/admin/testing/bug-loop',
     lines: [{label: 'With every run that takes shots', wf: 'ui-findings.yml', when: 'after every e2e run'}], bugs: {detector: 'Layout and DOM checks'}},
-  {id: 'interactions', ring: 'find', icon: '🖱️', title: 'Interactions', proves: 'Clicks every safe control; flags what breaks.', href: '/admin/testing/self-healing',
+  {id: 'interactions', ring: 'find', icon: '🖱️', title: 'Interactions', proves: 'Clicks every safe control; flags what breaks.', href: '/admin/testing/bug-loop',
     lines: [{label: 'Night, report only', when: 'nights', last: {suite: 'interactions'}}], bugs: {detector: 'Interaction probe'}},
   {id: 'wander', ring: 'find', icon: '🧭', title: 'Wander', proves: 'A random walk through the app.', href: '/admin/testing/e2e',
     lines: [{label: 'Night, report only', when: 'nights', last: {suite: 'wander'}}], bugs: {none: 'not counted under its own name'}},
@@ -46,9 +46,9 @@ export const METHODS = [
     lines: [{label: 'Merged code', wf: 'code-review.yml'}, {label: 'Gitar on every pull request', when: 'every pull request', last: {none: 'Gitar posts on GitHub only'}}],
     bugs: {detector: 'AI code review'}},
 
-  {id: 'mutation', ring: 'testers', icon: '🧬', title: 'Planted code bugs', proves: 'Plants bugs in code; the suites must go red.', href: '/admin/testing/self-healing',
+  {id: 'mutation', ring: 'testers', icon: '🧬', title: 'Planted code bugs', proves: 'Plants bugs in code; the suites must go red.', href: '/admin/testing/bug-loop',
     lines: [{label: 'Planted-bug run', wf: 'mutation.yml'}], bugs: {mutation: true}},
-  {id: 'recall', ring: 'testers', icon: '🪲', title: 'Planted UI bugs', proves: 'Plants visible bugs; counts what the Finder sees.', href: '/admin/testing/self-healing',
+  {id: 'recall', ring: 'testers', icon: '🪲', title: 'Planted UI bugs', proves: 'Plants visible bugs; counts what the Finder sees.', href: '/admin/testing/bug-loop',
     lines: [{label: 'With the Interactions night', when: 'nights', last: {suite: 'interactions'}}], bugs: {recall: true}},
 
   {id: 'sentry', ring: 'real', icon: '🐞', title: 'Sentry', proves: 'Crashes and errors from real installs.', href: '/admin/testing/sentry',

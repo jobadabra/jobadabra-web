@@ -49,7 +49,7 @@ test('Agents and Testing loaders read the rows their pages keep', async () => {
   db.prepare('INSERT INTO selfheal_snapshots (day, at, body) VALUES (?, ?, ?)').run('2026-10-15', '2026-10-15T09:00:00Z', JSON.stringify({totals: {real: 73, judged: 181, precision: 40}, fixer: {landed: 21, opened: 24, open: 0}, recall: {caught: 21, planted: 22, missed: ['dead-button']}}));
   db.prepare('INSERT INTO digest_days (day, groups, open_line, numbers, drafts, usd, updated_at) VALUES (?, ?, ?, ?, 1, 0, ?)').run('2026-10-15', '[{"t":1},{"t":2}]', '', '[1,2,3]', '2026-10-15T10:00:00Z');
   db.prepare('INSERT INTO ai_cost_runs (job, run_id, day, at, usd, calls) VALUES (?, ?, ?, ?, ?, 1)').run('self-heal', 'r1', '2026-10-15', '2026-10-15T08:00:00Z', 8.15);
-  const [heal, fixer] = await HEADLINES['/admin/testing/self-healing'](e, now);
+  const [heal, fixer] = await HEADLINES['/admin/testing/bug-loop'](e, now);
   assert.deepEqual([heal.value, heal.status, heal.sub.includes('dead-button'), fixer.value], ['40%', 'warn', true, '21']);
   assert.deepEqual((await HEADLINES['/admin/agents/build-log'](e, now))[0].sub, '2 goals');
   assert.equal((await HEADLINES['/admin/ai/costs'](e, now))[0].value, '$8.15');

@@ -20,7 +20,7 @@ test('Why issues were closed: one segmented bar of the labels in words; a tail f
   assert.equal(resolutionFigure([], RESOLUTION_WORDS, TABLE), TABLE);
 });
 
-test('the Self-healing page keeps both tables behind their charts', () => {
+test('the Bug loop page keeps both tables behind their charts', () => {
   const live = {periods: {all: {totals: {filed: 4, fixed: 1, real: 1, falsePositive: 1, precision: 0.5, judged: 2}, byDetector: [{detector: 'AI code review', filed: 4, fixed: 1, queued: 0, falsePositive: 1}]}}, history: [], causes: {fixed: 2, duplicate: 1}};
   const finder = periodsSection(live), why = causesSection(live);
   assert.match(finder, /class="vz"/); assert.match(finder, /<details class="vz-more">[\s\S]*<th>Detector<\/th>/);

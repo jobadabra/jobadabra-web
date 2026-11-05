@@ -1,4 +1,4 @@
-// The CI's small stores that were pinned GitHub issues, now one D1 table `ci_state` (key, body JSON, at): read by the Self-healing cards and the Red main tab, written by CI
+// The CI's small stores that were pinned GitHub issues, now one D1 table `ci_state` (key, body JSON, at): read by the Bug loop cards and the Red main tab, written by CI
 // (Bearer SELFHEAL_PUBLISH_KEY, the key every CI upload here uses) and, for two keys, by the owner's buttons (admin/selfheal.js POST). One copy of each fact, no second store.
 // Why (5 Nov 2026, owner: "turn this pinned issues into dashboards/tabs/pages in Admin … and will remove them from GH issue list"): the noise register (#274), the verdict audit
 // (#2736) and the red-main issues (#2817) were data that loops read back from an issue body. Spec: docs/superpowers/specs/2026-11-05-state-issues-to-admin-design.md (public repo).

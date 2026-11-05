@@ -1,4 +1,4 @@
-// The "Top issues" card of the Self-healing page (admin/selfheal-cards.js): the ranking a snapshot carries, drawn for the owner; it replaces the pinned GitHub issue #1892.
+// The "Top issues" card of the Bug loop page (admin/selfheal-cards.js): the ranking a snapshot carries, drawn for the owner; it replaces the pinned GitHub issue #1892.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {liveSection} from '../../../admin/selfheal.js';
@@ -35,7 +35,7 @@ test('no ranking in the snapshot (published before 5 Nov 2026): no card; nothing
   assert.match(topIssuesSection({ranking: {open: 0, counts: {}, rows: []}}), /nothing open/);
 });
 
-test('the Self-healing page puts the card under the tiles', () => {
+test('the Bug loop page puts the card under the tiles', () => {
   const html = liveSection({at: '2026-11-05T12:00:00Z', totals: {}, byDetector: [], ranking});
   assert.ok(html.indexOf('id="top-issues"') > html.indexOf('class="tiles"'));
 });

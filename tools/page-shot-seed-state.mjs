@@ -1,4 +1,4 @@
-// Demo data for the state cards of /admin/testing/self-healing and the Red main tab (state-issues plan, 5 Nov 2026): made-up findings, detectors, ticks and suites, never a real issue or user.
+// Demo data for the state cards of /admin/testing/bug-loop and the Red main tab (state-issues plan, 5 Nov 2026): made-up findings, detectors, ticks and suites, never a real issue or user.
 export const stateFields = back => ({
   ranking: {open: 4, counts: {P0: 0, P1: 1, P2: 1, P3: 2}, rows: [
     {number: 301, title: 'settings: the button opens the wrong page', priority: 'P1', platform: 'Mac', score: 8, needsPerson: true, clean: false, build: 'aaaaaaa', days: 0, url: 'https://github.com/demo/demo/issues/301'},

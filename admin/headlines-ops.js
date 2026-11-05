@@ -11,18 +11,18 @@ const all = async (env, sql, ...binds) => { try { return env.STATS ? (await env.
 const json = text => { try { return JSON.parse(text) || {}; } catch { return {}; } };
 const num = value => (Number(value) || 0).toLocaleString('en-US', {maximumFractionDigits: 0});
 
-// Self-healing: the newest daily snapshot (what /admin/testing/self-healing shows as "The loop, live") and the weekly precision from the stored days.
+// Self-healing: the newest daily snapshot (what /admin/testing/bug-loop shows as "The loop, live") and the weekly precision from the stored days.
 async function selfHealing(env, now) {
   const rows = (await all(env, 'SELECT day, body FROM selfheal_snapshots WHERE day >= ? ORDER BY day', since(now))).map(row => ({day: row.day, ...json(row.body)}));
   const live = rows.at(-1);
-  if (!live) return [{label: 'Self-healing precision', value: 'No data', sub: 'the loop publishes every 3 hours from CI', status: 'none'}];
+  if (!live) return [{label: 'Bug loop precision', value: 'No data', sub: 'the loop publishes every 3 hours from CI', status: 'none'}];
   const t = live.totals || {}, fix = live.fixer || {}, recall = live.recall;
   const judged = t.judged ?? (t.real || 0) + (t.falsePositive || 0);
   const precision = t.precision == null ? null : Math.round(t.precision);   // stored as a percent
   const weekly = byWeek(rows.filter(row => row.totals?.precision != null).map(row => ({day: row.day, p: row.totals.precision})), now, list => (list.length ? list.at(-1).p : null));
   return [
     // good from 50%, warn from 30%: below that the Finder files more noise than bugs.
-    {label: 'Self-healing precision', value: precision == null ? '–' : `${precision}%`, sub: `${num(t.real)} real of ${num(judged)} judged${recall?.missed?.length ? ` · missed ${recall.missed.join(', ')}` : ''}`,
+    {label: 'Bug loop precision', value: precision == null ? '–' : `${precision}%`, sub: `${num(t.real)} real of ${num(judged)} judged${recall?.missed?.length ? ` · missed ${recall.missed.join(', ')}` : ''}`,
       status: precision == null ? 'none' : precision >= 50 ? 'good' : precision >= 30 ? 'warn' : 'bad', series: weekly, format: v => `${Math.round(v)}%`},
     {label: 'Fixer landed', value: num(fix.landed ?? fix.merged), sub: `${num(fix.opened)} PRs · ${num(fix.open)} open`, status: fix.open ? 'warn' : 'good'},
   ];
@@ -94,4 +94,4 @@ async function integration(env, now) {
   return [{label: 'Integration green, 7 days', value: runs.length ? `${num(greens)} of ${num(runs.length)}` : 'No runs', sub: 'main runs of the three layers that ended green', status: !runs.length ? 'none' : greens === runs.length ? 'good' : greens / runs.length >= 0.9 ? 'warn' : 'bad'}];
 }
 
-export const OPERATIONS = {'/admin/agents/build-log': buildLog, '/admin/testing/pr-checks': prChecks, '/admin/agents/agent-coding': agentCoding, '/admin/testing/e2e': e2e, '/admin/testing/integrations': integration, '/admin/operations/scheduled': schedules, '/admin/testing/self-healing': selfHealing, '/admin/testing/sentry': sentry, '/admin/ai/costs': aiCost};
+export const OPERATIONS = {'/admin/agents/build-log': buildLog, '/admin/testing/pr-checks': prChecks, '/admin/agents/agent-coding': agentCoding, '/admin/testing/e2e': e2e, '/admin/testing/integrations': integration, '/admin/operations/scheduled': schedules, '/admin/testing/bug-loop': selfHealing, '/admin/testing/sentry': sentry, '/admin/ai/costs': aiCost};
