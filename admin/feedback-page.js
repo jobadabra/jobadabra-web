@@ -130,6 +130,9 @@ function formFor(row, action) {
   const mail = el('input'); mail.type = 'checkbox'; const told = /^app/.test(row.told || ''); mail.disabled = !row.mailable; mail.checked = !!row.mailable && !told;   // Why (3/7 review): a card told before (deferred, then fixed) does not mail again unless the owner ticks it
   const mailRow = el('label', 'check'); mailRow.append(mail, row.mailable ? (told ? 'Already told once: e-mail ' : 'Also e-mail ') + row.contact : 'No e-mail: the contact is not an address (they are told in the app)');
   form.append(mailRow);
+  // Why (fb 2/7, 5 Nov 2026, owner: a validated report earns a surprise): on for Fixed, never advertised to users; the reporter reads it only in the reply.
+  const thanks = fixed ? el('input') : null;
+  if (thanks) { thanks.type = 'checkbox'; thanks.checked = true; const t = el('label', 'check'); t.append(thanks, 'Thank them: add 5 free applications (a surprise, not announced)'); form.append(t); }
   let when = null, impact = null, tell = null;
   if (fixed) {
     when = el('select'); let touched = false;
@@ -141,7 +144,7 @@ function formFor(row, action) {
     if (!row.impact) { impact = el('select'); for (const [value, label] of [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]) impact.append(Object.assign(el('option', '', label), {value})); impact.value = row.impact_ai || 'low'; field('Impact', impact); }
   }
   const buttons = el('div', 'row'), go = el('button', 'go', 'Save'), cancel = el('button', '', 'Cancel'); go.type = cancel.type = 'button'; cancel.onclick = () => form.remove();
-  go.onclick = () => send({ref: row.ref, action, message: message.value, mail: mail.checked && !mail.disabled, ...(fixed ? {fixed_in: version.value, pr_url: link.value, when: when.value} : {linear_url: link.value, tell: tell.checked, ...(impact ? {impact: impact.value} : {})})},
+  go.onclick = () => send({ref: row.ref, action, message: message.value, mail: mail.checked && !mail.disabled, ...(fixed ? {fixed_in: version.value, pr_url: link.value, when: when.value, thanks: thanks.checked} : {linear_url: link.value, tell: tell.checked, ...(impact ? {impact: impact.value} : {})})},
     fixed ? 'Marked as fixed.' : 'Deferred.');
   buttons.append(go, cancel); form.append(buttons); setTimeout(() => (version || message).focus());
   return form;

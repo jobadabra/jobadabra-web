@@ -8,11 +8,12 @@ import {accountOf, planOn} from './pro.js';
 export const FREE_APPLICATIONS = 20, FREE_DAYS = 60;
 const DAY = 24 * 60 * 60 * 1000;
 
-// Pure: where an install stands. -> {ended, used, limit, daysLeft}
-export function stand({applied = 0, first, now = new Date()}) {
+// Pure: where an install stands. `bonus`: applications added for validated reports (shared/feedback-reply.js THANKS_APPS). -> {ended, used, limit, daysLeft, bonus}
+export function stand({applied = 0, first, now = new Date(), bonus = 0}) {
   const started = Date.parse(first) || now.getTime();
   const daysLeft = Math.max(0, Math.ceil(FREE_DAYS - (now.getTime() - started) / DAY));
-  return {used: applied, limit: FREE_APPLICATIONS, daysLeft, ended: applied >= FREE_APPLICATIONS && daysLeft === 0};
+  const limit = FREE_APPLICATIONS + bonus;
+  return {used: applied, limit, daysLeft, bonus, ended: applied >= limit && daysLeft === 0};
 }
 
 export async function status(request, env, now = new Date()) {
@@ -34,7 +35,9 @@ export async function status(request, env, now = new Date()) {
   const account = planOn(env) ? await accountOf(env, access.install) : null;
   const pro = account?.status === 'active';
   const license = !pro && await verifyLicense(request.headers.get('x-jp-license'), env.LICENSE_PUBLIC_KEY);   // founder / friend / pass key: no wall
-  const state = stand({applied, first, now});
+  // Why (fb 2/7, 5 Nov 2026): the bonus is the sum of the thank-yous already told to this install; it lives in its own table (trial_bonus), so deleting a card never takes it back and nothing else can drift from it. A read that fails (CI only warns on a failed migration, so the table may not exist yet) gives no bonus: the trial still answers, and a missing bonus can only make the wall earlier, never open it.
+  const bonus = Number((await env.STATS?.prepare("SELECT COALESCE(SUM(apps), 0) AS total FROM trial_bonus WHERE install = ?").bind(access.install).first().catch(() => null))?.total) || 0;
+  const state = stand({applied, first, now, bonus});
   const ended = state.ended && !pro && !license;
   // The pause line goes out at most once a day per install: a run that will send it asks with claim=1 and is told yes once (the last day lives here, not in the repo).
   let notify = false;

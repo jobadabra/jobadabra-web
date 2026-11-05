@@ -59,7 +59,7 @@ export async function act(env, input, who, now = new Date(), opts = {}) {
   const {ref, action} = input || {}, spec = Object.hasOwn(ACTIONS, action) ? ACTIONS[action] : null;
   if (!spec || (spec.internal && !opts.trusted)) return refused(400, 'Unknown action.');
   if (!/^[0-9a-f]{16}$/.test(String(ref))) return refused(400, 'Unknown feedback.');
-  const row = await env.STATS.prepare('SELECT state, impact, impact_ai, told FROM feedback WHERE ref = ?').bind(ref).first();
+  const row = await env.STATS.prepare('SELECT state, impact, impact_ai, told, (SELECT COUNT(*) FROM trial_bonus WHERE trial_bonus.ref = feedback.ref) AS granted FROM feedback WHERE ref = ?').bind(ref).first();
   if (!row) return refused(404, 'This feedback is gone.');
   if (!spec.from.includes(row.state)) return refused(409, `Can't ${action.replace('_', ' ')} a feedback that is ${row.state.replace('_', ' ')}.`);
   const at = now.toISOString();
@@ -92,6 +92,7 @@ export async function act(env, input, who, now = new Date(), opts = {}) {
   if (form.error) return refused(400, form.error);
   const columns = {...form.columns};
   if (action === 'defer' && IMPACTS.includes(input.impact) && !row.impact) columns.impact = input.impact;   // the Defer form rates it in the same step
+  if (action === 'reopen' && !row.granted) columns.thanks_apps = 0;   // Why (fb 2/7 code review): a tick given for a fix that is now reopened is not carried to whatever fixes it next (an AI PR merging has no form to untick it); a grant already made stays
   if (action === 'reopen') columns.told = ['pending', 'telling'].includes(row.told) ? '' : row.told;   // a fix that waited for a release (or was being told) stops; what was already told stays
   const keys = Object.keys(columns), sets = keys.map(key => `, ${key} = ?`).join('');
   const detail = `${row.state} -> ${spec.to}${note || form.detail ? `: ${note || form.detail}` : ''}${form.tell ? ` (tell: ${form.tell})` : ''}`;

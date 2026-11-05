@@ -23,28 +23,33 @@ const RECEIPT_DAYS = 14;
 export const CLOCK_DAYS = 7;
 /** The SQL of "nobody has answered this yet": not set aside (dismissed, false positive), not told in the app (told starts with app, or a release call is mid-way), and not marked "do not tell" (tell_mode never). The one rule behind the receipt, the clock and the ping. */
 export const UNANSWERED = "state NOT IN ('dismissed', 'false_positive') AND told NOT LIKE 'app%' AND told != 'telling' AND tell_mode != 'never'";
+/** Free applications the owner may add for a validated report (owner, 5 Nov 2026: "As long as the feedback is validated on our side, and we acknoweledge it as a problem/bug. Then it's unlimited."): the Fixed form's thank-you tick. */
+export const THANKS_APPS = 5;
+/** The sentence a thanked reporter reads after the owner's words, in the app and in the e-mail. Says what it buys: applications. */
+export const THANKS_LINE = `We also added ${THANKS_APPS} more free applications to say thank you.`;
 const RECEIPT_PREFIX = 'r:';   // the receipt's ref in the replies list; closing it never touches the owner's later reply (seen_at)
 
 // Why (3/7 code review, 3 Nov 2026): one rule says when the app may show a reply, used by the list and by closing: the card is Fixed, Released or Deferred, it was told, and the person has not closed this telling.
 const VISIBLE = "state IN ('fixed', 'released', 'deferred') AND told LIKE 'app%' AND seen_at = '' AND ref != ''";
 
 /** What the reporter reads: the owner's own words, else the default sentence for the state. */
-export const replyText = row => clip(row.tell_message, 300) || (FIXED_STATES.includes(row.state) ? defaultFixed(row.fixed_in) : DEFAULT_DEFER);
+export const replyText = row => (clip(row.tell_message, 300) || (FIXED_STATES.includes(row.state) ? defaultFixed(row.fixed_in) : DEFAULT_DEFER)) + (FIXED_STATES.includes(row.state) && row.thanks_apps > 0 ? ` ${THANKS_LINE}` : '');
 /** The reporter's own words, cut for the reply ("You wrote on 28 Oct: …"): never more than 80 characters. */
 export const excerptOf = text => { const one = clip(text, 400); return one.length > 80 ? `${one.slice(0, 79).trimEnd()}…` : one; };
 
 /**
  * The columns the Fixed form sets, or {error}. `when`: now | release | never; blank = now when a version is typed, else at the next release.
+ * `row`: the card as read first; once its thank-you was granted (a trial_bonus row exists) the form no longer changes it, so saving Fixed again without the tick cannot take the 5 back.
  * -> {columns, tell}. A release-timed fix waits (`told = 'pending'`) until PR 5/7's release call finds it.
  */
-export function fixedColumns(input) {
+export function fixedColumns(input, row = {}) {
   const fixedIn = clip(input.fixed_in, 400), pr = clip(input.pr_url, 400);   // cut only to bound the work: a value over its limit then fails its own check, never passes cut to fit
   if (!VERSION.test(fixedIn)) return {error: 'The version has letters, digits, dots and dashes only.'};
   if (pr && (pr.length > PR_MAX || !PR.test(pr))) return {error: 'The link is a GitHub pull request or commit, like https://github.com/jobadabra/jobadabra/pull/123.'};
   const tell = WHEN.includes(input.when) ? input.when : (fixedIn ? 'now' : 'release');
   // Why (5/7 review): a release finds a fix by a public-repo PR number or by the version typed; any other link would wait for ever.
   if (tell === 'release' && pr && !releasePr(pr) && !fixedIn) return {error: "A release can't find this link: use a pull request of the public repo, type the version, or leave the link out."};
-  return {tell, columns: {fixed_in: fixedIn, pr_url: pr, tell_mode: tell, tell_message: clip(input.message, 300), tell_mail: input.mail ? 1 : 0, told: tell === 'release' ? 'pending' : ''}};
+  return {tell, columns: {fixed_in: fixedIn, pr_url: pr, tell_mode: tell, tell_message: clip(input.message, 300), tell_mail: input.mail ? 1 : 0, ...(row.granted ? {} : {thanks_apps: input.thanks ? THANKS_APPS : 0}), told: tell === 'release' ? 'pending' : ''}};
 }
 
 /**
@@ -66,12 +71,15 @@ export function deferColumns(input) {
   return {tell, columns: {linear_url: linear, tell_mode: tell, tell_message: clip(input.message, 300), tell_mail: input.mail ? 1 : 0, told: ''}};
 }
 
+/** The write that grants a report's thank-you: one trial_bonus row (install, ref, apps) when the owner ticked it (thanks_apps > 0) and the card is Fixed or Released; a second run changes nothing (the ref is the key). The row outlives the card. */
+const grantStatement = (env, ref, now) => env.STATS.prepare("INSERT OR IGNORE INTO trial_bonus (ref, install, apps, at) SELECT ref, install, thanks_apps, ? FROM feedback WHERE ref = ? AND thanks_apps > 0 AND install != '' AND state IN ('fixed', 'released')").bind(now.toISOString(), ref);
+
 /**
  * Makes the reply visible to the app and sends the e-mail when the owner ticked it and the contact is an address. -> the `told` value written.
  * The mail goes through send(): it refuses (never throws) an unsubscribed or bounced address, mail switched off or the per-address limit; that refusal is written on the card, the app reply still shows.
  */
 export async function tellReporter(env, ref, now = new Date(), who = 'owner (told)') {
-  const row = await env.STATS.prepare('SELECT at, text, contact, state, fixed_in, tell_message, tell_mail FROM feedback WHERE ref = ?').bind(ref).first();
+  const row = await env.STATS.prepare('SELECT at, text, contact, state, fixed_in, tell_message, tell_mail, thanks_apps FROM feedback WHERE ref = ?').bind(ref).first();
   if (!row || ![...FIXED_STATES, 'deferred'].includes(row.state)) return '';
   let told = 'app';
   if (row.tell_mail && validAddress(row.contact)) {
@@ -80,6 +88,7 @@ export async function tellReporter(env, ref, now = new Date(), who = 'owner (tol
   } else if (row.tell_mail) told = 'app, mail refused: not an address';
   await env.STATS.batch([
     env.STATS.prepare('UPDATE feedback SET told = ?, told_at = ?, seen_at = \'\' WHERE ref = ?').bind(told, now.toISOString(), ref),
+    grantStatement(env, ref, now),   // Why (fb 2/7, 5 Nov 2026): the grant is written by the same batch that tells the reporter, once (the ref is the key), so a second telling, Reopen then Fixed, or a release call after a "tell now" adds nothing
     env.STATS.prepare('INSERT INTO feedback_log (at, ref, who, action, detail) VALUES (?, ?, ?, ?, ?)').bind(now.toISOString(), ref, who, 'tell', told.slice(0, 200)),
   ]);
   return told;
@@ -92,6 +101,7 @@ export async function tellReporter(env, ref, now = new Date(), who = 'owner (tol
 export async function tellOnce(env, ref, now, who) {
   try { return await tellReporter(env, ref, now, who); } catch {
     await env.STATS.prepare("UPDATE feedback SET told = ?, told_at = ? WHERE ref = ? AND told IN ('telling', '')").bind(TOLD_ERROR, now.toISOString(), ref).run().catch(() => {});
+    await grantStatement(env, ref, now).run().catch(() => {});   // the reply is visible now and says the thank-you (the mail may have said it too): the grant must not be the one thing missing
     return TOLD_ERROR;
   }
 }
@@ -113,7 +123,7 @@ export function replyClock(row, now = new Date()) {
  * that has no answer yet (also one the owner marked fixed for a release: the reporter still has heard nothing), with ref "r:<ref>" and kind "received". An app that does not know "received" shows it like a heard-it card with the same words.
  */
 export async function repliesFor(db, install, now = new Date()) {
-  const rows = (await db.prepare(`SELECT ref, at, text, state, fixed_in, tell_message FROM feedback WHERE install = ? AND ${VISIBLE} ORDER BY told_at DESC LIMIT 5`).bind(install).all()).results || [];
+  const rows = (await db.prepare(`SELECT ref, at, text, state, fixed_in, tell_message, thanks_apps FROM feedback WHERE install = ? AND ${VISIBLE} ORDER BY told_at DESC LIMIT 5`).bind(install).all()).results || [];
   const answers = rows.map(row => ({ref: row.ref, on: String(row.at).slice(0, 10), excerpt: excerptOf(row.text), kind: FIXED_STATES.includes(row.state) ? 'fixed' : 'deferred', fixedIn: row.fixed_in, message: replyText(row)}));
   if (answers.length >= 5) return answers;
   const since = new Date(now.getTime() - RECEIPT_DAYS * 86400000).toISOString();
