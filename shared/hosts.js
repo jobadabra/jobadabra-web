@@ -27,7 +27,7 @@ export const MAIN_HOST = 'www.jobadabra.top';
 // The workers.dev name moves too (owner, 27 Oct 2026: "https://www.jobpilotto.workers.dev/ this should always redirect (301 permanently
 // moved) to jobadabra.top"); its API stays (central-scout.yml PUTs /api/index there). Its /admin pages go through shared/admin-hop.js.
 export const OLD_HOSTS = ['www.jobpilotto.top', 'www.jobpilotto.workers.dev'];
-export const PAGE_PATHS = ['/', '/about-you', '/benchmark', '/changelog', '/compare', '/coverage', '/download', '/faq', '/features', '/friends', '/how-it-works', '/intelligence', '/platforms', '/pricing', '/privacy', '/ready-live', '/research', '/terms', '/trust'];
+export const PAGE_PATHS = ['/', '/about-you', '/benchmark', '/changelog', '/compare', '/coverage', '/download', '/faq', '/features', '/friends', '/how-it-works', '/intelligence', '/open', '/platforms', '/pricing', '/privacy', '/ready-live', '/research', '/terms', '/trust'];
 export function pageRedirect(request) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return null;
   const url = new URL(request.url);
