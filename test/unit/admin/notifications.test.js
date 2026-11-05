@@ -52,7 +52,7 @@ test('the page needs the login; the owner sees every alert grouped, three channe
   for (const channel of CHANNELS) assert.ok(html.includes(channel.name.replace('&', '&amp;')), channel.name);
   assert.match(html, /Connect bot/);
   assert.match(html, new RegExp(`${ALERTS.filter(alert => alert.on).length} alerts on`), 'the count follows the registry (it is not a literal that breaks with each new alert)');
-  assert.match(html, new RegExp(`${ALERTS.filter(alert => alert.wired).length} of ${ALERTS.length} senders moved over`), 'the page counts the senders that already use the switchboard (2/4: nine Worker-side ones; 3/4: the failed-release alert)');
+  assert.match(html, new RegExp(`${ALERTS.filter(alert => alert.wired).length} of ${ALERTS.length} senders moved over`), 'the page counts the senders that already use the switchboard (2/4: the nine Worker-side ones)');
   assert.match(html, /sender not moved yet/);
   const group = await get(e, `/admin/${groupSlug(GROUPS.find(([name]) => name === 'Operations'))}`);
   assert.deepEqual([group.status, group.headers.get('Location')], [301, '/admin/operations/scheduled'], 'the group address leads to its first page');
