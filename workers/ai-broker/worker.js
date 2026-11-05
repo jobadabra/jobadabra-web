@@ -15,6 +15,7 @@ import {chainOf, configured, recordOutcome, engineHealth, CHOICES} from './lib/e
 import {CLAUDE_MODELS} from './lib/tiers.mjs';
 import {demotedNow, recordPerf} from './lib/adapt.mjs';
 import {addCall, addJobCall, jobKey, recentDays, tokensOf, workflowKey, workflowOf} from './lib/tally.mjs';
+import {countedOf, keyedLock, markGap, planOf, sessionKey, sessionKeyOf, settle} from './lib/sessions.mjs';
 
 export {ContainerProxy} from '@cloudflare/containers';   // required by the outbound host list below: without it every start fails with "ctx.exports.ContainerProxy is undefined" (28 Oct 2026)
 
@@ -40,6 +41,7 @@ export class CodexBroker extends Container {
   static outboundByHost = Object.fromEntries(HOSTS.map(h => [h, pass]));
   gate = slots(PARALLEL);
   claudeGate = slots(CLAUDE_PARALLEL);   // Why (1 Nov 2026): one Claude CLI call peaks near 210 MB (measured) and the container has 1 GiB, so at most 3 at once, and each also holds one of the 4 shared slots
+  turns = keyedLock();   // one turn at a time per Codex conversation (lib/sessions.mjs); other keys and plain calls never wait
   busyMs = BUSY_MS;   // how long a call that may pass on waits for a Claude slot (lib/busy.mjs); a test shortens it
   limits = null;   // the last whole-week reading from Codex: {usedPercent, resetsAt}
 
@@ -53,7 +55,7 @@ export class CodexBroker extends Container {
     const url = new URL(request.url);
     if (url.pathname === '/login' && request.method === 'POST') return this.setLogin(await request.text());
     if (url.pathname === '/health') return this.health();
-    if (url.pathname === '/call' && request.method === 'POST') return this.call(request.headers.get('x-lane'), await request.json(), workflowKey(request.headers.get('x-workflow')), jobKey(request.headers.get('x-job')));
+    if (url.pathname === '/call' && request.method === 'POST') return this.call(request.headers.get('x-lane'), await request.json(), workflowKey(request.headers.get('x-workflow')), jobKey(request.headers.get('x-job')), sessionKey(request.headers.get('x-session')));
     if (url.pathname === '/stop' && request.method === 'POST') { await this.stop(); return json(200, {stopped: true}); }   // the owner's kill test (admin route in front)
     return json(404, {error: 'not found'});
   }
@@ -82,14 +84,22 @@ export class CodexBroker extends Container {
   }
 
   // One call, answered and then counted for its workflow (lib/tally.mjs). The count never changes the answer: a tally that cannot be written is logged and the reply goes out.
-  async call(lane, body, workflow = 'unknown', job = '') {
+  async call(lane, body, workflow = 'unknown', job = '', session = '') {
     const started = Date.now();
-    const reply = await this.answer(lane, body);
+    const reply = await this.answer(lane, body, session);
+    if (session) await this.noteGap(session, reply).catch(error => console.log(`sessions: ${String(error?.message || error).slice(0, 200)}`));
     await this.countCall(workflow, reply, Date.now() - started, job).catch(error => console.log(`tally: ${String(error?.message || error).slice(0, 200)}`));
     return reply;
   }
 
   // Reads the finished reply's own tokens, engine and time (a refusal has none and still counts as a call), then adds them to today's row in one transaction.
+  // Why ([bf] review, 5 Nov 2026): a conversation turn that Codex did not answer (another engine did, Codex was out or at capacity, it failed) is a turn the Codex thread never saw, or saw half of. The record says so and the next call restarts from the full prompt instead of resuming a thread with a hole.
+  async noteGap(session, reply) {
+    const engine = reply.ok ? String((await reply.clone().json().catch(() => ({}))).engine || '') : '';
+    if (engine === 'codex') return;
+    await this.ctx.storage.transaction(async storage => { const records = (await storage.get('sessions')) || {}; if (records[session]) await storage.put('sessions', markGap(records, session)); });
+  }
+
   async countCall(workflow, reply, elapsed, job = '') {
     const data = reply.ok ? await reply.clone().json().catch(() => ({})) : {};
     const outcome = {ok: reply.ok, tokens: tokensOf(data.tokens), ms: Number.isFinite(data.ms) ? data.ms : elapsed, engine: reply.ok ? String(data.engine || '') : ''};
@@ -101,7 +111,8 @@ export class CodexBroker extends Container {
       .catch(error => console.log(`jobs: ${String(error?.message || error).slice(0, 200)}`));
   }
 
-  async answer(lane, body) {
+  // `session`: the conversation key the Worker built from the verified run token ('' = a plain call); only a call with one may use `delta` and `endSession`.
+  async answer(lane, body, session = '') {
     if (Object.hasOwn(body, 'search') && typeof body.search !== 'boolean') return json(400, {why: 'search must be a boolean'});
     if (Object.hasOwn(body, 'effort') && !validEffort(body.effort)) return json(400, {why: `effort must be ${EFFORTS.slice(0, -1).join(', ')} or ${EFFORTS.at(-1)}`});
     if (Object.hasOwn(body, 'engine') && !CHOICES.includes(body.engine)) return json(400, {why: `engine must be ${CHOICES.slice(0, -1).join(', ')} or ${CHOICES.at(-1)}`});
@@ -146,7 +157,7 @@ export class CodexBroker extends Container {
     for (const engine of chain) {
       const started = Date.now();
       let reply = null;
-      if (engine === 'codex') { reply = await this.codexStep(lane, body, model, verdict, later.length > 0, chain[0] === 'codex'); if (!reply || reply.passOn) { codexRefusal = reply?.refusal ?? null; await skip(engine, reply?.passOn ?? 'ran-out', true, reply?.detail); reply = null; } }
+      if (engine === 'codex') { reply = await this.codexStep(lane, body, model, verdict, later.length > 0, chain[0] === 'codex', session); if (!reply || reply.passOn) { codexRefusal = reply?.refusal ?? null; await skip(engine, reply?.passOn ?? 'ran-out', true, reply?.detail); reply = null; } }
       else if (engine === 'claude') reply = await this.claudeStep(lane, body, skip, waitMs);
       else if (engine === 'free-ai') {
         reply = (!body.search && apiPrecheck(body)) || await freeAiStep(ctx);
@@ -173,30 +184,38 @@ export class CodexBroker extends Container {
   }
 
   // Codex's step: a Response when Codex answered or refused for good, null when it ran out and a later engine is configured, {passOn: 'overloaded', detail} when its model was at capacity and a later engine is configured.
-  async codexStep(lane, body, model, verdict, hasLater, loginChecked) {
+  async codexStep(lane, body, model, verdict, hasLater, loginChecked, session = '') {
     if (!loginChecked) { const refusal = await this.loginRefusal(); if (refusal) return refusal; }
     if (verdict.ranOut) return hasLater ? null : json(429, {why: verdict.why});
-    const release = await this.gate.acquire(lane === 'drift' ? 'scheduled' : lane);   // nightly drift shares scheduled queue priority
+    const unlock = session ? await this.turns(session) : () => {};   // before the slot: a waiting turn of one conversation must not hold a slot others need
     try {
-      const reply = await this.containerFetch('http://c/call', {method: 'POST', body: JSON.stringify({...body, engine: undefined, only: undefined, model})});
-      const text = await reply.text();
-      let answer;
-      try { answer = JSON.parse(text); } catch { return json(502, {why: `container: ${text.slice(0, 300)}`}); }   // the platform's own error text (not our server's JSON): say it, never crash (a 1101 hid it, 28 Oct 2026)
-      if (answer.authFile) await this.ctx.storage.put('login', answer.authFile);   // write-through BEFORE the reply goes out: a rotated token is never only in the container
-      if (!reply.ok && exhausted(answer.error) && hasLater) return null;
-      if (!reply.ok && overloaded(answer.error) && hasLater) return {passOn: 'overloaded', detail: codexMessage(answer.error).slice(0, 200), refusal: json(502, {why: answer.error})};   // counted as a failure (and for JOB-202's demotion), but a later engine answers
-      if (!reply.ok) { if (answer.error === 'login-lost') await this.ctx.storage.put('lost', true); return json(reply.status === 500 && answer.error === 'login-lost' ? 503 : 502, {why: tokenShaped(answer.error) ? 'codex-failed (detail withheld: token-shaped)' : answer.error}); }
-      if (answer.limits) { this.limits = answer.limits; await this.ctx.storage.put('limits', answer.limits); }
-      const used = (answer.tokens.input + answer.tokens.output) * weightOf(body.effort);   // a higher effort counts for more of the week (lib/tiers.mjs EFFORT_WEIGHT)
-      // Completions also transact: a token write must never overwrite a newer daily reservation.
-      await this.ctx.storage.transaction(async storage => {
-        const latest = (await storage.get('meter')) || newMeter(0);
-        await storage.put('meter', record(latest, lane, used, Date.now() / 1000, answer.limits?.resetsAt));
-      });
-      const refused = refuseReply(answer.reply);
-      if (refused) return json(422, {why: refused});
-      return json(200, {reply: answer.reply, tokens: answer.tokens, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'codex'});
-    } finally { release(); }
+      const release = await this.gate.acquire(lane === 'drift' ? 'scheduled' : lane);   // nightly drift shares scheduled queue priority
+      try {
+        const delta = typeof body.delta === 'string' ? body.delta : '', now = Date.now();
+        const plan = session ? planOf(((await this.ctx.storage.get('sessions')) || {})[session], {now, tier: body.tier ?? 'mid', delta}) : null;
+        const sent = {prompt: body.prompt, schema: body.schema, images: body.images, search: body.search, effort: body.effort, model, ...(session ? {session: {key: session, ...plan, delta, end: body.endSession === true}} : {})};   // an allow-list, never the caller's body: nothing else of theirs reaches the container
+        const reply = await this.containerFetch('http://c/call', {method: 'POST', body: JSON.stringify(sent)});
+        const text = await reply.text();
+        let answer;
+        try { answer = JSON.parse(text); } catch { return json(502, {why: `container: ${text.slice(0, 300)}`}); }   // the platform's own error text (not our server's JSON): say it, never crash (a 1101 hid it, 28 Oct 2026)
+        if (answer.authFile) await this.ctx.storage.put('login', answer.authFile);   // write-through BEFORE the reply goes out: a rotated token is never only in the container
+        if (!reply.ok && exhausted(answer.error) && hasLater) return null;
+        if (!reply.ok && overloaded(answer.error) && hasLater) return {passOn: 'overloaded', detail: codexMessage(answer.error).slice(0, 200), refusal: json(502, {why: answer.error})};   // counted as a failure (and for JOB-202's demotion), but a later engine answers
+        if (!reply.ok) { if (answer.error === 'login-lost') await this.ctx.storage.put('lost', true); return json(reply.status === 500 && answer.error === 'login-lost' ? 503 : 502, {why: tokenShaped(answer.error) ? 'codex-failed (detail withheld: token-shaped)' : answer.error}); }
+        if (answer.limits) { this.limits = answer.limits; await this.ctx.storage.put('limits', answer.limits); }
+        // Why ([bf], 5 Nov 2026, owner: "that context should be only once"): a conversation's call counts what it added (input minus cached, plus output); every other call counts in full, as before (lib/sessions.mjs countedOf).
+        const counted = countedOf(answer.tokens, Boolean(session)), used = counted * weightOf(body.effort);   // a higher effort counts for more of the week (lib/tiers.mjs EFFORT_WEIGHT)
+        // Completions also transact: a token write must never overwrite a newer daily reservation.
+        await this.ctx.storage.transaction(async storage => {
+          const latest = (await storage.get('meter')) || newMeter(0);
+          await storage.put('meter', record(latest, lane, used, Date.now() / 1000, answer.limits?.resetsAt));
+          if (session && answer.session?.mode) await storage.put('sessions', settle((await storage.get('sessions')) || {}, session, {now: Date.now(), tier: body.tier ?? 'mid', mode: answer.session.mode}));   // the clock after the turn: a slow one must not look idle
+        });
+        const refused = refuseReply(answer.reply);
+        if (refused) return json(422, {why: refused});
+        return json(200, {reply: answer.reply, tokens: {...answer.tokens, counted}, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'codex', ...(answer.session ? {session: answer.session} : {})});
+      } finally { release(); }
+    } finally { unlock(); }
   }
 
   // Why (1 Nov 2026, first live Claude call failed with no reason shown): a failed Claude step says why in `fellBack[].detail` and /health `lastError`, scrubbed: nothing token-shaped, at most 200 characters.
@@ -265,7 +284,9 @@ export default {
       let claims;
       try { claims = await verifyRunToken((request.headers.get('authorization') || '').replace(/^Bearer /, ''), {jwks: jwks(env), audience: audiences(env), repository: repositories(env)}); }
       catch (e) { return json(401, {why: String(e.message)}); }
-      return broker.fetch(new Request('http://c/call', {method: 'POST', body: await request.text(), headers: {'x-lane': laneOf(claims), 'x-workflow': workflowOf(claims), 'x-job': jobKey(request.headers.get('x-jobadabra-job'))}}));   // Why (3 Nov 2026, owner): lane and workflow are built fresh from the verified claims; a header the caller sends is never forwarded. Why (5 Nov 2026, owner via mac-32: per-job AI cost): the one exception is the job label, a GitHub job id of a fixed shape that only names a row for display and never decides a lane or a cap
+      const text = await request.text();
+      let asked; try { asked = JSON.parse(text); } catch { asked = null; }   // the Durable Object refuses a body that is not JSON; the key just stays empty
+      return broker.fetch(new Request('http://c/call', {method: 'POST', body: text, headers: {'x-lane': laneOf(claims), 'x-workflow': workflowOf(claims), 'x-job': jobKey(request.headers.get('x-jobadabra-job')), 'x-session': sessionKeyOf(claims, asked?.session)}}));   // Why (3 Nov 2026, owner): lane and workflow are built fresh from the verified claims; a header the caller sends is never forwarded. Why (5 Nov 2026, owner via mac-32: per-job AI cost): the one exception is the job label, a GitHub job id of a fixed shape that only names a row for display and never decides a lane or a cap
     }
     return json(404, {error: 'not found'});
   },

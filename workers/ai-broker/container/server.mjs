@@ -7,6 +7,7 @@ import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {weeklyWindow} from './weekly.mjs';
 import {buildArgs} from '../lib/args.mjs';
+import {readTurn, threadTable, turnUsage} from './threads.mjs';
 import {CLAUDE_TIMEOUT_MS, claudeArgs, claudeInput, readClaude} from './claude.mjs';
 
 const HOME = process.env.CODEX_HOME, AUTH = path.join(HOME, 'auth.json');
@@ -75,24 +76,58 @@ async function limitsNow() {
   return limitsCache?.value ?? null;
 }
 
-// One call: {prompt, schema?, images?: [{name, base64}], search?: boolean, effort?: low|medium|high|xhigh} -> {reply, tokens: {input, output}, ms}. Throws Error with a reason word on a failed codex run.
-async function call({prompt, schema, images = [], model, search, effort}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'call-'));
+// Conversations kept for the AI user agent (spec 2026-11-05-broker-codex-resume-design.md): the table is in memory, so a sleep or a redeploy empties it and the next call starts a conversation again from the full prompt.
+const threads = threadTable();
+const forget = entry => {
+  if (!entry) return;
+  fs.rmSync(entry.dir, {recursive: true, force: true});
+  if (!entry.thread) return;   // Codex named none: nothing to look for (and never a file called null.jsonl)
+  const root = path.join(HOME, 'sessions');
+  try { for (const file of fs.readdirSync(root, {recursive: true})) if (String(file).endsWith(`${entry.thread}.jsonl`)) fs.rmSync(path.join(root, String(file)), {force: true}); } catch { /* no sessions folder: nothing to delete */ }
+};
+setInterval(() => threads.sweep().forEach(forget), 60000).unref();
+
+// One call: {prompt, schema?, images?: [{name, base64}], search?: boolean, effort?: low|medium|high|xhigh, session?: {key, expect: 'none'|'warm', delta?, restart?, end?}} -> {reply, tokens: {input, cached, output}, ms, session?: {mode, reason?}}. Throws Error with a reason word on a failed codex run.
+// With a session the call keeps its conversation on disk: `warm` + a live conversation + a delta resumes it (only the new turn is sent), anything else starts one from the full prompt. The Worker decides; this only does and reports.
+// Tokens are always THIS call's: on a resumed conversation Codex reports the running total, so the turn is the difference from the total after the turn before (lib: threads.mjs turnUsage).
+async function call({prompt, schema, images = [], model, search, effort, session}) {
+  const key = session?.key, held = key ? threads.get(key) : undefined;
+  const resumable = Boolean(held && session.expect === 'warm' && !session.restart && held.model === model && typeof session.delta === 'string' && session.delta);
+  const reason = !key || resumable ? undefined : session.restart || (session.expect === 'warm' ? (held ? (held.model !== model ? 'tier' : 'no-delta') : 'lost') : undefined);
+  if (held && !resumable) forget(threads.drop(key));   // a conversation that is not continued is deleted before its replacement opens
+  const dir = resumable ? held.dir : fs.mkdtempSync(path.join(os.tmpdir(), key ? 'thread-' : 'call-'));
+  let retained = false, opened = null;
+  if (resumable) held.busy = true;   // Why ([bf] review): a sweep or an eviction never deletes a conversation that is in the middle of a turn
   try {
     if (schema) fs.writeFileSync(path.join(dir, 'schema.json'), JSON.stringify(schema));
+    fs.rmSync(path.join(dir, 'out.txt'), {force: true});   // a turn that fails must not read the turn before it
     const imageNames = images.map((img, i) => {
       const name = `img${i}${path.extname(String(img.name || '.png')).replace(/[^.\w]/g, '')}`;
       fs.writeFileSync(path.join(dir, name), Buffer.from(img.base64, 'base64'));
       return name;
     });
-    const args = buildArgs({schema, imageNames, model, search, effort});
+    const args = buildArgs({schema, imageNames, model, search, effort, keep: Boolean(key), resume: resumable ? held.thread : undefined});
     const started = Date.now();
-    const {code, out, err} = await run(args, dir, prompt);
+    const {code, out, err} = await run(args, dir, resumable ? session.delta : prompt);
     const reply = fs.existsSync(path.join(dir, 'out.txt')) ? fs.readFileSync(path.join(dir, 'out.txt'), 'utf8') : '';
-    if (code !== 0 || !reply) throw new Error(/401 Unauthorized|please log in|not logged in|token (is )?(expired|invalid|revoked)|refresh token/i.test(err) ? 'login-lost' : `codex-failed:${code} ${(err || out).replace(/\s+/g, ' ').slice(-900)}`);   // the worker refuses a token-shaped tail (lib/guard.mjs); Why (1 Nov 2026, after the transfer): 300/200 characters showed only Codex's MCP noise, never the line that made it exit 1
-    const usage = [...out.matchAll(/"usage":(\{[^}]*\})/g)].map(m => JSON.parse(m[1])).pop() || {};
-    return {reply, tokens: {input: usage.input_tokens || 0, output: usage.output_tokens || 0}, ms: Date.now() - started};
-  } finally { fs.rmSync(dir, {recursive: true, force: true}); }
+    if (code !== 0 || !reply) {
+      opened = readTurn(out).thread;
+      throw new Error(/401 Unauthorized|please log in|not logged in|token (is )?(expired|invalid|revoked)|refresh token/i.test(err) ? 'login-lost' : `codex-failed:${code} ${(err || out).replace(/\s+/g, ' ').slice(-900)}`);   // the worker refuses a token-shaped tail (lib/guard.mjs); Why (1 Nov 2026, after the transfer): 300/200 characters showed only Codex's MCP noise, never the line that made it exit 1
+    }
+    const {thread, usage: total} = readTurn(out), turn = turnUsage(total, resumable ? held.total : null);
+    let mode;
+    if (key) {
+      mode = session.end ? 'ended' : resumable ? 'resumed' : reason ? 'restarted' : 'opened';
+      if (session.end || (!thread && !resumable)) forget(resumable ? threads.drop(key) : {dir, thread});   // the caller said it was the last turn, or Codex named no thread to continue
+      else if (resumable) { threads.touch(key, {total: total || held.total}); retained = true; }
+      else { threads.set(key, {thread, dir, model, total}).forEach(forget); retained = true; }
+    }
+    return {reply, tokens: {input: turn.input, cached: turn.cached, output: turn.output}, ms: Date.now() - started, ...(key ? {session: {mode, ...(reason ? {reason} : {})}} : {})};
+  } catch (error) {
+    // Why ([bf] review, 5 Nov 2026): whatever stopped a turn (Codex failed, a file could not be written), the conversation is not trusted again: it is deleted here, and the Worker restarts it from the full prompt (it marks the record as having a gap).
+    if (resumable) forget(threads.drop(key)); else if (key) forget({dir, thread: opened});
+    throw error;
+  } finally { if (held) held.busy = false; if (!retained) fs.rmSync(dir, {recursive: true, force: true}); }
 }
 
 // One Claude call on the owner's subscription (spec section 3): {prompt, schema?, images?, model} -> {reply, tokens, ms, limits}. The CLI reads CLAUDE_CODE_OAUTH_TOKEN from here only; its state lives in a temp folder, never in the Codex home.
