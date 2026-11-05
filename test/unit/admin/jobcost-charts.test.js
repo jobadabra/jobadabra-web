@@ -27,9 +27,15 @@ test('By day: oldest first, a day with no bill is hollow, the lead says how much
   const s = summarize(rows, [{day: '2026-10-03', usd: 6}], now);
   const html = dayFigure(s, TABLE);
   assert.ok(html.indexOf('data-tip="2026-10-03') < html.indexOf('data-tip="2026-10-04'), 'oldest day first');
-  assert.match(html, /Billed not reported yet/); assert.match(html, /stroke-dasharray/); assert.match(html, /the jobs explain 50% of the bill/); assert.match(html, /1 day with no bill yet/);
+  assert.match(html, /Billed not reported yet/); assert.match(html, /stroke-dasharray/); assert.match(html, /over 30 days the jobs explain 50% of the bill/); assert.match(html, /1 day with no bill yet/);
   assert.match(dayFigure(summarize(rows, [], now), TABLE), /not reported yet/);
   assert.doesNotMatch(dayFigure(summarize(rows, [], now), TABLE), /explain/, 'no bill, no claim about it');
+});
+
+test('By day: the coverage chip follows the 30 days drawn, not the selected range (Gitar on #384)', () => {
+  const billed = [{day: '2026-10-03', usd: 6}, {day: '2026-10-04', usd: 3}];
+  // 3 + 3 tracked on the two days, 6 + 3 billed: 67%, whatever range the page shows
+  assert.match(dayFigure(summarize(rows, billed, now, '24h'), TABLE), /over 30 days the jobs explain 67% of the bill/);
 });
 
 test('By group: a whole split into at most 6 coloured parts; a tail folds into "Other"', () => {

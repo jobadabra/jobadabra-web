@@ -24,7 +24,10 @@ export function dayFigure(s, table) {
   const days = s.days.slice(0, 30).reverse().map(d => ({day: d.day, values: [d.tracked, d.billed],
     tip: `${d.day} · Jobs ${money(d.tracked)} · Billed ${d.billed === null ? 'not reported yet' : money(d.billed)}`}));
   const lead = [];
-  if (s.covered !== null) lead.push([`the jobs explain ${s.covered}% of the bill`, s.covered >= 80 ? 'good' : 'warn']);
+  // Why (Gitar on #384): s.covered follows the selected range, but this chart always draws the last 30 days, so the chip is worked out from the days drawn, both sides present.
+  const both = s.days.slice(0, 30).filter(d => d.billed !== null && d.tracked > 0), billedSum = both.reduce((n, d) => n + d.billed, 0);
+  const covered = billedSum > 0 ? Math.round(100 * both.reduce((n, d) => n + d.tracked, 0) / billedSum) : null;
+  if (covered !== null) lead.push([`over 30 days the jobs explain ${covered}% of the bill`, covered >= 80 ? 'good' : 'warn']);
   const waiting = days.filter(d => d.values[1] === null).length;
   if (waiting) lead.push([`${waiting} day${waiting === 1 ? '' : 's'} with no bill yet`, 'off']);
   return figure({lead, chart: columns(days, [{name: 'Jobs (reported by the jobs)', tone: 's1'}, {name: "Billed (Anthropic's report)", tone: 's2'}], {unit: '$'}), table});
