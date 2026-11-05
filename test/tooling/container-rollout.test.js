@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
-import {appNameOf, rolledOut} from '../../tools/wait-container-rollout.mjs';
+import {appNameOf, checkOnce, rolledOut} from '../../tools/wait-container-rollout.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
 const image = digest => `registry.cloudflare.com/acct/www-hosted-runner-staging-hostedrunner@sha256:${digest}`;
@@ -44,4 +44,21 @@ test('the deploy workflow waits for the rollout after wrangler deploy, with the 
   const deploy = flow.indexOf('wrangler@4 deploy'), wait = flow.indexOf('wait-container-rollout.mjs');
   assert.ok(deploy > 0 && wait > deploy, 'the wait comes after the deploy');
   assert.match(flow.slice(wait - 200, wait + 200), /\$CONFIG|wrangler\.(staging\.)?jsonc/, 'it reads the config that was deployed');
+});
+
+test('images without a digest (a tag reference) are compared as whole strings, never as equal-because-empty', () => {
+  const tagged = (number, tag) => ({version: number, configuration: {image: `registry.cloudflare.com/acct/www-hosted-runner-hostedrunner:${tag}`}});
+  const old = {image: 'registry.cloudflare.com/acct/www-hosted-runner-hostedrunner:old'};
+  assert.equal(rolledOut(tagged(3, 'new'), [tagged(3, 'new')], [old]).done, false);   // Gitar on #380: both reduced to '' and passed
+  assert.equal(rolledOut(tagged(3, 'new'), [tagged(3, 'other')], []).done, false);
+  assert.equal(rolledOut(tagged(3, 'new'), [tagged(3, 'new')], [{image: tagged(3, 'new').configuration.image}]).done, true);
+});
+
+test('one failed API call counts as "waiting" with its reason, it does not throw out of the wait (a green deploy must not turn red on a 502)', async () => {
+  const flaky = async () => { throw new Error('/containers/applications: 502 Bad Gateway'); };
+  const answer = await checkOnce('www-hosted-runner-staging-hostedrunner', flaky);
+  assert.equal(answer.done, false);
+  assert.match(answer.why, /API error: .*502/);
+  const none = await checkOnce('www-hosted-runner-staging-hostedrunner', async () => []);
+  assert.match(none.why, /no application www-hosted-runner-staging-hostedrunner yet/);
 });
