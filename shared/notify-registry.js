@@ -17,7 +17,7 @@ export const ALERTS = [
   a('beta-published', '🧪 Beta published', 'releases', 'every', 'engineering', {jobs: ['beta-approve.yml']}),
   // Why (5 Nov 2026, owner: "I didn't get any notification. I should have"; beta 0.9.12 failed in silence): a release that ends without reaching testers or stable (a build or the E2E gate failed or did not run, a promotion failed) tells the owner;
   // desktop/e2e/release-failed-alert.mjs in the public repo posts it. The release-alert for a lane that WAS offered stays `beta-published`.
-  a('release-failed', '🔴 A release did not ship (build, E2E gate or promotion failed)', 'releases', 'every', 'engineering', {jobs: ['desktop.yml', 'canary-promote.yml']}),   // wired: true once the sender (public PR `[nt] 3/4b`) is merged (Gitar on #434)
+  a('release-failed', '🔴 A release did not ship (build, E2E gate or promotion failed)', 'releases', 'every', 'engineering', {jobs: ['desktop.yml', 'canary-promote.yml'], wired: true}),   // the sender (public #3293, desktop/e2e/release-failed-alert.mjs) merged first; until this is live the site answers 400 and the old bot sends it
   a('stable-promoted', '✅ Stable promoted · store publish did not start', 'releases', 'every', 'engineering', {jobs: ['canary-promote.yml']}),
   a('msstore-status', '🏪 Microsoft Store accepted / refused / recovered', 'releases', 'every', 'engineering', {jobs: ['msix-store-watch.yml', 'msix-store.yml']}),
   a('chrome-store-failed', '🧩 Chrome Web Store publish failed', 'releases', 'problems', 'engineering', {jobs: ['extension-store-publish.yml']}),
