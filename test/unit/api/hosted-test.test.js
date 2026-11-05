@@ -1,0 +1,223 @@
+// Hosted Always on, "Test it" (api/hosted-test.js; hr 4/6, 5 Nov 2026; owner: "the test button should be both for easiest (our servers) and for Advanced", "One real run"):
+// POST starts one real run now and counts like any run; GET answers each step in words from what the site recorded.
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import {test} from 'node:test';
+import {digestOf, tokenFor} from '../../../shared/guard.js';
+import {result, schedule, startRun} from '../../../shared/hosted.js';
+import {addrOf} from '../../../shared/mail.js';
+import {test as hostedTest, COOLDOWN_MS} from '../../../api/hosted-test.js';
+import {tick} from '../../../api/hosted-tick.js';
+
+const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
+function d1() {
+  const db = new DatabaseSync(':memory:');
+  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0083_mail.sql']) db.exec(sql(file));
+  db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
+  db.exec('CREATE TABLE IF NOT EXISTS revoked (who TEXT PRIMARY KEY, reason TEXT, at TEXT)');
+  const statement = (text, args = []) => ({bind: (...v) => statement(text, v), run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
+    all: async () => ({results: db.prepare(text).all(...args).map(r => ({...r}))}), first: async () => { const r = db.prepare(text).get(...args); return r ? {...r} : null; }});
+  return {db, prepare: text => statement(text)};
+}
+const kv = () => { const m = new Map(); return {m, get: async k => m.get(k) ?? null, put: async (k, v) => { m.set(k, v); }}; };
+const queue = () => { const sent = []; return {sent, send: async m => { sent.push(m); }}; };
+const bucket = () => { const m = new Map(); return {m, head: async k => (m.has(k) ? {} : null)}; };
+const env = (extra = {}) => ({STATS: d1(), WAITLIST: kv(), HOSTED_QUEUE: queue(), HOSTED_STATE: bucket(), STATS_SALT: 'salt', HOSTED_ALWAYS_ON: 'on', FREE_AI_TRIAL_USD: '2', ...extra});
+const keyOf = async install => `JPF1.${install}.${await tokenFor(install, {STATS_SALT: 'salt'}, 'ai')}`;
+const t0 = new Date('2026-11-05T10:00:00Z');
+const later = (minutes, from = t0) => new Date(from.getTime() + minutes * 60000);
+const rows = (e, text, ...a) => e.STATS.db.prepare(text).all(...a).map(r => ({...r}));
+const turnOn = async (e, install = 'install-aaaa1', email = 'a@example.com') => schedule(new Request('https://x/s', {method: 'PUT', headers: {'x-api-key': await keyOf(install)}, body: JSON.stringify({on: true, email})}), e, t0);
+const call = async (e, method, at, install = 'install-aaaa1', query = '') => hostedTest(new Request(`https://x/api/hosted/test${query}`, {method, headers: {'x-api-key': await keyOf(install)}}), e, at);
+const finish = (e, body, at) => result(new Request('https://x/r', {method: 'POST', headers: {authorization: `Bearer ${e.HOSTED_QUEUE.sent.at(-1).token}`}, body: JSON.stringify(body)}), e, at);
+
+test('off answers 404, a wrong key 401, no schedule 409 with the reason', async () => {
+  assert.equal((await call(env({HOSTED_ALWAYS_ON: 'off'}), 'POST', t0)).status, 404);
+  const e = env();
+  assert.equal((await hostedTest(new Request('https://x/t', {method: 'POST', headers: {'x-api-key': 'JPF1.install-aaaa1.nope'}}), e, t0)).status, 401);
+  const none = await call(e, 'POST', t0);
+  assert.equal(none.status, 409);
+  assert.equal((await none.json()).reason, 'off');
+});
+
+test('a press queues one run now with a run token, marked as a test; the schedule\'s own time does not move', async () => {
+  const e = env(); await turnOn(e);
+  const before = rows(e, 'SELECT next_run_at FROM hosted_schedules')[0].next_run_at;
+  const answer = await (await call(e, 'POST', later(5))).json();
+  assert.equal(answer.ok, true);
+  assert.equal(e.HOSTED_QUEUE.sent.length, 1);
+  assert.match(e.HOSTED_QUEUE.sent[0].token, /^HR1\./);
+  assert.equal(e.HOSTED_QUEUE.sent[0].test, true);
+  assert.match(rows(e, 'SELECT slot FROM hosted_runs')[0].slot, /^test-/);
+  assert.equal(rows(e, 'SELECT next_run_at FROM hosted_schedules')[0].next_run_at, before);
+});
+
+test('pressing again while it runs watches the same run: no second message', async () => {
+  const e = env(); await turnOn(e);
+  const first = await (await call(e, 'POST', later(5))).json();
+  const second = await (await call(e, 'POST', later(6))).json();
+  assert.deepEqual([second.run, second.joined], [first.run, true]);
+  assert.equal(e.HOSTED_QUEUE.sent.length, 1);
+});
+
+test('the steps read from what the site recorded: running, then found jobs and the e-mail', async () => {
+  const e = env(); await turnOn(e);
+  const account = rows(e, 'SELECT account FROM hosted_schedules')[0].account;
+  e.HOSTED_STATE.m.set(`hosted/${account}/config.json`, 1);
+  await call(e, 'POST', later(5));
+  const running = (await (await call(e, 'GET', later(6))).json()).run;
+  assert.equal(running.status, 'running');
+  assert.deepEqual(running.steps.map(s => [s.key, s.state]), [['on', 'ok'], ['profile', 'ok'], ['started', 'ok'], ['finished', 'running']]);
+  await finish(e, {status: 'ok', matches: [{job: 'j1', title: 'Engineer', company: 'Acme', fit: 80}]}, later(8));
+  const done = (await (await call(e, 'GET', later(9))).json()).run;
+  const by = Object.fromEntries(done.steps.map(s => [s.key, s]));
+  assert.equal(done.status, 'ok');
+  assert.deepEqual([by.found.state, by.found.note], ['ok', '1']);
+  assert.equal(by.mail.state, 'skipped', 'no digest was recorded as sent: not claimed');
+  e.STATS.db.prepare("INSERT INTO mail_log (addr, list, template, status, at) VALUES (?, 'service', 'digest', 'sent', ?)").run(await addrOf('a@example.com'), later(8).toISOString());
+  const mailed = (await (await call(e, 'GET', later(10))).json()).run.steps.find(s => s.key === 'mail');
+  assert.equal(mailed.state, 'ok');
+});
+
+test('a profile that was never pushed and a failed run are said plainly', async () => {
+  const e = env(); await turnOn(e);
+  await call(e, 'POST', later(5));
+  await finish(e, {status: 'failed'}, later(7));
+  const run = (await (await call(e, 'GET', later(8))).json()).run;
+  assert.equal(run.steps.find(s => s.key === 'profile').state, 'failed');
+  assert.equal(run.steps.find(s => s.key === 'finished').state, 'failed');
+  assert.ok(!run.steps.some(s => s.key === 'found'), 'no found-jobs claim for a failed run');
+});
+
+test('a run that never reports back is failed once its token has expired', async () => {
+  const e = env(); await turnOn(e);
+  await call(e, 'POST', later(5));
+  const run = (await (await call(e, 'GET', later(60))).json()).run;
+  assert.equal(run.status, 'failed');
+  assert.match(run.steps.find(s => s.key === 'finished').note, /did not report back/);
+});
+
+test('a second test within ten minutes of the last is refused; after that it starts', async () => {
+  const e = env(); await turnOn(e);
+  await call(e, 'POST', later(5));
+  await finish(e, {status: 'ok', matches: []}, later(7));
+  const soon = await call(e, 'POST', later(8));
+  assert.equal(soon.status, 429);
+  assert.equal(e.HOSTED_QUEUE.sent.length, 1);
+  const after = await call(e, 'POST', new Date(later(5).getTime() + COOLDOWN_MS + 60000));
+  assert.equal(after.status, 200);
+  assert.equal(e.HOSTED_QUEUE.sent.length, 2);
+});
+
+test('the same guards as the tick: a spent trial, a pause, the Free AI stop and the day cap refuse the press', async () => {
+  const spent = env(); await turnOn(spent);
+  spent.WAITLIST.m.set(`freeai:life:${await digestOf('install-aaaa1')}`, String(2_000_000));
+  const a = await call(spent, 'POST', later(5));
+  assert.deepEqual([a.status, (await a.json()).reason], [402, 'trial-over']);
+  const paused = env(); await turnOn(paused);
+  paused.STATS.db.prepare("UPDATE hosted_schedules SET state = 'paused', pause_reason = 'inactive'").run();
+  assert.equal((await call(paused, 'POST', later(5))).status, 409);
+  const stopped = env(); await turnOn(stopped);
+  stopped.WAITLIST.m.set('freeai:usd:2026-11-05', String(10_000_000));
+  assert.equal((await call(stopped, 'POST', later(5))).status, 503);
+  const full = env({HOSTED_MAX_RUNS_DAY: '1'}); await turnOn(full);
+  assert.equal((await call(full, 'POST', later(5))).status, 200);
+  await finish(full, {status: 'ok', matches: []}, later(6));
+  assert.equal((await call(full, 'POST', later(30))).status, 503);
+  assert.equal(full.HOSTED_QUEUE.sent.length, 1);
+});
+
+test('a test run counts in the tick\'s day total, and the tick still starts a due schedule once', async () => {
+  const e = env(); await turnOn(e);
+  await call(e, 'POST', later(5));
+  await finish(e, {status: 'ok', matches: []}, later(6));
+  const out = await tick(e, new Date(t0.getTime() + 25 * 3600000));
+  assert.equal(out.enqueued, 1);
+});
+
+// ---- review of hr 4/6 (fresh subagent, 5 Nov 2026): each finding is a test ----
+const DAY_MS = 86400000;
+
+test('the month\'s compute guard stops a test as it stops the tick', async () => {
+  const e = env(); await turnOn(e);
+  const account = rows(e, 'SELECT account FROM hosted_schedules')[0].account;
+  e.STATS.db.prepare("INSERT INTO hosted_runs (id, account, slot, started_at, expires_at, finished_at, status, compute_micro) VALUES ('old', ?, '2026-11-01T01', '2026-11-01T01:00:00.000Z', '2026-11-01T01:30:00.000Z', '2026-11-01T01:10:00.000Z', 'ok', 1500000)").run(account);
+  const answer = await call(e, 'POST', later(5));
+  assert.deepEqual([answer.status, (await answer.json()).reason], [409, 'guard']);
+  assert.equal(e.HOSTED_QUEUE.sent.length, 0);
+});
+
+test('five tests a day at most, then "tomorrow"; the next day it starts again', async () => {
+  const e = env({HOSTED_MAX_RUNS_DAY: '100'}); await turnOn(e);
+  for (let n = 0; n < 5; n++) {
+    const at = later(5 + n * 11);
+    assert.equal((await call(e, 'POST', at)).status, 200, `test ${n + 1}`);
+    await finish(e, {status: 'ok', matches: []}, later(6 + n * 11));
+  }
+  const sixth = await call(e, 'POST', later(5 + 5 * 11));
+  assert.deepEqual([sixth.status, (await sixth.json()).reason], [429, 'daily']);
+  assert.equal((await call(e, 'POST', new Date(t0.getTime() + DAY_MS + 3600000))).status, 200);
+});
+
+test('two starts in different minutes cannot both be open: the insert itself says no', async () => {
+  const e = env(); await turnOn(e);
+  const account = rows(e, 'SELECT account FROM hosted_schedules')[0].account;
+  assert.ok(await startRun(e, {account}, t0, 'test-2026-11-05T10:59', true));
+  assert.equal(await startRun(e, {account}, later(1), 'test-2026-11-05T11:00', true), null);
+});
+
+test('a tick beside an open test starts no second run and leaves the schedule where it was', async () => {
+  const e = env(); await turnOn(e);
+  await call(e, 'POST', later(5));
+  e.STATS.db.prepare("UPDATE hosted_schedules SET next_run_at = ?").run(later(10).toISOString());   // due while the test (open 30 minutes) is still running
+  const due = rows(e, 'SELECT next_run_at FROM hosted_schedules')[0].next_run_at;
+  const out = await tick(e, later(15));
+  assert.equal(out.enqueued, 0);
+  assert.equal(e.HOSTED_QUEUE.sent.length, 1);
+  assert.equal(rows(e, 'SELECT next_run_at FROM hosted_schedules')[0].next_run_at, due, 'not moved: the next tick asks again');
+  await finish(e, {status: 'ok', matches: []}, later(20));
+  assert.equal((await tick(e, later(25))).enqueued, 1, 'once the test is over the scheduled run starts');
+});
+
+test('a queue that refuses the message closes the run, so the next press is not stuck behind it', async () => {
+  const e = env(); await turnOn(e);
+  const send = e.HOSTED_QUEUE.send;
+  e.HOSTED_QUEUE.send = async () => { throw new Error('queue down'); };
+  assert.equal((await call(e, 'POST', later(5))).status, 503);
+  assert.equal(rows(e, 'SELECT status FROM hosted_runs')[0].status, 'failed');
+  e.HOSTED_QUEUE.send = send;
+  assert.equal((await call(e, 'POST', new Date(later(5).getTime() + COOLDOWN_MS + 60000))).status, 200);
+});
+
+test('a finished test leaves the schedule\'s own next run where it was', async () => {
+  const e = env(); await turnOn(e);
+  const before = rows(e, 'SELECT next_run_at FROM hosted_schedules')[0].next_run_at;
+  await call(e, 'POST', later(5));
+  await finish(e, {status: 'ok', matches: []}, later(7));
+  assert.equal(rows(e, 'SELECT next_run_at FROM hosted_schedules')[0].next_run_at, before);
+});
+
+test('the steps are honest at the edges: jobs counted from the inbox, the mail not claimed until it had time, never another run\'s digest', async () => {
+  const e = env(); await turnOn(e);
+  const account = rows(e, 'SELECT account FROM hosted_schedules')[0].account;
+  await call(e, 'POST', later(5));
+  await finish(e, {status: 'ok', matches: [{job: 'j1', title: 'A', company: 'X', fit: 70}]}, later(7));
+  const soon = (await (await call(e, 'GET', new Date(later(7).getTime() + 5000))).json()).run;
+  assert.equal(soon.status, 'running', 'the digest is sent last: a read right after the post is not final');
+  assert.equal(soon.steps.find(s => s.key === 'mail').state, 'running');
+  e.STATS.db.prepare("INSERT INTO mail_log (addr, list, template, status, at) VALUES (?, 'service', 'digest', 'sent', ?)").run(await addrOf('a@example.com'), later(300).toISOString());   // a later day's digest
+  const later1 = (await (await call(e, 'GET', later(60))).json()).run;
+  assert.equal(later1.steps.find(s => s.key === 'mail').state, 'skipped', 'a later run\'s digest does not make this run look mailed');
+  assert.equal(later1.found, 1);
+  assert.ok(account);
+});
+
+test('the ten-minute gap holds across UTC midnight', async () => {
+  const e = env(); await turnOn(e);
+  const late = new Date('2026-11-05T23:58:00Z');
+  assert.equal((await call(e, 'POST', late)).status, 200);
+  await finish(e, {status: 'ok', matches: []}, new Date('2026-11-05T23:59:00Z'));
+  assert.equal((await call(e, 'POST', new Date('2026-11-06T00:01:00Z'))).status, 429, 'three minutes after the last test, on the next UTC day');
+  assert.equal((await call(e, 'POST', new Date('2026-11-06T00:10:00Z'))).status, 200);
+});

@@ -104,6 +104,7 @@ import {status as trialStatus} from '../../shared/trial.js';
 import * as hosted from '../../shared/hosted.js';
 import * as hostedState from '../../api/hosted-state.js';
 import {tick as hostedTick} from '../../api/hosted-tick.js';
+import {test as hostedTest} from '../../api/hosted-test.js';
 import {ready, sweep as readySweep} from '../../api/ready.js';
 import {tick as readyTick} from '../../api/ready-tick.js';
 import {checkout as proCheckout, webhook as proWebhook} from '../../api/pro-pay.js';
@@ -297,6 +298,7 @@ async function route(request, env, ctx) {
   if (pathname === '/api/hosted/config') return hostedState.config(request, env);   // profile, search and CV text the app pushes; the container reads
   if (pathname === '/api/hosted/export' || pathname === '/api/hosted/data') return hostedState.own(request, env);   // download and delete my hosted data
   if (pathname.startsWith('/api/ready/')) return ready(request, env);   // Ready to send, phase 1: the owner's night batch and morning rows (api/ready.js; 404 while READY_TO_SEND is off)
+  if (pathname === '/api/hosted/test') return hostedTest(request, env);   // the Test button on our servers' card: one real run now, steps in words (api/hosted-test.js)
   if (pathname === '/api/hosted/inbox') return hosted.inbox(request, env);   // the matches that arrived while the app was closed
   if (pathname === '/api/pro/checkout') return proCheckout(request, env);   // a one-time payment for Pro or a top-up (api/pro-pay.js)
   if (pathname === '/api/pro/webhook') return proWebhook(request, env);   // the payment provider's signed events
