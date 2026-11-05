@@ -86,7 +86,8 @@ export const seeds = {
     const day = now.toISOString().slice(0, 10), engines = {codex: 38, claude: 12};
     const tally = {days: {[day]: {'jobadabra/ai-user-agents.yml': {calls: 31, ok: 30, tokens: 412000, ms: 1, engines}, 'jobadabra/code-review.yml': {calls: 6, ok: 6, tokens: 88000, ms: 1, engines: {codex: 6}}, 'jobadabra/ui-findings.yml': {calls: 14, ok: 14, tokens: 120000, ms: 1, engines: {codex: 14}}, 'jobadabra/sentry-fix.yml': {calls: 2, ok: 2, tokens: 21000, ms: 1, engines: {codex: 2}}}}};
     const chain = [{name: 'codex', configured: true, answeredToday: 52, ranOutToday: 0, failedToday: 1, avgMs: 41000}, {name: 'claude', configured: true, answeredToday: 12, ranOutToday: 3, failedToday: 0, avgMs: 52000}, {name: 'free-ai', configured: true, answeredToday: 4, ranOutToday: 0, failedToday: 0, avgMs: 9000}];
-    env.AI_BROKER = {fetch: async () => new Response(JSON.stringify({fallback: {day, freeAi: 4, freeAiCap: 200, held: {freeAi: 0}}, chain, tally}))};
+    const jobs = {days: {[day]: {'jobadabra/ai-user-agents.yml|explore': {calls: 20, tokens: 290000}, 'jobadabra/ai-user-agents.yml|judge': {calls: 11, tokens: 122000}, 'jobadabra/ui-findings.yml|review': {calls: 14, tokens: 120000}}}};   // fictional job labels (per-job AI cost)
+    env.AI_BROKER = {fetch: async () => new Response(JSON.stringify({fallback: {day, freeAi: 4, freeAiCap: 200, held: {freeAi: 0}}, chain, tally, jobs}))};
   },
   'ai-harness': async ({env}) => {   // /admin/ai/harness (4 Nov 2026): the first real run's shape (needs-human, no change) plus two MADE-UP runs to show a READY run and a run a wall refused; plan rows, layers and sources are demo values, and the first card's reason is an illustration (the real run printed none); the page wears a "Demo data" ribbon (demo: true)
     const {ingest} = await import('../admin/agent-coding.js');

@@ -52,3 +52,33 @@ export function recentDays(tally, n = SHOWN_DAYS) {
   const days = tally?.days || {};
   return {days: Object.fromEntries(Object.keys(days).sort().slice(-n).map(key => [key, days[key]]))};
 }
+
+/**
+ * Bounds of the job tally, in bytes as well as keys (a review, 5 Nov 2026: 14 days x 101 keys with real names measured 135 KB, past the 128 KiB value cap): 7 days kept, 50 keys a day over all
+ * workflows, 12 per workflow (the rest of a workflow under "<workflow>|other", so one workflow cannot starve the others), keys at most 100 characters. 7 x 51 x ~130 bytes stays near 46 KB.
+ */
+export const JOB_KEEP_DAYS = 7;
+export const MAX_JOB_KEYS = 50;
+export const MAX_JOBS_PER_WORKFLOW = 12;
+const MAX_JOB_KEY_LENGTH = 100;
+
+/** Takes the `x-jobadabra-job` header; returns the label (a GitHub job id: lower-case letters, digits and dashes, 40 at most) or '' (not sent or not of that shape). Display only: it never decides a lane or a cap. */
+export const jobKey = value => (/^[a-z0-9][a-z0-9-]{0,39}$/.test(String(value || '')) ? String(value) : '');
+
+/**
+ * Adds one call to the per-job tally and returns it: {days: {<YYYY-MM-DD>: {"<workflow>|<job>": {calls, tokens}}}}; days older than JOB_KEEP_DAYS are dropped.
+ * Takes the stored value (or undefined), the UTC day, the verified workflow key, the job label and the call's tokens. No label: nothing is counted (the workflow tally already has the call).
+ * Overflow: a workflow's 13th job counts under "<workflow>|other"; past 50 keys a day, under the shared key "|other" (it starts with the separator, so it can never be a workflow's own key).
+ */
+export function addJobCall(jobs, day, workflow, job, tokens = 0) {
+  if (!job) return jobs || {days: {}};
+  const days = {...(jobs?.days || {})}, today = days[day] || {}, own = `${workflow}|`;
+  let key = `${workflow}|${job}`;
+  if (!today[key]) {
+    if (Object.keys(today).filter(name => name.startsWith(own) && name !== `${own}other`).length >= MAX_JOBS_PER_WORKFLOW || key.length > MAX_JOB_KEY_LENGTH) key = `${own}other`;
+    if (!today[key] && (Object.keys(today).length >= MAX_JOB_KEYS || key.length > MAX_JOB_KEY_LENGTH)) key = '|other';
+  }
+  days[day] = {...today, [key]: {calls: (today[key]?.calls || 0) + 1, tokens: (today[key]?.tokens || 0) + tokens}};
+  const keep = Object.keys(days).sort().slice(-JOB_KEEP_DAYS);
+  return {days: Object.fromEntries(keep.map(k => [k, days[k]]))};
+}

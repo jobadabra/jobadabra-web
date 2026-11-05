@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {day, body, success, harness, entry} from './harness.mjs';
-import {addCall, KEEP_DAYS, MAX_WORKFLOWS, recentDays, tokensOf, workflowKey, workflowOf} from '../../../../workers/ai-broker/lib/tally.mjs';
+import {addCall, addJobCall, jobKey, JOB_KEEP_DAYS, KEEP_DAYS, MAX_JOB_KEYS, MAX_JOBS_PER_WORKFLOW, MAX_WORKFLOWS, recentDays, tokensOf, workflowKey, workflowOf} from '../../../../workers/ai-broker/lib/tally.mjs';
 
 const ref = (repository, file) => `${repository}/.github/workflows/${file}@refs/heads/main`;
 
@@ -91,8 +91,77 @@ test('the Worker names the workflow from the verified token only: a caller-sent 
   const token = `${head}.${Buffer.from(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', pair.privateKey, new TextEncoder().encode(head))).toString('base64url')}`;
   t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({keys: [jwk]})));
   const seen = [];
-  const env = {BROKER: {fetch: async request => { seen.push({lane: request.headers.get('x-lane'), workflow: request.headers.get('x-workflow')}); return new Response('{}'); }}, BROKER_ADMIN_TOKEN: 'admin-secret'};
+  const env = {BROKER: {fetch: async request => { seen.push({lane: request.headers.get('x-lane'), workflow: request.headers.get('x-workflow'), job: request.headers.get('x-job')}); return new Response('{}'); }}, BROKER_ADMIN_TOKEN: 'admin-secret'};
   await entry.fetch(new Request('https://broker/call', {method: 'POST', headers: {authorization: `Bearer ${token}`, 'x-workflow': 'jobadabra/someone-else.yml', 'x-lane': 'pr'}, body: JSON.stringify(body)}), env);
   await entry.fetch(new Request('https://broker/admin/call', {method: 'POST', headers: {authorization: 'Bearer admin-secret', 'x-workflow': 'jobadabra/someone-else.yml'}, body: JSON.stringify(body)}), env);
-  assert.deepEqual(seen, [{lane: 'scheduled', workflow: 'jobadabra/ai-user-agents.yml'}, {lane: 'scheduled', workflow: 'admin'}]);
+  // Per-job AI cost (5 Nov 2026): the caller's `x-jobadabra-job` is forwarded only when it has a GitHub job id's shape; a caller-sent internal `x-job` never is; the admin call has none.
+  for (const job of ['e2e-review', 'Bad Label']) await entry.fetch(new Request('https://broker/call', {method: 'POST', headers: {authorization: `Bearer ${token}`, 'x-jobadabra-job': job, 'x-job': 'smuggled'}, body: JSON.stringify(body)}), env);
+  assert.deepEqual(seen, [{lane: 'scheduled', workflow: 'jobadabra/ai-user-agents.yml', job: ''}, {lane: 'scheduled', workflow: 'admin', job: null},
+    {lane: 'scheduled', workflow: 'jobadabra/ai-user-agents.yml', job: 'e2e-review'}, {lane: 'scheduled', workflow: 'jobadabra/ai-user-agents.yml', job: ''}]);
+});
+
+// Per-job AI cost (owner via mac-32, 5 Nov 2026): the job label is a display-only second counter, in its own storage value.
+test('only a GitHub job id of a fixed shape is a job label; anything else is none', () => {
+  for (const ok of ['review', 'e2e-review', 'run', 'job-1', 'a']) assert.equal(jobKey(ok), ok);
+  for (const bad of [null, '', 'Review', 'a b', '../x', 'a/b', '-x', 'x'.repeat(41), '<script>', 'a|b']) assert.equal(jobKey(bad), '', String(bad));
+});
+
+test('a job call adds calls and tokens under "<workflow>|<job>"; no label counts nothing; days are bounded', () => {
+  let jobs = addJobCall(undefined, '2026-11-05', 'jobadabra/e2e.yml', 'review', 30);
+  jobs = addJobCall(jobs, '2026-11-05', 'jobadabra/e2e.yml', 'review', 20);
+  jobs = addJobCall(jobs, '2026-11-05', 'jobadabra/e2e.yml', 'suite', 5);
+  assert.deepEqual(jobs.days['2026-11-05'], {'jobadabra/e2e.yml|review': {calls: 2, tokens: 50}, 'jobadabra/e2e.yml|suite': {calls: 1, tokens: 5}});
+  assert.equal(addJobCall(jobs, '2026-11-05', 'jobadabra/e2e.yml', '', 99), jobs, 'no label: the same value back');
+  // One workflow cannot starve the others: its 13th job counts under its own "other".
+  let own;
+  for (let i = 0; i < MAX_JOBS_PER_WORKFLOW + 3; i++) own = addJobCall(own, '2026-11-05', 'jobadabra/w.yml', `j${i}`, 1);
+  own = addJobCall(own, '2026-11-05', 'jobadabra/z.yml', 'ok', 1);
+  const mine = own.days['2026-11-05'];
+  assert.equal(mine['jobadabra/w.yml|other'].calls, 3); assert.equal(mine['jobadabra/z.yml|ok'].calls, 1, 'another workflow still gets its own job');
+  own = addJobCall(own, '2026-11-05', 'jobadabra/w.yml', 'j0', 1);
+  assert.equal(own.days['2026-11-05']['jobadabra/w.yml|j0'].calls, 2, 'a known key still counts once the workflow is full');
+  // The whole day is bounded by keys and by key length (bytes): past 50 keys, or a key over 100 characters, the shared "|other" (never a workflow's name).
+  let many;
+  for (let i = 0; i < MAX_JOB_KEYS + 5; i++) many = addJobCall(many, '2026-11-05', `jobadabra/w${i}.yml`, 'x', 1);
+  assert.equal(Object.keys(many.days['2026-11-05']).length, MAX_JOB_KEYS + 1); assert.equal(many.days['2026-11-05']['|other'].calls, 5);
+  const long = addJobCall(undefined, '2026-11-05', `jobadabra/${'w'.repeat(120)}.yml`, 'x', 1);
+  assert.deepEqual(Object.keys(long.days['2026-11-05']), ['|other'], 'a key that long never reaches storage');
+  let old; for (let i = 1; i <= JOB_KEEP_DAYS + 2; i++) old = addJobCall(old, `2026-10-${String(i).padStart(2, '0')}`, 'jobadabra/a.yml', 'x', 1);
+  assert.equal(Object.keys(old.days).length, JOB_KEEP_DAYS);
+});
+
+test('the broker counts a labelled call under its job, /health returns it, an unlabelled call adds none, and the workflow tally is unchanged', async t => {
+  t.mock.method(Date, 'now', () => day);
+  const {broker, storage} = harness();
+  broker.containerFetch = async () => new Response(JSON.stringify({reply: 'ok', tokens: {input: 20, output: 30}, ms: 7}));
+  await broker.call('scheduled', body, 'jobadabra/e2e.yml', 'review');
+  await broker.call('scheduled', body, 'jobadabra/e2e.yml', 'review');
+  await broker.call('scheduled', body, 'jobadabra/e2e.yml');
+  const health = await (await broker.health()).json();
+  assert.deepEqual(health.jobs.days['2026-10-30'], {'jobadabra/e2e.yml|review': {calls: 2, tokens: 100}});
+  assert.equal(health.tally.days['2026-10-30']['jobadabra/e2e.yml'].calls, 3, 'every call is in the workflow tally, labelled or not');
+  assert.deepEqual(Object.keys(await storage.get('tally')).sort(), ['days'], 'the workflow value holds no job data');
+});
+
+test('a job count that cannot be written is logged: the workflow tally of that call is kept and the answer goes out (review, 5 Nov 2026)', async t => {
+  t.mock.method(Date, 'now', () => day);
+  const logged = []; t.mock.method(console, 'log', (...line) => logged.push(line.join(' ')));
+  const {broker, storage} = harness(), put = storage.put;
+  storage.put = async (key, value) => { if (key === 'jobs') throw new Error('storage full'); return put(key, value); };
+  broker.containerFetch = async () => new Response(JSON.stringify({reply: 'ok', tokens: {input: 2, output: 3}, ms: 1}));
+  assert.equal((await broker.call('scheduled', body, 'jobadabra/e2e.yml', 'review')).status, 200);
+  const health = await (await broker.health()).json();
+  assert.equal(health.tally.days['2026-10-30']['jobadabra/e2e.yml'].calls, 1, 'the workflow count survives a failed jobs write');
+  assert.deepEqual(health.jobs.days, {}); assert.ok(logged.some(line => /jobs: storage full/.test(line)));
+});
+
+test('past the day\'s workflow limit a job counts under the "other" row the tally folded it into, so every job row has a parent (Gitar, 5 Nov 2026)', async t => {
+  t.mock.method(Date, 'now', () => day);
+  const {broker} = harness();
+  broker.containerFetch = async () => new Response(JSON.stringify({reply: 'ok', tokens: {input: 1, output: 1}, ms: 1}));
+  for (let i = 0; i < MAX_WORKFLOWS; i++) await broker.call('scheduled', body, `jobadabra/w${i}.yml`);
+  await broker.call('scheduled', body, 'jobadabra/late.yml', 'review');
+  const health = await (await broker.health()).json();
+  assert.equal(health.tally.days['2026-10-30'].other.calls, 1, 'the tally folded the 61st workflow');
+  assert.deepEqual(health.jobs.days['2026-10-30'], {'other|review': {calls: 1, tokens: 2}}, 'its job sits under that same row');
 });

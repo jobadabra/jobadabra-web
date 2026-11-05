@@ -25,20 +25,51 @@ export function workflowRows(tally, today) {
   return all.map(row => ({...row, share: total ? row.tokens / total : 0})).sort((a, b) => b.tokens - a.tokens || a.name.localeCompare(b.name));
 }
 
+/**
+ * The jobs behind each workflow over the days given: Map workflow -> [{job, calls, tokens, share}] biggest first, share = the job's tokens / its workflow's counted job tokens (0..1).
+ * Takes the broker's job tally ({days: {<day>: {"<workflow>|<job>": {calls, tokens}}}}); null gives an empty map, and the shared overflow "|other" sits under the workflow name ''. Calls sent without a label are in no job.
+ */
+export function jobRows(jobs) {
+  const by = new Map();
+  for (const items of Object.values(jobs?.days || {})) {
+    for (const [key, item] of Object.entries(items || {})) {
+      const at = key.lastIndexOf('|'), workflow = at > 0 ? key.slice(0, at) : '', job = at >= 0 ? key.slice(at + 1) : key;
+      const list = by.get(workflow) || new Map(), row = list.get(job) || {job, calls: 0, tokens: 0};
+      row.calls += item.calls || 0; row.tokens += item.tokens || 0;
+      list.set(job, row); by.set(workflow, list);
+    }
+  }
+  return new Map([...by].map(([workflow, list]) => {
+    const rows = [...list.values()], total = rows.reduce((sum, row) => sum + row.tokens, 0);
+    return [workflow, rows.map(row => ({...row, share: total ? row.tokens / total : 0})).sort((a, b) => b.tokens - a.tokens || a.job.localeCompare(b.job))];
+  }));
+}
+
 /** "Codex 60% · Claude 40%" from the engine call counts; '' when none answered. */
 export function engineMix(engines) {
   const total = Object.values(engines || {}).reduce((sum, n) => sum + n, 0);
   return total ? Object.entries(engines).sort((a, b) => b[1] - a[1]).map(([name, n]) => `${ENGINE_NAMES[name] || name} ${Math.round(100 * n / total)}%`).join(' · ') : '';
 }
 
+/** The sub-rows of one workflow: one line per job ("↳ review"), its calls, tokens and share of the workflow's labelled tokens; '' when no call carried a label. */
+function jobLines(list) {   // a workflow's own "other" (its 13th job on) reads as a job named other
+  return (list || []).map(row => `<tr class="job"><td class="muted" style="white-space:nowrap;padding-left:18px">↳ ${esc(row.job)}</td><td class="n muted">${number(row.calls)}</td><td class="n muted">${tokens(row.tokens)}</td><td></td><td></td><td class="n muted">${Math.round(row.share * 100)}% of labelled</td><td></td></tr>`).join('');
+}
+
+/** The shared overflow (past 50 labels a day over all workflows): one line under the table so these tokens are never invisible. */
+function overflowLine(list) {
+  const row = (list || [])[0];
+  return row ? `<tr class="job"><td class="muted" style="white-space:nowrap;padding-left:18px">↳ other jobs (past the day's label limit)</td><td class="n muted">${number(row.calls)}</td><td class="n muted">${tokens(row.tokens)}</td><td></td><td></td><td></td><td></td></tr>` : '';
+}
+
 /** The card for a /health tally (null: the broker has none yet, an older build). `today` is the UTC day "YYYY-MM-DD". */
-export function workflowCard(tally, today) {
+export function workflowCard(tally, today, jobs = null) {
   if (!tally) return '<section class="card" id="ai-workflow-tokens"><p class="muted" style="margin:0">Tokens per workflow: data unavailable</p></section>';
-  const rows = workflowRows(tally, today), days = Object.keys(tally.days || {}).length;
+  const rows = workflowRows(tally, today), days = Object.keys(tally.days || {}).length, byJob = jobRows(jobs);
   const body = rows.length ? rows.map(row => `<tr><td style="white-space:nowrap">${esc(row.name)}</td><td class="n">${number(row.calls)}</td><td class="n">${tokens(row.tokens)}</td><td class="n">${tokens(row.today)}</td>
-<td style="min-width:120px"><div style="background:var(--line);border-radius:4px;height:10px"><div style="background:var(--amber);height:10px;border-radius:4px;width:${Math.max(1, Math.round(row.share * 100))}%"></div></div></td><td class="n">${Math.round(row.share * 100)}%</td><td class="muted" style="white-space:nowrap">${esc(engineMix(row.engines))}</td></tr>`).join('\n')
+<td style="min-width:120px"><div style="background:var(--line);border-radius:4px;height:10px"><div style="background:var(--amber);height:10px;border-radius:4px;width:${Math.max(1, Math.round(row.share * 100))}%"></div></div></td><td class="n">${Math.round(row.share * 100)}%</td><td class="muted" style="white-space:nowrap">${esc(engineMix(row.engines))}</td></tr>${jobLines(byJob.get(row.name))}`).join('\n') + overflowLine(byJob.get(''))
     : '<tr><td colspan="7" class="muted">No call counted yet: the count starts with the first AI call after this broker build.</td></tr>';
-  return `<section class="card" id="ai-workflow-tokens"><h2>⚙️ Tokens per CI workflow</h2><small class="muted">The last ${days} day${days === 1 ? '' : 's'} the broker has counted (the workflow comes from GitHub's signed run token) · tokens = input + output as the engine reports them; a refused or failed answer counts as a call with no tokens</small>
+  return `<section class="card" id="ai-workflow-tokens"><h2>⚙️ Tokens per CI workflow</h2><small class="muted">The last ${days} day${days === 1 ? '' : 's'} the broker has counted (the workflow comes from GitHub's signed run token; a ↳ job line is a label the workflow sent, for display; its share is of the labelled calls only) · tokens = input + output as the engine reports them; a refused or failed answer counts as a call with no tokens</small>
 <div class="wrap"><table><tr><th>Workflow</th><th>Calls</th><th>Tokens</th><th>Today</th><th>Share</th><th></th><th>Answered by</th></tr>
 ${body}
 </table></div></section>`;
