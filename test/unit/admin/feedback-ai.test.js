@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {brief, status} from '../../../admin/feedback-ai.js';
 import {actRoute, view} from '../../../admin/feedback.js';
-import {NOW, REPO, add, env, log, prUrl, row, signer} from '../shared/feedback-kit.js';
+import {NOW, REPO, add, env, log, prUrl, row, signer} from '../shared/feedback/feedback-kit.js';
 
 const kit = await signer(), deps = {jwks: kit.jwks};
 const get = (ref, token) => brief(new Request(`https://x/api/feedback/brief?ref=${ref}`, {headers: token ? {Authorization: `Bearer ${token}`} : {}}), env_, NOW, deps);
