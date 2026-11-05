@@ -39,3 +39,8 @@ test('the Self-healing page puts the card under the tiles', () => {
   const html = liveSection({at: '2026-11-05T12:00:00Z', totals: {}, byDetector: [], ranking});
   assert.ok(html.indexOf('id="top-issues"') > html.indexOf('class="tiles"'));
 });
+
+test('a null inside the snapshot\'s lists is skipped, so one odd publish cannot make the page a 500 (Gitar, #423)', () => {
+  assert.doesNotThrow(() => liveSection({at: '2026-11-05T12:00:00Z', totals: {}, byDetector: [], ranking: {open: 1, counts: {}, rows: [null, 'x', ranking.rows[0]]},
+    scorecard: {at: 'x', totals: {}, detectors: [null, {source: 'a', detector: 'A', precision: 50}]}}, [{day: '2026-11-04', scorecard: {detectors: [null]}}]));
+});

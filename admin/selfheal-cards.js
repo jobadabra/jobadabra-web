@@ -19,13 +19,17 @@ function row(item, index) {
   return `<tr><td class="n">${index + 1}</td><td>${chip(band, TONE[band])}</td><td>${link} ${esc(item.title)} ${notes}</td><td>${esc(item.platform)}</td><td class="n">${esc(item.score)}</td><td class="muted">${seen}</td></tr>`;
 }
 
+// A snapshot is another repo's data: a null or a string inside a list is skipped, never thrown on (Gitar, #423).
+const objects = list => (Array.isArray(list) ? list : []).filter(item => item && typeof item === 'object');
+
 /** The card, or '' when the snapshot has no ranking yet (published before 5 Nov 2026). */
 export function topIssuesSection(live) {
   const top = live?.ranking;
   if (!top || !Array.isArray(top.rows)) return '';
   const counts = BANDS.map(band => chip(`${band} · ${Number(top.counts?.[band]) || 0}`, TONE[band])).join(' ');
-  const body = top.rows.length
-    ? `<div class="wrap"><table><tr><th>#</th><th>Priority</th><th>Finding</th><th>Platform</th><th>Score</th><th>Last build seen on</th></tr>${top.rows.map(row).join('')}</table></div>`
+  const rows = objects(top.rows);
+  const body = rows.length
+    ? `<div class="wrap"><table><tr><th>#</th><th>Priority</th><th>Finding</th><th>Platform</th><th>Score</th><th>Last build seen on</th></tr>${rows.map(row).join('')}</table></div>`
     : `<p>${chip('✔ nothing open', 'good')}</p>`;
   return `<section class="card" id="top-issues"><h2>🔥 Top issues</h2><small class="muted">The open findings, most important first · re-ranked after every Finder run · ${esc(Number(top.open) || 0)} open</small>
 <p>${counts}</p>${body}
@@ -41,8 +45,8 @@ const causes = list => Object.entries(list || {}).filter(([, n]) => n).map(([why
 /** The card from `live.scorecard`; `previous` is the older snapshot's scorecard (or null). '' when the snapshot has none yet. */
 export function scoreSection(card, previous = null) {
   if (!card || !Array.isArray(card.detectors)) return '';
-  const was = source => (previous?.detectors || []).find(row => row.source === source);
-  const rows = card.detectors.map(row => `<tr><td>${esc(row.detector)}</td><td class="n">${esc(row.filed)}</td><td class="n">${esc(row.real)}</td><td class="n">${esc(row.falsePositive)}</td><td class="n">${esc(row.open)}</td>
+  const was = source => objects(previous?.detectors).find(row => row.source === source);
+  const rows = objects(card.detectors).map(row => `<tr><td>${esc(row.detector)}</td><td class="n">${esc(row.filed)}</td><td class="n">${esc(row.real)}</td><td class="n">${esc(row.falsePositive)}</td><td class="n">${esc(row.open)}</td>
 <td>${chip(esc(pct(row.precision)), precisionTone(row.precision))}${delta(row.precision, was(row.source)?.precision)}</td><td class="muted">${causes(row.causes) || '–'}</td><td class="n">${esc(row.severityChanged?.judged ?? 0)}</td></tr>`).join('');
   const t = card.totals || {}, y = card.yield || {};
   const week = (label, w) => (w ? `${label}: ${esc(w.real)} real · ${esc(w.falsePositive)} false` : '');
