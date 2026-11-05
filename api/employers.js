@@ -7,12 +7,14 @@ import {sourceRanking} from './source-ranking.js';
 import {poolSnapshot, pooledKeys, storePoolSnapshot} from '../shared/pool-snapshot.js';
 import {COUNTRIES, FAMILIES, METROS} from '../shared/pool-tags.js';
 import {authorize, digestOf, equal, flag} from '../shared/guard.js';
+import {alertOwner} from '../shared/notify-send.js';
 import {store as storeScouting} from '../shared/scouting.js';
 import {snapshot, storeSnapshot} from '../shared/scouting-snapshot.js';
 const KEY = 'index:employers';
 const NOFEED_KEY = 'index:nofeed';
 const SUMMARY_KEY = 'index:summary';   // the website's two counts, written at every publish (the old single-value copy stops once the list outgrows it)
 const GENERATED_KEY = 'index:generated';   // when the central scout last published: installs ask "still this one?" hourly, answered from KV alone
+const COPY_PREFIX = 'index:copy:', COPY_DAYS = 30;   // the dated copies (keepCopy): written here only, no route reads them
 const BOARDS_KEY = 'index:boards';   // per job board, what it gives people by role, family and place (src/scout.py board_stats): installs order the boards they suggest   // employers with no readable job site, published by the central scout: installs skip them 30 days
 const SYSTEMS = ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'teamtailor', 'join', 'workday', 'umantis', 'successfactors', 'oracle', 'phenom', 'eightfold', 'careers', 'amazon', 'netflix', 'jobsch'];
 const MAX_BYTES = 1_000_000;          // the KV copy older app versions download (one KV value)
@@ -278,6 +280,22 @@ async function storeBoardFacts(db, facts, date) {
   if (db.batch) await db.batch(statements); else for (const statement of statements) await statement.run();
 }
 
+/**
+ * Keeps this publish's body as the UTC day's copy for COPY_DAYS (a later publish that day replaces it). Returns 'kept' or 'failed'; never throws, a copy is never a reason to refuse the index. A failure tells the owner.
+ * To go back to a day, from workers/www: `wrangler kv key get --remote --binding WAITLIST index:copy:<day>`, then PUT that body to /api/index with INDEX_PUBLISH_KEY; it passes the same checks as any publish, and replays that day's board facts and stats under today's date.
+ * A copy over about 7 days old comes back in steps: the next scout run keeps only feeds read in the last 7 days (public src/scout_carry.py CARRY_DAYS) and re-reads the rest, oldest first.
+ */
+// Why (5 Nov 2026, owner: "Find root cause, and preven this happening again"): on 2 Nov the scout lost its cache and published 3,871 of 6,833 feeds, and no old copy existed. The raw body, so a restore is one more publish. KV: 25 MiB a value, above the 20 MB publish limit for the scout's plain ASCII; about 3.6 MB a day today, 600 MB at worst, in the 1 GB the plan includes.
+async function keepCopy(env, raw, day) {
+  try { await env.WAITLIST.put(`${COPY_PREFIX}${day}`, raw, {expirationTtl: COPY_DAYS * 86400}); return 'kept'; }
+  catch (error) {
+    console.log(`index copy: ${String(error?.message || error).slice(0, 200)}`);
+    const legacy = env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null;
+    await alertOwner(env, 'index-copy-failed', {text: `🗂 Employer list: the copy of ${day} could not be saved. The publish went through, but this day has no way back.`, level: 'problem', legacy}).catch(() => {});
+    return 'failed';
+  }
+}
+
 async function publish(request, env) {
   const key = env.INDEX_PUBLISH_KEY;
   const given = (request.headers.get('Authorization') || '').replace(/^Bearer /, '');
@@ -318,7 +336,8 @@ async function publish(request, env) {
   const legacy = JSON.stringify({version: 1, generated, feeds});
   const kept = legacy.length <= MAX_BYTES;
   if (kept) await env.WAITLIST.put(KEY, legacy);
-  return Response.json({ok: true, feeds: feeds.length, ...(boardFacts.length ? {board_facts: boardFacts.length} : {}), d1: !!env.STATS, legacy: kept ? 'updated' : 'too large, unchanged'});
+  const copy = await keepCopy(env, raw, generated.slice(0, 10));
+  return Response.json({ok: true, feeds: feeds.length, ...(boardFacts.length ? {board_facts: boardFacts.length} : {}), d1: !!env.STATS, legacy: kept ? 'updated' : 'too large, unchanged', copy});
 }
 
 // Is a feed worth rewriting? (14 Oct 2026: 11.7k feed writes a day, 23k rows, though most feeds only had a new "checked"/"ok" date or a drifting job count.)
