@@ -9,7 +9,7 @@
 import {accountOf} from '../shared/pro.js';
 import {freeAi} from '../shared/free-ai.js';
 import {digestOf} from '../shared/guard.js';
-import {hostedOn, installOf, startRun} from '../shared/hosted.js';
+import {hostedOn, installOf, runToken, startRun} from '../shared/hosted.js';
 import {addrOf} from '../shared/mail.js';
 import {dayCaps, freeStopped, MONTH_COMPUTE_MICRO, monthSpent, openRun, runsToday, SITE, trialSpent} from './hosted-tick.js';
 
@@ -18,12 +18,23 @@ export const COOLDOWN_MS = 10 * 60 * 1000, TESTS_PER_DAY = 5, MAIL_WAIT_MS = 30 
 
 /** One short call through the Free AI route with the run's token, as the container's engine makes them. -> {ok} or {ok: false, error}, within AI_WAIT_MS. */
 export async function aiAnswers(env, token, now, wait = AI_WAIT_MS) {
+  const books = [];   // the route's counting and billing, awaited after the verdict: slow KV is not a slow AI (review of hr21)
   const ask = freeAi(new Request(`${SITE}/api/ai/v1/messages`, {method: 'POST', headers: {'x-api-key': token, 'content-type': 'application/json', 'x-jp-action': 'hosted-test'},
-    body: JSON.stringify({model: 'claude-haiku-5-5', max_tokens: 5, messages: [{role: 'user', content: 'Answer with the word ok.'}]})}), env, now)
+    body: JSON.stringify({model: 'claude-haiku-5-5', max_tokens: 5, messages: [{role: 'user', content: 'Answer with the word ok.'}]})}), env, now, {waitUntil: work => books.push(work)})
     .then(async reply => (reply.ok ? {ok: true} : {ok: false, error: (await reply.json().catch(() => ({})))?.error?.message || `The AI answered ${reply.status}.`}), () => ({ok: false, error: 'The AI did not answer.'}));
   let timer;
   const late = new Promise(done => { timer = setTimeout(() => done({ok: false, error: 'The AI is slow right now.'}), wait); });
-  try { return await Promise.race([ask, late]); } finally { clearTimeout(timer); }
+  try { return await Promise.race([ask, late]); } finally { clearTimeout(timer); await Promise.allSettled(books); }
+}
+
+// The Test's AI step for run `id`, once: a press that joins an open run (the schedule's own, or a test already running) checks it too (review of hr21:
+// a joined run returned before the check and its AI step failed at 60 s while everything worked). A failed stamp costs the Test its step, not the press.
+async function checkAi(env, id, now) {
+  const row = await env.STATS.prepare('SELECT ai_at, ai_error FROM hosted_runs WHERE id = ?').bind(id).first();
+  if (!row || row.ai_at || row.ai_error) return;
+  const ai = await aiAnswers(env, await runToken(env, id), now);
+  await env.STATS.prepare('UPDATE hosted_runs SET ai_at = ?, ai_error = ? WHERE id = ?').bind(ai.ok ? new Date().toISOString() : null, ai.ok ? null : ai.error, id).run()
+    .catch(error => console.error(`hosted ai_at not stamped for ${id}: ${error.message}`));
 }
 const say = (status, error, extra = {}) => Response.json({ok: false, error, ...extra}, {status});
 const PAUSED = {'trial-over': 'Your free trial is used up.', inactive: 'Always on paused after two weeks without opening the app. Open the app to resume it.', guard: 'Always on is paused for this month.'};
@@ -42,7 +53,7 @@ export async function test(request, env, now = new Date()) {
   const stamp = now.toISOString();
   await env.STATS.prepare("UPDATE hosted_runs SET status = 'failed', finished_at = ? WHERE finished_at IS NULL AND expires_at < ?").bind(stamp, stamp).run();   // a run that never reported is over, as the tick treats it
   const open = await openRun(env, account.id, stamp);
-  if (open) return Response.json({ok: true, run: open.id, joined: true});   // one run at a time: pressing again watches the one that is running
+  if (open) { await checkAi(env, open.id, now); return Response.json({ok: true, run: open.id, joined: true}); }   // one run at a time: pressing again watches the one that is running
   // The gap is read from a window that reaches back past UTC midnight; only the daily count starts at midnight (Gitar on #372).
   const tests = await env.STATS.prepare("SELECT SUM(CASE WHEN started_at >= ? THEN 1 ELSE 0 END) AS n, MAX(started_at) AS last FROM hosted_runs WHERE account = ? AND slot LIKE 'test-%' AND started_at >= ?")
     .bind(`${stamp.slice(0, 10)}T00:00:00`, account.id, new Date(Math.min(now.getTime() - COOLDOWN_MS, Date.parse(`${stamp.slice(0, 10)}T00:00:00Z`))).toISOString()).first();
@@ -54,16 +65,14 @@ export async function test(request, env, now = new Date()) {
   const today = await runsToday(env, stamp.slice(0, 10)), caps = dayCaps(env);
   if (!env.HOSTED_QUEUE || today.all >= caps.all || (trial && (today.trial >= caps.trial || await freeStopped(env, stamp)))) return say(503, 'Always on is busy right now. Try again later.', {reason: 'busy'});
   const run = await startRun(env, {account: account.id}, now, `test-${stamp.slice(0, 16)}`, true);
-  if (!run) { const again = await openRun(env, account.id, stamp); return again ? Response.json({ok: true, run: again.id, joined: true}) : say(429, 'A test ran a moment ago. Try again in a few minutes.', {reason: 'cooldown'}); }
+  if (!run) { const again = await openRun(env, account.id, stamp); if (again) await checkAi(env, again.id, now); return again ? Response.json({ok: true, run: again.id, joined: true}) : say(429, 'A test ran a moment ago. Try again in a few minutes.', {reason: 'cooldown'}); }
   try {
     await env.HOSTED_QUEUE.send({run: run.id, token: run.token, site: env.HOSTED_SITE || SITE, account: await digestOf(account.id), test: true});
   } catch (error) {   // a row nothing will ever post to would block the next press for 30 minutes
     await env.STATS.prepare("UPDATE hosted_runs SET status = 'failed', finished_at = ? WHERE id = ?").bind(stamp, run.id).run();
     return say(503, 'Always on is busy right now. Try again later.', {reason: 'busy'});
   }
-  const ai = await aiAnswers(env, run.token, now);
-  await env.STATS.prepare('UPDATE hosted_runs SET ai_at = ?, ai_error = ? WHERE id = ?').bind(ai.ok ? new Date().toISOString() : null, ai.ok ? null : ai.error, run.id).run()
-    .catch(error => console.error(`hosted ai_at not stamped for ${run.id}: ${error.message}`));   // the run is queued: a failed stamp costs the Test its step, not the press
+  await checkAi(env, run.id, now);
   return Response.json({ok: true, run: run.id});
 }
 

@@ -209,6 +209,22 @@ test('a tick beside an open test starts no second run and leaves the schedule wh
   assert.equal((await tick(e, later(25))).enqueued, 1, 'once the test is over the scheduled run starts');
 });
 
+test('a press during the scheduled run joins it and still checks the AI: the verdict is ok, not "the AI did not answer"', async () => {
+  // Why (review of hr21, 5 Nov 2026): a joined run returned before the AI check, so its AI step failed at 60 s while everything worked.
+  const e = env({HOSTED_KEK: 'kek'}); await turnOn(e);
+  const account = rows(e, 'SELECT account FROM hosted_schedules')[0].account;
+  e.HOSTED_STATE.m.set(`hosted/${account}/config.json`, 1);
+  e.HOSTED_STATE.get = async () => null;
+  e.STATS.db.prepare('UPDATE hosted_schedules SET next_run_at = ?').run(later(1).toISOString());
+  assert.equal((await tick(e, later(2))).enqueued, 1);
+  await config(new Request('https://x/api/hosted/config', {headers: {authorization: `Bearer ${e.HOSTED_QUEUE.sent.at(-1).token}`}}), e, later(2));
+  const joined = await (await call(e, 'POST', later(4))).json();
+  assert.equal(joined.joined, true);
+  const run = (await (await call(e, 'GET', later(5), 'install-aaaa1', `?run=${joined.run}`)).json()).run;
+  assert.equal(run.steps.find(s => s.key === 'ai').state, 'ok');
+  assert.equal(run.status, 'ok');
+});
+
 test('a queue that refuses the message closes the run, so the next press is not stuck behind it', async () => {
   const e = env(); await turnOn(e);
   const send = e.HOSTED_QUEUE.send;
