@@ -110,6 +110,26 @@ test('the Test sends one short e-mail to the alert address and says why when it 
   assert.match(none.steps.find(s => s.key === 'mail').note, /E-mail alerts are off.*Settings → Notifications/);
 });
 
+test('a double press checks once: one test e-mail and one AI call, not one per press', async () => {
+  // Why (Gitar on #417, 5 Nov 2026): the second press read "not checked" while the first was still sending, and sent again.
+  let release, entered;
+  const inSend = new Promise(resolve => { entered = resolve; });
+  const held = new Promise(resolve => { release = resolve; });
+  const box = mailbox(), send = box.send;
+  box.send = async m => { entered(); await held; return send(m); };
+  let asked = 0;
+  const e = env({EMAIL: box, AI: {run: async () => { asked++; return aiOk.run(); }}}); await turnOn(e);
+  const first = call(e, 'POST', later(5));
+  await inSend;
+  const second = call(e, 'POST', later(5));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  release();
+  assert.deepEqual([(await first).status, (await second).status], [200, 200]);
+  assert.equal(box.sent.length, 1, 'one test e-mail');
+  assert.equal(asked, 1, 'one AI call');
+  assert.equal((await (await call(e, 'GET', later(6))).json()).run.steps.find(s => s.key === 'mail').state, 'ok');
+});
+
 test('a site whose migration 0130 did not apply still starts the Test: the press never fails on the checks', async t => {
   t.mock.method(console, 'error', () => {});
   const e = env(); await turnOn(e);

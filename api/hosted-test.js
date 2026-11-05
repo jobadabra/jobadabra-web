@@ -32,8 +32,7 @@ export async function aiAnswers(env, token, now, wait = AI_WAIT_MS) {
 const MAIL_WHY = {no_channel: 'E-mail alerts are off. Turn them on in Settings → Notifications.', off: 'E-mail is not available right now.', rate: 'Too many e-mails today. Try again tomorrow.',
   suppressed: 'Your address bounced or marked us as spam, so e-mail alerts are off. Check the address in Settings → Notifications.', unsubscribed: 'You stopped our e-mails. Turn alerts back on in Settings → Notifications.'};
 async function checkMail(env, account, id, now) {
-  const done = await env.STATS.prepare('SELECT mail_at, mail_error FROM hosted_runs WHERE id = ?').bind(id).first();
-  if (!done || done.mail_at || done.mail_error) return;
+  if (!await claim(env, id, 'mail')) return;
   const row = await env.STATS.prepare('SELECT a.email, s.email_channel FROM hosted_schedules s JOIN pro_accounts a ON a.id = s.account WHERE s.account = ?').bind(account).first();
   // Once a day: the address gets 6 mails a day at most (shared/mail.js DAILY_MAX); five presses must not use up the digest's room.
   const today = row?.email && row.email_channel ? await env.STATS.prepare("SELECT at FROM mail_log WHERE addr = ? AND template = 'always-on-test' AND status = 'sent' AND at >= ? LIMIT 1")
@@ -45,14 +44,17 @@ async function checkMail(env, account, id, now) {
 
 // Both checks a press makes, side by side (each once per run): the Test's AI and e-mail steps.
 // Best effort (Gitar on #417): a schema or D1 error (site.yml's migration step may fail without stopping the deploy) costs the Test its steps, never the press.
+/** Claims the `step` ('ai' | 'mail') check of run `id` for this press; true for exactly one press per run.
+ * Why (Gitar on #417, 5 Nov 2026): two quick presses both read "not checked" before either stamped, and both sent a mail (one of the address's 6 a day).
+ * The claim is '' in `<step>_error`: report() reads it as running, and the check's own stamp replaces it. */
+const claim = async (env, id, step) => (await env.STATS.prepare(`UPDATE hosted_runs SET ${step}_error = '' WHERE id = ? AND ${step}_at IS NULL AND ${step}_error IS NULL`).bind(id).run()).meta?.changes === 1;
 const safely = (step, id) => step.catch(error => console.error(`hosted test check not stamped for ${id}: ${error.message}`));
 const checks = (env, account, id, now) => Promise.all([safely(checkAi(env, id, now), id), safely(checkMail(env, account, id, now), id)]);
 
 // The Test's AI step for run `id`, once: a press that joins an open run (the schedule's own, or a test already running) checks it too (review of hr21:
 // a joined run returned before the check and its AI step failed at 60 s while everything worked). A failed stamp costs the Test its step, not the press.
 async function checkAi(env, id, now) {
-  const row = await env.STATS.prepare('SELECT ai_at, ai_error FROM hosted_runs WHERE id = ?').bind(id).first();
-  if (!row || row.ai_at || row.ai_error) return;
+  if (!await claim(env, id, 'ai')) return;
   const ai = await aiAnswers(env, await runToken(env, id), now);
   await env.STATS.prepare('UPDATE hosted_runs SET ai_at = ?, ai_error = ? WHERE id = ?').bind(ai.ok ? new Date().toISOString() : null, ai.ok ? null : ai.error, id).run()
     .catch(error => console.error(`hosted ai_at not stamped for ${id}: ${error.message}`));
