@@ -32,6 +32,16 @@ test('a PUT is checked for size and shape; only the register takes a POST', asyn
   assert.equal((await call(env, 'red-main', 'POST', '{}')).status, 404);
 });
 
+test('a PUT with a null inside a list is refused, so one bad CI write cannot make a page throw; one POST with a repeated id appends it once', async () => {
+  const {env} = fakeEnv();
+  for (const [key, body] of [['noise-register', {entries: [null]}], ['verdict-audit', {audits: [{items: 'x'}]}], ['red-main', {reds: [null]}], ['red-main', {reds: [{suite: 'a', tested: [null]}]}]]) {
+    assert.equal((await call(env, key, 'PUT', JSON.stringify(body))).status, 400, key);
+  }
+  assert.equal((await call(env, 'red-main', 'PUT', JSON.stringify({reds: [{suite: 'a', tested: [['abc', 'failure']]}]}))).status, 200);
+  await call(env, 'noise-register', 'POST', JSON.stringify({entries: [{id: 'a'}, {id: 'a'}]}));
+  assert.equal((await readState(env, 'noise-register', null)).entries.length, 1);
+});
+
 test('the register is appended on the server: an id already there is kept, the oldest go past 300, a Forget removes one', async () => {
   const {env} = fakeEnv();
   await call(env, 'noise-register', 'POST', JSON.stringify({entries: [{id: 'a', title: 'first'}, {id: 'b'}]}));

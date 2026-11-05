@@ -30,9 +30,10 @@ const isId = value => typeof value === 'string' && value.length > 0 && value.len
 
 /** The register after CI appended `fresh`: an id already there is kept as it was, the newest NOISE_KEEP stay. */
 export function appended(state, fresh) {
-  const have = new Set(entriesOf(state).map(item => item.id));
-  const add = (Array.isArray(fresh) ? fresh : []).filter(item => item && isId(item.id) && !have.has(item.id));
-  return {entries: [...entriesOf(state), ...add].slice(-NOISE_KEEP)};
+  const kept = entriesOf(state).filter(item => item && typeof item === 'object');
+  const have = new Set(kept.map(item => item.id));
+  const add = (Array.isArray(fresh) ? fresh : []).filter(item => item && typeof item === 'object' && isId(item.id) && !have.has(item.id) && have.add(item.id));
+  return {entries: [...kept, ...add].slice(-NOISE_KEEP)};
 }
 
 /** The owner's "Forget": the entry leaves the register, so the Finder may file that finding again. */
@@ -48,6 +49,14 @@ export function ticked(state, key, value) {
 }
 
 const NOT_FOUND = () => new Response('Not found', {status: 404});
+const objects = list => Array.isArray(list) && list.every(item => item && typeof item === 'object' && !Array.isArray(item));
+
+/** Whether a PUT body has the shape its cards draw (a null inside a list would make the whole page throw): refused with 400 instead. */
+export function shapeOk(key, data) {
+  if (key === 'noise-register') return objects(data.entries);
+  if (key === 'verdict-audit') return objects(data.audits) && data.audits.every(audit => objects(audit.items));
+  return objects(data.reds) && data.reds.every(red => red.tested === undefined || (Array.isArray(red.tested) && red.tested.every(Array.isArray)));
+}
 
 /** /ci-state/<key>: GET (CI; red-main for anyone), PUT (CI replaces), POST on noise-register (CI appends). Checked: the key name, the bearer key, the size, JSON. */
 export async function route(request, env, key) {
@@ -65,6 +74,7 @@ export async function route(request, env, key) {
   try { data = JSON.parse(text); } catch { return new Response('Not JSON', {status: 400}); }
   if (!data || typeof data !== 'object' || Array.isArray(data)) return new Response('Unexpected shape', {status: 400});
   if (request.method === 'POST') await writeState(env, key, appended(await readState(env, key, {entries: []}), data.entries));
+  else if (!shapeOk(key, data)) return new Response('Unexpected shape', {status: 400});
   else await writeState(env, key, data);
   return new Response(JSON.stringify({ok: true, key}), {headers: JSON_HEADERS});
 }
