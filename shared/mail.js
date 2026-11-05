@@ -76,22 +76,39 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
   const logged = test ? `test:${template}` : template;
   if (!spec) return {ok: false, reason: 'bad_template'};
   if (env.MAIL !== 'on' || !env.EMAIL || !env.STATS) return {ok: false, reason: 'off'};
+  let claimed = null;   // the marker of the mail_log row holding this call's room until the provider has answered
   try {
     const verdict = await mailAllowed(env, to, spec.list, spec);
     const addr = await addrOf(to);
     if (!verdict.ok) { if (verdict.reason !== 'bad_address' && verdict.reason !== 'marketing_off') await record(env, now, addr, spec.list, logged, verdict.reason); return verdict; }
-    const since = new Date(now.getTime() - DAY).toISOString();
-    const mine = test ? {n: 0} : await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE addr = ? AND status = 'sent' AND at >= ? AND template NOT LIKE 'test:%'").bind(addr, since).first();
-    const all = await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'sent' AND at >= ?").bind(since).first();
-    if ((!test && mine.n >= DAILY_MAX) || all.n >= Number(env.MAIL_DAY_MAX || GLOBAL_DAY_MAX)) { await record(env, now, addr, spec.list, logged, 'rate'); return {ok: false, reason: 'rate'}; }
+    // Why (jobadabra-web#431; 20 of 20 parallel sends went out in the review of #430): the room under both caps is CLAIMED in one statement before the provider is asked (D1 runs a statement alone,
+    // as in sendTestMail), so calls that arrive together cannot all read the same count. A live claim counts like a sent mail; one older than CLAIM_MS is a Worker that died and counts for nothing.
+    const since = new Date(now.getTime() - DAY).toISOString(), fresh = new Date(now.getTime() - CLAIM_MS).toISOString();
+    // Only send()'s own claims (marked `claim:`) are mail in flight: sendTestMail's day-claim has no marker and must not take a second slot (Gitar on #438).
+    const live = "((status = 'sent' AND at >= ?) OR (status = 'claimed' AND message_id LIKE 'claim:%' AND at >= ?))";
+    const marker = `claim:${crypto.randomUUID()}`;   // this call's claim row is found again by it (message_id until the provider answers): no driver's row id is needed
+    const claim = await env.STATS.prepare(`INSERT INTO mail_log (at, addr, list, template, status, message_id) SELECT ?, ?, ?, ?, 'claimed', ? WHERE (SELECT COUNT(*) FROM mail_log WHERE addr = ? AND template NOT LIKE 'test:%' AND ${live}) < ? AND (SELECT COUNT(*) FROM mail_log WHERE ${live}) < ?`)
+      .bind(now.toISOString(), addr, spec.list, logged, marker, addr, since, fresh, test ? Number.MAX_SAFE_INTEGER : DAILY_MAX, since, fresh, Number(env.MAIL_DAY_MAX || GLOBAL_DAY_MAX)).run();   // a test send takes no per-person room; the product-wide cap still counts it
+    const changes = claim.meta?.changes ?? claim.changes;
+    if (typeof changes !== 'number' && typeof changes !== 'bigint') throw new Error('claim: the database gave no changes count');   // never read an unknown shape as "the cap is full": that would stop every mail without a word
+    if (Number(changes) !== 1) { await record(env, now, addr, spec.list, logged, 'rate'); return {ok: false, reason: 'rate'}; }
+    claimed = marker;
     const appVersion = await appVersionOf(env, addr);
     const stop = spec.essential ? null : await stopLink(env, to, spec.list);
     const {subject, text, html, headers} = compose(template, {...data, appVersion}, stop && {stop, settings: await settingsLink(env, to)});
     const result = await env.EMAIL.send({from: FROM[spec.list], replyTo: REPLY_TO, to: clean(to), subject, text, html, ...(headers && {headers})});
-    await record(env, now, addr, spec.list, logged, 'sent', result?.messageId || null);
-    return {ok: true, id: result?.messageId || null};
+    const id = result?.messageId || null, mine = claimed;
+    claimed = null;   // the mail is gone: whatever happens next, its room is not given back
+    // The mail has gone: it must end up counted whatever the settling does (the UPDATE fails, or the claim row was removed meanwhile and it matches nothing).
+    try {
+      const settled = await env.STATS.prepare("UPDATE mail_log SET status = 'sent', message_id = ? WHERE message_id = ? AND status = 'claimed'").bind(id, mine).run();
+      if (Number(settled.meta?.changes ?? settled.changes) === 0) await record(env, now, addr, spec.list, logged, 'sent', id);
+    } catch { await record(env, now, addr, spec.list, logged, 'sent', id); }
+    return {ok: true, id};
   } catch (error) {
     console.error(`mail ${template}: ${error.message}`);
+    // A mail the provider (or anything before it) failed gives its room back: a failure must not eat the person's cap, and 'failed' rows are never counted.
+    if (claimed != null) await env.STATS?.prepare("DELETE FROM mail_log WHERE message_id = ? AND status = 'claimed'").bind(claimed).run().catch(() => {});
     await record(env, now, await addrOf(to).catch(() => ''), spec.list, logged, 'failed');
     return {ok: false, reason: 'failed'};
   }

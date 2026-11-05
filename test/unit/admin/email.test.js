@@ -48,6 +48,15 @@ test('counts sent, refused, failed, stopped and held inside the window', async (
   assert.deepEqual(data.byTemplate.map(r => [r.template, r.sent, r.refused]), [['welcome', 1, 0], ['digest', 1, 2]]);
 });
 
+test('a mail in flight (a claimed row) is neither sent nor refused on the page', async () => {
+  const {env, secret} = await fill();
+  log(env.STATS.db, '2026-10-26T12:00:00Z', secret, 'digest', 'claimed');   // a send between its claim and the provider's answer, or one a dead Worker left
+  const data = await collect(env, {days: 7, now});
+  assert.deepEqual([data.sent, data.notSent, data.today], [2, 2, 2]);
+  assert.deepEqual(data.byTemplate.map(r => [r.template, r.sent, r.refused]), [['welcome', 1, 0], ['digest', 1, 2]]);
+  assert.equal(JSON.stringify(data).includes('claimed'), false, 'no claimed reason or recent-refusal row anywhere in the numbers');
+});
+
 test('the four switches show on only when exactly "on"', async () => {
   const {env} = await fill();
   const data = await collect({...env, TRIAL_REMINDERS: 'ON'}, {now});
