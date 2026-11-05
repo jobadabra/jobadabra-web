@@ -10,17 +10,26 @@ export function moneyTicks(max, want = 4) {
   return ticks;
 }
 
+/** Whole-number ticks for a count axis (bugs, runs): 0 up to a top at or above `max` (at least 2), a step of 1, 2 or 5 times a power of ten, never a fraction.
+ * Why (5 Nov 2026, [ri] product-quality Bugs chart): moneyTicks gave 0, 0.5, 1 for a day with one bug: half a bug. */
+export function countTicks(max, want = 4) {
+  const top = Math.max(2, Math.ceil(Number.isFinite(max) ? max : 0)), rough = top / want, power = 10 ** Math.floor(Math.log10(rough));
+  const step = Math.max(1, [1, 2, 5, 10].map(unit => unit * power).find(candidate => candidate >= rough)), ticks = [];
+  for (let at = 0; ; at += step) { ticks.push(at); if (at >= top) break; }
+  return ticks;
+}
+
 const W = 720, H = 220, M = {l: 44, r: 6, t: 10, b: 24};
 
 /**
  * Grouped columns over days, a Y axis from 0 with grid lines, a date every few days; the page's one tooltip gives each day's exact numbers.
  * days: [{day: 'YYYY-MM-DD', values: [number | null…], tip}] oldest first; `series`: [{name, tone}] (tone s1…s6), one column per value.
- * A null value is drawn as a dashed hollow column (a number that does not exist yet, never a zero). `unit` prefixes the axis numbers ('$'). '' for no days.
+ * A null value is drawn as a dashed hollow column (a number that does not exist yet, never a zero). `unit` prefixes the axis numbers ('$'); `whole`: a count axis with whole-number ticks only. '' for no days.
  * Why (owner, 1 Nov 2026, on the Website per-day chart: "doesn't show an Y axis, doesn't show tooltips"): the same three things here: a scale, the numbers, the tooltip.
  */
-export function columns(days, series, {unit = '', labelEvery = 5} = {}) {
+export function columns(days, series, {unit = '', labelEvery = 5, whole = false} = {}) {
   if (!days.length) return '';
-  const top = Math.max(...days.flatMap(day => day.values.map(value => value || 0)), 0), ticks = moneyTicks(top), max = ticks[ticks.length - 1] || 1;
+  const top = Math.max(...days.flatMap(day => day.values.map(value => value || 0)), 0), ticks = whole ? countTicks(top) : moneyTicks(top), max = ticks[ticks.length - 1] || 1;
   const pw = W - M.l - M.r, ph = H - M.t - M.b, y = value => M.t + ph - (ph * value) / max, slot = pw / days.length, each = Math.max(3, (slot * 0.7) / series.length);
   const grid = ticks.map(tick => `<line x1="${M.l}" x2="${W - M.r}" y1="${y(tick).toFixed(1)}" y2="${y(tick).toFixed(1)}" class="vz-grid"/><text x="${M.l - 6}" y="${(y(tick) + 4).toFixed(1)}" text-anchor="end" class="vz-axis">${esc(unit)}${+tick.toFixed(2)}</text>`).join('');
   const groups = days.map((day, index) => {

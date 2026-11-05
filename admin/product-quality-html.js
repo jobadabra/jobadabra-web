@@ -16,7 +16,7 @@ export const QUALITY_STYLE = `${CHIP_STYLE}
 .qc .num{font-size:32px;font-weight:600;line-height:1.05;font-variant-numeric:tabular-nums}.qc .num small{font-size:14px;font-weight:400;color:#8d949c}.qc .lbl{font-size:13px;color:#8d949c}
 .qc .sub{font-size:12.5px;color:#8d949c;display:grid;gap:2px}.qc .sub b{color:inherit;font-weight:600}.qc .src{font-size:11.5px;color:#6b7580}
 .qc.nm{border-style:dashed;background:transparent}.qc.nm .num{font-size:20px;color:#8d949c}
-.qc .vz{margin:2px 0}.qc .vz-more table{width:100%;border-collapse:collapse;font-size:12.5px}.qc .vz-more th,.qc .vz-more td{text-align:left;padding:3px 8px;border-bottom:1px solid #262c33}.qc .vz-more .tw{max-height:260px;overflow:auto}
+.qc .vz{margin:2px 0}.qc .vz-more table{width:100%;border-collapse:collapse;font-size:12.5px}.qc .vz-more th,.qc .vz-more td{text-align:left;padding:3px 8px;border-bottom:1px solid var(--vz-line,#262c33)}.qc .vz-more .tw{max-height:260px;overflow:auto}
 .qhead{margin:26px 0 8px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8d949c}.qhead .muted{text-transform:none;letter-spacing:0;font-weight:400}`;
 
 const iconOf = tone => ICON[tone] ?? ICON.none, toneOf = tone => TONE[tone] ?? TONE.none;

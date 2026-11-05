@@ -20,11 +20,13 @@ export function chartOf(area) {
   if (!area.series?.length) return '';
   if (area.kind === 'columns') {
     const days = area.series.map(point => ({day: point.day, values: [point.found, point.escaped], tip: `${point.day}: ${point.found} caught by tests, ${point.escaped} reached a user`}));
-    return figure({chart: columns(days, [{name: 'Caught by tests', tone: 's1'}, {name: 'Reached a user', tone: 's2'}]),
+    return figure({chart: columns(days, [{name: 'Caught by tests', tone: 's1'}, {name: 'Reached a user', tone: 's2'}], {whole: true}),
       table: tableOf(['Day', 'Caught by tests', 'Reached a user'], area.series.map(point => [point.day, point.found, point.escaped]))});
   }
+  if (!area.series.some(point => point.value != null)) return '';   // every day empty: no frame around a table of "no data"
   const points = area.series.map(point => { const value = shown(point.value); return {day: point.day, value, tip: value == null ? `${point.day}: no data` : `${point.day}: ${text(value, area)}`}; });
-  const bar = area.bar == null ? '' : `<div class="vz-sub">Bar: ${esc(String(area.bar))}${esc(area.unit.trim())}${area.id === 'ai' ? ' of nights give the same score twice' : ''}</div>`;
+  const notes = [area.bar == null ? '' : `Bar: ${area.bar}${area.unit.trim()}`, area.unit.trim() === 's' ? 'Axis in seconds, lower is better' : ''].filter(Boolean);   // the axis labels carry no unit
+  const bar = notes.length ? `<div class="vz-sub">${esc(notes.join(' · '))}</div>` : '';
   return figure({chart: line(points, {tone: 's1', percent: area.unit.trim() === '%', name: area.area}) + bar,
     table: tableOf(['Day', area.area], points.map(point => [point.day, point.value == null ? 'no data' : text(point.value, area)]))});
 }
