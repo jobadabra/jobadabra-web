@@ -1,4 +1,4 @@
-// The two routes the "Send to AI" run (feedback-ai.yml in the public repo) calls, proved by GitHub's own run token (OIDC), never by a shared secret:
+// The two routes the "Send to AI" run (ai-fixer.yml in the public repo; feedback-ai.yml before 5 Nov 2026) calls, proved by GitHub's own run token (OIDC), never by a shared secret:
 //   GET  /api/feedback/brief?ref=<16 hex>      what the AI may read about one feedback (shared/feedback-ai.js briefOf)
 //   POST /api/feedback/ai-status {ref, status: pr|none|failed|merged|closed, pr?, verdict?, why?}   the run reports; the card moves (shared/feedback-actions.js, internal actions)
 // Spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md (PR 7/7). Guarded by test/unit/admin/feedback-ai.test.js.

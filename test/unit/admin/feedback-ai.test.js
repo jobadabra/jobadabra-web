@@ -133,13 +133,13 @@ test('only GET reads the brief and only POST reports', async () => {
   assert.equal((await status(new Request('https://x/s'), env_, NOW, deps)).status, 405);
 });
 
-test('the owner\'s click starts feedback-ai.yml for that ref with the timers\' token; without the token it is a 503; a stranger gets 404; the owner route never accepts a run\'s own step', async () => {
+test('the owner\'s click starts ai-fixer.yml for that card (source feedback) with the timers\' token; without the token it is a 503; a stranger gets 404; the owner route never accepts a run\'s own step', async () => {
   const calls = [], dispatch = async (e, inputs, workflow) => { calls.push([e.GITHUB_REPO, e.GITHUB_TOKEN, inputs, workflow]); };
   const post = (e, body, key = 'owner-key') => actRoute(new Request('https://x/admin/growth/feedback/act', {method: 'POST', headers: {'Content-Type': 'application/json', ...(key ? {Authorization: `Bearer ${key}`} : {})}, body: JSON.stringify(body)}), e, NOW, {dispatch});
   const e = env(), ref = add(e);
   const sent = await post(e, {ref, action: 'ai', include: {profile: true}});
   assert.deepEqual([sent.status, (await sent.json()).state], [200, 'ai_running']);
-  assert.deepEqual(calls, [[REPO, 'timers-token', {ref}, 'feedback-ai.yml']]);
+  assert.deepEqual(calls, [[REPO, 'timers-token', {source: 'feedback', ref}, 'ai-fixer.yml']]);
   assert.equal(row(e, ref).ai_include, 'logs,page,profile');
   assert.deepEqual(log(e, ref).map(l => l.who), ['owner (key)']);
   assert.equal((await post(e, {ref, action: 'ai_merged'})).status, 400, 'a run\'s step through the owner\'s route');

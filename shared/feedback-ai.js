@@ -1,4 +1,4 @@
-// Send to AI (spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md, PR 7/7): one click on a feedback starts one CI run (feedback-ai.yml in the public repo) that ends in a DRAFT PR the owner reviews.
+// Send to AI (spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md, PR 7/7): one click on a feedback starts one CI run (ai-fixer.yml in the public repo since 5 Nov 2026; feedback-ai.yml before) that ends in a DRAFT PR the owner reviews.
 // This file holds what the site decides: the caps, the columns each step writes, the dispatch and the brief the run reads. The state changes themselves are rows of shared/feedback-actions.js; the CI-facing
 // routes are admin/feedback-ai.js. Guarded by test/unit/shared/feedback/feedback-ai.test.js.
 // Why (3 Nov 2026, owner: "send it to a claude session (on the CI using the ai-broker, that the outcome should be a PR with the fix)"; first live run on one feedback he picks): it runs only on his click,
@@ -84,11 +84,14 @@ export async function expireStale(db, now = new Date()) {
   return moved;
 }
 
-/** Starts feedback-ai.yml in the public repo for this ref with the timers' token (the site token is never sent to the public repo). `dispatch` is the Worker's. Throws with the reason when it cannot start. */
+/**
+ * Starts the AI fixer (ai-fixer.yml) in the public repo for this card with the timers' token (the site token is never sent to the public repo). `dispatch` is the Worker's. Throws with the reason when it cannot start.
+ * Why (5 Nov 2026, owner: "Button starts the new agent"; plan ci-agent-until-green, web 5/5): the click used to start feedback-ai.yml (WORKFLOW, still trusted for the brief and the reports). Rollback = revert this one line.
+ */
 export async function startRun(env, ref, dispatch) {
   if (!env.TIMERS_GITHUB_TOKEN) throw new Error('TIMERS_GITHUB_TOKEN is not set');
   if (!env.TIMERS_REPO) throw new Error('TIMERS_REPO is not set');
-  await dispatch({...env, GITHUB_REPO: env.TIMERS_REPO, GITHUB_TOKEN: env.TIMERS_GITHUB_TOKEN}, {ref}, WORKFLOW);
+  await dispatch({...env, GITHUB_REPO: env.TIMERS_REPO, GITHUB_TOKEN: env.TIMERS_GITHUB_TOKEN}, {source: 'feedback', ref}, FIXER_WORKFLOW);
 }
 
 /**

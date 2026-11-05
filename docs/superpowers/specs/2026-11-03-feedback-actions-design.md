@@ -64,7 +64,7 @@ Why this is not the UI Fixer (which stays OFF, owner 25 Oct 2026): that one ran 
 
 ```
 admin button ─► POST act {ai, include} ─► site: state ai_running, one-time run row
-   └► dispatch feedback-ai.yml (jobadabra/jobadabra, input: ref only) via TIMERS_GITHUB_TOKEN
+   └► dispatch ai-fixer.yml (jobadabra/jobadabra, inputs: source=feedback and ref; feedback-ai.yml until 5 Nov 2026) via TIMERS_GITHUB_TOKEN
         ├ 1 brief   OIDC token (audience jobadabra-feedback) ─► GET /api/feedback/brief?ref (site verifies GitHub's signature, repo, workflow file, state=ai_running)
         ├ 2 agent   broker call 1 picks files, call 2 returns edits as data (≤ 3 calls: one retry after a red test), 25 min cap
         ├ 3 gates   paths allowed (src/, desktop/, extension/ and their tests; never .github/, tools/, package files, secrets), a test file changed,
@@ -77,7 +77,7 @@ admin button ─► POST act {ai, include} ─► site: state ai_running, one-ti
 - **The repo is public, so the PR is public.** The branch, commit, PR title and body, run log and artifacts are written by a script that (a) never quotes the feedback or the logs, only the AI's own root cause and fixture data it invents, (b) is scanned for e-mails, tokens, home-folder names and the install id before it is posted (a hit stops the run, nothing is pushed). The brief is a file that is never printed or uploaded.
 - **The AI may also say no:** verdict `fixed-already | not-reproducible | needs-human | false-positive` with a reason → no PR, the card returns to `new` with "🤖 <verdict>: <why>" (a false-positive verdict is a suggestion; only the owner sets that state).
 - **A refused broker call** (limit, login, down) is named, reported to the card as `failed: <cause>` and the run goes red (`AiRefused` handling already used by the site's jobs); nothing else breaks.
-- **Authenticity:** the Worker trusts the run only when GitHub's OIDC token verifies (`audience`, `repository`, `workflow_ref` = `.github/workflows/feedback-ai.yml@refs/heads/main`, `event_name` = `workflow_dispatch`, or `pull_request_target` for merged/closed) **and** the feedback is in `ai_running` started within the last hour; the first run id to fetch the brief owns the card and every later report must carry that id (merged/closed must name the PR the card holds). A run that never answers is sent back to `new` after an hour. The run's own steps (`ai_pr`, `ai_none`, `ai_failed`, `ai_merged`, `ai_closed`) are internal actions: not in the menu and refused on the owner's route. Nothing secret is in the dispatch inputs (the repo and its run pages are public).
+- **Authenticity:** the Worker trusts the run only when GitHub's OIDC token verifies (`audience`, `repository`, `workflow_ref` = `.github/workflows/ai-fixer.yml@refs/heads/main` (or feedback-ai.yml, still trusted), `event_name` = `workflow_dispatch`, or `pull_request_target` for merged/closed) **and** the feedback is in `ai_running` started within the last hour; the first run id to fetch the brief owns the card and every later report must carry that id (merged/closed must name the PR the card holds). A run that never answers is sent back to `new` after an hour. The run's own steps (`ai_pr`, `ai_none`, `ai_failed`, `ai_merged`, `ai_closed`) are internal actions: not in the menu and refused on the owner's route. Nothing secret is in the dispatch inputs (the repo and its run pages are public).
 - Recorded fixtures in every test (a recorded broker answer); the live broker is never called in CI tests.
 
 ### Auth and the log
