@@ -32,7 +32,7 @@
   </nav>
   <main class="legal">
     <h1>Privacy</h1>
-    <p class="muted">Last updated 27 October 2026</p>
+    <p class="muted">Last updated 5 November 2026</p>
     <p><b>In short:</b> your job search lives in <b>your own Notion workspace</b> and on <b>your own computer</b>. We don't run a
       database of your data and we don't sell or share anything.</p>
     <h2>What Jobadabra stores, and where</h2>
@@ -43,7 +43,7 @@
         job listings. Settings → Your data lets you export or delete them.</li>
       <li><b>Optional, only if you connect them</b>: Gmail and Calendar (read-only, to track replies and interviews), Telegram (to send you
         matches), a private GitHub repository (to run while your computer is off), and the AI provider you give a key for
-        (Anthropic), which receives job postings and the parts of your profile needed to score jobs and draft answers.</li>
+        (Anthropic or OpenAI), which receives job postings and the parts of your profile needed to score jobs and draft answers.</li>
     </ul>
     <h2>Technical reports from the app</h2>
     <p>To fix problems for everyone, the app sends us technical reports, <b>on by default</b>: errors and crashes, jobs that failed
@@ -136,7 +136,7 @@
     <h2>Email, Pro and hosted Always on</h2>
     <p><b>Email address:</b> if you give one (in the setup, for notifications, or when you buy Pro) we use it to send you what you chose: your sign-in code, trial reminders and notifications. Product news and the Pro launch offer are sent only if the box for them stays ticked; every message has an unsubscribe link that works in one click, and you can also untick it in Settings. We keep the address as a one-way hash for the mail log and the unsubscribe list, plus the address itself with your account so we can write to you; ask us to delete it any time.</p>
     <p><b>Pro and payments:</b> a Pro payment is made on Stripe's page, in your browser. Stripe is our payment processor: it receives your card details and billing country; we never see your card. We keep your Pro account (your email, which of your computers it covers, your AI credit balance) and the receipt facts we must keep by law.</p>
-    <p><b>Hosted Always on</b> (optional, not offered yet): if you switch it on, our servers run your job search while your computer is off. Your profile and search settings are encrypted, kept apart and deleted when you turn Always on off. These are the same measures the app shows under "How we protect your data":</p>
+    <p><b>Hosted Always on</b> (optional): if you switch it on, our servers run your job search while your computer is off. Your profile and search settings are encrypted, kept apart and deleted when you turn Always on off. These are the same measures the app shows under "How we protect your data":</p>
     <ul>
       <li><b>Encrypted when stored:</b> your profile, search settings and the search's saved state are stored encrypted, with a separate key for each account.</li>
       <li><b>Encrypted on the way:</b> your Mac talks to our site over HTTPS only, and so does the search that runs for you.</li>
@@ -148,7 +148,8 @@
       <li><b>Not end-to-end encrypted:</b> our server decrypts your profile to run the search for you: the price of "we run it". The jobs we found and your e-mail address are kept to send your matches, not encrypted with your key. "On your own accounts" keeps everything on your Mac and in your own accounts.</li>
     </ul>
     <p>For Always on, your CV file is not sent to our servers. After a search that finds new jobs we e-mail you up to five of them, at most once every 4 hours. Turning Always on off keeps your account and its e-mail address, and the log of the e-mails we sent (a one-way hash of the address, never the message), until you ask us to close the account. If your app has not been in touch for 14 days, the searches pause; nothing is deleted until you turn it off.</p>
-    <p>Without hosted Always on, none of it leaves your computer and your Notion.</p>
+    <p>Without hosted Always on, none of it reaches our servers.</p>
+    <p><b>Always on, on your own GitHub</b> (optional): the search runs in a private repository in your own GitHub account, on GitHub's computers, with your own AI key. Your keys (your AI key, Notion, Telegram, the job-search services you added and your Google sign-in) are encrypted on your computer with your repository's key before they leave it, and kept as that repository's secrets. The run's logs and data stay in your repository, and the jobs it finds go to your Notion. We never receive your keys or your profile. The run tells our site only what the free trial needs (how many applications you hold and your first day) and, if you chose e-mail alerts, hands us the message to send.</p>
     <p><b>Ready to send</b> (being tested; not offered yet): the jobs you send to be filled overnight (the address, your answers, CV and letter) are stored on our servers encrypted and deleted when you press Done, after 24 hours, or when you delete everything. For each form it filled, the server also keeps, encrypted, what <i>Open in my browser</i> needs to show it filled in your own browser: the page's address, that site's cookies and storage, and the values it typed. It keeps the video of each fill (<i>Watch the fill</i>) encrypted too. All of it is deleted with the form's data (Done, 24 hours, Delete everything); none of it is written to a log. Nothing is ever submitted for you.</p>
     <h2>Who runs Jobadabra</h2>
     <p>Jobadabra is operated by SEVEN CODE DEVELOPMENT SRL (7code), CUI 38088795, trade register J12/5277/2017, registered office Str. Soporului 8B, bl. B2, sc. 3, et. 8, ap. 191, Cluj-Napoca, Cluj, Romania.</p>
