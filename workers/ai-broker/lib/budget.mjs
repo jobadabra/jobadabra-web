@@ -1,9 +1,12 @@
 // The broker's own share and Codex's whole-week usedPercent both stop scheduled, benchmark and drift work at 70% of the Codex week; PR checks go to 100%.
 // Why (28 Oct 2026, owner: "burn these tokens"; Gitar on #2375; 30 Oct 2026, owner, JOB-45): own tokens and usedPercent meter CI and the whole week; the original caps reserved 25% for the owner.
 // Why (31 Oct 2026, owner: "CI can use up to 100%"): the owner gave CI the whole allowance in every lane; keep both refusal brakes at exhaustion. Replaced for scheduled, bench and drift on 3 Nov 2026 (next Why); PR stays 100.
-// Why (3 Nov 2026, owner, chose "Busy = next engine + PR reserve"): scheduled work (the search check, scouts, the digest) used 62% of the week and PR checks 37%, and by Tuesday the week read 100% so no PR check could use Codex. Scheduled, bench and drift now stop at 70%; PR keeps 30% to itself. A refusal by this reserve passes the call to the next engine like "ran out" (worker.js), it is not an error.
+// Why (3 Nov 2026, owner, chose "Busy = next engine + PR reserve"): scheduled work (the search check, scouts, the digest) used 62% of the week and PR checks 37%, and by Tuesday the week read 100% so no PR check could use Codex. Scheduled, bench and drift now stop at 70%; PR keeps 30% to itself. A refusal by this reserve is not an error.
+// Why (5 Nov 2026, owner: "I first stop scheduled jobs spilling onto your Claude plan at the 70% Codex line"): the refusal used to pass to the next engine like "ran out", and that was Claude, the owner's own subscription. Past the line these lanes pass to Free AI only (worker.js `noClaude`); PR still goes on to Claude at 100%.
 export const RESERVE_PCT = 70;
 export const LIMITS = {own: {pr: 100, scheduled: RESERVE_PCT, bench: RESERVE_PCT, drift: RESERVE_PCT}, week: {pr: 100, scheduled: RESERVE_PCT, bench: RESERVE_PCT, drift: RESERVE_PCT}};
+/** Whether the reserve stops this lane before the whole week is used: scheduled, bench and drift. PR goes to 100%. */
+export const heldByReserve = lane => LIMITS.week[lane] < 100;
 export const DAILY = {drift: 24};   // Why (30 Oct 2026, owner, JOB-45): 20 stored-answer prompts + up to 4 judges per UTC day; the broker must stop reruns and failed calls from exceeding 24.
 // Seed for tokens per 1% of the week (PR 0, 28 Oct 2026: 1% >= ~40 calls of ~18k tokens); the broker replaces it with its measured ratio.
 export const TOKENS_PER_PERCENT = 720000;
