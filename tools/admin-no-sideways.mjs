@@ -11,10 +11,13 @@ const width = Number(process.argv.includes('--width') ? process.argv[process.arg
 const browser = await launchChromium(root);
 if (!browser) { console.log('admin-no-sideways: playwright-core not found (set PLAYWRIGHT_CORE)'); process.exit(2); }
 const {PAGES} = await import(pathToFileURL(path.join(root, 'admin/admin.js')));
+// Why (5 Nov 2026, owner: E-mail split into tabs): a tab is a query on one route, so the page list alone checked only the first tab; every other tab is opened too.
+const {TABS} = await import(pathToFileURL(path.join(root, 'admin/email-tabs.js')));
+const routes = [...PAGES, ...TABS.slice(1).map(tab => ({path: `/admin/growth/email?tab=${tab.id}`}))];
 const site = await workerServer(root, 'all');
 let bad = 0;
 try {
-  await eachPage(PAGES, async ({path: route}) => {
+  await eachPage(routes, async ({path: route}) => {
     const context = await browser.newContext({viewport: {width, height: 844}, isMobile: true, hasTouch: true, reducedMotion: 'reduce'});
     await context.route(url => !url.href.startsWith(site.base), r => r.abort());   // never the live site
     const page = await context.newPage();
@@ -34,5 +37,5 @@ try {
     await context.close();
   });
 } finally { await browser.close(); site.close(); }
-console.log(`admin-no-sideways: ${PAGES.length} admin pages at ${width}px, ${bad} wider than the screen`);
+console.log(`admin-no-sideways: ${PAGES.length} admin pages and ${routes.length - PAGES.length} E-mail tabs at ${width}px, ${bad} wider than the screen`);
 process.exit(bad ? 1 : 0);

@@ -41,7 +41,7 @@ export async function releaseView(request, env) {
 .release-review .notice{padding:12px 16px;border:1px solid #4cc38a;border-radius:8px;color:#4cc38a}
 @media(max-width:600px){.release-review button{width:100%}.release-review iframe{height:640px}.release-review .test-address{flex-basis:100%}}
 </style></head><body><main><div class="release-review">
-<header><a href="/admin/growth/email">← All email</a> <span aria-hidden="true"> · </span> <a href="/admin/growth/email?template=release">Latest stable email</a>
+<header><a href="/admin/growth/email?tab=releases">← All email</a> <span aria-hidden="true"> · </span> <a href="/admin/growth/email?template=release">Latest stable email</a>
 <h1>What's new mail · ${esc(version)} <span class="muted">· ${esc(row.status)}</span></h1>
 <p class="muted">${draft ? 'Waiting for your approval. A test sends only to the address you enter; use Send to everyone below to publish this email.' : row.status === 'sending' ? 'Sending is in progress. Do not send this release again.' : 'This release email has already been sent.'}</p></header>${note}
 <section class="card"><h2>Release preview</h2><p class="muted">Subject: ${esc(mail.subject)}</p>

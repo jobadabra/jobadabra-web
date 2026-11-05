@@ -67,7 +67,7 @@ test('the four switches show on only when exactly "on"', async () => {
 
 test('the page never contains a full address hash, only the first 8 characters', async () => {
   const {env, secret} = await fill();
-  const html = page(await collect(env, {days: 30, now}));
+  const data = await collect(env, {days: 30, now}), html = ['overview', 'settings', 'people', 'releases', 'templates'].map(tab => page(data, null, null, null, [], undefined, tab)).join('\n');   // every tab
   assert.ok(!html.includes(secret));
   assert.ok(html.includes(`<code>${hashOf(secret)}</code>`));
   assert.ok(!html.includes('real.person'));
@@ -89,7 +89,7 @@ test('every template has sample data and renders inside the frame, essential one
 
 test('the page shows each template in a sandboxed frame', async () => {
   const {env} = await fill();
-  const html = page(await collect(env, {now}));
+  const html = page(await collect(env, {now}), null, null, null, [], undefined, 'templates');
   assert.equal((html.match(/<iframe sandbox/g) || []).length, Object.keys(TEMPLATES).length);
 });
 
@@ -104,7 +104,7 @@ test('a test send mails only the test inbox, through the real sender, and says s
   assert.equal(response.headers.get('Location'), '/admin/growth/email?test=welcome:sent&destination=inbox#test-result-welcome');
   assert.deepEqual(sent.map(m => m.to), [TEST_INBOX]);
   assert.match(sent[0].subject, /Confirm your email/);
-  assert.match(page(await collect(env, {now}), null, '<p>x</p>'), /test-account-admin@jobpilotto\.top/);
+  assert.match(page(await collect(env, {now}), null, '<p>x</p>', null, [], undefined, 'templates'), /test-account-admin@jobpilotto\.top/);
 });
 
 test('a test send refuses any other address, an unknown template, a stranger and a foreign origin', async () => {
@@ -130,7 +130,7 @@ test('with the MAIL switch off, or for a list the address stopped, the result sa
 test('the page prints the agreed mail rules from the code: three types, who gets each, the per-address and daily limits', async () => {
   // Why (owner, 5 Nov 2026: "store in the Admin -> Email all these settings we agreed on"): the card reads MAIL_TYPES and DAILY_MAX, so it cannot drift from what send() does.
   const {env} = await fill();
-  const html = page(await collect(env, {now}));
+  const html = page(await collect(env, {now}), null, null, null, [], undefined, 'settings');
   const card = html.slice(html.indexOf('id="mail-types"'), html.indexOf('</section>', html.indexOf('id="mail-types"')));
   for (const type of MAIL_TYPES) assert.ok(card.includes(type.name) && card.includes(type.who.slice(0, 20)), type.id);
   assert.match(card, /Tips and tricks<\/b><\/td><td>[^<]*<\/td><td><span class="pill off">Off/);
@@ -139,7 +139,7 @@ test('the page prints the agreed mail rules from the code: three types, who gets
 
 test('every template card has its own button, and only a known notice word is printed', async () => {
   const {env} = await fill();
-  const html = page(await collect(env, {now}));
+  const html = page(await collect(env, {now}), null, null, null, [], undefined, 'templates');
   assert.equal((html.match(/<button type="submit">Send to test inbox/g) || []).length, Object.keys(TEMPLATES).length);
 });
 
@@ -164,23 +164,24 @@ test('the template full-page view shows a visible failure and a back link', asyn
   assert.match(html, /role="alert"/);
   assert.doesNotMatch(html, /sent 0 in the window/);
   assert.match(html, /Email sending is switched off/);
-  assert.match(html, /href="\/admin\/growth\/email"/);
+  assert.match(html, /href="\/admin\/growth\/email\?tab=templates"/);
 });
 
 test('the email overview links to stable release drafts and template detail pages', async () => {
   const {env} = await live();
   env.STATS.db.prepare('INSERT INTO release_mail (version,data,created_at) VALUES (?,?,?)').run('0.9.9', '{}', 'x');
   env.STATS.db.prepare('INSERT INTO changelog_entries (version,date,channel,hidden,body,at) VALUES (?,?,?,?,?,?)').run('0.9.9', '2026-11-05', 'stable', 0, '[]', 'x');
-  const html = await (await view(new Request('https://www.jobadabra.top/admin/growth/email', {headers: {Authorization: 'Bearer script-key'}}), env)).text();
-  assert.match(html, /href="\/admin\/growth\/email\?release=0\.9\.9"/);
-  assert.match(html, /href="\/admin\/growth\/email\?template=welcome"/);
+  const open = async tab => (await view(new Request(`https://www.jobadabra.top/admin/growth/email?tab=${tab}`, {headers: {Authorization: 'Bearer script-key'}}), env)).text();
+  assert.match(await open('releases'), /href="\/admin\/growth\/email\?release=0\.9\.9"/);
+  assert.match(await open('templates'), /href="\/admin\/growth\/email\?template=welcome"/);
 });
 
-test('the four number tables are charts with the table behind "Show table"; the tooltip script is on the page once', async () => {
-  const {env} = await fill();
-  const html = page(await collect(env, {now}));
-  assert.equal((html.match(/<summary>Show table<\/summary>/g) || []).length, 4);   // By template, Why mail was not sent, Addresses, Stopped
-  assert.match(html, /By template<\/h2><div class="vz">[\s\S]*?<details class="vz-more"><summary>Show table[\s\S]*?<th>Template<\/th>/);
-  assert.equal((html.match(/id="tip"/g) || []).length, 1);
-  assert.match(html, /Last 10 refusals and failures<\/h2><table>/);   // a log stays a table
+test('the four number tables are charts with the table behind "Show table"; the tooltip script is on each tab once', async () => {
+  const {env} = await fill(), data = await collect(env, {now});
+  const overview = page(data), people = page(data, null, null, null, [], undefined, 'people');
+  assert.equal((overview.match(/<summary>Show table<\/summary>/g) || []).length, 2);   // By template, Why mail was not sent
+  assert.equal((people.match(/<summary>Show table<\/summary>/g) || []).length, 2);   // Addresses, Stopped
+  assert.match(overview, /By template<\/h2><div class="vz">[\s\S]*?<details class="vz-more"><summary>Show table[\s\S]*?<th>Template<\/th>/);
+  for (const html of [overview, people]) assert.equal((html.match(/id="tip"/g) || []).length, 1);
+  assert.match(overview, /Last 10 refusals and failures<\/h2><table>/);   // a log stays a table
 });

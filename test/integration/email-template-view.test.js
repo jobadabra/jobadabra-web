@@ -13,8 +13,10 @@ test('template navigation, test results and inputs work at desktop and phone wid
       site.env.MAIL = 'on';
       const page = await browser.newPage({viewport: {width, height: 900}});
       await page.route(url => !url.href.startsWith(site.base), route => route.abort());
-      await page.goto(site.base + '/admin/growth/email', {waitUntil: 'load'});
+      await page.goto(site.base + '/admin/growth/email?tab=releases', {waitUntil: 'load'});
       assert.equal(await page.locator('a[href="/admin/growth/email?release=0.9.9"]').count(), 1);
+      await page.getByRole('link', {name: 'Templates', exact: true}).click();   // the tab bar moves between the sections
+      await page.waitForURL(url => url.searchParams.get('tab') === 'templates');
       await page.locator('#template-welcome h2 a').click();
       assert.equal(await page.locator('.tpl').count(), 1);
       assert.equal(await page.locator('iframe').count(), 1);
@@ -56,7 +58,7 @@ test('the release title opens the live stable draft and its test sends that cont
   try {
     const page = await browser.newPage({viewport: {width: 1440, height: 900}});
     await page.route(url => !url.href.startsWith(site.base), route => route.abort());
-    await page.goto(site.base + '/admin/growth/email', {waitUntil: 'load'});
+    await page.goto(site.base + '/admin/growth/email?tab=templates', {waitUntil: 'load'});
     await page.locator('#template-release h2 a').click();
     await page.waitForURL(url => url.searchParams.get('release') === '0.9.9');
     assert.match(await page.locator('h1').textContent(), /0\.9\.9/);

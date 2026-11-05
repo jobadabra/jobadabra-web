@@ -25,7 +25,7 @@ const stored = env => env.STATS.db.prepare('SELECT name, state FROM mail_switch 
 
 test('the card shows four real switches (role=switch, aria-checked) with their state and where it came from', async () => {
   const env = setup();
-  const html = page({...await collect(env, {days: 7}), confirm: ''}, null, null, null, [], null);
+  const html = page({...await collect(env, {days: 7}), confirm: ''}, null, null, null, [], null, 'settings');
   assert.equal((html.match(/role="switch"/g) || []).length, 4);
   assert.ok(html.includes('role="switch" aria-checked="true" aria-label="MAIL"'));
   assert.ok(html.includes('role="switch" aria-checked="false" aria-label="MARKETING_MAIL"'));
@@ -37,7 +37,7 @@ test('turning a switch off is one press and is stored', async () => {
   const env = setup();
   const response = await press(env, {name: 'MAIL', state: 'off'});
   assert.equal(response.status, 303);
-  assert.equal(response.headers.get('Location'), '/admin/growth/email#switches');
+  assert.equal(response.headers.get('Location'), '/admin/growth/email?tab=settings#switches');
   assert.deepEqual(stored(env), [['MAIL', 'off']]);
   assert.equal((await withSwitches(env)).MAIL, 'off');
 });
@@ -45,12 +45,12 @@ test('turning a switch off is one press and is stored', async () => {
 test('turning a switch on asks first: the first press stores nothing and comes back with the question, the second stores it', async () => {
   const env = setup();
   const first = await press(env, {name: 'MARKETING_MAIL', state: 'on'});
-  assert.equal(first.headers.get('Location'), '/admin/growth/email?confirm=MARKETING_MAIL#switches');
+  assert.equal(first.headers.get('Location'), '/admin/growth/email?tab=settings&confirm=MARKETING_MAIL#switches');
   assert.deepEqual(stored(env), []);
-  const html = page({...await collect(env, {days: 7}), confirm: 'MARKETING_MAIL'}, null, null, null, [], null);
+  const html = page({...await collect(env, {days: 7}), confirm: 'MARKETING_MAIL'}, null, null, null, [], null, 'settings');
   assert.ok(html.includes('Yes, turn it on') && html.includes('name="confirmed" value="1"'));
   const second = await press(env, {name: 'MARKETING_MAIL', state: 'on', confirmed: '1'});
-  assert.equal(second.headers.get('Location'), '/admin/growth/email#switches');
+  assert.equal(second.headers.get('Location'), '/admin/growth/email?tab=settings#switches');
   assert.deepEqual(stored(env), [['MARKETING_MAIL', 'on']]);
   assert.equal((await withSwitches(env)).MARKETING_MAIL, 'on');
 });
@@ -71,11 +71,11 @@ import worker from '../../../workers/www/index.js';
 test('the Worker applies a press to the next request: pressing MAIL off shows it off on the page; the deployed value is untouched', async () => {
   const env = {...setup(), WAITLIST: {list: async () => ({keys: [], list_complete: true})}}, headers = {Authorization: 'Bearer owner-key', Origin: 'https://www.jobpilotto.top'};
   const call = (path, init = {}) => worker.fetch(new Request(`https://www.jobpilotto.top${path}`, {headers, ...init}), env, {waitUntil() {}});
-  const before = await (await call('/admin/growth/email')).text();
+  const before = await (await call('/admin/growth/email?tab=settings')).text();
   assert.ok(before.includes('role="switch" aria-checked="true" aria-label="MAIL"'));
   const pressed = await call('/admin/growth/email/switch', {method: 'POST', body: new URLSearchParams({name: 'MAIL', state: 'off'})});
   assert.equal(pressed.status, 303);
-  const after = await (await call('/admin/growth/email')).text();
+  const after = await (await call('/admin/growth/email?tab=settings')).text();
   assert.ok(after.includes('role="switch" aria-checked="false" aria-label="MAIL"'), 'the page shows the pressed state');
   assert.equal(env.MAIL, 'on');
 });
@@ -98,8 +98,8 @@ test('a press that cannot be saved says so (503) instead of an unexplained error
 test('the card says when the deploy disagrees with a press, and when the stored state could not be read', async () => {
   const env = setup();
   await press(env, {name: 'MARKETING_MAIL', state: 'on', confirmed: '1'});
-  const html = page({...await collect(await withSwitches(env), {days: 7}), confirm: ''}, null, null, null, [], null);
+  const html = page({...await collect(await withSwitches(env), {days: 7}), confirm: ''}, null, null, null, [], null, 'settings');
   assert.ok(html.includes('(the deploy says off)'));
-  const held = page({...await collect(env, {days: 7}), switches: (await collect(env, {days: 7})).switches.map(row => ({...row, held: true, on: false, pressed: false})), confirm: ''}, null, null, null, [], null);
+  const held = page({...await collect(env, {days: 7}), switches: (await collect(env, {days: 7})).switches.map(row => ({...row, held: true, on: false, pressed: false})), confirm: ''}, null, null, null, [], null, 'settings');
   assert.ok(held.includes('the stored state could not be read, so it is held off'));
 });
