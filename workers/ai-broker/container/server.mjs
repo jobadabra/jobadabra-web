@@ -11,7 +11,7 @@ import {readTurn, threadTable, turnUsage} from './threads.mjs';
 import {CLAUDE_TIMEOUT_MS, claudeArgs, claudeInput, readClaude} from './claude.mjs';
 
 const HOME = process.env.CODEX_HOME, AUTH = path.join(HOME, 'auth.json');
-const CALL_TIMEOUT_MS = 100000;   // under the callers' own wait, so a hung codex comes back with its last output instead of a dropped request (28 Oct 2026)
+const CALL_TIMEOUT_MS = Number(process.env.CALL_TIMEOUT_MS ?? 100000);   // under the callers' own wait, so a hung codex comes back with its last output instead of a dropped request (28 Oct 2026)
 fs.mkdirSync(HOME, {recursive: true});   // codex exits 1 ("Error finding codex home") when this folder is missing, e.g. a call before the login arrives (found locally, 28 Oct 2026)
 const readAuth =() => (fs.existsSync(AUTH) ? fs.readFileSync(AUTH, 'utf8') : '');
 
@@ -28,15 +28,24 @@ function trustEnv() {
   return (trust = {SSL_CERT_FILE: BUNDLE, CODEX_CA_CERTIFICATE: CF_CA});
 }
 
+// Why (5 Nov 2026, a8; runs 42057090129 and 42058621304: the 5th call of a conversation got no answer in 180 s while this guard is 100 s; worker log: the container leg lasted 179,975 ms): `close` waits for every process that still holds codex's stdout and stderr, so killing codex alone left the call waiting for a helper it had started, and the guard never answered. The guard now kills codex's whole process group and answers by itself after KILL_GRACE_MS even if a pipe is still held; its error says it was the guard and what codex had printed, so the next stall explains itself.
+const KILL_GRACE_MS = Number(process.env.KILL_GRACE_MS ?? 2000);
+function killTree(child) { try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); } }   // -pid = the group (codex is its leader: detached); a helper that left the group is covered by the grace answer
+
 function run(args, cwd, prompt) {
   return new Promise(resolve => {
-    const child = spawn('codex', args, {cwd, stdio: ['pipe', 'pipe', 'pipe'], env: {PATH: process.env.PATH, HOME: process.env.HOME, CODEX_HOME: HOME, ...trustEnv()}});
-    let out = '', err = '';
+    const child = spawn('codex', args, {cwd, detached: true, stdio: ['pipe', 'pipe', 'pipe'], env: {PATH: process.env.PATH, HOME: process.env.HOME, CODEX_HOME: HOME, ...trustEnv()}});
+    let out = '', err = '', answered = false, grace = null, killed = false;
+    const guarded = () => `${err}\n[killed after ${CALL_TIMEOUT_MS / 1000} s: codex did not finish${out ? `; its last output: ${out.slice(-300)}` : ''}]`;
+    const answer = result => { if (answered) return; answered = true; clearTimeout(timer); clearTimeout(grace); resolve(result); };
     child.stdout.on('data', d => { out += d; });
     child.stderr.on('data', d => { err += d; });
-    const timer = setTimeout(() => child.kill('SIGKILL'), CALL_TIMEOUT_MS);
-    child.on('close', code => { clearTimeout(timer); resolve({code, out, err}); });
-    child.on('error', e => { clearTimeout(timer); resolve({code: -1, out, err: `spawn: ${e.message}`}); });
+    const timer = setTimeout(() => {
+      killed = true; killTree(child);
+      grace = setTimeout(() => answer({code: null, out, err: guarded()}), KILL_GRACE_MS);
+    }, CALL_TIMEOUT_MS);
+    child.on('close', code => answer({code, out, err: killed ? guarded() : err}));
+    child.on('error', e => answer({code: -1, out, err: `spawn: ${e.message}`}));
     child.stdin.on('error', () => {});   // an early CLI exit can close the pipe before the whole prompt is written
     child.stdin.end(String(prompt));   // EOF is required: Codex waits for the complete prompt before starting
   });
