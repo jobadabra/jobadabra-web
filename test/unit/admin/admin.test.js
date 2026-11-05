@@ -35,7 +35,8 @@ test('the menu: every page has a group, no group row has more than 11 pages, Acc
   // Why (owner, 1 Nov 2026, "Add a separate tab on the Admin -> Testing, to be called Synthetic Monitoring"): 9, so Testing holds that tab too; he is shown the 9-page row with the mockup.
   // Why (owner, 2 Nov 2026, asked to fit the Report only tab, a 10th: "Synthetic Monitoring can be renamed to Synthetics and that's it"): 10, with the shorter label so the Testing row still sits in one line at 1440.
   // Why (owner, 4 Nov 2026, asked to fit the AI persona tab, an 11th: "Allow 11 and rename GTM readiness to GTM"): 11, with the shorter label so the Testing row still sits in one line at 1440.
-  for (const name of names) assert.ok(PAGES.filter(page => page.group === name && !page.superadmin).length <= 11, `${name} row is short`);
+  // Why (owner, 5 Nov 2026, approved the Red main tab preview of the state-issues plan: "Yes, ship it"): 12, the Red main tab replaces the pinned red-main GitHub issues.
+  for (const name of names) assert.ok(PAGES.filter(page => page.group === name && !page.superadmin).length <= 12, `${name} row is short`);
   const access = PAGES.find(page => page.superadmin);
   const row = html => html.match(/<div class="admin-sub">.*?<\/div>/s)?.[0] || '';
   const sup = nav('/admin/growth/website', {role: 'superadmin'}), adm = nav('/admin/growth/website', {role: 'admin', name: 'Ann'});

@@ -7,6 +7,8 @@ import {equal} from '../shared/guard.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {VIZ_STYLE} from './viz.js';
 import {finderFigure, resolutionFigure} from './selfheal-charts.js';
+import {auditSection, noiseSection, scoreSection, STATE_STYLE, topIssuesSection} from './selfheal-cards.js';
+import {forgotten, readState, ticked, writeState} from './ci-state.js';
 import {changesSection, dayLabel, TREND_SCRIPT, TREND_STYLE, trendSection} from './trend.js';
 
 // 2-3 Oct 2026, from GitHub Actions logs. Fixer: claude-code-action's own total_cost_usd. Finder: estimated (the review then dropped usage).
@@ -108,7 +110,8 @@ ${PERIODS.map(block).join('\n')}
 const SEVERITY_TONE = {high: 'bad', medium: 'warn', low: 'off'};
 export const bugRow = bug => `<tr><td><a href="${esc(bug.url)}">#${bug.number}</a></td><td>${esc(bug.title)}</td><td class="muted">${esc(bug.detector)}</td><td>${chip(esc(bug.severity), SEVERITY_TONE[bug.severity])}</td><td>${bug.status === 'fixed' ? chip('fixed', 'good') : chip('queued', 'warn')}</td></tr>`;
 
-export function liveSection(live, history = [], now = new Date()) {
+// `state` = {noise, audit, owner}: the ci_state stores the cards read (admin/ci-state.js) and whether the viewer may press their buttons.
+export function liveSection(live, history = [], now = new Date(), state = {}) {
   if (!live) return `<section class="card"><h2>🩺 The loop, live</h2><p class="muted">No numbers published yet: they arrive every 3 hours from CI (self-heal-stats.yml).</p></section>`;
   const t = live.totals || {}, fixer = live.fixer || {}, cost = live.cost || {}, recall = live.recall;
   const periods = !!live.periods;
@@ -136,6 +139,10 @@ export function liveSection(live, history = [], now = new Date()) {
   const pause = live.budget?.paused ? `<section class="card late"><b>💸 The AI verdicts are paused</b> · the AI limit was reached on ${esc(live.budget.since)}${live.budget.until ? `; access returns on ${esc(live.budget.until)}` : ''}. ${num(live.budget.waiting)} findings wait for a verdict until then (issue #${esc(live.budget.issue)}).</section>` : '';
   return `${banner}${pause}<section class="card"><h2>🩺 The loop, live</h2><small class="muted">Updated ${esc(String(live.at || '').slice(0, 16).replace('T', ' '))} UTC (${esc(age.text)}) · every issue the loop filed${since ? ` since ${esc(since)}` : ''}, by what found it and how it ended${since ? `. ${num(live.excluded)} earlier issues, filed under noisier rules, stay on GitHub and are not counted, so the figures cover only this window` : ''}</small></section>
 <div class="tiles">${tiles.map(([label, value, note]) => `<div class="card tile"><span class="muted">${label}</span><b>${esc(value)}</b><small class="muted">${esc(note)}</small></div>`).join('')}</div>
+${topIssuesSection(live)}
+${auditSection(state.audit, state.owner)}
+${scoreSection(live.scorecard, (history.find(row => row.day < String(live.at || '').slice(0, 10) && row.scorecard) || {}).scorecard)}
+${noiseSection(state.noise, state.owner)}
 ${watchSection(live)}
 ${periodsSection(live)}
 ${trendSection(live)}
@@ -180,7 +187,7 @@ export async function snapshots(env) {
   } catch { return []; }
 }
 
-export function page(_legacy, live = null, history = []) {
+export function page(_legacy, live = null, history = [], state = {}) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>Self-healing · Admin</title><link rel="icon" href="/favicon-32.png">
 <style>${CHIP_STYLE}${VIZ_STYLE}
@@ -195,12 +202,25 @@ a{color:var(--amber)}.muted{color:var(--muted)}header{display:flex;justify-conte
 td{padding:6px 4px;border-top:1px solid var(--line)}td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}tr.total td{font-weight:700}
 ul{margin:8px 0 0;padding-left:18px}li{margin-top:6px}
 .reference summary{cursor:pointer;list-style:none}.reference summary::-webkit-details-marker{display:none}.reference summary h2::after{content:' ▸ show';color:var(--amber);font-weight:400;font-size:13px}.reference[open] summary h2::after{content:' ▾'}
-${TREND_STYLE}
+${TREND_STYLE}${STATE_STYLE}
 </style></head><body><main>
 <header><h1>🔁 Self-healing</h1><span class="muted">${esc(rangeText(live))}</span></header>
-${liveSection(live, history)}
+${liveSection(live, history, undefined, state)}
 ${principlesSection()}
 </main><noscript><style>.period[hidden]{display:block!important}</style></noscript><div id="tip" role="tooltip" hidden></div><script>${TREND_SCRIPT}</script></body></html>`;
+}
+
+// The owner's two buttons (never an invited admin's): "Forget" on a noise-register entry and a verdict-audit tick. A form on another site cannot post here (Origin), the answer is a redirect back to the card.
+async function press(request, env, url) {
+  if (!await isOwner(request, env) || !env.STATS || request.headers.get('Origin') !== url.origin) return new Response('Not found', {status: 404});
+  const form = await request.formData().catch(() => new FormData());
+  const action = form.get('action');
+  if (action === 'forget') await writeState(env, 'noise-register', forgotten(await readState(env, 'noise-register', {entries: []}), String(form.get('id') || '')));
+  else if (action === 'tick') {
+    const {audits, changed} = ticked(await readState(env, 'verdict-audit', {audits: []}), String(form.get('key') || ''), String(form.get('value') || ''));
+    if (changed) await writeState(env, 'verdict-audit', {audits});
+  } else return new Response('Unknown action', {status: 400});
+  return new Response(null, {status: 303, headers: {Location: `${url.pathname}#${action === 'forget' ? 'noise' : 'audit'}`}});
 }
 
 // GET /self-heal (?key=<STATS_KEY> once; the cookie after that)
@@ -208,6 +228,8 @@ export async function view(request, env) {
   if (!await viewer(request, env)) return new Response('Not found', {status: 404});
   const url = new URL(request.url);
   if (url.searchParams.has('key')) return remember(url, env, request);
+  if (request.method === 'POST') return press(request, env, url);
   const history = env.STATS ? await snapshots(env) : [];
-  return new Response(page(undefined, history[0] || null, history), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
+  const state = {noise: await readState(env, 'noise-register', null), audit: await readState(env, 'verdict-audit', null), owner: await isOwner(request, env)};
+  return new Response(page(undefined, history[0] || null, history, state), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
 }

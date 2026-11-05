@@ -6,6 +6,7 @@ import {aiPersona} from './page-shot-seed-ai-persona.mjs';
 import {aiCostFull} from './page-shot-seed-ai-cost.mjs';
 import {healFull, testingFull} from './page-shot-seed-testing.mjs';
 import {qualityBoard} from './page-shot-seed-quality.mjs';
+import {redMainRows, stateFields, stateRows} from './page-shot-seed-state.mjs';
 const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields)});
 
 export const seeds = {
@@ -135,12 +136,14 @@ export const seeds = {
       const body = {schema: 1, at, totals: {filed: 95 - back, fixed: 19, queued: real - 19, falsePositive: 22, duplicate: 10, harness: 6, unclear: 25, open: 6, real, precision: 54},
         byDetector: ['AI screenshot review', 'AI code review of the latest merged pull requests', 'Recorded replay mismatch', 'Console errors'].map((detector, i) => ({detector, filed: 38 - i * 7, fixed: 4 + i, queued: 7, falsePositive: 10 - i, duplicate: 3, harness: i, unclear: 6, open: 1})),
         fixer: {opened: 8, merged: 2, landed: 5, closed: 4, open: 0}, verdicts: {real: 9, falsePositive: 8}, cost: {usd: 1.06, runs: 12, byJob: {review: 0.6, fixer: 0.46}, perRealBug: 0.04},
-        recall: {planted: 13, caught: 11, missed: ['page-overflow', 'a11y-contrast']}, quality: {mutation: {rate: 100, note: '12 of 12 planted code bugs caught'}, escape: {rate: 66, note: '68 of 103 bugs found outside the Finder'}}, daily: [{day: at.slice(0, 10), filed: 33, real: 20, falsePositive: 9}],
+        ...stateFields(back), recall: {planted: 13, caught: 11, missed: ['page-overflow', 'a11y-contrast']}, quality: {mutation: {rate: 100, note: '12 of 12 planted code bugs caught'}, escape: {rate: 66, note: '68 of 103 bugs found outside the Finder'}}, daily: [{day: at.slice(0, 10), filed: 33, real: 20, falsePositive: 9}],
         notable: [1, 2, 3, 4].map(n => ({number: 100 + n, title: `Demo issue ${n}: a long made-up title that names a component, the symptom and where_it_happens_in_some/long/path/file-name.js`, url: `https://github.com/demo/demo/issues/${100 + n}`,
           detector: 'AI code review', status: n % 2 ? 'fixed' : 'queued', severity: 'medium'}))};
       await env.STATS.prepare('INSERT INTO selfheal_snapshots (day, at, body) VALUES (?, ?, ?) ON CONFLICT(day) DO UPDATE SET at = excluded.at, body = excluded.body').bind(at.slice(0, 10), at, JSON.stringify(body)).run();
     }
+    await stateRows(env);
   },
+  'red-main': ({env}) => redMainRows(env),
   'testing-overview': async ({env}) => {   // the Testing Overview (1 Nov 2026): made-up e2e / integration / self-healing / scorecard rows; the workflows' last runs are the real ones in $TESTING_OVERVIEW_REAL_DIR/schedules.json (jobs/schedules-snapshot.mjs --dry --out) when set
     const {clean} = await import('../admin/schedules.js');
     const {readFileSync, existsSync} = await import('node:fs');

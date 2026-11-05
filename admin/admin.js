@@ -52,6 +52,7 @@ export const PAGES = [
   {path: '/admin/testing/integrations', group: 'Testing', question: 'Are the integration tests green, quick and steady, and how much of e2e has moved to them?', old: ['/admin/operations/integrations'], name: 'Integrations', icon: '🧩'},
   {path: '/admin/testing/pr-checks', group: 'Testing', question: 'Do our PR checks catch real bugs, and how long do they make us wait?', old: ['/admin/operations/pr-checks'], name: 'PR checks', icon: '✅'},
   {path: '/admin/testing/self-healing', group: 'Testing', question: 'Do the automatic loops find and fix problems on their own?', old: ['/admin/self-healing', '/self-heal', '/admin/operations/self-healing'], name: 'Self-healing', icon: '🔁'},
+  {path: '/admin/testing/red-main', group: 'Testing', question: 'Which main e2e suites are red now, and which PR broke them?', name: 'Red main', icon: '🚨'},
   {path: '/admin/testing/sentry', group: 'Testing', question: 'What errors do the apps report to Sentry, and did the fixer handle them?', old: ['/admin/sentry', '/admin/operations/sentry'], name: 'Sentry', icon: '🐞'},
   {path: '/admin/testing/scheduled', group: 'Testing', question: 'Are the scheduled jobs that test and heal our code running on time and green?', name: 'Scheduled', icon: '⏰'},
   {path: '/admin/schedules/all-jobs', group: 'Schedules', question: 'Are all our scheduled jobs running on time and green, in every area?', old: ['/admin/agents/schedules', '/admin/operations/schedules'], name: 'All jobs', icon: '⏰'},
