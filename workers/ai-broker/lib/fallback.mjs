@@ -27,13 +27,13 @@ export const exhausted = why => !refuseReply(why) && /^(budget:(week|own-share)\
 
 /** The server's own words in a failed Codex run's text: the last "message" of its JSON event stream, else the text without its `codex-failed:<code>` prefix; one line. */
 export function codexMessage(why) {
-  const said = [...String(why ?? '').matchAll(/"message":"((?:[^"\\]|\\.)*)"/g)].map(found => found[1]);
+  const said = [...String(why ?? '').matchAll(/"message":"((?:[^"\\]|\\.)*)"/g)].map(found => { try { return JSON.parse(`"${found[1]}"`); } catch { return found[1]; } });   // a cut-off escape keeps the raw text
   return (said.length ? said.at(-1) : String(why ?? '').replace(/^codex-failed:\d+\s*/, '')).replace(/\s+/g, ' ').trim();
 }
 
 /** Whether Codex's model server turned the run away for capacity (Codex's server_overloaded class), read from the server's own words only; credential-shaped text keeps the refusal. */
 // Why (5 Nov 2026, CI run 42040707448): the AI user agent died on "codex-failed:1 … Selec[ted model is at capacity]" while Claude was configured and idle; a busy model is not the caller's fault, another engine can answer.
-export const overloaded = why => !refuseReply(why) && /\bat capacity\b|\boverloaded\b|high demand|capacity unavailable/i.test(codexMessage(why));
+export const overloaded = why => !refuseReply(why) && /\bat capacity\b|overloaded|high demand|capacity[ _]unavailable/i.test(codexMessage(why));
 
 /** Today's measured Free AI USD and outstanding reservation, for broker health and the guarded admin page. */
 export async function fallbackToday(storage, env) {
