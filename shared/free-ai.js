@@ -91,11 +91,12 @@ export async function freeAi(request, env, now = new Date(), ctx = null, fetcher
   let body;
   try { body = await request.json(); } catch { return error(400, 'Bad request.', 'invalid_request_error'); }
   const routed = pro?.account ? proRoute(request.headers.get('x-jp-action'), env) : null;   // a Pro account with credit, on a step with a measured Claude gain (shared/pro-claude.js); Free never
+  const began = Date.now();   // before a Pro step's Claude try (up to 50 s, shared/pro-claude.js), so a 502's ms= counts it (Gitar on #414)
   const claude = routed ? await claudeCall(env, routed, body, fetcher) : null;   // null on any failure: Workers AI answers below
   const model = claude ? routed : modelFor(request.headers.get('x-jp-action'), env);
   let result;
   // Why (5 Nov 2026, the first production hosted run: two 502s after 163 s and 173 s with no reason logged): a 502 names its cause.
-  const began = Date.now(), failed = cause => { console.error(`free-ai 502: ${cause} model=${model} action=${request.headers.get('x-jp-action') || '-'} ms=${Date.now() - began}`); return error(502, 'Free AI could not answer just now.'); };
+  const failed = cause => { console.error(`free-ai 502: ${cause} model=${model}${routed ? ` claude=${routed} failed` : ''} action=${request.headers.get('x-jp-action') || '-'} ms=${Date.now() - began}`); return error(502, 'Free AI could not answer just now.'); };
   if (!claude) try {
     const readPdf = async base64 => {
       const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
