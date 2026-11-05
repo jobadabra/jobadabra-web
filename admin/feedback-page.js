@@ -147,11 +147,11 @@ function formFor(row, action) {
 }
 
 // "Send to AI": one CI run reads this report and opens a DRAFT PR for the owner. The ticks say what the AI may read besides the words (never the e-mail, the install id or the screenshot);
-// the profile snapshot is off unless ticked for this run. The server checks the limits again (3 a day, one at a time).
+// the profile snapshot is off unless ticked for this run. The server checks the limits again (10 a day, one at a time).
 function aiForm(row) {
   const form = el('div', 'form'), tick = (label, on, disabled) => { const box = el('input'); box.type = 'checkbox'; box.checked = on; box.disabled = disabled; const l = el('label', 'check'); l.append(box, label); form.append(l); return box; };
   const logs = tick('Its logs', !!row.logs, !row.logs), page = tick('Its screen data', !!row.page, !row.page), profile = tick('The Profile snapshot (off unless you tick it for this run)', false, !row.profile);
-  form.append(el('div', 'note', 'A CI run reads the report, writes a failing test and the fix, and opens a draft PR for you to review. It never merges. At most 3 a day, one at a time. It uses the AI plan.'));
+  form.append(el('div', 'note', 'A CI run reads the report, writes a failing test and the fix, and opens a draft PR for you to review. It never merges. At most 10 a day, one at a time. It uses the AI plan.'));
   const buttons = el('div', 'row'), go = el('button', 'go', 'Send to AI'), cancel = el('button', '', 'Cancel'); go.type = cancel.type = 'button'; cancel.onclick = () => form.remove();
   go.onclick = () => send({ref: row.ref, action: 'ai', include: {logs: logs.checked, page: page.checked, profile: profile.checked}}, 'Sent to the AI: its run starts in a minute.');
   buttons.append(go, cancel); form.append(buttons); setTimeout(() => go.focus());

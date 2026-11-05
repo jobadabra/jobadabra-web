@@ -2,7 +2,7 @@
 // This file holds what the site decides: the caps, the columns each step writes, the dispatch and the brief the run reads. The state changes themselves are rows of shared/feedback-actions.js; the CI-facing
 // routes are admin/feedback-ai.js. Guarded by test/unit/shared/feedback/feedback-ai.test.js.
 // Why (3 Nov 2026, owner: "send it to a claude session (on the CI using the ai-broker, that the outcome should be a PR with the fix)"; first live run on one feedback he picks): it runs only on his click,
-// at most 3 a day and 1 at a time, never merges and never pushes to main; the UI Fixer (scheduled, many findings) stays OFF (owner, 25 Oct 2026).
+// at most 10 a day and 1 at a time, never merges and never pushes to main; the UI Fixer (scheduled, many findings) stays OFF (owner, 25 Oct 2026).
 import {releasePr} from './feedback-reply.js';
 import {TEXT_FILES} from './feedback.js';
 
@@ -12,7 +12,8 @@ export const WORKFLOW = 'feedback-ai.yml';
 export const FIXER_WORKFLOW = 'ai-fixer.yml';
 /** The file that tells the site an fd-ai/ pull request was merged or closed (pull_request_target), apart so a normal PR's close draws one row (jobadabra plan 2026-11-05-check-names, 3/4). */
 export const CLOSE_WORKFLOW = 'feedback-ai-closed.yml';
-export const DAILY_RUNS = 3;
+// Why (5 Nov 2026, owner): allow 10 daily attempts after the fourth CI attempt was blocked by the old limit.
+export const DAILY_RUNS = 10;
 export const STALE_MS = 60 * 60 * 1000;   // a run that has not answered in an hour is dead: the brief and the callbacks are only served inside this window
 export const VERDICTS = ['fixed-already', 'not-reproducible', 'needs-human', 'false-positive', 'none'];
 const INCLUDABLE = ['logs', 'page', 'profile'];
