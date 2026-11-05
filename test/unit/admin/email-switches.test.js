@@ -26,7 +26,8 @@ const stored = env => env.STATS.db.prepare('SELECT name, state FROM mail_switch 
 test('the card shows four real switches (role=switch, aria-checked) with their state and where it came from', async () => {
   const env = setup();
   const html = page({...await collect(env, {days: 7}), confirm: ''}, null, null, null, [], null, 'settings');
-  assert.equal((html.match(/role="switch"/g) || []).length, 4);
+  const switches = html.slice(html.indexOf('id="switches"'), html.indexOf('</section>', html.indexOf('id="switches"')));   // the Mails card below has switches of its own
+  assert.equal((switches.match(/role="switch"/g) || []).length, 4);
   assert.ok(html.includes('role="switch" aria-checked="true" aria-label="MAIL"'));
   assert.ok(html.includes('role="switch" aria-checked="false" aria-label="MARKETING_MAIL"'));
   assert.ok(html.includes('action="/admin/growth/email/switch"') && html.includes('as deployed'));

@@ -1,10 +1,11 @@
 // Our e-mail sender (Cloudflare Email Sending, binding EMAIL): send(env, template, to, data) is the one way any code mails a person. It refuses (never throws) on a bad address,
-// a bounce/complaint, a stop from the template's list, news its rules hold back (shared/mail-lists.js), or more than DAILY_MAX mails a day to one address; it adds the footer, the one-click
+// a bounce/complaint, a stop from the template's list, news its rules hold back (shared/mail-lists.js), the owner's stop on that mail (shared/mail-registry.js), or more than DAILY_MAX mails a day to one address; it adds the footer, the one-click
 // unsubscribe link and headers, and logs the mail (hash of the address, never the body) in mail_log. Switch: env.MAIL = "on" (anything else sends nothing). Guard: test/unit/shared/mail/mail.test.js.
 import {appVersionOf} from './app-needs.js';
 import {digestOf, tokenFor} from './guard.js';
 import {frameHtml, frameText, REPLY_TO, SITE} from './mail-frame.js';
 import {NEWS, OPT_IN, newsFacts, newsRefusal} from './mail-lists.js';
+import {ruleRefusal} from './mail-registry.js';
 import {TEMPLATES} from './mail-templates.js';
 
 // Per address, per rolling 24 h, every template together: a safety net so a bug of ours (a loop, a schedule firing too often) cannot flood one person into
@@ -89,6 +90,8 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
     const verdict = await mailAllowed(env, to, spec.list, {...spec, test});
     const addr = await addrOf(to);
     if (!verdict.ok) { if (verdict.reason !== 'bad_address' && verdict.reason !== 'marketing_off') await record(env, now, addr, spec.list, logged, verdict.reason); return verdict; }
+    const ruled = await ruleRefusal(env, template);   // the owner's stop on this one mail, or 'rule_held' when the stops cannot be read (spec 2026-11-05-service-mail-rules-design.md)
+    if (ruled) { await record(env, now, addr, spec.list, logged, ruled); return {ok: false, reason: ruled}; }
     // Why (jobadabra-web#431; 20 of 20 parallel sends went out in the review of #430): the room under both caps is CLAIMED in one statement before the provider is asked (D1 runs a statement alone,
     // as in sendTestMail), so calls that arrive together cannot all read the same count. A live claim counts like a sent mail; one older than CLAIM_MS is a Worker that died and counts for nothing.
     const since = new Date(now.getTime() - DAY).toISOString(), fresh = new Date(now.getTime() - CLAIM_MS).toISOString();
