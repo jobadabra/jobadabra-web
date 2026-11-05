@@ -7,11 +7,16 @@ name: CI · Ready to send image
 # which public-watch.yml starts when those files change, so a broken image never ships.
 # Why (2 Nov 2026, owner: "No e2e on PRs", 1 Nov 2026): this boots the real built container image and runs a night in it, so it is an e2e, not an integration test: it runs after the merge on main
 # (a red merge is reverted), not on the PR. The deploy above is the second guard: a broken image never ships.
+# Why (5 Nov 2026, owner 2 Nov 2026: "A PR adding a new e2e or modifying the e2e.. should have it as a PR CI check"): a PR that changes this check itself runs it, and only that PR (not every change under ops/hosted).
 on:
   push:
     branches: [main]
     paths:
       - 'ops/hosted/**'
+      - '.github/workflows/ready-fill-image.yml'
+  pull_request:
+    paths:
+      - 'ops/hosted/ready-fill/image-check.mjs'
       - '.github/workflows/ready-fill-image.yml'
   workflow_dispatch:
 permissions:
