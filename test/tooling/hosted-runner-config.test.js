@@ -1,7 +1,9 @@
 // The hosted runner's deploy: the staging copy never shares the production Worker name or queue, and the workflow is by hand (hr 2/6, 5 Nov 2026).
 // Why: a staging runner reading the queue "hosted-runs" would take production's runs and call the wrong site; a push-triggered production deploy would skip the owner's yes.
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 import {STAGING, readConfig, stagingConfig} from '../../tools/runner-config.mjs';
 
@@ -42,4 +44,10 @@ test('the deploy workflow is by hand only and picks staging or production', () =
   assert.ok(/runner-config\.mjs staging/.test(flow));
   assert.ok(/environment: \$\{\{ inputs\.target == 'production' && 'production'/.test(flow), 'production runs in its own environment, where the owner is the required reviewer');
   assert.ok(/queues create hosted-runs-staging/.test(flow), 'the staging queue is made when missing');
+});
+
+test('the runner Worker parses (its tests cannot import it: @cloudflare/containers does not load under node)', () => {
+  // Why (5 Nov 2026, Gitar on #387): an edit moved the comma between queue() and fetch() into a comment; only regexes read the file, so CI stayed green on a Worker that would not load.
+  const checked = spawnSync(process.execPath, ['--check', fileURLToPath(new URL('../../workers/hosted-runner/worker.js', import.meta.url))], {encoding: 'utf8'});
+  assert.equal(checked.status, 0, checked.stderr);
 });

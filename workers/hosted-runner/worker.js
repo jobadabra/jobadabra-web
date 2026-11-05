@@ -12,6 +12,6 @@ export class HostedRunner extends Container {
 }
 
 export default {
-  async queue(batch, env) { await consume(batch, account => getContainer(env.RUNNER, account)); },
+  async queue(batch, env) { await consume(batch, account => getContainer(env.RUNNER, account), console, {build: env.HOSTED_BUILD}); },   // HOSTED_BUILD: the engine stamp the deploy built (release-hosted-runner.yml); each run checks its container against it
   async fetch() { return new Response('Not found', {status: 404}); },
 };
