@@ -6,6 +6,7 @@ import {chromium} from 'playwright';
 import {WebSocketServer} from 'ws';
 import {attach, handoff} from './live.mjs';
 import {gone, runNight, why} from './night.mjs';
+import {onStop} from './stop.mjs';
 
 let night = null, token = '', status = {state: 'idle', jobs: 0, filled: 0};
 const log = (what, data = {}) => console.log(JSON.stringify({what, ...data}));   // counts and words only
@@ -39,4 +40,5 @@ server.on('upgrade', (request, socket, head) => {
   if (!page) { socket.destroy(); return; }
   sockets.handleUpgrade(request, socket, head, ws => attach(ws, page).catch(() => ws.close()));
 });
+onStop(process, server, () => { for (const ws of sockets.clients) ws.close(1001, 'stopping'); return night?.close(); }, {log});   // Cloudflare's stop (hosted/ready-fill/stop.mjs says why this is needed)
 server.listen(Number(process.env.PORT) || 8080, () => log('ready-fill listening'));

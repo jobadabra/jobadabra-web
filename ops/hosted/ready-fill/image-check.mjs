@@ -45,6 +45,12 @@ try {
   else if (results.length !== 1) failed = `expected 1 result posted, got ${results.length}`;
   else if (results[0].wall === 'error') failed = 'the job threw instead of being tried';
   else if (videos.length !== 1 || videos[0].head !== '1a45dfa3') failed = `expected 1 WebM video of the fill posted, got ${JSON.stringify(videos)} (Watch the fill: is Playwright's ffmpeg in the image?)`;   // 1a45dfa3: the WebM/Matroska header
+  if (!failed) {   // Why (5 Nov 2026, hr): the real PID 1 gets Cloudflare's stop (SIGTERM). Exit code 0 in a few seconds = it handled it; 137 after the 30 s = it was killed because it ignored it (stop.mjs).
+    const began = Date.now();
+    docker('stop', '-t', '30', name);
+    const code = docker('inspect', '-f', '{{.State.ExitCode}}', name), took = Math.round((Date.now() - began) / 1000);
+    if (code !== '0' || took > 15) failed = `docker stop took ${took} s and the container exited ${code}: it must exit 0 within 15 s of SIGTERM (stop.mjs)`;
+  }
 } catch (error) { failed = error.message; }
 finally {
   try { console.log(docker('logs', '--tail', '20', name)); } catch { /* no container */ }
@@ -52,4 +58,4 @@ finally {
   site.close();
 }
 if (failed) { console.error(`image check FAILED: ${failed}`); process.exit(1); }
-console.log('image check OK: a fresh container says gone; the night read its batch, tried the job, posted its result and its video');
+console.log('image check OK: a fresh container says gone; the night read its batch, tried the job, posted its result and its video; docker stop ended it with exit 0');
