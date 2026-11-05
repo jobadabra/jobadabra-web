@@ -10,16 +10,26 @@ import {SITE} from '../shared/mail-frame.js';
 
 const VERSION = /^\d+\.\d+\.\d+$/;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const KINDS = ['features', 'improvements'];   // fixes stay on the What's new page; the mail tells what people can now do
+// Why (5 Nov 2026, owner): release emails mirror the changelog, including fixes.
+const KINDS = ['features', 'improvements', 'fixes'];
 const json = (body, status = 200) => Response.json(body, {status, headers: {'Cache-Control': 'no-store'}});
 const notFound = () => new Response('Not found', {status: 404});
 
-// A changelog entry's groups -> the mail's data. The first feature (else improvement) is the headline; every item is a section (at most 5).
+/** Builds the complete release email from changelog groups, preserving each change's kind. */
 export function dataFrom({version, date, groups = []}) {
-  const items = KINDS.flatMap(kind => groups.filter(group => group.kind === kind).flatMap(group => group.items || []));
+  const items = KINDS.flatMap(kind => groups.filter(group => group.kind === kind).flatMap(group => (group.items || []).map(item => ({...item, kind}))));
   if (!items.length) return null;
   const [year, month] = String(date || '').split('-').map(Number);
-  return {version, month: `${MONTHS[(month || 1) - 1]} ${year}`, headline: items[0].text.replace(/\.$/, ''), sections: items.slice(0, 5).map(item => ({title: item.lead, text: item.text})), updateUrl: `${SITE}/download`};
+  return {version, month: `${MONTHS[(month || 1) - 1]} ${year}`, headline: items[0].text.replace(/\.$/, ''), sections: items.map(item => ({kind: item.kind, title: item.lead, text: item.text})), updateUrl: `${SITE}/download`};
+}
+
+/** Reads legacy drafts through the current changelog shape without writing or sending anything. */
+export async function releaseData(env, data) {
+  if (data.sections?.length && data.sections.every(section => section.kind)) return data;
+  const row = await env.STATS.prepare('SELECT version, date, body FROM changelog_entries WHERE version = ? AND hidden = 0').bind(data.version).first();
+  const fresh = row && dataFrom({version: row.version, date: row.date, groups: JSON.parse(row.body)});
+  if (!fresh) return data;
+  return {...data, sections: fresh.sections.map(section => ({...section, ...data.sections?.find(saved => saved.title === section.title), kind: section.kind}))};
 }
 
 // Everyone we hold an address for: accounts (trial, Always on, Pro) and the waitlist (KV signup:<email>), once each.
@@ -66,7 +76,7 @@ export async function sendAll(env, version, {now = new Date()} = {}) {
   const claim = await env.STATS.prepare("UPDATE release_mail SET status = 'sending' WHERE version = ? AND status = 'draft'").bind(version).run();
   if (!claim.meta?.changes) return {refused: 'not a draft'};
   const row = await env.STATS.prepare('SELECT data FROM release_mail WHERE version = ?').bind(version).first();
-  const data = JSON.parse(row.data);
+  const data = await releaseData(env, JSON.parse(row.data));
   let sent = 0, skipped = 0;
   for (const email of await audience(env)) {
     const result = await send(env, 'release', email, {...data, name: ''}, {now});
@@ -82,9 +92,9 @@ export async function releaseRoute(request, env) {
   const url = new URL(request.url), version = url.searchParams.get('version') || '';
   const row = await env.STATS.prepare('SELECT status, data, sent_count FROM release_mail WHERE version = ?').bind(version).first();
   if (!row) return json({error: 'no draft for this version'}, 404);
-  const data = JSON.parse(row.data), headline = url.searchParams.get('headline');
+  const data = await releaseData(env, JSON.parse(row.data)), headline = url.searchParams.get('headline');
   if (headline && row.status === 'draft') {
-    data.headline = headline.slice(0, 120);
+    data.intro = headline.slice(0, 120); data.headline = data.intro;
     await env.STATS.prepare('UPDATE release_mail SET data = ? WHERE version = ?').bind(JSON.stringify(data), version).run();
   }
   if (url.searchParams.get('send') === '1') return env.MARKETING_MAIL === 'on' ? json(await sendAll(env, version)) : json({off: true}, 409);

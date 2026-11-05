@@ -8,9 +8,19 @@ import {healFull, testingFull} from './page-shot-seed-testing.mjs';
 const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields)});
 
 export const seeds = {
+  'release-mail': async ({env}) => {
+    env.MAIL = 'on'; env.MARKETING_MAIL = 'on';
+    const data = {version: '0.9.9', month: 'November 2026', headline: 'Locations update as soon as you choose them',
+      sections: [{kind: 'improvements', title: 'Faster location updates', text: 'Locations update as soon as you choose them or undo a change.'},
+        {kind: 'features', title: 'Search by recruiter', text: 'Find jobs using the recruiter or agency name.'}, {kind: 'fixes', title: 'Keep reply status', text: 'A reply copied to your inbox stays marked as Replied.'}], updateUrl: 'https://www.jobadabra.top/download'};
+    await env.STATS.prepare('INSERT INTO release_mail (version, data, created_at) VALUES (?, ?, ?)').bind('0.9.9', JSON.stringify(data), '2026-11-05T01:53:00Z').run();
+    const {createAccount} = await import('../shared/pro.js');
+    await createAccount(env, 'alex@example.com', new Date('2026-11-05T01:00:00Z'), {plan: 'trial'});
+  },
   feedback: feedbackSeed,
   'feedback-stuck': context => feedbackRunSeed(context),
   'feedback-recovered': context => feedbackRunSeed(context, true),
+
   website: async ({env}) => {   // made-up visitors and downloaders for /admin/growth/website (1 Nov 2026): 30 days, busiest 5 days ago, a quiet day after it; person ids are made up
     const week = [[8, 6], [6, 9], [8, 6], [17, 1], [5, 2], [7, 4], [8, 3]], rows = [];
     for (let back = 29; back >= 0; back--) {

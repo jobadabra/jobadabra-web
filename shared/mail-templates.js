@@ -88,7 +88,7 @@ export const TEMPLATES = {
   // The "What's new" mail at a stable release (shared/mail-release.js), held as a draft on /admin/growth/email until the owner clicks "Send to everyone". Data: see mail-release.js.
   'release': {list: 'marketing',
     subject: releaseSubject,
-    title: ({headline}) => releaseSubject({headline}),
+    title: releaseSubject,
     hero: releaseHero,
     text: releaseText,
     html: releaseHtml},
