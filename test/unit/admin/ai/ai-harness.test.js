@@ -23,14 +23,25 @@ const URL_BASE = 'https://github.com/jobadabra/jobadabra/actions/runs/';
 const record = {v: 1, workflow: 'ai-fixer', run_id: 41932545228, url: `${URL_BASE}41932545228`, started: '2026-11-04T16:30:00Z', minutes: 4, source: 'linear', ref: 'JOB-271', round: 0, engine: 'codex/gpt-6.1-sol', model: 'gpt-6.1-sol',
   turns: 3, calls: 3, tokens_in: 48124, tokens_out: 220, steps: [{n: 1, action: 'search'}, {n: 2, action: 'read'}, {n: 3, action: 'finish'}], verdict: 'needs-human', reason: 'the walls deny tools/', changed_files: [], pr: null, stop: null, errors: []};
 const card = {plan: {rows: [{n: 1, name: 'Plan and spec', state: 'done', pr: 3170}, {n: 2, name: 'Move walls', state: 'doing'}, {n: 3, name: 'Loop', state: 'weird'}], web: [{n: 1, name: 'One card per row', state: 'done'}]},
-  layers: [{id: 'L0', name: 'Index', present: true, note: 'docs/map/index.md'}, {id: 'L1', name: 'Hubs', present: false, note: '0 of 10'}], sources: [{name: 'Linear', built: true}, {name: 'PostHog', built: false}], runs: [record]};
+  layers: [{id: 'L0', name: 'Index', present: true, note: 'docs/map/index.md'}, {id: 'L1', name: 'Hubs', present: false, note: '0 of 10'}], sources: [{name: 'Linear', built: true, key: 'set'}, {name: 'PostHog', built: true, key: 'missing'}, {name: 'Sentry', built: true}, {name: 'Notion', built: false, key: 'set'}], runs: [record]};
 
 test('Agent harness shows only context layers and sources, without run outcomes or the implementation plan', () => {
   const html = harnessPage(cleanHarness(card), now);
   assert.match(html, /Context layers and sources/);
   assert.match(html, /docs\/map\/index.md/);
-  assert.match(html, /✅ built · Linear/);
+  assert.match(html, /✅ code built · key set · Linear/);
+  assert.match(html, /ai-chip warn[^>]*>⚠️ code built · no key yet · PostHog/, 'a fetcher without a key is amber, never the green of a working source');
+  assert.match(html, /🔧 code built · key not reported · Sentry/, 'an upload that says nothing about keys claims nothing');
+  assert.match(html, /⬜ not built · Notion/);
+  assert.doesNotMatch(html, /✅ built/, 'the old word "built" in green is gone');
+  assert.deepEqual(cleanHarness({sources: [{name: 'X', built: true, key: '<b>yes</b>'}]}).sources, [{name: 'X', built: true, key: ''}], 'only set or missing is accepted for key');
   assert.doesNotMatch(html, /Needs a human|Fixer chain|Plan and spec|Last run:|hn-run\"/);
+});
+
+test('a card stored before the key field existed (raw, never cleaned on read) still renders: "key not reported", no throw', () => {
+  const html = harnessPage({layers: [], sources: [{name: 'Linear', built: true}, {name: 'Notion', built: false}]}, now);
+  assert.match(html, /🔧 code built · key not reported · Linear/);
+  assert.match(html, /⬜ not built · Notion/);
 });
 
 test('Agent runs is a separate protected tab with an empty state', async () => {

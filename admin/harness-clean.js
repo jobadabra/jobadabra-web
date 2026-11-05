@@ -39,6 +39,6 @@ export function cleanHarness(card, now = new Date()) {
   const runs = read.filter(run => run && !seen.has(run.id) && seen.add(run.id)).sort((a, b) => (a.started < b.started ? 1 : a.started > b.started ? -1 : 0)).slice(0, 60);
   return {demo: card.demo === true, plan: {rows: cleanRows(card.plan?.rows, 12), web: cleanRows(card.plan?.web, 6)},
     layers: (Array.isArray(card.layers) ? card.layers.slice(0, 6) : []).map(layer => ({id: name(layer?.id).slice(0, 4), name: name(layer?.name), present: layer?.present === true, note: name(layer?.note)})).filter(layer => layer.id && layer.name),
-    sources: (Array.isArray(card.sources) ? card.sources.slice(0, 12) : []).map(source => ({name: name(source?.name), built: source?.built === true})).filter(source => source.name),
+    sources: (Array.isArray(card.sources) ? card.sources.slice(0, 12) : []).map(source => ({name: name(source?.name), built: source?.built === true, key: source?.key === 'set' || source?.key === 'missing' ? source.key : ''})).filter(source => source.name),
     runs, dropped: count(card.dropped) + (raw.length - read.filter(Boolean).length)};
 }
