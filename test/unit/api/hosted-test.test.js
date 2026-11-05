@@ -25,7 +25,8 @@ const kv = () => { const m = new Map(); return {m, get: async k => m.get(k) ?? n
 const queue = () => { const sent = []; return {sent, send: async m => { sent.push(m); }}; };
 const bucket = () => { const m = new Map(); return {m, head: async k => (m.has(k) ? {} : null)}; };
 const aiOk = {run: async () => ({choices: [{message: {content: 'ok'}, finish_reason: 'stop'}], usage: {prompt_tokens: 10, completion_tokens: 1}})};
-const env = (extra = {}) => ({STATS: d1(), WAITLIST: kv(), HOSTED_QUEUE: queue(), HOSTED_STATE: bucket(), AI: aiOk, STATS_SALT: 'salt', HOSTED_ALWAYS_ON: 'on', FREE_AI_TRIAL_USD: '2', ...extra});
+const mailbox = () => { const sent = []; return {sent, send: async m => { sent.push(m); return {messageId: `m${sent.length}`}; }}; };
+const env = (extra = {}) => ({STATS: d1(), WAITLIST: kv(), HOSTED_QUEUE: queue(), HOSTED_STATE: bucket(), AI: aiOk, MAIL: 'on', EMAIL: mailbox(), STATS_SALT: 'salt', HOSTED_ALWAYS_ON: 'on', FREE_AI_TRIAL_USD: '2', ...extra});
 const keyOf = async install => `JPF1.${install}.${await tokenFor(install, {STATS_SALT: 'salt'}, 'ai')}`;
 const t0 = new Date('2026-11-05T10:00:00Z');
 const later = (minutes, from = t0) => new Date(from.getTime() + minutes * 60000);
@@ -72,7 +73,7 @@ test('the Test answers in seconds: on, profile held, our server read it, the AI 
   await call(e, 'POST', later(5));
   const waiting = (await (await call(e, 'GET', new Date(later(5).getTime() + 3000))).json()).run;
   assert.equal(waiting.status, 'running');
-  assert.deepEqual(waiting.steps.map(s => [s.key, s.state]), [['on', 'ok'], ['profile', 'ok'], ['started', 'running'], ['ai', 'ok']]);
+  assert.deepEqual(waiting.steps.map(s => [s.key, s.state]), [['on', 'ok'], ['profile', 'ok'], ['started', 'running'], ['ai', 'ok'], ['mail', 'ok']]);
   const token = e.HOSTED_QUEUE.sent.at(-1).token;
   await config(new Request('https://x/api/hosted/config', {headers: {authorization: `Bearer ${token}`}}), e, new Date(later(5).getTime() + 9000));   // the container's first read
   const ready = (await (await call(e, 'GET', new Date(later(5).getTime() + 10000))).json()).run;
@@ -83,10 +84,30 @@ test('the Test answers in seconds: on, profile held, our server read it, the AI 
   const by = Object.fromEntries(done.search.steps.map(s => [s.key, s]));
   assert.deepEqual([done.status, done.search.status], ['ok', 'ok']);
   assert.deepEqual([by.found.state, by.found.note], ['ok', '1']);
-  assert.equal(by.mail.state, 'skipped', 'no digest was recorded as sent: not claimed');
-  e.STATS.db.prepare("INSERT INTO mail_log (addr, list, template, status, at) VALUES (?, 'service', 'digest', 'sent', ?)").run(await addrOf('a@example.com'), later(8).toISOString());
-  const mailed = (await (await call(e, 'GET', later(10))).json()).run.search.steps.find(s => s.key === 'mail');
-  assert.equal(mailed.state, 'ok');
+  assert.equal(by.mail.state, 'ok', 'the run sent its digest');
+  assert.deepEqual(e.EMAIL.sent.map(m => m.subject), ['Always on test: your alerts reach you', '1 new job match'], 'the Test\'s own mail at the press, the digest after the search');
+});
+
+test('the Test sends one short e-mail to the alert address and says why when it cannot', async () => {
+  // Why (owner, 5 Nov 2026: "The test should include also a notification test... telegram or email, whatever the user built"): our servers alert by e-mail.
+  const e = env(); await turnOn(e);
+  await call(e, 'POST', later(5));
+  assert.equal(e.EMAIL.sent.length, 1);
+  assert.equal(e.EMAIL.sent[0].subject, 'Always on test: your alerts reach you');
+  const mail = (await (await call(e, 'GET', later(6))).json()).run.steps.find(s => s.key === 'mail');
+  assert.deepEqual([mail.state, mail.settings], ['ok', true]);
+  await finish(e, {status: 'ok', matches: []}, later(7));
+  await call(e, 'POST', later(30));   // a second press the same day: no second mail, the step still says it reached you
+  assert.equal(e.EMAIL.sent.length, 1);
+  const again = (await (await call(e, 'GET', later(31))).json()).run.steps.find(s => s.key === 'mail');
+  assert.equal(again.state, 'ok'); assert.match(again.note, /went to you today/);
+  const off = env(); await turnOn(off);
+  off.STATS.db.prepare('UPDATE hosted_schedules SET email_channel = 0').run();
+  await call(off, 'POST', later(5));
+  const none = (await (await call(off, 'GET', later(6))).json()).run;
+  assert.equal(off.EMAIL.sent.length, 0);
+  assert.equal(none.status, 'failed');
+  assert.match(none.steps.find(s => s.key === 'mail').note, /E-mail alerts are off.*Settings → Notifications/);
 });
 
 test('a server that never reads the profile fails the Test after a minute, said plainly', async () => {
@@ -244,7 +265,7 @@ test('a finished test leaves the schedule\'s own next run where it was', async (
 });
 
 test('the steps are honest at the edges: jobs counted from the inbox, the mail not claimed until it had time, never another run\'s digest', async () => {
-  const e = env(); await turnOn(e);
+  const e = env({MAIL: 'off'}); await turnOn(e);   // no digest goes out by itself here: the test writes the mail log
   const account = rows(e, 'SELECT account FROM hosted_schedules')[0].account;
   await call(e, 'POST', later(5));
   await finish(e, {status: 'ok', matches: [{job: 'j1', title: 'A', company: 'X', fit: 70}]}, later(7));

@@ -10,7 +10,7 @@ import {accountOf} from '../shared/pro.js';
 import {freeAi} from '../shared/free-ai.js';
 import {digestOf} from '../shared/guard.js';
 import {hostedOn, installOf, runToken, startRun} from '../shared/hosted.js';
-import {addrOf} from '../shared/mail.js';
+import {addrOf, send} from '../shared/mail.js';
 import {dayCaps, freeStopped, MONTH_COMPUTE_MICRO, monthSpent, openRun, runsToday, SITE, trialSpent} from './hosted-tick.js';
 
 // READ_WAIT_MS: a container starts and reads the profile in ~10 s (production, 5 Nov 2026: 10 s); past this it did not start. AI_WAIT_MS: the AI's one short answer.
@@ -26,6 +26,25 @@ export async function aiAnswers(env, token, now, wait = AI_WAIT_MS) {
   const late = new Promise(done => { timer = setTimeout(() => done({ok: false, error: 'The AI is slow right now.'}), wait); });
   try { return await Promise.race([ask, late]); } finally { clearTimeout(timer); await Promise.allSettled(books); }
 }
+
+// The Test's alert step, at the press (owner, 5 Nov 2026: "The test should include also a notification test... telegram or email, whatever the user built"):
+// a run on our servers alerts by e-mail only (shared/hosted-notify.js), so one short mail to the account's address, through the mail module's limits.
+const MAIL_WHY = {no_channel: 'E-mail alerts are off. Turn them on in Settings → Notifications.', off: 'E-mail is not available right now.', rate: 'Too many e-mails today. Try again tomorrow.',
+  suppressed: 'Your address bounced or marked us as spam, so e-mail alerts are off. Check the address in Settings → Notifications.', unsubscribed: 'You stopped our e-mails. Turn alerts back on in Settings → Notifications.'};
+async function checkMail(env, account, id, now) {
+  const done = await env.STATS.prepare('SELECT mail_at, mail_error FROM hosted_runs WHERE id = ?').bind(id).first();
+  if (!done || done.mail_at || done.mail_error) return;
+  const row = await env.STATS.prepare('SELECT a.email, s.email_channel FROM hosted_schedules s JOIN pro_accounts a ON a.id = s.account WHERE s.account = ?').bind(account).first();
+  // Once a day: the address gets 6 mails a day at most (shared/mail.js DAILY_MAX); five presses must not use up the digest's room.
+  const today = row?.email && row.email_channel ? await env.STATS.prepare("SELECT at FROM mail_log WHERE addr = ? AND template = 'always-on-test' AND status = 'sent' AND at >= ? LIMIT 1")
+    .bind(await addrOf(row.email), new Date(now.getTime() - 24 * 3600 * 1000).toISOString()).first() : null;
+  const sent = today ? {ok: true, earlier: true} : row?.email && row.email_channel ? await send(env, 'always-on-test', row.email, {}, {now}) : {ok: false, reason: 'no_channel'};
+  await env.STATS.prepare('UPDATE hosted_runs SET mail_at = ?, mail_error = ? WHERE id = ?').bind(sent.ok ? (today ? today.at : now.toISOString()) : null, sent.ok ? null : MAIL_WHY[sent.reason] || 'The e-mail could not be sent.', id).run()
+    .catch(error => console.error(`hosted mail_at not stamped for ${id}: ${error.message}`));
+}
+
+// Both checks a press makes, side by side (each once per run): the Test's AI and e-mail steps.
+const checks = (env, account, id, now) => Promise.all([checkAi(env, id, now), checkMail(env, account, id, now)]);
 
 // The Test's AI step for run `id`, once: a press that joins an open run (the schedule's own, or a test already running) checks it too (review of hr21:
 // a joined run returned before the check and its AI step failed at 60 s while everything worked). A failed stamp costs the Test its step, not the press.
@@ -53,7 +72,7 @@ export async function test(request, env, now = new Date()) {
   const stamp = now.toISOString();
   await env.STATS.prepare("UPDATE hosted_runs SET status = 'failed', finished_at = ? WHERE finished_at IS NULL AND expires_at < ?").bind(stamp, stamp).run();   // a run that never reported is over, as the tick treats it
   const open = await openRun(env, account.id, stamp);
-  if (open) { await checkAi(env, open.id, now); return Response.json({ok: true, run: open.id, joined: true}); }   // one run at a time: pressing again watches the one that is running
+  if (open) { await checks(env, account.id, open.id, now); return Response.json({ok: true, run: open.id, joined: true}); }   // one run at a time: pressing again watches the one that is running
   // The gap is read from a window that reaches back past UTC midnight; only the daily count starts at midnight (Gitar on #372).
   const tests = await env.STATS.prepare("SELECT SUM(CASE WHEN started_at >= ? THEN 1 ELSE 0 END) AS n, MAX(started_at) AS last FROM hosted_runs WHERE account = ? AND slot LIKE 'test-%' AND started_at >= ?")
     .bind(`${stamp.slice(0, 10)}T00:00:00`, account.id, new Date(Math.min(now.getTime() - COOLDOWN_MS, Date.parse(`${stamp.slice(0, 10)}T00:00:00Z`))).toISOString()).first();
@@ -65,14 +84,14 @@ export async function test(request, env, now = new Date()) {
   const today = await runsToday(env, stamp.slice(0, 10)), caps = dayCaps(env);
   if (!env.HOSTED_QUEUE || today.all >= caps.all || (trial && (today.trial >= caps.trial || await freeStopped(env, stamp)))) return say(503, 'Always on is busy right now. Try again later.', {reason: 'busy'});
   const run = await startRun(env, {account: account.id}, now, `test-${stamp.slice(0, 16)}`, true);
-  if (!run) { const again = await openRun(env, account.id, stamp); if (again) await checkAi(env, again.id, now); return again ? Response.json({ok: true, run: again.id, joined: true}) : say(429, 'A test ran a moment ago. Try again in a few minutes.', {reason: 'cooldown'}); }
+  if (!run) { const again = await openRun(env, account.id, stamp); if (again) await checks(env, account.id, again.id, now); return again ? Response.json({ok: true, run: again.id, joined: true}) : say(429, 'A test ran a moment ago. Try again in a few minutes.', {reason: 'cooldown'}); }
   try {
     await env.HOSTED_QUEUE.send({run: run.id, token: run.token, site: env.HOSTED_SITE || SITE, account: await digestOf(account.id), test: true});
   } catch (error) {   // a row nothing will ever post to would block the next press for 30 minutes
     await env.STATS.prepare("UPDATE hosted_runs SET status = 'failed', finished_at = ? WHERE id = ?").bind(stamp, run.id).run();
     return say(503, 'Always on is busy right now. Try again later.', {reason: 'busy'});
   }
-  await checkAi(env, run.id, now);
+  await checks(env, account.id, run.id, now);
   return Response.json({ok: true, run: run.id});
 }
 
@@ -97,6 +116,8 @@ async function report(env, account, schedule, runId, now) {
     {key: 'profile', label: 'Your profile is held on our servers', state: held ? 'ok' : 'failed'},
     {key: 'started', label: 'Our server started and read it', state: run.read_at ? 'ok' : notStarted ? 'failed' : 'running', ...(notStarted ? {note: 'Our server did not start. Press Test again in a few minutes.'} : {})},
     {key: 'ai', label: 'The AI answers', state: run.ai_at ? 'ok' : run.ai_error ? 'failed' : age > READ_WAIT_MS ? 'failed' : 'running', ...(run.ai_error ? {note: run.ai_error} : !run.ai_at && age > READ_WAIT_MS ? {note: 'The AI did not answer.'} : {})},
+    {key: 'mail', label: 'A test e-mail was sent to you', state: run.mail_at ? 'ok' : run.mail_error ? 'failed' : age > READ_WAIT_MS ? 'failed' : 'running',
+      ...(run.mail_error ? {note: run.mail_error, settings: true} : run.mail_at ? {note: run.mail_at < run.started_at ? 'A test e-mail went to you today. Check your inbox (and spam).' : 'Check your inbox (and spam).', settings: true} : {})},
   ];
   const search = [
     {key: 'finished', label: 'The search finished', state: status === 'running' ? 'running' : status === 'ok' ? 'ok' : 'failed', ...(over ? {note: 'It did not report back.'} : {})},
