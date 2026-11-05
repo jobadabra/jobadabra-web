@@ -56,7 +56,7 @@ export const TEMPLATES = {
   'digest': {list: 'service',
     subject: ({total, matches = []}) => `${total ?? matches.length} new job match${(total ?? matches.length) === 1 ? '' : 'es'}`,
     title: ({total, matches = []}) => ((total ?? matches.length) === 1 ? '1 new match' : `${total ?? matches.length} new matches`),
-    button: ({openUrl}) => ({label: 'Open in Jobadabra', url: openUrl || SITE}),
+    button: ({openUrl}) => ({label: 'Open in Jobadabra', url: openUrl || `${SITE}/open?view=jobs`}),
     text: ({matches = []}) => jobText(matches),
     html: ({matches = [], total}) => `${(total ?? matches.length) > matches.length ? muted(`The top ${matches.length} of ${total}.`) : ''}${jobRows(matches)}`},
   // Trial reminders (admin/mail-lifecycle.js): service mails, facts only, no promotion. Data: {left} / {days}. Off unless env.TRIAL_REMINDERS = "on".

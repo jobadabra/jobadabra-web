@@ -8,8 +8,8 @@ import {test} from 'node:test';
 const dir = new URL('../../../web/public/', import.meta.url);
 const read = name => readFileSync(new URL(name, dir), 'utf8');
 const pages = readdirSync(dir).filter(name => name.endsWith('.html'));
-const UNLISTED = ['friends.html', 'ready-live.html'];   // a page for early testers and the hand-off page the app opens: linked, never indexed
-const NO_MENU = ['ready-live.html'];
+const UNLISTED = ['friends.html', 'ready-live.html', 'open.html'];   // a page for early testers and the hand-off page the app opens: linked, never indexed
+const NO_MENU = ['ready-live.html', 'open.html'];
 const nav = html => (html.match(/<nav class="topnav[\s\S]*?<\/nav>/) || [''])[0].replace(/ aria-current="page"/g, '');
 const foot = html => (html.match(/<footer class="site-foot"[\s\S]*?<\/footer>/) || [''])[0];
 const pageOf = href => href.replace(/#.*$/, '').replace(/^\/$/, '/index').replace(/^\//, '') + '.html';

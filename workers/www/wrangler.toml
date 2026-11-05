@@ -30,7 +30,7 @@ name = "EMAIL"
 directory = "../../web/public"
 binding = "ASSETS"
 # The worker runs first for the pages, so each page keeps one address (shared/hosts.js pageRedirect); every other path is served as before.
-run_worker_first = ["/", "/about-you", "/benchmark", "/changelog", "/compare", "/coverage", "/download", "/faq", "/features", "/friends", "/how-it-works", "/intelligence", "/platforms", "/pricing", "/privacy", "/ready-live", "/research", "/terms", "/trust", "/*.html", "/media/*", "/images/app/*"]
+run_worker_first = ["/", "/about-you", "/benchmark", "/changelog", "/compare", "/coverage", "/download", "/faq", "/features", "/friends", "/how-it-works", "/intelligence", "/open", "/platforms", "/pricing", "/privacy", "/ready-live", "/research", "/terms", "/trust", "/*.html", "/media/*", "/images/app/*"]
 
 # Pro early-access sign-ups.
 [[kv_namespaces]]
