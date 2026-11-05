@@ -22,7 +22,7 @@ routes = [
 binding = "AI"
 
 # Our e-mail sender (shared/mail.js): Cloudflare Email Sending from jobpilotto.top (the domain is onboarded under Compute > Email Service > Email Sending).
-# MAIL = "on" sends; anything else sends nothing (the kill switch). Bounce/complaint events reach queue() through a Queues event subscription (see api/mail-unsub.js).
+# MAIL = "on" sends; anything else sends nothing (the kill switch; since 5 Nov 2026 a state pressed in Admin → E-mail beats these four values, shared/mail-switches.js). Bounce/complaint events reach queue() through a Queues event subscription (see api/mail-unsub.js).
 [[send_email]]
 name = "EMAIL"
 
@@ -76,10 +76,10 @@ FREE_AI_MONTH_ALERT_USD = "100"
 FREE_AI_MONTH_STOP_USD = "200"
 # The Workers Free plan's 10,000 neurons a day no longer applies: the account is on Workers Paid (owner, 16 Oct 2026). Spend is guarded by the $ lines above. Remove this line to go back to the free-plan stop.
 FREE_AI_NEURONS = "off"
-MARKETING_MAIL = "on"  # promotional mail (release news, Pro launch): On since 28 Oct 2026 (owner: "you turn it on"); each send is still the owner's click (admin/release-mail-page.js) or by hand (MAIL_LAUNCH) (shared/mail.js)
-TRIAL_REMINDERS = "off"  # "N applications left" / "trial ends in 3 days": a Pro push, off (admin/mail-lifecycle.js)
+MARKETING_MAIL = "on"  # the default until pressed in Admin → E-mail (shared/mail-switches.js); promotional mail (release news, Pro launch): On since 28 Oct 2026 (owner: "you turn it on"); each send is still the owner's click (admin/release-mail-page.js) or by hand (MAIL_LAUNCH) (shared/mail.js)
+TRIAL_REMINDERS = "off"  # the default until pressed in Admin → E-mail; "N applications left" / "trial ends in 3 days": a Pro push, off (admin/mail-lifecycle.js)
 # The Pro plan (shared/pro.js, spec docs/superpowers/specs/2026-10-16-pro-plan.md): "off" = nothing visible, "promo" = promo codes only (no prices, no payment), "test" = Stripe test mode only, "live" = the owner flips it.
-MAIL = "on"        # the kill switch (shared/mail.js): "off" sends nothing. On since 26 Oct 2026 (owner: "Let's turn it on"); jobadabra.top is onboarded for Email Sending
+MAIL = "on"        # the default until pressed in Admin → E-mail (shared/mail-switches.js); the kill switch (shared/mail.js): "off" sends nothing. On since 26 Oct 2026 (owner: "Let's turn it on"); jobadabra.top is onboarded for Email Sending
 PRO_PLAN = "promo"   # "promo" = a promo code gives Pro, paying stays off (owner, 25 Oct 2026)
 # Payment prices (public ids; the provider's dashboard, test mode first). Secrets (Worker): STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET. STRIPE_TAX = "on" once the owner turns Stripe Tax on. Webhook URL: https://www.jobpilotto.top/api/pro/webhook
 STRIPE_PRICE_PRO = ""       # Pro, EUR 9, one-off, tax inclusive (the displayed prices are in shared/pro-packages.js: change both together)

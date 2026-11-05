@@ -2,7 +2,8 @@
 // Counts and short hashes only, never an address (mail_log keeps the hash; pro_accounts is only counted). Guard: tests/test_site_admin_email.js.
 const DAY = 24 * 60 * 60 * 1000;
 export const WINDOWS = [7, 30, 90];
-export const SWITCHES = ['MAIL', 'MARKETING_MAIL', 'TRIAL_REMINDERS', 'MAIL_LAUNCH'];   // the flags shared/mail.js and admin/mail-lifecycle.js read; "on" or anything else (= off)
+import {switchRows} from '../shared/mail-switches.js';
+export {SWITCHES} from '../shared/mail-switches.js';   // the flags shared/mail.js and admin/mail-lifecycle.js read (their state: shared/mail-switches.js); "on" or anything else (= off)
 
 const one = async (env, sql, ...args) => (await env.STATS.prepare(sql).bind(...args).first().catch(() => null)) || {n: 0};
 const many = async (env, sql, ...args) => (await env.STATS.prepare(sql).bind(...args).all().catch(() => ({results: []}))).results || [];
@@ -37,5 +38,5 @@ export async function collect(env, {days = 7, now = new Date()} = {}) {
   const stopped = offReasons.filter(row => row.reason === 'bounce' || row.reason === 'complaint').reduce((total, row) => total + row.n, 0);
   return {days, testMail, sent, notSent, failed, stopped, perDay, byTemplate, refused, recent: recent.map(row => ({...row, addr: hashOf(row.addr)})), offReasons,
     confirmed: confirmed.n, unconfirmed: unconfirmed.n, types: {service: service.n, releases: releases.n, tips: tips.n, jobdigest: digest.n}, held: {items: held.n, accounts: held.accounts || 0, oldest: heldOldest.at || null}, today: today.n,
-    switches: SWITCHES.map(name => ({name, on: env[name] === 'on'})), dayMax: Number(env.MAIL_DAY_MAX || 3000)};
+    switches: await switchRows(env), dayMax: Number(env.MAIL_DAY_MAX || 3000)};
 }
