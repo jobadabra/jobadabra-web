@@ -220,6 +220,27 @@ test('search: Codex first while it has allowance; when it is used up Claude sear
 // JOB-202 (owner, 1 Nov 2026: "adapt or report if one is doing worse than the other"): an engine that fails half of its last calls goes behind the other subscription for 30 minutes.
 const codexBroken = () => new Response(JSON.stringify({error: 'codex-failed:1 boom'}), {status: 500});
 
+// The container's error for a Codex run the model's server turned away, as CI run 42040707448 printed it (5 Nov 2026, cut at "Selec" by the caller); the rest of the message is
+// the server's capacity wording, a hypothesis until the broker's own detail shows it. Codex names this class server_overloaded ("Server overloaded; retry later.").
+const capacity = message => `codex-failed:1 {"type":"thread.started","thread_id":"01a1ac05-5b58-7850-8433-3b742820d8cb"} {"type":"turn.started"} {"type":"error","message":"${message}"} {"type":"turn.failed","error":{"message":"${message}"}}`;
+test('Codex turned away for capacity (run 42040707448): the Claude subscription answers instead of a 502, and fellBack carries the server\'s own words without the JSON around them', async t => {
+  for (const message of ['Selected model is at capacity. Please try a different model.', 'Server overloaded; retry later.', 'We\'re currently experiencing high demand, which may cause temporary errors.']) {
+    const {broker, calls} = world(t, 'codex', {...withToken, codex: () => new Response(JSON.stringify({error: capacity(message)}), {status: 500})});
+    const reply = await broker.call('pr', body);
+    assert.equal(reply.status, 200, message);
+    const answer = await reply.json();
+    assert.equal(answer.engine, 'claude'); assert.deepEqual(answer.fellBack, [{engine: 'codex', why: 'overloaded', detail: message}]);
+    assert.equal(calls.claudeCli, 1);
+    Date.now.mock.restore();
+  }
+  for (const error of ['codex-failed:1 boom', 'codex-failed:1 rate_limit_exceeded', capacity('Selected model is at capacity sk-' + 'a'.repeat(30))]) {   // anything else, or a token-shaped text, stays Codex's own refusal
+    const {broker, calls} = world(t, 'codex', {...withToken, codex: () => new Response(JSON.stringify({error}), {status: 500})});
+    assert.equal((await broker.call('pr', body)).status, 502, error);
+    assert.equal(calls.claudeCli, 0);
+    Date.now.mock.restore();
+  }
+});
+
 test('Codex failing half its last calls moves behind Claude for 30 minutes, the owner is told once, a call that names its engine is never moved, then Codex is first again', async t => {
   const {broker, calls} = world(t, 'codex', {...withToken, codex: codexBroken});
   for (let i = 0; i < 6; i++) assert.equal((await broker.call('pr', body)).status, 502);   // Codex first, each of these callers saw the failure
