@@ -171,6 +171,7 @@ test('ai-fixer.yml is trusted for the brief and the pr/none/failed reports exact
     'a branch copy': {workflow_ref: fixerRef('evil')}, 'a pull_request event': {workflow_ref: fixerRef('main'), event_name: 'pull_request'},
     'a pull_request_target event': {workflow_ref: fixerRef('main'), event_name: 'pull_request_target'}, 'another repository': {workflow_ref: fixerRef('main'), repository: 'someone/else'},
     'another audience': {workflow_ref: fixerRef('main'), aud: 'jobadabra-ai-broker'}, 'a longer file name': {workflow_ref: `${REPO}/.github/workflows/ai-fixer.yml.evil@refs/heads/main`},
+    'the follow workflow': {workflow_ref: `${REPO}/.github/workflows/ai-fixer-follow.yml@refs/heads/main`}, 'the close workflow': {workflow_ref: closeFile('main')},
   };
   const fresh = running();
   for (const [what, claims] of Object.entries(refused)) assert.equal((await get(fresh, await kit.token({...claims, run_id: '7003'}))).status, 401, what);
