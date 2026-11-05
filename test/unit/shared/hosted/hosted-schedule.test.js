@@ -24,12 +24,13 @@ const rows = (e, text, ...a) => e.STATS.db.prepare(text).all(...a).map(r => ({..
 const post = (e, token, body, at = now) => result(new Request('https://x/api/hosted/result', {method: 'POST', headers: {authorization: `Bearer ${token}`}, body: JSON.stringify(body)}), e, at);
 const getInbox = async (e, install, after = 0, at = now) => (await (await inbox(new Request(`https://x/api/hosted/inbox?after=${after}`, {headers: {'x-api-key': await keyOf(install)}}), e, at)).json()).matches;
 
-test('every hosted route answers 404 while the flag is off, and wrangler.toml ships it off', async () => {
+// Why (5 Nov 2026, owner: "let's make it production ready"): production ships it on; "off" is the rollback, and these 404s are what the rollback gives.
+test('every hosted route answers 404 while the flag is off, and wrangler.toml ships it on', async () => {
   const e = env({HOSTED_ALWAYS_ON: 'off'});
   assert.equal((await put(e, 'install-aaaa1', {on: true, email: 'a@example.com'})).status, 404);
   assert.equal((await post(e, 'HR1.x.y', {})).status, 404);
   assert.equal((await inbox(new Request('https://x/api/hosted/inbox'), e)).status, 404);
-  assert.match(readFileSync(new URL('../../../../workers/www/wrangler.toml', import.meta.url), 'utf8'), /^HOSTED_ALWAYS_ON = "off"/m);
+  assert.match(readFileSync(new URL('../../../../workers/www/wrangler.toml', import.meta.url), 'utf8'), /^HOSTED_ALWAYS_ON = "on"/m);
 });
 
 test('switching on needs the install key and an e-mail; it makes a trial account, links the install, once a day', async () => {
