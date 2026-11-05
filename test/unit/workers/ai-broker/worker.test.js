@@ -98,7 +98,9 @@ test('search keeps every tier, lane, queue priority and meter identical to ordin
       };
       const response = await broker.call(lane, {...body, tier, ...option, lane: 'forged'});
       assert.equal(response.status, 200);
-      assert.deepEqual(await response.json(), {reply: 'ok', tokens: {input: 2, output: 3, counted: 5}, ms: 1, lane, tier: expectedTier, model, weekUsedPercent: null, engine: 'codex'});
+      const answered = await response.json();   // the timeline's times are the clock's, only their shape is the contract
+      assert.deepEqual(Object.keys(answered.timeline).sort(), ['containerMs', 'effort', 'model', 'status', 'waitMs']); assert.equal(answered.timeline.status, 200);
+      assert.deepEqual(answered, {reply: 'ok', tokens: {input: 2, output: 3, counted: 5}, ms: 1, lane, tier: expectedTier, model, weekUsedPercent: null, engine: 'codex', timeline: answered.timeline});
       const meter = await storage.get('meter');
       assert.equal(meter.tokens[lane], 5);
       if (ordinaryMeter) assert.deepEqual(meter, ordinaryMeter);

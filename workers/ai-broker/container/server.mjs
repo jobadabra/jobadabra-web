@@ -38,14 +38,21 @@ function lastEvents(out) {
   return types.length ? `[codex events: ${types.length}, last: ${types.slice(-4).join(' > ')}]` : '[codex events: none]';
 }
 
+// Why (5 Nov 2026, a8, owner via mac-32: "record ONE timeline with timestamps on all 3 hops"; 4 tries and 3 signatures of "a persona Codex call dies around step 5-6"): the container's own log is not readable, so each call carries its own clock home: "<ms since spawn> <event>" for codex's first stderr byte, each stdout event and its end. Logging only; nothing decides on it.
+const traceOf = stamps => stamps.map(([ms, what]) => `${ms} ${what}`).join('|');
+
 function run(args, cwd, prompt) {
   return new Promise(resolve => {
     const child = spawn('codex', args, {cwd, detached: true, stdio: ['pipe', 'pipe', 'pipe'], env: {PATH: process.env.PATH, HOME: process.env.HOME, CODEX_HOME: HOME, ...trustEnv()}});
     let out = '', err = '', answered = false, grace = null, killed = false;
+    const t0 = Date.now(), stamps = [[0, 'spawn']], stamp = (label, last = false) => { if (last || stamps.length < 39) stamps.push([Date.now() - t0, /^[\w.:-]{1,40}$/.test(label) ? label : 'event']); };   // 39 + the end stamp; a label is a short name, never free text
+    let pending = '';
     const guard = () => `[killed after ${CALL_TIMEOUT_MS / 1000} s: codex did not finish]`;
-    const answer = result => { if (answered) return; answered = true; clearTimeout(timer); clearTimeout(grace); resolve(result); };
-    child.stdout.on('data', d => { out += d; });
-    child.stderr.on('data', d => { err += d; });
+    const answer = result => { if (answered) return; answered = true; flush(); stamp(result.guard ? 'guard' : `exit:${result.code}`, true); clearTimeout(timer); clearTimeout(grace); resolve({...result, trace: traceOf(stamps)}); };
+    const note = line => { try { const m = JSON.parse(line); if (typeof m?.type === 'string') stamp(m.type); } catch { /* not an event line */ } };
+    const flush = () => { if (pending) note(pending); pending = ''; };   // a last event with no newline
+    child.stdout.on('data', d => { out += d; pending += d; if (pending.length > 1e6) pending = ''; const lines = pending.split('\n'); pending = lines.pop(); lines.forEach(note); });   // a runaway stream with no newline is dropped at 1 MB, not re-split for ever
+    child.stderr.on('data', d => { if (!err) stamp('stderr'); err += d; });
     const timer = setTimeout(() => {
       killed = true; killTree(child);
       grace = setTimeout(() => answer({code: null, out, err, guard: guard()}), KILL_GRACE_MS);
@@ -123,11 +130,11 @@ async function call({prompt, schema, images = [], model, search, effort, session
     });
     const args = buildArgs({schema, imageNames, model, search, effort, keep: Boolean(key), resume: resumable ? held.thread : undefined});
     const started = Date.now();
-    const {code, out, err, guard} = await run(args, dir, resumable ? session.delta : prompt);
+    const {code, out, err, guard, trace} = await run(args, dir, resumable ? session.delta : prompt);
     const reply = fs.existsSync(path.join(dir, 'out.txt')) ? fs.readFileSync(path.join(dir, 'out.txt'), 'utf8') : '';
     if (code !== 0 || !reply) {
       opened = readTurn(out).thread;
-      throw new Error(/401 Unauthorized|please log in|not logged in|token (is )?(expired|invalid|revoked)|refresh token/i.test(err) ? 'login-lost' : `codex-failed:${code} ${guard ? `${guard} ${lastEvents(out)} ` : ''}${(err || out).replace(/\s+/g, ' ').slice(-900)}`);   // the worker refuses a token-shaped tail (lib/guard.mjs); Why (1 Nov 2026, after the transfer): 300/200 characters showed only Codex's MCP noise, never the line that made it exit 1
+      throw Object.assign(new Error(/401 Unauthorized|please log in|not logged in|token (is )?(expired|invalid|revoked)|refresh token/i.test(err) ? 'login-lost' : `codex-failed:${code} ${guard ? `${guard} ${lastEvents(out)} ` : ''}${(err || out).replace(/\s+/g, ' ').slice(-900)}`), {trace});   // the worker refuses a token-shaped tail (lib/guard.mjs); Why (1 Nov 2026, after the transfer): 300/200 characters showed only Codex's MCP noise, never the line that made it exit 1
     }
     const {thread, usage: total} = readTurn(out), turn = turnUsage(total, resumable ? held.total : null);
     let mode;
@@ -137,7 +144,7 @@ async function call({prompt, schema, images = [], model, search, effort, session
       else if (resumable) { threads.touch(key, {total: total || held.total}); retained = true; }
       else { threads.set(key, {thread, dir, model, total}).forEach(forget); retained = true; }
     }
-    return {reply, tokens: {input: turn.input, cached: turn.cached, output: turn.output}, ms: Date.now() - started, ...(key ? {session: {mode, ...(reason ? {reason} : {})}} : {})};
+    return {reply, tokens: {input: turn.input, cached: turn.cached, output: turn.output}, ms: Date.now() - started, trace, ...(key ? {session: {mode, ...(reason ? {reason} : {})}} : {})};
   } catch (error) {
     // Why ([bf] review, 5 Nov 2026): whatever stopped a turn (Codex failed, a file could not be written), the conversation is not trusted again: it is deleted here, and the Worker restarts it from the full prompt (it marks the record as having a gap).
     if (resumable) forget(threads.drop(key)); else if (key) forget({dir, thread: opened});
@@ -188,6 +195,6 @@ http.createServer((req, res) => {
       }
       if (req.url === '/health') return reply(200, {hasLogin: !!readAuth(), limits: readAuth() ? await readLimits() : null});
       return reply(404, {error: 'not found'});
-    } catch (e) { return reply(500, {error: String(e.message || e).slice(0, 1000), authFile: readAuth()}); }
+    } catch (e) { return reply(500, {error: String(e.message || e).slice(0, 1000), authFile: readAuth(), ...(e.trace ? {trace: e.trace} : {})}); }
   });
 }).listen(8080);

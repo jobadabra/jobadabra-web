@@ -88,3 +88,23 @@ Reply: `tokens: {input, output, cached, counted}` (`input` is the turn's own, ne
 - The first call of every goal still costs the opening (~16.5k uncached; 6 goals ≈ 100k of a 250k run). That is the price of independent goals.
 - `exec resume` was proven on 0.162.1 for the arguments the broker uses; the sandbox is passed as `-c sandbox_mode` (the thread's stored one also applies). A resumed turn fails like any other when the model is at capacity (#406 passes the call to Claude).
 - The Codex week meter counts whole percents; whether the plan really weighs cached input lower is unmeasured. The meter now follows the owner's rule (count what a turn adds); if the week figure drifts, adjust `TOKENS_PER_PERCENT`, not this design.
+
+## Design: one call's path and who ends a step (a8, 5 Nov 2026; owner's pick "One owner, design first")
+
+Why: "a persona Codex call dies around step 5-6" took 4 tries and showed 3 signatures. Each fix guessed a hop. This block names every hop, the wait it owns and the outcomes that end a step, so the timeline (below) can say which hop a call died in.
+
+| Hop | Owns | Its limit | Outcomes that end a step |
+|---|---|---|---|
+| 1. Runner (`askBroker`, desktop/e2e/lib/broker-client.mjs) | one `fetch` to `/call` | `AbortSignal.timeout(180 s)`; no limit of its own on the connection | an answer; a 5xx with no `why` = one retry after 30 s; a `502 codex-failed:` on a conversation = one retry; a network error (ECONNRESET, abort) = no retry, `unreachable` |
+| 2. Worker (`codexStep`, workers/ai-broker/worker.js) | the conversation's lock, a gate slot, the one `containerFetch` | none of its own on the container leg; a deploy swap drops every in-flight request (JOB-274) | the container's reply; `502` with its `why`; a conversation is marked stale after a failed turn |
+| 3. Container (`call()` / `run()`, container/server.mjs) | one `codex exec` process | `CALL_TIMEOUT_MS` 100 s, then kill and answer after 2 s | codex exit 0 with an answer; any other exit; the 100 s guard |
+| 4. Codex to the model (outside our code) | the model stream | codex's own stream timeouts (not measured here) | a turn finished; codex retrying inside itself |
+
+Known so far (5 Nov 2026):
+- Signature 1, the guard never answered: fixed (web#422).
+- Signature 3, `ECONNRESET` at 62 s with no body (ag run 42067346216): the container's traffic stops at 16:46:35, one second after the Release job finished (16:46:34): a deploy swap (JOB-274), made by our own merge. Not a stall.
+- Signature 2, the 100 s guard: ag run 42064112764 (call 6 and its restart) and the by-hand run 42068465230 (its first call, new conversation): codex printed `thread.started` and `turn.started`, then nothing. So the stall is hop 4: the model's turn produced nothing for 100 s. A fresh conversation stalls too, so it is not a lost thread. Healthy calls of the same run take 7-14 s.
+- Still unknown: whether the model was thinking (large tier = gpt-6-astra, default effort) or the stream was dead.
+
+The timeline (logging only; nothing decides on it): every Codex call returns `timeline` = `{waitMs, containerMs, status, model, effort, codex}`, where `codex` is `<ms since spawn> <event>|...` as the container saw them; the Worker also logs it as one line per call (`codexCall`). The runner keeps it in the call's trace row. A call that never gets a reply leaves the Worker's line and the runner's `after N s`.
+Decision rule: no behaviour patch until ~10 calls name the hop and the state in which one died; then the fix is proposed to the coordinator.

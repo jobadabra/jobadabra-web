@@ -99,7 +99,7 @@ test('the container passes search through to Codex and preserves ordinary replie
     request.emit('end');
     const {status, body} = await result;
     assert.equal(status, 200);
-    assert.deepEqual(body, {reply: 'offline reply', tokens: {input: 2, cached: 0, output: 3}, ms: body.ms, limits: null, authFile: ''});
+    assert.deepEqual(body, {reply: 'offline reply', tokens: {input: 2, cached: 0, output: 3}, ms: body.ms, trace: body.trace, limits: null, authFile: ''});
     assert.deepEqual(calls.at(-1), ['exec', '--skip-git-repo-check', '--ignore-user-config', '--ephemeral', '-s', 'read-only', '--disable', 'shell_tool', '--json', '-o', 'out.txt', '-m', 'gpt-6.1-sol', '--output-schema', 'schema.json', '-i', 'img0.png', ...(option.search ? ['-c', 'web_search="live"'] : []), '--', '-']);
     assert.deepEqual(fs.readdirSync(dir), ['home'], 'call files are removed after every call');
   }
