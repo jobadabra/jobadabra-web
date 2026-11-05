@@ -29,5 +29,5 @@ Not collected (proposals, nothing built): app speed a user feels (click → scre
 | PR | What | State |
 |---|---|---|
 | 1/3 | The reader and the rules, and the page opens with the verdict and the five area numbers (no charts yet), "not measured" and "Too few installs (n)" | ✅ merged (#412) |
-| 2/3 | A 30-day line (columns for Bugs) in each area card from `admin/viz*.js`, a tooltip per day, the numbers behind "Show table" (the admin has no light theme yet) | ✅ in review (#413, Gitar approved) |
-| 3/3 | The current 13 cards move under a "Plumbing: did the nightly jobs run" toggle; the page header and the Testing links say what it is now | ▶️ built, ships after #413 |
+| 2/3 | A 30-day line (columns for Bugs) in each area card from `admin/viz*.js`, a tooltip per day, the numbers behind "Show table" (the admin has no light theme yet) | ✅ merged (#413) |
+| 3/3 | The current 13 cards move under a "Plumbing: did the nightly jobs run" toggle; the page header and the Testing links say what it is now | in review |
