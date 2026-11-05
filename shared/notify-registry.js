@@ -43,6 +43,7 @@ export const ALERTS = [
   a('email-added', '✉️ An account added or changed its e-mail', 'users', 'every', 'users', {wired: true}),
   a('feedback-overdue', '⏰ A feedback is 24 h old with no reply', 'users', 'every', 'users', {wired: true}),
   a('feedback-not-told', '📣 Feedback reporters not told after a release', 'users', 'problems', 'users', {wired: true, jobs: ['feedback-released.yml']}),
+  a('index-copy-failed', '🗂 Employer list: the day\'s copy could not be saved', 'site', 'daily', 'engineering', {wired: true}),   // Why (5 Nov 2026, review): a failed copy must not stay unseen until the day a list is lost; the scout reads only the publish's status. `daily` = one message an outage, by the switchboard
   a('feedback-impact-down', '📉 Feedback impact job is down', 'users', 'problems', 'users', {wired: true}),
   a('always-on-failed', '☁️ Always on: a user\'s run failed', 'users', 'every', 'engineering', {status: 'new'}),
   a('sentry-issue', '🐞 Sentry: new / regressed / spike', 'site', 'every', 'engineering', {wired: true, maxPerHour: 30}),

@@ -189,7 +189,7 @@ test('published feeds land in D1 with their regions, and an install gets only it
   const feeds = [feed('zh', {regions: ['europe']}), feed('ny', {regions: ['north_america']}), feed('rem', {regions: ['remote', 'europe']}),
     feed('nowhere', {regions: []}), feed('bad', {regions: ['mars', 'europe']})];
   const put = await call(e, 'PUT', auth, {feeds});
-  assert.deepEqual(await put.json(), {ok: true, feeds: 5, d1: true, legacy: 'updated'});
+  assert.deepEqual(await put.json(), {ok: true, feeds: 5, d1: true, legacy: 'updated', copy: 'kept'});
   const got = await (await sliced(e, 'europe', await holder())).json();
   assert.equal(got.version, 2);
   assert.deepEqual(got.feeds.map(f => f.slug).sort(), ['bad', 'nowhere', 'rem', 'zh']);   // not the New York feed
@@ -370,4 +370,71 @@ test('the central scout\'s measured boards are served as the same board fact ins
   e.STATS.db.prepare("UPDATE sitefacts SET day = '2000-01-01' WHERE host = 'rabota.md'").run();
   await call(e, 'PUT', auth, {feeds: [feed('a')], board_facts: [good]});   // one not measured again for 30 days leaves
   assert.deepEqual((await agreedSites(e)).filter(fact => fact.kind === 'board').map(f => f.host).sort(), ['delucru.md', 'section.md'], 'the recent section stays, the 30-day-old rabota.md left');
+});
+
+// 2 Nov 2026: the scout lost its cache and published 3,871 of 6,833 feeds, and no old copy existed to go back to (owner, 5 Nov 2026: "Find root cause, and preven this happening again").
+const keeping = (fails = false) => {
+  const kept = new Map();
+  const put = async (key, value, options) => { if (key.startsWith('index:copy:')) { if (fails) throw new Error('KV down'); kept.set(key, {value, options}); } store.set(key, value); };
+  return {kept, e: {...env(), WAITLIST: {...env().WAITLIST, put}}};
+};
+const onlyCopy = kept => { assert.equal(kept.size, 1, 'one copy a day'); const [[key, copy]] = kept; assert.match(key, /^index:copy:\d{4}-\d{2}-\d{2}$/); return copy; };
+
+test('a publish keeps the whole body for 30 days', async () => {
+  store.clear();
+  const {kept, e} = keeping(), sent = {feeds: [feed('a'), feed('b')], nofeed: [{key: 'gone', company: 'Gone', host: null, last: '2026-11-01'}]};
+  assert.equal((await (await call(e, 'PUT', auth, sent)).json()).copy, 'kept');
+  const copy = onlyCopy(kept);
+  assert.equal(copy.options.expirationTtl, 30 * 86400);
+  assert.deepEqual(JSON.parse(copy.value), sent);
+});
+
+test('the 2 Nov loss played: a good list, a publish that loses 43% and passes the guard, then one restore of the earlier copy brings everything back', async () => {
+  store.clear();
+  const {kept, e: kv} = keeping(), e = {...kv, STATS: d1()}, whole = Array.from({length: 100}, (_, i) => feed(`f${i}`));
+  await call(e, 'PUT', auth, {feeds: whole, nofeed: [{key: 'gone', company: 'Gone', host: null, last: '2026-11-01'}]});
+  const earlier = onlyCopy(kept).value;   // the day before the loss: a later publish today would replace today's copy, not that one
+  assert.equal((await call(e, 'PUT', auth, {feeds: whole.slice(0, 57)})).status, 200, 'the precondition: the loss got through');
+  const summary = async () => (await (await worker.fetch(new Request('https://www.jobpilotto.top/api/index?summary=1'), e, {})).json()).employers;
+  assert.equal(await summary(), 57);
+  assert.equal(store.get('index:nofeed'), '[]');
+  assert.equal((await call(e, 'PUT', auth, JSON.parse(earlier))).status, 200);
+  assert.equal(await summary(), 100);
+  assert.equal((await e.STATS.prepare('SELECT COUNT(*) AS n FROM index_feeds').first()).n, 100);
+  assert.equal(JSON.parse(store.get('index:nofeed')).length, 1, 'the dead ends come back with the feeds');
+});
+
+test('a second publish on one day replaces that day\'s copy: one copy a day', async () => {
+  store.clear();
+  const {kept, e} = keeping();
+  await call(e, 'PUT', auth, {feeds: [feed('a')]});
+  await call(e, 'PUT', auth, {feeds: [feed('a'), feed('b')]});
+  assert.equal(JSON.parse(onlyCopy(kept).value).feeds.length, 2);
+});
+
+test('a refused publish is never kept: the good copy stays', async () => {
+  store.clear();
+  const {kept, e} = keeping(), many = Array.from({length: 20}, (_, i) => feed(`f${i}`));
+  await call(e, 'PUT', auth, {feeds: many});
+  assert.equal((await call(e, 'PUT', auth, {feeds: many.slice(0, 5)})).status, 409);
+  assert.equal(JSON.parse(onlyCopy(kept).value).feeds.length, 20);
+});
+
+test('a copy that cannot be written never refuses the publish, the answer says so, and the owner is told', async t => {
+  store.clear();
+  const told = [];
+  t.mock.method(globalThis, 'fetch', async (url, init) => { told.push({url: String(url), body: String(init?.body || '')}); return Response.json({ok: true, result: {message_id: 1}}); });
+  const {e} = keeping(true), alerted = {...e, BRAIN_BOT_TOKEN: 'bot', BRAIN_CHAT_ID: '1'}, put = await call(alerted, 'PUT', auth, {feeds: [feed('a')]});
+  assert.equal(put.status, 200);
+  assert.equal((await put.json()).copy, 'failed');
+  assert.match(told.map(sent => sent.body).join(), /could not be saved/);
+  assert.equal((await (await worker.fetch(new Request('https://www.jobpilotto.top/api/index?summary=1'), e, {})).json()).employers, 1, 'the publish itself went through');
+});
+
+test('a telling that fails too still never refuses the publish', async t => {
+  store.clear();
+  t.mock.method(globalThis, 'fetch', async () => { throw new Error('telegram down'); });
+  const {e} = keeping(true), put = await call({...e, BRAIN_BOT_TOKEN: 'bot', BRAIN_CHAT_ID: '1'}, 'PUT', auth, {feeds: [feed('a')]});
+  assert.equal(put.status, 200);
+  assert.equal((await put.json()).copy, 'failed');
 });
