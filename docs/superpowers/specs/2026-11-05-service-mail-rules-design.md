@@ -10,7 +10,7 @@ Owner, in their words: "each users sets his own emails. We can jsut suggest a se
 - 🟢 **Modes change what can run, not the rules.** Each mode only suggests different defaults; every row can be changed.
 - 🟢 **Every mail says why it came**, and states only what is true for that mail. Account mail has no unsubscribe. A person's own mail points to the app, with a small web link for someone who cannot open it.
 - 🟢 **A switch beside each automation, and the same switch in Notifications.** The screen says plainly what comes from the Mac and what comes from Always on.
-- 🟢 **Privacy line, once the Notifications screen ships:** "You choose every e-mail. Your data stays yours: it works for you, never for our marketing."
+- 🟢 **Privacy line, once the Notifications screen ships:** "You choose every e-mail. Your data stays yours: your search and profile work for you, never for our marketing."
 - 🟢 **Tips by mail are general, the same for everyone.** Personal suggestions stay in the app, where they already are. No personal data reaches the site for a tip.
 - 🟢 **Insights are a product feature**, not the person's automation.
 - 🟢 **No new daily limit.** The 10 a person a day (3,000 for the product) stays as a safety net only.
@@ -23,12 +23,12 @@ Owner, in their words: "each users sets his own emails. We can jsut suggest a se
 | Owner | Mails | Who decides | In Admin |
 |---|---|---|---|
 | **Account** | sign-in code 🔒, confirm 🔒, about your feedback, Always on test | nobody: they go when the person asks | on the list, no switch on the locked ones |
-| **Yours** | a row per automation (new matches, applied for you, an application needs you, interview reminder), Always on stopped working, nothing found for days, Job digest, Weekly summary | the person; we suggest | counts, the suggested default, an emergency stop for a broken mail |
+| **Yours** | a row per automation (new matches, applied for you, an application needs you, interview reminder), Always on stopped working, nothing found for days, Job digest, Weekly summary | the person; we suggest | counts, the suggested default (read only), an emergency stop for a broken mail |
 | **Jobadabra's** | What's new, Tips and tricks (general), Pro is out and offers, come back (planned), trial reminders (off) | the owner on content and rhythm, the person on the tick | on/off and rhythm |
 
 Job digest and Weekly summary were never promotional: they are the person's own reports.
 
-**Come back** (owner: "a user just downloaded the app then stopped using. Then in 3 months we can get back to them say that look, we grew our job pool size by 3x"): it replaces the planned check-in and carries "What got in the way?". Goes once, 3 months after the app last reached us. It uses only that date and product facts, never the person's search. It is promotional, so it needs the tick; the legal read below covers whether someone who gave their address for the product can get it with a stop link instead.
+**Come back** (owner: "a user just downloaded the app then stopped using. Then in 3 months we can get back to them say that look, we grew our job pool size by 3x"): it replaces the planned check-in and carries "What got in the way?". Goes once, 3 months after the app last reached us. It uses only that date and product facts, never the person's search or profile, and its footer names the date. It is promotional, so it needs the tick; the legal read below covers whether someone who gave their address for the product can get it with a stop link instead.
 
 **No consent pop-up for what a person sets themselves** (owner: "we don't need to get any consent"). Three things stay: confirming the address (it protects strangers from mail they never asked for), the tick on Jobadabra's mail, and no upsell inside a person's own mail (a Pro banner would make it promotional). The stored choice of the CV switch (date and wording, `2026-11-05-email-consent-design.md`, public repo) stays. One legal read of the wording before it goes in ads.
 
@@ -37,7 +37,7 @@ Job digest and Weekly summary were never promotional: they are the person's own 
 | Automation | Mac only | Own accounts | Our servers |
 |---|---|---|---|
 | Find jobs | while open | Mac can be off | Mac can be off (daily on trial, down to every 4 h on Pro) |
-| More employers (own schedule) | while open | Mac can be off | on the Mac, while open |
+| More employers (no row: the product decides, #3312) | while open | Mac can be off | on the Mac, while open |
 | Insights | while open | Mac can be off | on the Mac, while open |
 | Check Gmail & Calendar | while open | moves to the Mac | on the Mac, while open |
 | Applying, Full automation included | on the Mac | on the Mac | on the Mac |
@@ -67,16 +67,17 @@ A mail about work done on the Mac can only go while the app is open, and its row
 | Written on the Mac | "Written on your Mac by Jobadabra. It passed through our mail service to reach you, and we kept no copy. You chose this in Settings → Notifications." |
 | Always on, our servers | "You get this because you turned on Always on. Your profile is stored encrypted, kept apart per account and deleted when you turn it off. We use it only to run your search, never for marketing." |
 | Always on, own accounts | "Your own GitHub ran this search. You chose this in Settings → Notifications." |
-| Jobadabra's news | "News from Jobadabra, the same for everyone. Nothing here comes from your data. You ticked this, and one click stops it." |
+| Jobadabra's news | "News from Jobadabra, the same for everyone. Nothing here comes from your search or profile. You ticked this, and one click stops it." |
+| Come back | "We wrote because the app has not reached us in 3 months. Nothing else about you was used. You ticked this, and one click stops it." |
 | Account | no unsubscribe, no headers. "Wasn't you? Ignore this mail." on the confirm mails |
 
-Every Yours mail then ends with the same two lines: "Change this in the Jobadabra app: Settings → Notifications." and, small, "Can't open the app? Stop these e-mails." The web link stays because someone who uninstalled the app or lost their Mac cannot reach Settings, while their own GitHub repo keeps mailing them; they would press Report spam, which hurts delivery of sign-in codes too. Today only `account-code` and `confirm-resend` go without a stop link: `welcome`, `feedback-update` and `always-on-test` change.
+Every Yours mail then ends with the same two lines: "Change this in the Jobadabra app: Settings → Notifications." and, small, "Can't open the app? Stop these e-mails." The web link stays because someone who uninstalled the app or lost their Mac cannot reach Settings, while their own GitHub repo keeps mailing them; they would press Report spam, which hurts delivery of sign-in codes too (owner: "there should be a link for us to intervene and stop that email sending"). `send()` refuses it whichever mode wrote the mail, so it works with the app gone. It stops the mail, not the searches: our servers pause after 14 days without the app, and a person's own repo keeps running. Today only `account-code` and `confirm-resend` go without a stop link: `welcome`, `feedback-update` and `always-on-test` change.
 
 ## What we can say (read 5 Nov 2026)
 
 | Claim | Verdict | Why |
 |---|---|---|
-| Your data is never used for our marketing | say it | nothing built uses it, and tips stay general |
+| Your search and profile are never used for our marketing | say it | nothing built uses them, and tips stay general. Not "your data": Come back uses the date the app last reached us |
 | We never sell it, or use it to train AI | say it | on the privacy page |
 | Stored encrypted, kept apart per account, deleted when you turn this off | say it | the owner's line, in the app; it covers the profile, found jobs are not encrypted with the person's key |
 | You choose every e-mail | after the Notifications screen | |
@@ -113,7 +114,7 @@ Every mail from the engine is `message`, so a row per mail has nothing to key on
 
 The one owner of what a mail is: id, owner (`account`, `yours`, `jobadabra`), locked or not, its suggested default per mode. `TEMPLATES` keeps subject/html/text. App mail gets virtual ids so `message` can be told apart: `app-matches`, `app-weekly`, `app-stopped`, `app-nothing`, `app-applied`, `app-needs-you`; `app-reminder` is reserved.
 
-Stored: one D1 table `mail_rule (id TEXT PRIMARY KEY, enabled INTEGER, rhythm TEXT, at TEXT)`, one row per mail the owner changed. For a Jobadabra mail it holds on/off and rhythm; for a Yours mail only the emergency stop and the suggested default. Locked mails cannot be written.
+Stored: one D1 table `mail_rule (id TEXT PRIMARY KEY, enabled INTEGER, rhythm TEXT, at TEXT)`, one row per mail the owner changed. For a Jobadabra mail it holds on/off and rhythm; for a Yours mail `enabled = 0` is the emergency stop and nothing else. Suggested defaults per mode live in `mail-registry.js`, changed by a PR, not in this table. Locked mails cannot be written.
 `send()` asks `ruleOf(id)` before the claim: off → `{ok:false, reason:'rule_off'}`, logged like any refusal and shown in "Why mail was not sent".
 
 **A failed read never sends more than the owner chose** (the lesson of #442): a missing table leaves the defaults; any other read error keeps this Worker copy's last good answer, and with none holds every unlocked mail. Locked mails never wait for a rule.
@@ -128,7 +129,7 @@ One list in three groups, by owner: name and "goes out when", last sent, sent in
 
 ### 4. Two screens, one stored value
 
-- **Settings → Automation, the Schedules card:** a simple e-mail switch in line with each automation.
+- **Settings → Automation, the Schedules card:** a simple e-mail switch in line with each automation. Applying has no Schedules row, so its two switches sit on Settings → Apply.
 - **Settings → Notifications:** the same switches again, then Summaries (Job digest, Weekly summary), then From Jobadabra. Both screens write the one value in section 2, so they can never disagree.
 - **Each row says where it comes from:** "From your Mac: only while your Mac is awake and the app is open. If it isn't, no e-mail is sent." or "From Always on: on schedule, even with your Mac off." We do not promise 100%: a run can fail, and Always on stopped working covers that.
 - **Without Always on,** the screen sells it in one line with the Turn on button: "Turn on Always on and these arrive on schedule, even with your Mac off." In the app only, never inside a person's own mail.
@@ -156,7 +157,7 @@ Owner: "Mac now, phone later". The GitHub Gmail job stops and the Google sign-in
 
 ### 9. The Schedules card (decided; sc builds it in the public repo)
 
-Owner, via the coordinator: "Yes, say where (Recommended)", "Yes, one place searches (Recommended)". Three rows, the status says where each runs, and with our servers on the Mac stops its own scheduled search; the Find jobs button still works. Insights get their own once-a-day trigger.
+Owner, via the coordinator: "Yes, say where (Recommended)", "Yes, one place searches (Recommended)". Two rows, Find jobs and Check Gmail & Calendar (#3312: the person should not see the employer search), the status says where each runs, and with our servers on the Mac stops its own scheduled search; the Find jobs button still works. Insights get their own once-a-day trigger.
 
 ### 10. The new mails (off until the owner turns each on)
 
