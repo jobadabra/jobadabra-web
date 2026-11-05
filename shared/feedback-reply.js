@@ -5,6 +5,8 @@ import {send, validAddress} from './mail.js';
 import {PUBLIC_REPO, githubUrl} from './repos.js';
 
 export const DEFAULT_DEFER = 'Thank you: we saw this and parked it for later. If we pick it up we will tell you.';
+/** The closing reply for a report the owner set aside (dismissed, false positive), offered pre-filled and sent only when the owner presses the button (owner, 5 Nov 2026: "Yes, short and kind"; nothing goes out until the owner has seen the wording). */
+export const DEFAULT_CLOSE = "Thanks, we looked into this and it isn't something we'll change.";
 export const defaultFixed = fixedIn => (fixedIn ? `Thank you: this is fixed in ${fixedIn}.` : 'Thank you: this is fixed and will arrive in the next update.');
 const clip = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const PR = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|commit)\/\w+$/, LINEAR = /^https:\/\/linear\.app\/[\w./-]+$/, VERSION = /^[\w.+ -]{0,40}$/, PR_MAX = 200;
@@ -13,6 +15,7 @@ const PUBLIC_PR = new RegExp(`^${githubUrl(PUBLIC_REPO).replace(/[.]/g, '\\.')}/
 /** The PR number a card's link names when it can be matched by a release (a pull request of the public repo), else 0. */
 export const releasePr = url => Number(String(url || '').match(PUBLIC_PR)?.[1]) || 0;
 const WHEN = ['now', 'release', 'never'];
+const CLOSED_STATES = ['dismissed', 'false_positive'];   // set aside: the reporter hears only when the owner chose to reply (closeColumns)
 const FIXED_STATES = ['fixed', 'released'];   // both read as "fixed" to the reporter: Released only adds that the build shipped
 export const TOLD_ERROR = 'app, error: not confirmed';
 /** The receipt every report gets at once, before any person has read it (owner, 5 Nov 2026: "Within 24 hours"). Why: 1 of 8 reporters heard back within 24 h and 3 of 8 never did (D1, 5 Nov 2026), so the first thing a reporter sees must not wait for the owner. */
@@ -30,10 +33,14 @@ export const THANKS_LINE = `We also added ${THANKS_APPS} more free applications 
 const RECEIPT_PREFIX = 'r:';   // the receipt's ref in the replies list; closing it never touches the owner's later reply (seen_at)
 
 // Why (3/7 code review, 3 Nov 2026): one rule says when the app may show a reply, used by the list and by closing: the card is Fixed, Released or Deferred, it was told, and the person has not closed this telling.
-const VISIBLE = "state IN ('fixed', 'released', 'deferred') AND told LIKE 'app%' AND seen_at = '' AND ref != ''";
+// Why (code review of 1b, 5 Nov 2026): a card set aside shows a reply only when it was told in the step that set it aside (told_at not before state_at), never an older telling from before it was reopened and dismissed.
+const VISIBLE = "state IN ('fixed', 'released', 'deferred', 'dismissed', 'false_positive') AND told LIKE 'app%' AND seen_at = '' AND ref != '' AND (state NOT IN ('dismissed', 'false_positive') OR told_at >= state_at)";
 
 /** What the reporter reads: the owner's own words, else the default sentence for the state. */
-export const replyText = row => (clip(row.tell_message, 300) || (FIXED_STATES.includes(row.state) ? defaultFixed(row.fixed_in) : DEFAULT_DEFER)) + (FIXED_STATES.includes(row.state) && row.thanks_apps > 0 ? ` ${THANKS_LINE}` : '');
+export const replyText = row => {
+  if (CLOSED_STATES.includes(row.state)) return clip(row.tell_message, 300) || DEFAULT_CLOSE;
+  return (clip(row.tell_message, 300) || (FIXED_STATES.includes(row.state) ? defaultFixed(row.fixed_in) : DEFAULT_DEFER)) + (FIXED_STATES.includes(row.state) && row.thanks_apps > 0 ? ` ${THANKS_LINE}` : '');
+};
 /** The reporter's own words, cut for the reply ("You wrote on 28 Oct: …"): never more than 80 characters. */
 export const excerptOf = text => { const one = clip(text, 400); return one.length > 80 ? `${one.slice(0, 79).trimEnd()}…` : one; };
 
@@ -63,6 +70,16 @@ export function releasedColumns(input, row) {
   return {tell: waits ? 'now' : undefined, detail: version, columns: {fixed_in: version, told: waits ? 'telling' : row.told}};
 }
 
+/**
+ * The columns Dismiss and False positive set when the owner chose to reply (`input.reply` true), or none (the one-click dismiss as before). The reply is the owner's words, else DEFAULT_CLOSE at tell time;
+ * the false positive's own note is the owner's reason and never reaches the reporter. -> {tell, columns}. The reply goes through tellOnce like every other (in the app, and by e-mail when ticked).
+ */
+export function closeColumns(input) {
+  // Why (own test, 5 Nov 2026): a card told earlier (Fixed, then Reopen) keeps told = 'app'; closing it without a reply clears that, or the old reply would be served as the closing reply.
+  if (input.reply !== true) return {columns: {told: ''}};
+  return {tell: 'now', columns: {tell_mode: 'now', tell_message: clip(input.message, 300), tell_mail: input.mail ? 1 : 0, told: ''}};
+}
+
 /** The columns the Acknowledge + defer form sets, or {error}. `tell`: false = do not tell (default true). */
 export function deferColumns(input) {
   const linear = clip(input.linear_url, 400);
@@ -80,7 +97,7 @@ const grantStatement = (env, ref, now) => env.STATS.prepare("INSERT OR IGNORE IN
  */
 export async function tellReporter(env, ref, now = new Date(), who = 'owner (told)') {
   const row = await env.STATS.prepare('SELECT at, text, contact, state, fixed_in, tell_message, tell_mail, thanks_apps FROM feedback WHERE ref = ?').bind(ref).first();
-  if (!row || ![...FIXED_STATES, 'deferred'].includes(row.state)) return '';
+  if (!row || ![...FIXED_STATES, ...CLOSED_STATES, 'deferred'].includes(row.state)) return '';
   let told = 'app';
   if (row.tell_mail && validAddress(row.contact)) {
     const sent = await send(env, 'feedback-update', row.contact, {kind: FIXED_STATES.includes(row.state) ? 'fixed' : 'deferred', on: String(row.at).slice(0, 10), excerpt: excerptOf(row.text), message: replyText(row)}, {now});

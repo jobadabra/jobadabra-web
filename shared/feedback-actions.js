@@ -3,7 +3,7 @@
 // Why (3 Nov 2026, owner: "offer some actions buttons for each feedback"): the list only grew; the owner needs to clear it, rate it and, later, answer the reporter.
 
 import {aiClosedColumns, aiColumns, aiEndColumns, aiGate, aiGuard, aiMergedColumns, aiPrColumns} from './feedback-ai.js';
-import {deferColumns, fixedColumns, releasedColumns, tellOnce} from './feedback-reply.js';
+import {closeColumns, deferColumns, fixedColumns, releasedColumns, tellOnce} from './feedback-reply.js';
 
 export const STATES = ['new', 'dismissed', 'false_positive', 'deferred', 'ai_running', 'ai_pr', 'fixed', 'released'];
 export const IMPACTS = ['high', 'medium', 'low'];
@@ -21,8 +21,8 @@ export const ACTIONS = {
   ai_failed: {from: ['ai_running'], to: 'new', form: aiEndColumns(true), internal: true},
   ai_merged: {from: ['ai_pr'], to: 'fixed', form: aiMergedColumns, internal: true},
   ai_closed: {from: ['ai_pr'], to: 'new', form: aiClosedColumns, internal: true},
-  dismiss: {from: ['new'], to: 'dismissed'},
-  false_positive: {from: ['new'], to: 'false_positive', note: 'required'},
+  dismiss: {from: ['new'], to: 'dismissed', form: closeColumns},   // with reply: true the reporter gets a short closing reply (owner, 5 Nov 2026); without it, as before
+  false_positive: {from: ['new'], to: 'false_positive', note: 'required', form: closeColumns},
   reopen: {from: ['dismissed', 'false_positive', 'deferred', 'fixed', 'released', 'ai_pr'], to: 'new'},
   delete: {from: ['new', 'dismissed', 'false_positive', 'deferred', 'ai_pr', 'fixed', 'released']},   // not while a run is going (ai_running)
   impact: {from: STATES},

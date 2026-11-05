@@ -1,6 +1,8 @@
 // The HTML of the owner's feedback page (routes in admin/feedback.js). Live list, filters by state and impact, a ⋯ menu per card, inline forms for the actions that need a word or a second click.
 // Everything from the server is put on the page with textContent. Guarded by test/unit/shared/feedback/feedback.test.js and test/unit/shared/feedback/feedback-actions.test.js.
 // Why (3 Nov 2026, owner: "Make all the action buttons under a 3 dot dropdown menu"): the card shows state and impact; every action lives in one menu, and the menu lists only what the state table allows (the server sends `actions`).
+import {DEFAULT_CLOSE} from '../shared/feedback-reply.js';
+
 export const PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>Feedback · Admin</title><link rel="icon" href="/favicon-32.png">
 <style>
@@ -45,6 +47,7 @@ a.chip{text-decoration:none}.told{display:flex;gap:6px;flex-wrap:wrap;margin-top
 <div id="list"><p class="muted">Loading…</p></div>
 <div class="toast" id="toast" role="status" hidden></div>
 <script>
+const CLOSE = ${JSON.stringify(DEFAULT_CLOSE)};   // the closing reply's wording: one copy, in shared/feedback-reply.js
 const list = document.getElementById('list'), stateEl = document.getElementById('state'), live = document.getElementById('live'), toast = document.getElementById('toast');
 let known = null, rows = [], canAct = false, stateFilter = location.hash.length > 1 ? 'all' : 'open', impactFilter = '', sortBy = 'newest';
 const STATE = {new: ['🆕 New', 'new'], dismissed: ['🙈 Dismissed', 'dismissed'], false_positive: ['🚫 False positive', 'false_positive'], deferred: ['⏳ Acknowledged · deferred', 'deferred'],
@@ -103,21 +106,35 @@ function choose(row, action, card) {
   if (action === 'fixed' || action === 'defer') return card.append(formFor(row, action));
   if (action === 'released') return card.append(releasedForm(row));
   if (action === 'ai') return card.append(aiForm(row));
-  if (action === 'dismiss') return send({ref: row.ref, action}, 'Dismissed.', {undo: {ref: row.ref, action: 'reopen', from: 'dismissed'}});
+  if (action === 'dismiss' || action === 'false_positive') return card.append(closeForm(row, action));
   if (action === 'reopen') return send({ref: row.ref, action}, 'Back to new.');
-  const panel = el('div', 'panel'), go = el('button', action === 'delete' ? 'danger' : 'go', action === 'delete' ? 'Delete' : 'Save'), cancel = el('button', '', action === 'delete' ? 'Keep' : 'Cancel');
+  const panel = el('div', 'panel'), go = el('button', 'danger', 'Delete'), cancel = el('button', '', 'Keep');
   go.type = cancel.type = 'button'; cancel.onclick = () => panel.remove();
-  if (action === 'delete') {
-    panel.append(el('span', '', 'Delete forever? Its screenshot, logs and data go too.'), go, cancel);
-    go.onclick = () => send({ref: row.ref, action}, 'Deleted.');
-  } else {
-    const input = el('input'); input.type = 'text'; input.maxLength = 200; input.placeholder = 'Why? (works as designed, duplicate of …)'; input.setAttribute('aria-label', 'Why is this a false positive');
-    panel.append(input, go, cancel);
-    go.onclick = () => { if (!input.value.trim()) return input.focus(); send({ref: row.ref, action, note: input.value}, 'Marked as a false positive.'); };
-    input.onkeydown = event => { if (event.key === 'Enter') go.click(); };
-    setTimeout(() => input.focus());
-  }
+  panel.append(el('span', '', 'Delete forever? Its screenshot, logs and data go too.'), go, cancel);
+  go.onclick = () => send({ref: row.ref, action}, 'Deleted.');
   card.append(panel);
+}
+
+// Dismiss and False positive: the reporter may get one short closing reply (owner, 5 Nov 2026: "Yes, short and kind"). The wording is filled in so the owner reads it first; nothing is sent until the reply button is pressed,
+// and "without a reply" does what the one-click Dismiss did. The false positive's reason is for the owner only. The server checks everything again.
+function closeForm(row, action) {
+  const fp = action === 'false_positive', form = el('div', 'form');
+  const field = (label, input) => { const l = el('label', '', label); l.append(input); form.append(l); return input; };
+  const why = fp ? field('Why? (for you only: the reporter never sees it)', Object.assign(el('input'), {type: 'text', maxLength: 200, placeholder: 'works as designed, duplicate of …'})) : null;
+  const message = field('Closing reply to the reporter (edit it, or leave it)', Object.assign(el('input'), {type: 'text', maxLength: 300, value: CLOSE}));
+  const mail = el('input'); mail.type = 'checkbox'; mail.disabled = !row.mailable; mail.checked = false;
+  const mailRow = el('label', 'check'); mailRow.append(mail, row.mailable ? 'Also e-mail ' + row.contact : 'No e-mail: the contact is not an address (they are told in the app)'); form.append(mailRow);
+  const buttons = el('div', 'row'), reply = el('button', 'go', fp ? 'Send reply + mark as false positive' : 'Send reply + dismiss'), quiet = el('button', '', fp ? 'Mark without a reply' : 'Dismiss without a reply'), cancel = el('button', '', 'Cancel');
+  reply.type = quiet.type = cancel.type = 'button'; cancel.onclick = () => form.remove();
+  const finish = withReply => {
+    if (fp && !why.value.trim()) return why.focus();
+    if (withReply && !message.value.trim()) return message.focus();
+    send({ref: row.ref, action, ...(fp ? {note: why.value} : {}), ...(withReply ? {reply: true, message: message.value, mail: mail.checked && !mail.disabled} : {})},
+      (fp ? 'Marked as a false positive' : 'Dismissed') + (withReply ? ' and replied. The reply cannot be taken back.' : '.'), withReply ? {} : {undo: {ref: row.ref, action: 'reopen', from: fp ? 'false_positive' : 'dismissed'}});   // Why (Gitar on #444): an Undo after a sent reply would look like it takes the reply back, and nothing can
+  };
+  reply.onclick = () => finish(true); quiet.onclick = () => finish(false);
+  buttons.append(reply, quiet, cancel); form.append(buttons); setTimeout(() => (why || message).focus());
+  return form;
 }
 
 // The two forms that carry the owner's words to the reporter. The server validates everything again (shared/feedback-reply.js); this only asks for it.
