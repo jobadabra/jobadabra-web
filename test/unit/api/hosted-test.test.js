@@ -7,13 +7,14 @@ import {test} from 'node:test';
 import {digestOf, tokenFor} from '../../../shared/guard.js';
 import {result, schedule, startRun} from '../../../shared/hosted.js';
 import {addrOf} from '../../../shared/mail.js';
-import {test as hostedTest, COOLDOWN_MS} from '../../../api/hosted-test.js';
+import {aiAnswers, test as hostedTest, COOLDOWN_MS} from '../../../api/hosted-test.js';
+import {config} from '../../../api/hosted-state.js';
 import {tick} from '../../../api/hosted-tick.js';
 
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0083_mail.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0083_mail.sql', '0130_hosted_test_checks.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE IF NOT EXISTS revoked (who TEXT PRIMARY KEY, reason TEXT, at TEXT)');
   const statement = (text, args = []) => ({bind: (...v) => statement(text, v), run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
@@ -23,7 +24,8 @@ function d1() {
 const kv = () => { const m = new Map(); return {m, get: async k => m.get(k) ?? null, put: async (k, v) => { m.set(k, v); }}; };
 const queue = () => { const sent = []; return {sent, send: async m => { sent.push(m); }}; };
 const bucket = () => { const m = new Map(); return {m, head: async k => (m.has(k) ? {} : null)}; };
-const env = (extra = {}) => ({STATS: d1(), WAITLIST: kv(), HOSTED_QUEUE: queue(), HOSTED_STATE: bucket(), STATS_SALT: 'salt', HOSTED_ALWAYS_ON: 'on', FREE_AI_TRIAL_USD: '2', ...extra});
+const aiOk = {run: async () => ({choices: [{message: {content: 'ok'}, finish_reason: 'stop'}], usage: {prompt_tokens: 10, completion_tokens: 1}})};
+const env = (extra = {}) => ({STATS: d1(), WAITLIST: kv(), HOSTED_QUEUE: queue(), HOSTED_STATE: bucket(), AI: aiOk, STATS_SALT: 'salt', HOSTED_ALWAYS_ON: 'on', FREE_AI_TRIAL_USD: '2', ...extra});
 const keyOf = async install => `JPF1.${install}.${await tokenFor(install, {STATS_SALT: 'salt'}, 'ai')}`;
 const t0 = new Date('2026-11-05T10:00:00Z');
 const later = (minutes, from = t0) => new Date(from.getTime() + minutes * 60000);
@@ -61,23 +63,50 @@ test('pressing again while it runs watches the same run: no second message', asy
   assert.equal(e.HOSTED_QUEUE.sent.length, 1);
 });
 
-test('the steps read from what the site recorded: running, then found jobs and the e-mail', async () => {
-  const e = env(); await turnOn(e);
+test('the Test answers in seconds: on, profile held, our server read it, the AI answered; the search is reported apart', async () => {
+  // Why (owner, 5 Nov 2026: "a test shuold not take more than 10 seconds"): the verdict no longer waits for the search (10-18 min).
+  const e = env({HOSTED_KEK: 'kek'}); await turnOn(e);
   const account = rows(e, 'SELECT account FROM hosted_schedules')[0].account;
   e.HOSTED_STATE.m.set(`hosted/${account}/config.json`, 1);
+  e.HOSTED_STATE.get = async () => null;
   await call(e, 'POST', later(5));
-  const running = (await (await call(e, 'GET', later(6))).json()).run;
-  assert.equal(running.status, 'running');
-  assert.deepEqual(running.steps.map(s => [s.key, s.state]), [['on', 'ok'], ['profile', 'ok'], ['started', 'ok'], ['finished', 'running']]);
+  const waiting = (await (await call(e, 'GET', new Date(later(5).getTime() + 3000))).json()).run;
+  assert.equal(waiting.status, 'running');
+  assert.deepEqual(waiting.steps.map(s => [s.key, s.state]), [['on', 'ok'], ['profile', 'ok'], ['started', 'running'], ['ai', 'ok']]);
+  const token = e.HOSTED_QUEUE.sent.at(-1).token;
+  await config(new Request('https://x/api/hosted/config', {headers: {authorization: `Bearer ${token}`}}), e, new Date(later(5).getTime() + 9000));   // the container's first read
+  const ready = (await (await call(e, 'GET', new Date(later(5).getTime() + 10000))).json()).run;
+  assert.equal(ready.status, 'ok', 'the verdict at ~10 s, while the search goes on');
+  assert.deepEqual(ready.search.steps.map(s => [s.key, s.state]), [['finished', 'running']]);
   await finish(e, {status: 'ok', matches: [{job: 'j1', title: 'Engineer', company: 'Acme', fit: 80}]}, later(8));
   const done = (await (await call(e, 'GET', later(9))).json()).run;
-  const by = Object.fromEntries(done.steps.map(s => [s.key, s]));
-  assert.equal(done.status, 'ok');
+  const by = Object.fromEntries(done.search.steps.map(s => [s.key, s]));
+  assert.deepEqual([done.status, done.search.status], ['ok', 'ok']);
   assert.deepEqual([by.found.state, by.found.note], ['ok', '1']);
   assert.equal(by.mail.state, 'skipped', 'no digest was recorded as sent: not claimed');
   e.STATS.db.prepare("INSERT INTO mail_log (addr, list, template, status, at) VALUES (?, 'service', 'digest', 'sent', ?)").run(await addrOf('a@example.com'), later(8).toISOString());
-  const mailed = (await (await call(e, 'GET', later(10))).json()).run.steps.find(s => s.key === 'mail');
+  const mailed = (await (await call(e, 'GET', later(10))).json()).run.search.steps.find(s => s.key === 'mail');
   assert.equal(mailed.state, 'ok');
+});
+
+test('a server that never reads the profile fails the Test after a minute, said plainly', async () => {
+  const e = env(); await turnOn(e);
+  await call(e, 'POST', later(5));
+  const run = (await (await call(e, 'GET', new Date(later(5).getTime() + 61000))).json()).run;
+  assert.equal(run.status, 'failed');
+  assert.match(run.steps.find(s => s.key === 'started').note, /did not start/);
+});
+
+test('an AI that fails or hangs fails its step with what it said, within the wait', async () => {
+  const e = env({AI: {run: async () => { throw new Error('upstream down'); }}}); await turnOn(e);
+  await call(e, 'POST', later(5));
+  const run = (await (await call(e, 'GET', new Date(later(5).getTime() + 5000))).json()).run;
+  assert.equal(run.status, 'failed');
+  assert.match(run.steps.find(s => s.key === 'ai').note, /Free AI could not answer/);
+  e.AI = {run: () => new Promise(() => {})};   // hangs, as two production calls did for ~170 s
+  const began = Date.now();
+  assert.deepEqual(await aiAnswers(e, e.HOSTED_QUEUE.sent.at(-1).token, later(5), 50), {ok: false, error: 'The AI is slow right now.'});
+  assert.ok(Date.now() - began < 2000);
 });
 
 test('a profile that was never pushed and a failed run are said plainly', async () => {
@@ -86,16 +115,16 @@ test('a profile that was never pushed and a failed run are said plainly', async 
   await finish(e, {status: 'failed'}, later(7));
   const run = (await (await call(e, 'GET', later(8))).json()).run;
   assert.equal(run.steps.find(s => s.key === 'profile').state, 'failed');
-  assert.equal(run.steps.find(s => s.key === 'finished').state, 'failed');
-  assert.ok(!run.steps.some(s => s.key === 'found'), 'no found-jobs claim for a failed run');
+  assert.equal(run.search.steps.find(s => s.key === 'finished').state, 'failed');
+  assert.ok(!run.search.steps.some(s => s.key === 'found'), 'no found-jobs claim for a failed run');
 });
 
 test('a run that never reports back is failed once its token has expired', async () => {
   const e = env(); await turnOn(e);
   await call(e, 'POST', later(5));
   const run = (await (await call(e, 'GET', later(60))).json()).run;
-  assert.equal(run.status, 'failed');
-  assert.match(run.steps.find(s => s.key === 'finished').note, /did not report back/);
+  assert.equal(run.search.status, 'failed');
+  assert.match(run.search.steps.find(s => s.key === 'finished').note, /did not report back/);
 });
 
 test('a second test within ten minutes of the last is refused; after that it starts', async () => {
@@ -204,11 +233,11 @@ test('the steps are honest at the edges: jobs counted from the inbox, the mail n
   await call(e, 'POST', later(5));
   await finish(e, {status: 'ok', matches: [{job: 'j1', title: 'A', company: 'X', fit: 70}]}, later(7));
   const soon = (await (await call(e, 'GET', new Date(later(7).getTime() + 5000))).json()).run;
-  assert.equal(soon.status, 'running', 'the digest is sent last: a read right after the post is not final');
-  assert.equal(soon.steps.find(s => s.key === 'mail').state, 'running');
+  assert.equal(soon.search.status, 'running', 'the digest is sent last: a read right after the post is not final');
+  assert.equal(soon.search.steps.find(s => s.key === 'mail').state, 'running');
   e.STATS.db.prepare("INSERT INTO mail_log (addr, list, template, status, at) VALUES (?, 'service', 'digest', 'sent', ?)").run(await addrOf('a@example.com'), later(300).toISOString());   // a later day's digest
   const later1 = (await (await call(e, 'GET', later(60))).json()).run;
-  assert.equal(later1.steps.find(s => s.key === 'mail').state, 'skipped', 'a later run\'s digest does not make this run look mailed');
+  assert.equal(later1.search.steps.find(s => s.key === 'mail').state, 'skipped', 'a later run\'s digest does not make this run look mailed');
   assert.equal(later1.found, 1);
   assert.ok(account);
 });
