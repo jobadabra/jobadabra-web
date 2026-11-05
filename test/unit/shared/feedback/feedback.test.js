@@ -19,13 +19,14 @@ const send = (e, body, sent = []) => feedback(new Request('https://x/api/feedbac
   async (url, init) => { sent.push(JSON.parse(init.body)); return new Response('{}'); });
 const good = {install: 'install-aaaa-bbbb', version: '0.5.70', platform: 'darwin', text: 'The kit is great; setup took 20 min', contact: 'ana@example.com'};
 
-test('feedback is stored and sent to the owner with the version and the contact', async () => {
+test('feedback is stored and sent to the owner with the version, never the reply address (owner, 5 Nov 2026)', async () => {
   const e = env(), sent = [];
   assert.equal((await send(e, good, sent)).status, 200);
   assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM feedback').get().n, 1);
   assert.equal(sent[0].chat_id, '42');
   assert.match(sent[0].text, /setup took 20 min/);
-  assert.match(sent[0].text, /ana@example\.com/);
+  assert.doesNotMatch(sent[0].text, /ana@example\.com/, 'an alert never carries an address; the row on /admin has it');
+  assert.match(sent[0].text, /Reply address/, 'it says one was left');
 });
 
 // Owner, 3 Nov 2026: "this should be mandatory for every feedback sent" (the app version, the OS platform, the install id); the e-mail stays optional.

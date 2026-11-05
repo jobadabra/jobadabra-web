@@ -2,6 +2,7 @@
 // responses, a short install digest, the time), never a host, page or value: the Worker has none. Same bot and chat as the feedback message (BRAIN_BOT_TOKEN, BRAIN_CHAT_ID, Worker secrets).
 // After 10 messages in a UTC day one "more reports today" line replaces the rest, so a burst is not a storm. A failure to tell never fails the upload. Guarded by test/unit/shared/report-form.test.js.
 import {esc} from './html.js';
+import {alertOwner} from './notify-send.js';
 
 export const TELL_PER_DAY = 10;
 
@@ -18,12 +19,11 @@ export const moreMessage = base => `📮 <b>More forms were reported today</b>: 
 
 // `count` = this report's place in the day (1 = the first). Returns true when a message went out; never throws.
 export async function tellOwner(env, report, count, fetcher = fetch) {
-  if (!env.BRAIN_BOT_TOKEN || !env.BRAIN_CHAT_ID || count > TELL_PER_DAY + 1) return false;
+  if (count > TELL_PER_DAY + 1) return false;
   const base = env.SITE_URL || 'https://www.jobadabra.top';
   const text = count > TELL_PER_DAY ? moreMessage(base) : reportMessage({...report, base});
   try {
-    const answer = await fetcher(`https://api.telegram.org/bot${env.BRAIN_BOT_TOKEN}/sendMessage`, {method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text, parse_mode: 'HTML', disable_web_page_preview: true}), signal: AbortSignal.timeout(3000)});
-    return answer.ok;
+    const legacy = env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null;
+    return (await alertOwner(env, 'form-reported', {text, html: true, legacy, fetcher})).sent;
   } catch (error) { console.log('report notify failed', error.message); return false; }
 }

@@ -4,6 +4,7 @@
 // Needs SENTRY_AUTH_TOKEN (read-only, as /admin/testing/sentry), SENTRY_TELEGRAM_TOKEN + SENTRY_TELEGRAM_CHAT (Worker secrets); wrangler var SENTRY_TELEGRAM = "on"|"off".
 // The owner's own app already tells fill errors to the owner's main Telegram (desktop/lib/real-errors.js); that is left alone. Guarded by test/unit/admin/sentry-alert.test.js.
 import {fixer, status} from './sentry.js';
+import {alertOwner} from '../shared/notify-send.js';
 
 const SENTRY = 'https://de.sentry.io/api/0', ORG = 'job-pilotto', PROJECT = 'job-pilotto-app';
 const HOUR = 3600000;
@@ -55,10 +56,11 @@ export function message(item, kind, {version, fix, base}) {
     pr ? `🛠️ Fixer: <a href="${text(pr.url)}">${text(pr.text)}</a>` : ''].filter(Boolean).join('\n');
 }
 
+// -> true when delivered; false when the owner's switch holds it (not an error). Throws when neither the switchboard nor the old bot could deliver, so the issue is retried next round.
 async function send(env, body, fetcher) {
-  const response = await fetcher(`https://api.telegram.org/bot${env.SENTRY_TELEGRAM_TOKEN}/sendMessage`, {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({chat_id: env.SENTRY_TELEGRAM_CHAT, text: body, parse_mode: 'HTML', disable_web_page_preview: true})});
-  if (!response.ok) throw new Error(`Telegram HTTP ${response.status}`);
+  const told = await alertOwner(env, 'sentry-issue', {text: body, html: true, fetcher, legacy: {token: env.SENTRY_TELEGRAM_TOKEN, chat: env.SENTRY_TELEGRAM_CHAT}});
+  if (!told.sent && told.via !== 'switchboard') throw new Error(`Telegram ${told.why || 'failed'}`);
+  return told.sent;
 }
 
 // Returns what it did: {told, held, skipped}. Silent (no throw) when switched off or not set up.
@@ -83,9 +85,9 @@ export async function check(env, fetcher = fetch, now = Date.now()) {
   for (const {item, kind} of due) {
     if (room <= 0) { held++; await remember(item, kind, 0); continue; }   // over the hourly limit: counted in the one summary, not told again
     const version = await get(`/issues/${item.id}/tags/release/`, env, fetcher).then(tag => tag?.topValues?.[0]?.name).catch(() => '');
-    await send(env, message(item, kind, {version, fix, base}), fetcher);
-    await remember(item, kind, 1);
-    room--; told++;
+    const sent = await send(env, message(item, kind, {version, fix, base}), fetcher);
+    await remember(item, kind, sent ? 1 : 0);   // held by the owner's switch: remembered (cooldown), not counted toward the hourly limit
+    if (sent) { room--; told++; }
   }
   if (held) await send(env, `📬 ${held} more Sentry issue${held === 1 ? '' : 's'} this hour (new, back or spiking). <a href="${base}/admin/testing/sentry">/admin/testing/sentry</a>`, fetcher);
   return {told, held, skipped: 0};

@@ -86,7 +86,7 @@ test('an event that is not in the registry cannot send; the sender gets a 400', 
 test('an alert goes to its channel\'s bot with its link; off holds it back; a switched-back-on one sends again', async () => {
   const e = env(), tg = await withBot(e);
   const sent = await notify(e, {event: 'beta-published', text: 'Beta 0.9.1 is out', link: 'https://www.jobadabra.top/admin/agents/build-log'}, {fetcher: tg.fetcher, now: NOW});
-  assert.deepEqual([sent.status, sent.body], [200, {ok: true, sent: true}]);
+  assert.deepEqual([sent.status, sent.body.ok, sent.body.sent, typeof sent.body.id], [200, true, true, 'number']);   // id = Telegram's message id (a sender replies to it)
   const call = tg.calls.find(item => item.method === 'sendMessage');
   assert.deepEqual([call.token, call.body.chat_id, call.body.text], [TOKEN, '777', 'Beta 0.9.1 is out\nhttps://www.jobadabra.top/admin/agents/build-log']);
   await saveSetting(e, 'beta-published', {enabled: false}, NOW);
@@ -106,8 +106,8 @@ test('when: "changes only" skips the same state, "only problems" skips an all-cl
   const later = new Date(NOW.getTime() + 86400000);
   assert.deepEqual([await ask('ai-credit', {}), await ask('ai-credit', {}), await ask('ai-credit', {}, later)], ['sent', 'already-today', 'sent']);
   const before = sends();
-  const results = []; for (let i = 0; i < 22; i++) results.push(await ask('sentry-issue', {}));
-  assert.deepEqual([results.filter(item => item === 'sent').length, results.filter(item => item === 'rate').length, sends() - before], [20, 2, 20], 'Sentry: at most 20 an hour');
+  const results = []; for (let i = 0; i < 32; i++) results.push(await ask('sentry-issue', {}));
+  assert.deepEqual([results.filter(item => item === 'sent').length, results.filter(item => item === 'rate').length, sends() - before], [30, 2, 30], 'Sentry: a ceiling of 30 an hour (the sender keeps its own 20 + one summary)');
 });
 
 test('fail-open: a channel without a bot, or Telegram refusing, answers 503 so the sender posts with its old bot; the sender\'s report is only counted', async () => {
