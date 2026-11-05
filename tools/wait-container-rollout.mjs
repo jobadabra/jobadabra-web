@@ -2,8 +2,8 @@
 // Usage: node tools/wait-container-rollout.mjs <path to the deployed wrangler config> [--timeout-min=10] [--deploy-output=<wrangler deploy's output>]   (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID in the environment)
 // Design (5 Nov 2026, hr 6/6; the 3rd fix on this path in a day, so one owner per state and no extra cases):
 //   1. target   = the digest `wrangler deploy` pushed (owner: the deploy output); none pushed -> the latest rollout's version (owner: Cloudflare).
-//   2. version  = the version whose image is that digest (owner: the versions list); not listed yet -> waiting.
-//   3. rollout  = Cloudflare's rollout to that version (owner: the rollouts list): pending/progressing -> waiting at its step; reverted/replaced -> failed at once; completed -> 4.
+//   2. version  = the NEWEST version whose image is that digest (owner: the versions list); not listed yet -> waiting.
+//   3. rollout  = Cloudflare's rollout to that version (owner: the rollouts list): pending/progressing -> waiting at its step; reverted/replaced -> failed at once if it is the newest version, else an older one with that image (waiting); completed -> 4.
 //   4. verdict "rolled out" = that rollout completed AND every instance runs the target digest (owner: instances-v2).
 // Why: #380 judged "newest listed version = the application's" and said DONE while the new version was not listed yet (01:27, try 5); try 3 had pressed into the old image after a green deploy.
 import {readFileSync} from 'node:fs';
@@ -21,11 +21,16 @@ export const pushedDigest = output => (String(output).match(/digest: (sha256:[0-
 
 /** Pure: {done, failed?, why} from the versions, rollouts (newest first) and instances as the API returns them; `expected` = the pushed digest ('' = none). */
 export function rolledOut(versions, rollouts, instances, expected = '') {
-  const version = expected ? versions.find(item => digestOf(item.configuration?.image) === expected) : versions.find(item => item.version === rollouts[0]?.target_version);
+  const sorted = [...versions].sort((a, b) => b.version - a.version);   // the API's order is not guaranteed
+  const version = expected ? sorted.find(item => digestOf(item.configuration?.image) === expected) : versions.find(item => item.version === rollouts[0]?.target_version);
   if (!version) return {done: false, why: expected ? `version with the pushed image ${short(expected)} not listed yet` : 'no rollout listed yet'};
   const target = digestOf(version.configuration?.image), rollout = rollouts.find(item => item.target_version === version.version);
   if (!rollout) return {done: false, why: `no rollout to version ${version.version} yet`};
-  if (rollout.status === 'reverted' || rollout.status === 'replaced') return {done: false, failed: true, why: `Cloudflare ${rollout.status} the rollout to version ${version.version}`};
+  if (rollout.status === 'reverted' || rollout.status === 'replaced') {
+    // Why (5 Nov 2026, Gitar on #383): a redeploy of an image an older version used (a revert) finds that version before its own is listed; only the newest is final.
+    if (version !== sorted[0]) return {done: false, why: `version ${version.version} with the pushed image is an old one; waiting for the new version`};
+    return {done: false, failed: true, why: `Cloudflare ${rollout.status} the rollout to version ${version.version}`};
+  }
   if (rollout.status !== 'completed') {
     const {current_step: step = '?', total_steps: steps = '?', version_distribution: split = {}} = rollout.progress || {};
     const {starting = 0, scheduling = 0, failed = 0} = rollout.health?.instances || {};

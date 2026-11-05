@@ -47,6 +47,16 @@ test('a rollout Cloudflare reverted or replaced fails the wait at once (no 10-mi
   }
 });
 
+test('a redeploy of an image an older version already used waits for its new version instead of failing on the old one\'s replaced rollout', () => {
+  // Why (5 Nov 2026, Gitar on #383): a revert builds to the same digest as version 2; before version 4 is listed, version 2 (rollout "replaced") was taken as the target.
+  const before = rolledOut([version(2, 'bbb'), version(3, 'aaa')], [rollout(3, 'completed'), rollout(2, 'replaced')], [instance('aaa')], 'sha256:bbb');
+  assert.equal(before.failed, undefined);
+  assert.equal(before.done, false);
+  assert.match(before.why, /version 2 with the pushed image is an old one/);
+  const listed = rolledOut([version(2, 'bbb'), version(4, 'bbb'), version(3, 'aaa')], [rollout(4, 'progressing', 1, 50), rollout(3, 'replaced'), rollout(2, 'replaced')], [instance('aaa')], 'sha256:bbb');
+  assert.match(listed.why, /rollout to version 4 progressing/);   // the newest version with that digest, whatever the list's order
+});
+
 test('no image pushed: the target is the latest rollout, with the same verdict', () => {
   assert.equal(rolledOut([version(3, 'aaa')], [rollout(3, 'completed')], [instance('aaa')]).done, true);
   assert.equal(rolledOut([version(4, 'bbb'), version(3, 'aaa')], [rollout(4, 'pending', 1, 0)], [instance('aaa')]).done, false);
