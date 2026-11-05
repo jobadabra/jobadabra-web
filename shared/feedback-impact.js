@@ -4,6 +4,7 @@
 // A refusal or a bad answer is written on the row ("AI unavailable: ...") and the daily job tries again, up to 3 times in 7 days; it never blocks saving or the Telegram message.
 // Guarded by test/unit/shared/feedback/feedback-impact.test.js (the fixed case set test/fixtures/feedback-impact-cases.json: a prompt change adds its case there and replays them all).
 import {IMPACTS} from './feedback-actions.js';
+import {alertOwner} from './notify-send.js';
 import {SMALL, modelFor, costUsd} from './free-ai-models.js';
 import {record} from './aicost.js';
 
@@ -74,12 +75,11 @@ export const suggestImpact = async (env, ref, now = new Date()) => (await attemp
 
 // One Telegram message to the owner (the Brain bot the feedback itself uses), at most once per UTC day per cause so an outage is one message, not one a run. -> true when sent
 async function tellOutage(env, text, kind, now, fetcher = fetch) {
-  if (!(env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID)) return false;
   const key = `fbimpact:outage:${now.toISOString().slice(0, 10)}:${kind}`;
   if (env.WAITLIST && await env.WAITLIST.get(key).catch(() => null)) return false;
   try {
-    const response = await fetcher(`https://api.telegram.org/bot${env.BRAIN_BOT_TOKEN}/sendMessage`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text, disable_web_page_preview: true})});
-    if (!response.ok) return false;
+    const legacy = env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null;
+    if (!(await alertOwner(env, 'feedback-impact-down', {text, level: 'problem', legacy, fetcher})).sent) return false;
   } catch { return false; }
   await env.WAITLIST?.put(key, '1', {expirationTtl: 2 * 86400}).catch(() => {});
   return true;

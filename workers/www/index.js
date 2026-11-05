@@ -40,6 +40,7 @@ import {ingest as opsIngest, view as opsView} from '../../admin/ops-overview.js'
 import {ingest as schedulesIngest, view as schedulesView} from '../../admin/schedules.js';
 import {view as notificationsView} from '../../admin/notifications.js';
 import {route as opsNotify} from '../../api/ops-notify.js';
+import {alertOwner} from '../../shared/notify-send.js';
 import {view as syntheticMonitoringView} from '../../admin/synthetic-monitoring.js';
 import {ingest as e2eIntelIngest} from '../../admin/e2e-intel.js';
 import {ingest as changelogIngest, list as changelogList} from '../../admin/changelog-store.js';
@@ -147,11 +148,9 @@ export async function waitlist(request, env) {
   const source = form.source === 'app' ? 'app' : 'web';   // the Plan screen in the Desktop App says "app"; the website form says nothing
   const entry = {email, role, source, at: new Date().toISOString(), country: request.cf?.country || ''};
   await env.WAITLIST.put(key, JSON.stringify(entry), {metadata: {at: entry.at, role, source}});
-  if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
-    await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({chat_id: env.TELEGRAM_CHAT_ID, text: `✈️ Pro early access: ${email}${role ? ` · ${role}` : ''}${source === 'app' ? ' · from the app' : ''}`})}).catch(() => {});
-  }
+  // Why (5 Nov 2026, owner: an alert never carries a name or e-mail address): the address is read on /admin/growth/email, the ping says one came.
+  await alertOwner(env, 'pro-waitlist', {text: `✈️ Pro early access sign-up${role ? ` · ${role}` : ''}${source === 'app' ? ' · from the app' : ''}`, link: 'https://www.jobadabra.top/admin/growth/email',
+    legacy: env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID ? {token: env.TELEGRAM_BOT_TOKEN, chat: env.TELEGRAM_CHAT_ID} : null}).catch(() => {});
   return json(200, {ok: true});
 }
 

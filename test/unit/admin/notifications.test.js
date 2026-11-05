@@ -52,7 +52,7 @@ test('the page needs the login; the owner sees every alert grouped, three channe
   for (const channel of CHANNELS) assert.ok(html.includes(channel.name.replace('&', '&amp;')), channel.name);
   assert.match(html, /Connect bot/);
   assert.match(html, /28 alerts on/);
-  assert.match(html, /0 of 30 senders moved over/, 'the switches are stored, but no sender uses them yet: the page says so');
+  assert.match(html, /9 of 30 senders moved over/, 'the page counts the senders that already use the switchboard (2/4: the nine Worker-side ones)');
   assert.match(html, /sender not moved yet/);
   const group = await get(e, `/admin/${groupSlug(GROUPS.find(([name]) => name === 'Operations'))}`);
   assert.deepEqual([group.status, group.headers.get('Location')], [301, '/admin/operations/scheduled'], 'the group address leads to its first page');

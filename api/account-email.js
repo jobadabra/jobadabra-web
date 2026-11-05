@@ -9,7 +9,7 @@ import {CADENCES, deliver, hold} from './mail-held.js';
 import {page, switchOff} from './mail-unsub.js';
 import {accountOf, createAccount, link} from '../shared/pro.js';
 import {escTags} from '../shared/html.js';
-import {telegram} from '../shared/telegram.js';
+import {alertOwner} from '../shared/notify-send.js';
 
 const parseKey = key => { const [tag, install, token] = String(key || '').split('.'); return tag === 'JPF1' && install && token ? {install, token} : null; };
 const json = (status, body) => Response.json(body, {status});
@@ -33,14 +33,15 @@ async function setMarketing(env, account, on, now) {
 // or changed ("User e-mail changed"); a re-save of the same address is not fresh, so it never pings. It runs after the account is written and never throws, so Telegram can never fail the save
 // (a bad answer or no BRAIN_* secrets = one log line without the token, or nothing). The address goes to the owner's own chat, as api/feedback.js does with a reporter's optional e-mail; no other personal data.
 async function tellOwner(env, fetcher, {email, install, changed}) {
-  if (!(env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID)) return;
   try {
     const total = (await env.STATS.prepare("SELECT COUNT(*) AS n FROM pro_accounts WHERE email IS NOT NULL AND email != ''").first().catch(() => null))?.n;
-    const text = `📧 <b>${changed ? 'User e-mail changed' : 'New user e-mail'}</b> · ${escTags(email)} · install ${escTags(install.slice(0, 8))}${total ? ` · ${total} with an e-mail` : ''}`;
-    const sent = await telegram(fetcher, env, 'sendMessage', {chat_id: env.BRAIN_CHAT_ID, text, parse_mode: 'HTML', disable_web_page_preview: true});
-    if (sent.why) console.log('account e-mail ping failed', sent.why.slice(0, 200));
+    // Why (5 Nov 2026, owner: an alert never carries a name or e-mail address): the address is on /admin/growth/email; the ping says that one came and links there.
+    const text = `📧 <b>${changed ? 'User e-mail changed' : 'New user e-mail'}</b> · install ${escTags(install.slice(0, 8))}${total ? ` · ${total} with an e-mail` : ''}`;
+    const legacy = env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null;
+    const sent = await alertOwner(env, 'email-added', {text, html: true, link: `${env.SITE_URL || 'https://www.jobadabra.top'}/admin/growth/email`, legacy, fetcher});
+    if (!sent.sent && sent.via !== 'switchboard') console.log('account e-mail ping failed', String(sent.why).slice(0, 200));
   } catch (error) {
-    console.log('account e-mail ping failed', String(error.message).split(env.BRAIN_BOT_TOKEN).join('<token>'));
+    console.log('account e-mail ping failed', String(error.message).split(env.BRAIN_BOT_TOKEN || '\u0000').join('<token>'));
   }
 }
 

@@ -1,6 +1,6 @@
 // The notification switchboard's store and sender, in shared/ so the admin pages and the Worker's own senders use the same code as the route (api/ops-notify.js). (owner, 5 Nov 2026: "control easily on what I want to get alerted or not"; sketch Xo6tGKuwH7P86VcWq9eBv9, spec docs/superpowers/specs/2026-11-05-ops-notifications-design.md).
 // Every owner-facing alert is posted here as {event, text, link}; this checks the registry (shared/notify-registry.js), the owner's switch and its "when", picks the channel's bot and sends.
-//   POST /ops/notify   Bearer SELFHEAL_PUBLISH_KEY (the key every CI upload uses)   body {event, text, link?, state?, level?, fallback?}
+//   POST /ops/notify   Bearer SELFHEAL_PUBLISH_KEY (the key every CI upload uses)   body {event, text, link?, state?, level?, html?, fallback?}   (html: the text is Telegram HTML)
 //     200 {ok:true, sent:true}              sent
 //     200 {ok:true, sent:false, why}        held back on purpose (off, same state, not a problem, already today, rate): the sender does nothing more
 //     200 {ok:true, logged:true}            `fallback:true`: the sender posted with its old bot because this was unreachable; only Admin's "sent without switchboard" count is told
@@ -12,7 +12,7 @@ import {open, seal} from './notify-vault.js';
 import {botName, chatTitle, lastChat, sendMessage} from './notify-telegram.js';
 import {alertOf, channelOf, effective} from './notify-registry.js';
 
-const KEEP_DAYS = 30, MAX_TEXT = 3500;
+const KEEP_DAYS = 30, MAX_TEXT = 3500, MAX_HTML = 3750;   // Why (5 Nov 2026, code review): feedback HTML is ~3000 text + header + link, and escaping grows it; Telegram allows 4096 with the link
 const answer = (status, body) => ({status, body});
 
 /** event -> {enabled, mode, channel} for every alert the owner changed (an unreadable table reads as none: the defaults apply). */
@@ -89,12 +89,12 @@ const lastSent = (env, event) => env.STATS.prepare('SELECT at, state FROM notify
 const sentSince = async (env, event, since) => Number((await env.STATS.prepare('SELECT COUNT(*) AS n FROM notify_log WHERE event = ? AND sent = 1 AND via = ? AND at >= ?').bind(event, 'switchboard', since.toISOString()).first())?.n) || 0;
 
 /** The text as sent: an e-mail address replaced (an alert never carries personal data), cut to Telegram's size, the Admin link last. */
-export function words(text, link) {
+export function words(text, link, html = false) {
   const scrub = value => String(value || '').replace(/[^\s@<>()]+@[^\s@<>()]+\.[A-Za-z]{2,}/g, '[e-mail]');
-  const body = scrub(text).trim().slice(0, MAX_TEXT), url = String(link || '').replace(/[?#].*$/, rest => (/@|%40/i.test(rest) ? '' : rest));   // a link keeps its address; a query that carries an e-mail address is cut
+  const cut = scrub(text).trim().slice(0, html ? MAX_HTML : MAX_TEXT), body = html ? cut.replace(/<[^>]*$/, '').replace(/&[#\w]*$/, '') : cut, url = String(link || '').replace(/[?#].*$/, rest => (/@|%40/i.test(rest) ? '' : rest));   // a link keeps its address; a query that carries an e-mail address is cut
   return /^https:\/\/[^\s]{1,300}$/.test(url) ? `${body}\n${url}` : body;
 }
-/** One alert asked to go out. -> {status, body} as documented above. */
+/** One alert asked to go out. -> {status, body} as documented above; a send also carries `bot` (the bot that delivered it) for an in-process caller, never in the body the route returns. */
 export async function notify(env, payload, {now = new Date(), fetcher = fetch} = {}) {
   const alert = alertOf(payload?.event);
   if (!alert) return answer(400, {ok: false, why: 'unknown-event'});
@@ -111,10 +111,10 @@ export async function notify(env, payload, {now = new Date(), fetcher = fetch} =
     if (alert.maxPerHour && await sentSince(env, alert.id, new Date(now.getTime() - 3600000)) >= alert.maxPerHour) return held('rate');
     const bot = await botOf(env, mine.channel);
     if (!bot) { await log(env, {event: alert.id, at: now, channel: mine.channel, sent: 0, reason: 'channel-not-connected', state}); return answer(503, {ok: false, why: 'channel-not-connected'}); }
-    const sent = await sendMessage(fetcher, bot.token, bot.chat, words(payload.text, payload.link));
+    const sent = await sendMessage(fetcher, bot.token, bot.chat, words(payload.text, payload.link, payload.html), payload.html ? {parse_mode: 'HTML'} : {});
     await log(env, {event: alert.id, at: now, channel: mine.channel, sent: sent.ok ? 1 : 0, reason: sent.ok ? '' : sent.why, state});
     await env.STATS.prepare('DELETE FROM notify_log WHERE at < ?').bind(new Date(now.getTime() - KEEP_DAYS * 86400000).toISOString()).run().catch(() => {});
-    return sent.ok ? answer(200, {ok: true, sent: true}) : answer(503, {ok: false, why: `telegram: ${sent.why}`});
+    return sent.ok ? {...answer(200, {ok: true, sent: true, id: sent.result?.message_id}), bot} : {...answer(503, {ok: false, why: `telegram: ${sent.why}`}), bot};   // bot: in-process callers only (shared/notify-send.js skips a second try on the same bot)
   } catch (error) {
     return answer(503, {ok: false, why: `error: ${String(error.message).slice(0, 120)}`});
   }

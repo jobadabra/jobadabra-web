@@ -10,7 +10,16 @@ async function call(fetcher, token, method, body, ms = 4000) {
     return {ok: false, why: `network ${String(error.message).split(token).join('<token>')}`};
   }
 }
-export const sendMessage = (fetcher, token, chat, text) => call(fetcher, token, 'sendMessage', {chat_id: chat, text, disable_web_page_preview: true});
+/** `extra` = more Bot API fields, e.g. {parse_mode: 'HTML'}. -> {ok, result: {message_id}} or {ok: false, why}. */
+export const sendMessage = (fetcher, token, chat, text, extra = {}) => call(fetcher, token, 'sendMessage', {chat_id: chat, text, disable_web_page_preview: true, ...extra});
+/** A photo (FormData: chat_id, photo, caption, reply_to_message_id) with the same answers; its call is longer: an upload. */
+export async function sendPhoto(fetcher, token, form) {
+  try {
+    const response = await fetcher(`https://api.telegram.org/bot${token}/sendPhoto`, {method: 'POST', body: form, signal: AbortSignal.timeout(15000)});
+    const answer = await response.json().catch(() => ({}));
+    return response.ok && answer.ok !== false ? {ok: true, result: answer.result} : {ok: false, why: `${response.status} ${String(answer.description || '').split(token).join('<token>')}`.trim()};
+  } catch (error) { return {ok: false, why: `network ${String(error.message).split(token).join('<token>')}`}; }
+}
 /** The bot's @name, or why not. */
 export async function botName(fetcher, token) {
   const answer = await call(fetcher, token, 'getMe');

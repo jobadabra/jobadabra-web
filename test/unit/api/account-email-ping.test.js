@@ -31,7 +31,7 @@ const put = async (s, install, email, method = 'PUT', fn = address) => {
   return {status: response.status, ...(await response.json())};
 };
 
-test('a first address pings the owner once, with the address escaped; the same address again pings nobody', async () => {
+test('a first address pings the owner once, WITHOUT the address (owner, 5 Nov 2026); the same address again pings nobody', async () => {
   const s = setup();
   assert.equal((await put(s, 'install-aaaa1234', 'not an address')).status, 400);
   assert.equal(s.calls.length, 0, 'a refused address pings nobody');
@@ -41,19 +41,19 @@ test('a first address pings the owner once, with the address escaped; the same a
   assert.equal(url, `https://api.telegram.org/bot${TOKEN}/sendMessage`);
   assert.equal(body.chat_id, '42');
   assert.equal(body.parse_mode, 'HTML');
-  assert.equal(body.text, '📧 <b>New user e-mail</b> · ana@example.com · install install- · 1 with an e-mail');
+  assert.equal(body.text, '📧 <b>New user e-mail</b> · install install- · 1 with an e-mail\nhttps://www.jobadabra.top/admin/growth/email');
+  assert.ok(!body.text.includes('ana@example.com'), 'an alert never carries the address; /admin/growth/email shows it');
   assert.equal((await put(s, 'install-aaaa1234', 'ana@example.com')).ok, true);
   await put(s, 'install-aaaa1234', null, 'GET');
   await put(s, 'install-aaaa1234', null, 'POST', resend);
   assert.equal(s.calls.length, 1, 'a re-save, a GET and a resend do not ping');
 });
 
-test('an address with an & is HTML-escaped, and the count is the accounts holding an address in the message', async () => {
+test('the count is the accounts holding an address, and an address with an & never reaches the message', async () => {
   const s = setup();
   s.e.STATS.db.exec("INSERT INTO pro_accounts (id, email_hash, email, created_at, plan) VALUES ('acc_x', 'hx', 'x', 'x', 'trial')");
-  // validAddress refuses < and >, so the escape is proven on what a valid address can still carry: & in the local part.
   assert.equal((await put(s, 'install-bbbb1234', 'o&co@example.com')).ok, true);
-  assert.ok(s.calls[0].body.text.includes('o&amp;co@example.com'), s.calls[0].body.text);
+  assert.ok(!/o&(amp;)?co/.test(s.calls[0].body.text), s.calls[0].body.text);
   assert.ok(s.calls[0].body.text.includes('· 2 with an e-mail'));
 });
 
@@ -62,7 +62,7 @@ test('a changed address on an existing account pings once, worded "changed"', as
   await put(s, 'install-aaaa1234', 'ana@example.com');
   assert.equal((await put(s, 'install-aaaa1234', 'ana.new@example.com')).ok, true);
   assert.equal(s.calls.length, 2);
-  assert.equal(s.calls[1].body.text, '📧 <b>User e-mail changed</b> · ana.new@example.com · install install- · 1 with an e-mail');
+  assert.equal(s.calls[1].body.text, '📧 <b>User e-mail changed</b> · install install- · 1 with an e-mail\nhttps://www.jobadabra.top/admin/growth/email');
 });
 
 test('a taken or Pro refusal pings nobody', async () => {

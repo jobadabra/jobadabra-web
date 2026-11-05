@@ -21,8 +21,8 @@ Releases 6 · Main & tests 7 · AI 5 · Users 6 · Site health 2 · Marketing & 
 ## Progress
 | PR | What | State |
 |---|---|---|
-| 1 `[nt] 1/4` | Store, registry, `/ops/notify`, Operations menu, Notifications tab, Notify column, channels | this PR |
-| 2 `[nt] 2/4` | Site/Worker senders call `notify()`; hand-written Telegram fetches go | |
+| 1 `[nt] 1/4` | Store, registry, `/ops/notify`, Operations menu, Notifications tab, Notify column, channels | ✅ merged #427 |
+| 2 `[nt] 2/4` | Site/Worker senders call `notify()`; hand-written Telegram fetches go | this PR (9 senders: feedback, e-mail, form report, impact, Free AI spend, Sentry, probe, waitlist, release mail) |
 | 3 `[nt] 3/4` | jobadabra: `ci-alert.mjs`, `telegram-post.mjs` and workflow senders post to `/ops/notify` (fail-open); public lists the route | |
 | 4 `[nt] 4/4` | New alerts; old bot secrets retired after a week of switchboard sends | |
 
