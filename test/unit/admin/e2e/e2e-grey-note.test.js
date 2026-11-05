@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {GREY_NOTE, greyData, greyLines, greySummary} from '../../../../admin/e2e-grey.js';
 import {page} from '../../../../admin/e2e-page.js';
-import {issueBody, telegramText, weekly} from '../../../../tools/ci-intel/lib/e2e-weekly.mjs';
+import {telegramText, weekly} from '../../../../tools/ci-intel/lib/e2e-weekly.mjs';
 
 const now = new Date('2026-11-02T07:23:00Z');
 const base = {at: now.toISOString(), days: [], fails: [], latest: [], quality: [], breaks: [], caught: [], work: [], workFiles: [], lanes: {suites: {quality: {lane: 'tolerant', input: 'ai', since: '2026-10-29', why: 'fixture'}}}};
@@ -19,7 +19,7 @@ test('positive control: the lane rows of the Grey card are still drawn, with the
 
 test('no suite x reason table is drawn or told, even when an old snapshot still holds a ledger', () => {
   const old = {...base, greyJobs: legacy};
-  for (const text of [page(old, {now}), issueBody(weekly(old, now)), telegramText(weekly(old, now)), greyLines(greySummary(old, now)).join('\n')]) {
+  for (const text of [page(old, {now}), telegramText(weekly(old, now)), greyLines(greySummary(old, now)).join('\n')]) {
     assert.doesNotMatch(text, /Greys, last 7 days|suite × reason|No grey jobs recorded/);
   }
   assert.equal(greySummary(old, now).trend, undefined);
