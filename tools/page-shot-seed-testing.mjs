@@ -48,8 +48,8 @@ export async function healFull({env}, seeds) {
   await seeds['self-healing']({env});
   const row = await env.STATS.prepare('SELECT day, body FROM selfheal_snapshots ORDER BY day DESC LIMIT 1').first(), body = JSON.parse(row.body);
   const detectors = ['AI screenshot review', 'AI code review', 'Recorded replay mismatch', 'Console errors', 'Layout and DOM checks', 'Interaction probe'];
-  const period = scale => { const byDetector = detectors.map((detector, i) => ({detector, filed: Math.round((40 - i * 6) * scale), fixed: Math.round((6 - i / 2) * scale), queued: Math.round(2 * scale), falsePositive: Math.round((9 - i) * scale), harness: i % 2 ? 1 : 0,
-    duplicate: Math.round(3 * scale), stale: i % 3 ? 1 : 0, unclear: Math.round((4 + i) * scale), open: i < 2 ? 3 : 0}));
+  const period = scale => { const byDetector = detectors.map((detector, i) => ({detector, fixed: Math.round((6 - i / 2) * scale), queued: Math.round(2 * scale), falsePositive: Math.round((9 - i) * scale), harness: i % 2 ? 1 : 0,
+    duplicate: Math.round(3 * scale), stale: i % 3 ? 1 : 0, unclear: Math.round((4 + i) * scale), open: i < 2 ? 3 : 0})).map(d => ({...d, filed: d.fixed + d.queued + d.falsePositive + d.harness + d.duplicate + d.stale + d.unclear + d.open}));   // Why (Gitar, 5 Nov 2026): filed is what the outcomes add up to, never fewer
     const sum = key => byDetector.reduce((n, d) => n + (d[key] || 0), 0), real = sum('fixed') + sum('queued');
     return {totals: {filed: sum('filed'), fixed: sum('fixed'), queued: sum('queued'), falsePositive: sum('falsePositive'), harness: sum('harness'), duplicate: sum('duplicate'), stale: sum('stale'), unclear: sum('unclear'), open: sum('open'), real, judged: real + sum('falsePositive') + sum('harness'), precision: 62}, byDetector, cost: {usd: 3.2 * scale, runs: 12, perRealBug: 0.05}}; };
   body.periods = {all: period(1), last7: period(0.35), cutoff: period(0.7)};
