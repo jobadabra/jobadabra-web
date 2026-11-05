@@ -4,8 +4,8 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {page} from '../../../admin/schedules.js';
 import {resolve} from '../../../admin/testing-overview-data.js';
-import {detailHtml, summaryLine, toggleHtml, trendHtml, NIGHTLY_STYLE} from '../../../admin/nightly-summary-html.js';
-import {NIGHTS, lastDays, loadNightlySummary, nightlySummary, summaryFor} from '../../../admin/nightly-summary.js';
+import {detailHtml, summaryLine, toggleHtml, trendBars, trendHtml, NIGHTLY_STYLE} from '../../../admin/nightly-summary-html.js';
+import {NIGHTS, dayWords, lastDays, loadNightlySummary, nightlySummary, summaryFor} from '../../../admin/nightly-summary.js';
 
 const now = new Date('2026-11-02T10:00:00Z');
 const D = back => new Date(now.getTime() - back * 86400000).toISOString().slice(0, 10);
@@ -70,7 +70,7 @@ test('wander and real Notion are a 14-night green/red trend; a red platform make
   const summary = nightlySummary({snapshot: {suiteNights}}, now);
   const wander = job(summary, 'wander');
   assert.deepEqual(wander.series.filter(point => point.ok != null).map(point => [point.day, point.ok]), [[D(2), true], [D(1), false], [D(0), true]]);
-  assert.deepEqual([wander.value, wander.status, wander.sub], ['green', 'good', `2 of 3 nights green · ${D(0)}`]);
+  assert.deepEqual([wander.value, wander.status, wander.sub], ['green', 'good', `2 of 3 nights green · ${dayWords(D(0))}`]);
   assert.deepEqual([job(summary, 'notion-real').value, job(summary, 'notion-real').status], ['red', 'bad']);
 });
 
@@ -202,4 +202,63 @@ test('two repos that schedule the same file name get two different detail ids, s
   assert.equal(ids.length, 2);
   assert.equal(new Set(ids).size, 2, ids.join(' '));
   assert.deepEqual([...html.matchAll(/aria-controls="([^"]+)"/g)].map(match => match[1]), ids);
+});
+
+// The chart (owner, 5 Nov 2026: "this is bad visual representation… use better graphs").
+const counts = values => ({id: 'finder-layout', title: 'Layout checks', unit: 'count', series: values.map((value, i) => ({day: D(values.length - 1 - i), value, ok: null}))});
+const cellsOf = html => [...html.matchAll(/<i class="(\w+)(?: zero)?" style="--h:([\d.]+)%" title="([^"]*)"/g)].map(match => ({tone: match[1], height: Number(match[2]), title: match[3]}));
+
+test('chart: a zero draws no column, a night with no result is a different cell, and a count of 1 is a third of the plot, not all of it', () => {
+  const html = trendBars(counts([0, 1, null, 3]));
+  const cells = cellsOf(html);
+  assert.deepEqual(cells.map(cell => cell.tone), ['num', 'num', 'gap', 'num']);
+  assert.equal(cells[0].height, 0, 'zero = nothing above the baseline');
+  assert.match(html, /class="num zero"/);
+  assert.match(html, /class="gap"/, 'no data is its own cell, not a zero');
+  assert.equal(cells[1].height, 33.3, 'one bug on a 0-3 floor scale');
+  assert.equal(cells[3].height, 100);
+  assert.match(cells[0].title, /^\d+ \w+: 0$/);
+  assert.match(cells[2].title, /no result stored/);
+  assert.match(html, /<span class="nscale"[^>]*><span>3<\/span><span>0<\/span>/, 'a top-of-scale label and the zero');
+  assert.match(trendBars(counts([0, 7, 2])), /<span>7<\/span><span>0<\/span>/, 'a count above the floor sets its own top');
+});
+
+test('chart: the first and the last day sit under the plot, in words', () => {
+  const html = trendBars(counts([0, 1, 2, 3]));
+  assert.match(html, new RegExp(`<div class="naxis"><span>${dayWords(D(3))}</span><span>${dayWords(D(0))}</span></div>`));
+  assert.equal(dayWords('2026-11-05'), '5 Nov');
+  assert.equal(dayWords('2026-10-22'), '22 Oct');
+  assert.doesNotMatch(html, /\d{4}-\d\d-\d\d/, 'no ISO date on the page');
+});
+
+test('chart: a series that is all zero reads as calm, in words; a rate keeps 0..100% and its bar line', () => {
+  const calm = trendBars(counts(Array(14).fill(0)));
+  assert.match(calm, /none in 14 days/);
+  assert.equal(cellsOf(calm).every(cell => cell.height === 0), true, 'no mark at all');
+  assert.match(trendBars(counts([0, null, 0])), /none on the 2 days measured/);
+  assert.doesNotMatch(trendBars(counts([0, 2])), /nquiet/);
+  const rate = trendBars({id: 'quality-ai', title: 'Quality AI', bar: {value: 0.8, label: '≥ 80%'}, series: [{day: D(1), value: 0.5, ok: null}, {day: D(0), value: 1, ok: null}]});
+  assert.match(rate, /<span>100%<\/span><span>0<\/span>/);
+  assert.match(rate, /<s style="bottom:80%"/);
+  assert.deepEqual(cellsOf(rate).map(cell => cell.height), [50, 100]);
+});
+
+test('chart: minutes get a round top, and a green/red row is dots on the same time axis, with no scale', () => {
+  const clock = trendBars({id: 'beta-clock', title: 'Beta wall clock', median: 28, series: [{day: D(1), value: 29.9, ok: null}, {day: D(0), value: 20, ok: null}]});
+  assert.match(clock, /<span>30<\/span><span>0<\/span>/);
+  assert.match(clock, /29\.9 min/);
+  const dots = trendBars({id: 'wander', title: 'Wander', series: [{day: D(2), value: null, ok: true}, {day: D(1), value: null, ok: false}, {day: D(0), value: null, ok: null}]});
+  assert.match(dots, /class="nbars ndots"/);
+  assert.deepEqual([...dots.matchAll(/<i class="(\w+)"/g)].map(match => match[1]), ['ok', 'no', 'gap']);
+  assert.doesNotMatch(dots, /nscale/);
+  assert.match(dots, /class="naxis"/);
+  assert.doesNotMatch(dots, /class="[^"]*\bdots\b/, 'the Scheduled page styles `.dots i` for its Last 14 column; a chart class of that name inherits it');
+});
+
+test('chart: "none" is only for counts; a rate or minutes at zero is a result, a tiny wall clock gets a clean label, one measured day is singular', () => {
+  const rate = trendBars({id: 'planted-code', title: 'Planted code bugs', bar: {value: 1, label: 'every planted code bug caught'}, series: [0, 0, 0].map((value, i) => ({day: D(2 - i), value, ok: false}))});
+  assert.doesNotMatch(rate, /nquiet|none/, '0% of planted bugs caught is the worst night, never "none"');
+  assert.match(trendBars({id: 'beta-clock', title: 'Beta wall clock', series: [{day: D(1), value: 0.3, ok: null}, {day: D(0), value: 0.2, ok: null}]}), /<span>0\.3<\/span><span>0<\/span>/);
+  assert.match(trendBars(counts([0, null, null])), /none on the 1 day measured/);
+  assert.match(trendBars(counts([0, 2])), /aria-label="Layout checks: 2 of 2 nights have a result, newest [^"]*: 2"/);
 });

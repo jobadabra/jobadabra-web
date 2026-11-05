@@ -1,10 +1,11 @@
 // The report-only numbers that come from the self-healing snapshots (one row a day, admin/selfheal.js snapshots): what the layout, screenshot and interaction finders filed, and
 // whether the planted bugs are still caught (owner, 2 Nov 2026: the Report only page). Same job shape as admin/nightly-summary.js, so the page draws them with the same renderer.
 // A day with no snapshot is a grey cell, never a 0. Report only: nothing here blocks anything. Guard: test/unit/admin/report/report-only.test.js.
-import {empty, newestWithValue} from './nightly-summary.js';
+import {empty, newestWithValue, dayWords} from './nightly-summary.js';
 
 // Finder jobs: the detector name in the snapshot's periods.last7.byDetector → the id and title the page shows.
-const FINDERS = [['finder-layout', 'Layout checks', 'Layout and DOM checks'], ['finder-review', 'AI screenshot review', 'AI screenshot review'], ['finder-interactions', 'Interaction probe', 'Interaction probe']];
+/** The finders the page shows; the third entry must be a label of the writer's DETECTORS (desktop/e2e/lib/selfheal-stats.mjs): a renamed label would read as a silent finder (guard: report-only.test.js). */
+export const FINDERS = [['finder-layout', 'Layout checks', 'Layout and DOM checks'], ['finder-review', 'AI screenshot review', 'AI screenshot review'], ['finder-interactions', 'Interaction probe', 'Interaction probe']];
 const byDay = snapshots => new Map((snapshots || []).filter(item => item?.day).map(item => [item.day, item]));
 
 // Real bugs (fixed or queued) the finder filed in the 7 days up to each day: one point per stored snapshot.
@@ -15,16 +16,18 @@ function finder(snapshots, days, [id, title, detector]) {
   const series = days.map(day => {
     const last7 = stored.get(day)?.periods?.last7;
     if (!last7) return {day, value: null, ok: null};
-    const row = (last7.byDetector || []).find(item => item.detector === detector);
-    if (row && (Number(row.filed) || 0) + (Number(row.fixed) || 0) + (Number(row.queued) || 0) > 0) filedOn.add(day);
-    return {day, value: (Number(row?.fixed) || 0) + (Number(row?.queued) || 0), ok: null};
+    if (!Array.isArray(last7.byDetector)) return {day, value: null, ok: null};   // no list at all = a snapshot that did not measure, not a finder that filed nothing
+    const row = last7.byDetector.find(item => item.detector === detector);
+    const value = (Number(row?.fixed) || 0) + (Number(row?.queued) || 0);   // real bugs only: the number, the chart and "last filed" count the same thing
+    if (value > 0) filedOn.add(day);
+    return {day, value, ok: null};
   });
   const last = newestWithValue(series);
   if (!last) return empty(id, title, files, 'no self-healing snapshot in the last 14 days');
   const lastFiled = days.filter(day => filedOn.has(day)).at(-1);
-  // A snapshot's window is 7 days, so the newest day whose window held a filing is when it last filed, give or take a week.
-  const when = lastFiled ? `last filed in the week to ${lastFiled}` : `none filed in the ${days.length} days shown`;
-  return {id, title, value: String(last.value), sub: `real bugs filed in the 7 days to ${last.day} (fixed + queued) · ${when}`, status: 'none', bar: null, higherIsBetter: false, series, files};
+  // Owner, 5 Nov 2026: "last filed…" only on a finder with nothing in the current week. A snapshot's window is 7 days, so the newest day whose window held a filing is "by" that day.
+  const note = [last.day === days.at(-1) ? '' : `as of ${dayWords(last.day)}`, !last.value && lastFiled ? `last filed by ${dayWords(lastFiled)}` : ''].filter(Boolean).join(' · ');
+  return {id, title, value: String(last.value), sub: 'real bugs in the last 7 days', note, status: 'none', bar: null, unit: 'count', higherIsBetter: false, series, files};
 }
 
 // Planted UI bugs: how many of the planted bugs the Finder caught, per snapshot day.
@@ -34,7 +37,7 @@ function plantedUi(snapshots, days) {
   const last = newestWithValue(series);
   if (!last) return empty('planted-ui', title, files, 'no interactions night has measured it in the last 14 days');
   const recall = stored.get(last.day).recall;
-  return {id: 'planted-ui', title, value: `${recall.caught}/${recall.planted}`, sub: `${recall.missed?.length ? `missed: ${recall.missed.join(', ')}` : 'every planted bug caught'} · ${last.day}`,
+  return {id: 'planted-ui', title, value: `${recall.caught}/${recall.planted}`, sub: `${recall.missed?.length ? `missed: ${recall.missed.join(', ')}` : 'every planted bug caught'} · ${dayWords(last.day)}`,
     status: recall.missed?.length ? 'warn' : 'good', bar: {value: 1, label: 'every planted bug caught'}, series, files};
 }
 
@@ -44,7 +47,7 @@ function plantedCode(snapshots, days) {
   const series = days.map(day => { const mutation = stored.get(day)?.quality?.mutation; return Number.isFinite(mutation?.rate) ? {day, value: mutation.rate / 100, ok: mutation.rate >= 100} : {day, value: null, ok: null}; });
   const last = newestWithValue(series);
   if (!last) return empty('planted-code', title, files, 'no planted-bug run in the last 14 days');
-  return {id: 'planted-code', title, value: `${Math.round(last.value * 100)}%`, sub: `${stored.get(last.day).quality.mutation.note || 'share of planted code bugs caught'} · ${last.day}`,
+  return {id: 'planted-code', title, value: `${Math.round(last.value * 100)}%`, sub: `${stored.get(last.day).quality.mutation.note || 'share of planted code bugs caught'} · ${dayWords(last.day)}`,
     status: last.ok ? 'good' : 'warn', bar: {value: 1, label: 'every planted code bug caught'}, series, files};
 }
 

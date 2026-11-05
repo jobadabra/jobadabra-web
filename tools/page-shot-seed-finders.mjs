@@ -10,8 +10,8 @@ export async function finderSilence({env}, seeds) {
   const base = JSON.parse((await env.STATS.prepare('SELECT body FROM selfheal_snapshots ORDER BY day DESC LIMIT 1').first()).body);
   for (let back = 0; back < 14; back++) {
     const byDetector = [row('AI screenshot review', 2, back < 3 ? 1 : 0, 0)];
-    if (back >= 4 && back <= 10) byDetector.push(row('Layout and DOM checks', 2, 0, 0));   // filed 2, none judged real
-    if (back >= 12) byDetector.push(row('Interaction probe', 1, 0, 0));
+    if (back >= 4 && back <= 10) byDetector.push(row('Layout and DOM checks', 2, 1, 0));   // filed 2, 1 judged real
+    if (back >= 12) byDetector.push(row('Interaction probe', 1, 1, 0));
     const body = {...base, at: new Date(now.getTime() - back * DAY).toISOString(), periods: {...base.periods, last7: {...base.periods?.last7, byDetector}}};
     await env.STATS.prepare('INSERT INTO selfheal_snapshots (day, at, body) VALUES (?, ?, ?) ON CONFLICT(day) DO UPDATE SET at = excluded.at, body = excluded.body').bind(day(back), body.at, JSON.stringify(body)).run();
   }
