@@ -4,8 +4,9 @@ import {button, esc, SITE} from './mail-frame.js';
 import {LIGHT as C} from './mail-palette.js';
 
 const FONT = '-apple-system,\'Segoe UI\',Helvetica,Arial,sans-serif';
-const pill = text => `<span class="jp-pill" style="background:${C.soft};color:${C.softInk};border-radius:4px;padding:1px 6px;font-weight:600;white-space:nowrap">${esc(text)}</span>`;
-export const withPills = text => esc(text).replace(/\*([^*]+)\*/g, (_, word) => pill(word.replace(/&amp;/g, '&')));
+const emphasis = text => esc(text).replace(/\*([^*]+)\*/g, '<strong style="font-weight:600">$1</strong>');
+// Why (5 Nov 2026, owner): recipients already have the app; opening it is primary, downloading stays in the footer.
+const OPEN_APP = `${SITE}/open?view=jobs`;
 const plain = text => String(text ?? '').replace(/\*([^*]+)\*/g, '$1');
 const LABELS = {features: 'New', improvements: 'Improved', fixes: 'Fixed'};
 const labelOf = section => LABELS[section.kind] || 'Improved';
@@ -16,30 +17,33 @@ export const releaseSubject = ({version, test = false}) => `${test ? '[TEST] ' :
 
 /** Renders a short version heading; only an explicitly saved introduction adds introductory prose. */
 export function releaseHero({version, previousStable, month, intro, hero, test = false}) {
-  return `<tr><td style="background:${C.hero};padding:24px;color:${C.onHero};border-radius:12px 12px 0 0">`
+  return `<tr><td style="background:${C.hero};padding:24px 26px;color:${C.onHero};border-radius:12px 12px 0 0">`
     + (test ? `<p style="margin:0 0 12px;color:${C.onHero};font-weight:700">Test email · Release ${esc(version)} · Sent only to your test address</p>` : '')
     + `<p style="margin:0 0 12px;font-size:13px;color:${C.onHeroMuted}"><img src="${SITE}/images/logo-mark.png" width="22" height="19" alt="" style="vertical-align:middle;border:0"> &nbsp;What's new in Jobadabra</p>`
-    + `<h1 style="margin:0;font:700 24px/1.25 ${FONT};color:${C.onHero}">Version ${esc(version)}</h1>`
+    + `<h1 style="margin:0;font:700 28px/1.2 ${FONT};color:${C.onHero}">Version ${esc(version)}</h1>`
     + `<p style="margin:8px 0 0;font-size:13px;color:${C.onHeroMuted}">${esc(month)}</p>`
     + (previousStable ? `<p style="margin:8px 0 0;font-size:13px;color:${C.onHeroMuted}">Changes since version ${esc(previousStable)}</p>` : '')
     + (intro ? `<p style="margin:16px 0 0;font-size:15px;line-height:1.55;color:${C.onHero}">${esc(intro)}</p>` : '')
     + picture(hero) + '</td></tr>';
 }
 
-/** Lists every change with its category, keeping long text within the email's table width. */
-export function releaseHtml({sections = [], updateUrl}) {
-  const rows = sections.map(section => `<tr><td width="78" style="width:78px;padding:3px 12px 18px 0;vertical-align:top;font:700 11px ${FONT};color:${C.signal}">${labelOf(section)}</td><td style="padding:0 0 18px;vertical-align:top">`
-    + `<p style="margin:0;line-height:1.6;overflow-wrap:anywhere"><b>${esc(section.title)}.</b> ${withPills(section.text)}</p>`
-    + (section.steps?.length ? `<p style="margin:8px 0 0;line-height:1.6">${section.steps.map(step => withPills(step)).join('<br>')}</p>` : '')
+/** Separates change headings, descriptions and ordered instructions for comfortable email reading. */
+export function releaseHtml({sections = []}) {
+  const rows = sections.map((section, index) => `<tr><td style="padding:${index ? 22 : 0}px 0 22px;${index ? `border-top:1px solid ${C.line};` : ''}" class="jp-line">`
+    + `<p class="jp-sig" style="margin:0 0 6px;font:600 12px/1.4 ${FONT};color:${C.signal}">${labelOf(section)}</p>`
+    + `<h2 class="jp-ink" style="margin:0 0 8px;font:600 18px/1.35 ${FONT};color:${C.ink}">${esc(section.title).replace(/\.$/, '')}</h2>`
+    + `<p style="margin:0;font:400 15px/1.65 ${FONT};overflow-wrap:anywhere">${emphasis(section.text)}</p>`
+    + (section.steps?.length ? `<ol style="margin:12px 0 0;padding-left:22px;font:400 14px/1.65 ${FONT}">${section.steps.map(step => `<li style="margin:0 0 5px;padding-left:3px">${emphasis(step)}</li>`).join('')}</ol>` : '')
     + picture(section.image) + '</td></tr>').join('');
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed">${rows}</table>`
-    + `<p style="margin:8px 0 0;line-height:1.6">Open Jobadabra and choose <b>Update</b>, or download the new version below. Your searches and settings stay as they are.</p>`
-    + (updateUrl ? button({label: 'Download latest version', url: updateUrl}) : '');
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="jp-line" style="padding-top:20px;border-top:1px solid ${C.line}">`
+    + `<p class="jp-muted" style="margin:0;font:400 14px/1.6 ${FONT};color:${C.muted}">Open Jobadabra and choose <strong style="font-weight:600">Update</strong> to get this release.</p>`
+    + button({label: 'Open Jobadabra App', url: OPEN_APP}) + '</td></tr></table>';
 }
 
 /** Provides the same version, categories and changes to clients that display plain text. */
-export function releaseText({version, previousStable, month, intro, sections = [], updateUrl, test = false}) {
-  const parts = sections.map(section => [`${labelOf(section)}: ${section.title}. ${plain(section.text)}`, ...(section.steps || []).map(plain)].join('\n'));
+export function releaseText({version, previousStable, month, intro, sections = [], test = false}) {
+  const parts = sections.map(section => [`${labelOf(section)}: ${section.title}. ${plain(section.text)}`, ...(section.steps || []).map((step, index) => `${index + 1}. ${plain(step)}`)].join('\n'));
   return [...(test ? [`Test email · Release ${version} · Sent only to your test address`, ''] : []), `What's new in Jobadabra · Version ${version}`, month, ...(previousStable ? [`Changes since version ${previousStable}`] : []), '', ...(intro ? [intro, ''] : []), ...parts.flatMap(part => [part, '']),
-    'Open Jobadabra and choose Update from the menu.', updateUrl ? `Or download it: ${updateUrl}` : ''].join('\n');
+    'Open Jobadabra and choose Update to get this release.', `Open Jobadabra App: ${OPEN_APP}`].join('\n');
 }

@@ -29,7 +29,7 @@ The release review page uses the shared admin main container, with responsive ca
 
 Legacy drafts without category metadata read the complete changelog through the same adapter for preview, test and broadcast, including previously omitted fixes. No production data rewrite or AI generation is needed.
 
-All email footers include “Don't have the app? Download Jobadabra”. The release CTA says “Download latest version” while installed apps do not yet register an open/update URL handler; email links must not promise to open an update dialog until that desktop support ships (5 Nov 2026).
+All email footers include “Don't have the app? Download Jobadabra”. The release CTA says “Open Jobadabra App” and uses the HTTPS `/open?view=jobs` handoff, which opens the installed app on Jobs. The email directs the user to choose Update; it does not promise to open an update dialog automatically (owner, 5 Nov 2026).
 
 ## Stable interval (owner, 5 Nov 2026)
 
@@ -40,3 +40,7 @@ The same calculation serves new drafts, existing drafts, previews, tests and bro
 ## Finding drafts and testing templates (owner, 5 Nov 2026)
 
 The Email overview starts with stable release draft links. Template titles open dedicated full-page sample previews with back navigation. Both sample-send buttons return to an anchored result inside the selected template, preserve detail mode, identify whether the destination was the test inbox or the entered address, and show readable failure reasons. Email inputs and buttons share the responsive admin styling. An accepted send is distinct from a received copy in Test inbox.
+
+## Release template layout (owner, 5 Nov 2026)
+
+Category labels sit above distinct change headings and regular-weight descriptions, giving the text the full content width on phones. Change groups are separated by spacing and light dividers. App labels use restrained inline emphasis rather than filled chips, and multi-step instructions use an ordered list. The version stays prominent; the primary button opens the app, and download remains a footer fallback. HTML and plain text carry the same instructions and destination.
