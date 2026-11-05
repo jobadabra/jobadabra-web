@@ -1,6 +1,6 @@
 // Our e-mail sender (Cloudflare Email Sending, binding EMAIL): send(env, template, to, data) is the one way any code mails a person. It refuses (never throws) on a bad address,
 // a bounce/complaint, an unsubscribe from the template's list, marketing without an opt-in, or more than 6 mails a day to one address; it adds the footer, the one-click
-// unsubscribe link and headers, and logs the mail (hash of the address, never the body) in mail_log. Switch: env.MAIL = "on" (anything else sends nothing). Guard: test/unit/shared/mail.test.js.
+// unsubscribe link and headers, and logs the mail (hash of the address, never the body) in mail_log. Switch: env.MAIL = "on" (anything else sends nothing). Guard: test/unit/shared/mail/mail.test.js.
 import {digestOf, tokenFor} from './guard.js';
 import {frameHtml, frameText, SITE} from './mail-frame.js';
 import {TEMPLATES} from './mail-templates.js';

@@ -1,6 +1,6 @@
 // The colours of every e-mail (owner, 28 Oct 2026: "we should switch our email templates to website and desktop app color palette ... yellow instead of orange"). Each is the app's own
 // token (desktop/renderer/tokens.css, public repo): [token, light value, dark value]. An e-mail cannot read CSS variables, so the values are written out here and
-// test/unit/shared/mail-palette.test.js reads tokens.css and fails when one drifts, so there is never a second hand-typed palette. The dark value is the app's dark-theme value (the light one where the app does not redefine it).
+// test/unit/shared/mail/mail-palette.test.js reads tokens.css and fails when one drifts, so there is never a second hand-typed palette. The dark value is the app's dark-theme value (the light one where the app does not redefine it).
 export const TOKENS = {
   bg: ['--bg', '#eef3f7', '#0b1016'],                  // the page behind the card
   card: ['--surface', '#ffffff', '#121a23'],

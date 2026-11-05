@@ -1,6 +1,6 @@
 // /admin/ai/costs: the board web search for Free AI without a plan (shared/free-ai-web.js) against its month line (owner, 26 Oct 2026: "Yes, $10/month cap"):
 // this month's spend, the searches it paid for, and the asks answered from the shared 30-day answers at no cost. Counts and money only.
-// Guard: test/unit/shared/free-ai-web.test.js.
+// Guard: test/unit/shared/free-ai/free-ai-web.test.js.
 import {keys, monthLine} from '../shared/free-ai-web.js';
 const money = n => `$${(Number(n) || 0).toFixed(2)}`;
 

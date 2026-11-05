@@ -1,6 +1,6 @@
 // POST /api/feedback/released: the release workflows tell the site what a beta or stable build contains, and the site tells the reporters whose fix is in it (shared/feedback-release.js).
 // Called by CI with Bearer SELFHEAL_PUBLISH_KEY, like the other uploads that feed /admin; no key configured = closed. Body {version, channel: beta|stable, prs: [numbers], cutAt: ISO}.
-// -> {ok, told, waiting, matched: [{ref, told}], failed: [ref]} (refs only), which the workflow prints in its log. GET -> {ok, prs: [numbers]}: the PRs the waiting cards name (numbers only, no card). Guarded by test/unit/shared/feedback-release.test.js.
+// -> {ok, told, waiting, matched: [{ref, told}], failed: [ref]} (refs only), which the workflow prints in its log. GET -> {ok, prs: [numbers]}: the PRs the waiting cards name (numbers only, no card). Guarded by test/unit/shared/feedback/feedback-release.test.js.
 import {equal} from '../shared/guard.js';
 import {tellRelease, waitingPrs} from '../shared/feedback-release.js';
 

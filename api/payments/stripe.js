@@ -1,6 +1,6 @@
 // The Stripe adapter of the payment layer (spec docs/superpowers/specs/2026-10-16-pro-plan.md §2): the only file that knows Stripe. It creates a Checkout Session
 // (one-time payment) and turns a signed webhook into OUR event shape, so the ledger, the accounts and the app never see a Stripe field. No SDK: fetch to the API,
-// so tests inject a fake. A merchant of record later = one more file like this one. Guards: test/unit/shared/pro-stripe.test.js. Secrets (Worker): STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET.
+// so tests inject a fake. A merchant of record later = one more file like this one. Guards: test/unit/shared/pro/pro-stripe.test.js. Secrets (Worker): STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET.
 import {equal} from '../../shared/guard.js';
 import {purchaseCreditWords} from '../../shared/credit-purchase-words.js';
 

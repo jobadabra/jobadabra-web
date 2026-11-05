@@ -1,5 +1,5 @@
 // /admin/form-filling/lab's "By-hand runs · where each site got to" bars, in the Outcomes tab (moved here from the Pool tab, 15 Oct 2026, owner restructure): one bar per day of pool runs, split by each run's one status.
-// The client code sits inside admin/applying.js's page (needs el, d, panels); plain quotes only, it is in a template literal. Guard: test/unit/admin/applying-pagetabs.test.js (each section in its tab).
+// The client code sits inside admin/applying.js's page (needs el, d, panels); plain quotes only, it is in a template literal. Guard: test/unit/admin/applying/applying-pagetabs.test.js (each section in its tab).
 export const NIGHTS_SCRIPT = `
   // By-hand runs · where each site got to (owner, 10 Oct 2026: at the top; 14 Oct 2026: by each run's one status, not the step it reached; the pool has had no nights since 11 Oct): one bar per day, newest first,
   // every run of that day split by its status (the segment's width is its share, its number the count). The % is works against needs a fix only: a day with more holds or site problems is not a drop.

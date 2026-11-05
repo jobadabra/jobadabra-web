@@ -1,6 +1,6 @@
 // The AI section of /admin (owner, 3 Nov 2026: "a separate top level: AI tab ... AI Agents, AI steps ... AI costs ... everything happening on the CI"): what the pages Agents, AI steps and Engines share.
 // Data: the daily upload of kind "agents" (tools/ci-agents-stats.mjs in the public repo, from its registry tools/ci-agents.json, stored by admin/agent-coding.js) and the broker's /health tally.
-// Pure parts: rows in, HTML out; report only, nothing here changes anything. Test: test/unit/admin/ai-section.test.js.
+// Pure parts: rows in, HTML out; report only, nothing here changes anything. Test: test/unit/admin/ai/ai-section.test.js.
 import {esc} from '../shared/html.js';
 import {workflowRows, engineMix} from './ai-workflow-tokens.js';
 

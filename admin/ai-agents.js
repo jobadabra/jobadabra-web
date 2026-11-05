@@ -1,5 +1,5 @@
 // /admin/ai/agents: every AI job on the CI that acts by itself (owner, 3 Nov 2026: fixers are "proper agents"; reviewers that only file or close issues are tagged "issues only"). One card per agent: when it starts,
-// what it acts on, its engine, state, last runs, what it opened in 30 days and its broker tokens. Rows come from tools/ci-agents.json via the daily upload. Report only. Test: test/unit/admin/ai-section.test.js.
+// what it acts on, its engine, state, last runs, what it opened in 30 days and its broker tokens. Rows come from tools/ci-agents.json via the daily upload. Report only. Test: test/unit/admin/ai/ai-section.test.js.
 import {esc} from '../shared/html.js';
 import {latestCard, shell, chip, engineChip, stateChip, dots, spendOf, spendRows, tokensWord, emptyCard} from './ai-section.js';
 

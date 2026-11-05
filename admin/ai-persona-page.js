@@ -1,7 +1,7 @@
 // The Admin → Testing → AI persona page, drawn from what CI uploaded (shared/agent-runs.js): the run list, and for one run its path, its notes and its video. Pure: data in, HTML out.
 // Why (4 Nov 2026, owner: "a dedicated tab in admin where I'll see all the runs/paths/bugs found… and video recording for each"; sketch https://claude.ai/artifact/1AZ2ASxDKuTXTWBfPEexgz approved with
 // "Nightly and replays, replays labelled" and "14 days"): the page is drawn on the server from the stored record, so the only script is the one that jumps the video to a note's second.
-// Guard: test/unit/admin/ai-persona.test.js.
+// Guard: test/unit/admin/ai/ai-persona.test.js.
 import {esc} from '../shared/html.js';
 import {PUBLIC_REPO} from '../shared/repos.js';
 import {KEEP_DAYS} from '../shared/agent-runs.js';

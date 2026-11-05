@@ -1,7 +1,7 @@
 // GET /api/ai/caps (owner, 26 Oct 2026: "show this popup whenever, on every action that requires AI and their cap is reached ... before they reached 60 days or 20
 // applications"): where this install stands with our AI, asked by the app before it starts an AI step: the credit lane, or the Free line it is past (the trial, the month,
 // the day, or Free AI busy for everyone) with when it resets. Read exactly as the route enforces them (shared/free-ai.js busyCap / installCap); nothing is counted or written.
-// The same key as Free AI (x-api-key: JPF1.<install>.<token>). Guard: test/unit/shared/free-ai-caps.test.js.
+// The same key as Free AI (x-api-key: JPF1.<install>.<token>). Guard: test/unit/shared/free-ai/free-ai-caps.test.js.
 import {accountNeurons} from './free-ai-usage.js';
 import {allowanceOf, busyCap, count, installCap, keysOf, limitsOf, who} from './free-ai.js';
 import {installCredit} from './install-credit.js';

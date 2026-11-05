@@ -1,5 +1,5 @@
 // The HTML of the owner's feedback page (routes in admin/feedback.js). Live list, filters by state and impact, a ⋯ menu per card, inline forms for the actions that need a word or a second click.
-// Everything from the server is put on the page with textContent. Guarded by test/unit/shared/feedback.test.js and test/unit/shared/feedback-actions.test.js.
+// Everything from the server is put on the page with textContent. Guarded by test/unit/shared/feedback/feedback.test.js and test/unit/shared/feedback/feedback-actions.test.js.
 // Why (3 Nov 2026, owner: "Make all the action buttons under a 3 dot dropdown menu"): the card shows state and impact; every action lives in one menu, and the menu lists only what the state table allows (the server sends `actions`).
 export const PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>Feedback · Admin</title><link rel="icon" href="/favicon-32.png">

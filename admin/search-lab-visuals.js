@@ -1,6 +1,6 @@
 // The Lab Job Search page's visual layer (owner, 18 Oct 2026: "add more colors, more nice graphs/widgets/bars... and put more information"): a health bar and coloured state tiles, one card per
 // candidate (time-to-result bars on a shared scale, funnel meters, a history sparkline, build and last-green facts). Pure: rows in, HTML out; counts and seconds only, no job text.
-// The exact numbers stay in the table (admin/search-lab-page.js). Guard: test/unit/admin/search-lab.test.js.
+// The exact numbers stay in the table (admin/search-lab-page.js). Guard: test/unit/admin/search/search-lab.test.js.
 import {esc} from '../shared/html.js';
 import {TIME_NAMES} from './search-lab-judge.js';
 

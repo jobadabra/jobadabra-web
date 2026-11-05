@@ -1,6 +1,6 @@
 // Ready to send, the night's AI (spec docs/superpowers/specs/2026-10-17-ready-to-send.md; owner, 17 Oct 2026: "Yes, add AI in phase 1", then "the user's own AI": the product holds NO AI key): the container answers the form's open questions with the same engine as the normal Apply,
 // but never holds a key: each model call goes through here with the night token. Whose AI answers: the user's own key sealed in the batch (BYOK, the real Claude model), else the install's Free AI (its own per-install limits, shared/free-ai.js).
-// Only a Messages call on one fixed model goes on; its cost counts toward the night (so the $1 cap counts it); a refusal (a limit or the cap) answers 402 and marks the night "AI stopped" for the morning line. Guard: test/unit/api/ready-ai.test.js.
+// Only a Messages call on one fixed model goes on; its cost counts toward the night (so the $1 cap counts it); a refusal (a limit or the cap) answers 402 and marks the night "AI stopped" for the morning line. Guard: test/unit/api/ready/ready-ai.test.js.
 import {freeAi} from '../shared/free-ai.js';
 import {costUsd, SMALL} from '../shared/free-ai-models.js';
 import {tokenFor} from '../shared/guard.js';

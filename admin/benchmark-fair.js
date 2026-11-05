@@ -2,7 +2,7 @@
 // every tool (Haiku 5.5), forms we never tested or fixed on, a blind judge. Two kinds of round: the fixed set (a fix is measured before and
 // after on it) and a weekly new set. Each row is one tool on one form in one repeat, split right / wrong / empty-but-answerable / not reached;
 // score = right / (right + wrong + empty + not reached). Rows of the old rounds (round 'old') never mix in. Names arrive as data.
-// Guard: test/unit/admin/benchmark-fair.test.js.
+// Guard: test/unit/admin/benchmark/benchmark-fair.test.js.
 import {esc} from '../shared/html.js';
 import {shareTone} from './applying-tiles.js';
 

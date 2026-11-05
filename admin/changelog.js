@@ -1,7 +1,7 @@
 // The public /changelog, one entry per released version, beta or stable (spec docs/superpowers/specs/2026-10-16-daily-digest.md §6, automatic since 18 Oct 2026): the rules for what may be said there and the checks of an entry.
 // An entry is {version, date, channel, groups: [{kind, items: [{emoji?, lead, text}]}]}; the group titles and their emoji are code's (GROUPS), the AI only sorts changes into the three kinds.
 // Public means NOTHING internal: no tests, test accounts, outages, costs, CI, session names, and no Pro plan or price before Pro launches (owner, 16 Oct 2026: "say it quietly").
-// The words are a safety FLOOR in front of the owner's yes, never what decides meaning (the AI writes). CI checks an entry (jobs/changelog-publish.mjs) and the site checks it again on PUT (admin/changelog-store.js): nothing unchecked is shown. Guard: test/unit/admin/changelog.test.js.
+// The words are a safety FLOOR in front of the owner's yes, never what decides meaning (the AI writes). CI checks an entry (jobs/changelog-publish.mjs) and the site checks it again on PUT (admin/changelog-store.js): nothing unchecked is shown. Guard: test/unit/admin/changelog/changelog.test.js.
 export const FORBIDDEN = /\$\s?\d|\b(?:usd|chf|eur)\b|\bpro\b|pricing|\bprice|\bcosts?\b|\bbilling\b|test[- ]account|outage|\bCI\b|\bsessions?\b|incident|red main|\bPRs?\b|pull request|\bworktree|\bflaky\b|\bAI limit|free ai|\bbudget|workers ai|\bkey\b|\btoken\b|\bsecret/i;
 // The three kinds, in page order; the AI answers only the kind, never the title.
 export const GROUPS = {features: '✨ New features', improvements: '🚀 Improvements', fixes: '🐛 Bug fixes'};

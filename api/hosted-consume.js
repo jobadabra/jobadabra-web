@@ -1,6 +1,6 @@
 // Hosted Always on, the Queue consumer's logic (the runner Worker workers/hosted-runner/worker.js is only glue around it): each message starts one container run and waits for it.
 // A message is always acknowledged: the run token is single-use and the container posts its own result; a run that never posts is failed by the next tick (api/hosted-tick.js).
-// Guard: test/unit/shared/hosted-guards.test.js.
+// Guard: test/unit/shared/hosted/hosted-guards.test.js.
 export const RUN_TIMEOUT_MS = 14 * 60 * 1000;
 
 // `runner(account)` -> {fetch(request)}: the container instance for that account (one at a time per account). -> {ok, failed} counts.

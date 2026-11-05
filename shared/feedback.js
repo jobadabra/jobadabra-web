@@ -1,5 +1,5 @@
 // What users sent through POST /api/feedback (api/feedback.js), read for the owner's pages and the product brain's signals.
-// Guarded by test/unit/shared/feedback.test.js.
+// Guarded by test/unit/shared/feedback/feedback.test.js.
 
 // The text files a feedback may carry besides the screenshot: the body field, its R2 name, the row flag (0/1) it sets, its cap and its type. One table, read by the endpoint, the owner's file route
 // and the daily purge, so a new kind is one line. Why (2 Nov 2026, owner: "send the content/data from that page … and a snapshot of the entire profile"): `page` is the screen's own data,

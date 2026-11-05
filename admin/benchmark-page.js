@@ -1,5 +1,5 @@
 // The page of /admin/form-filling/benchmark (owner, 15 Oct 2026): our extension against other tools on the same forms, read from ONE snapshot. Every tool, form and build name is data; none is written here.
-// The tiles' colours are the shared rule (admin/applying-tiles.js). The headline is user mode; harness mode and each applicant get their own view, never added together. Guard: test/unit/admin/benchmark.test.js.
+// The tiles' colours are the shared rule (admin/applying-tiles.js). The headline is user mode; harness mode and each applicant get their own view, never added together. Guard: test/unit/admin/benchmark/benchmark.test.js.
 import {esc} from '../shared/html.js';
 import {filterLinks, spark} from './admin.js';
 import {countTone, shareTone} from './applying-tiles.js';

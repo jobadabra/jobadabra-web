@@ -32,7 +32,7 @@ export function vars(text = fs.readFileSync(new URL('workers/www/wrangler.toml',
   return out;
 }
 
-// D1 in memory, every migration applied (the shape test/unit/admin/*.test.js use).
+// D1 in memory, every migration applied (the shape test/unit/admin/**/*.test.js use).
 export function memoryD1() {
   const db = new DatabaseSync(':memory:');
   for (const file of fs.readdirSync(new URL('db/migrations/', HERE)).filter(name => name.endsWith('.sql')).sort()) db.exec(fs.readFileSync(new URL(`db/migrations/${file}`, HERE), 'utf8'));

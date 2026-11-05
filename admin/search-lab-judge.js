@@ -4,7 +4,7 @@
 //   worse    a count (jobs in places, fit 70+) is lower, a time is more than 25 % slower, or a time that was reached is not reached; the control gets no tolerance on times
 //   new      no earlier green run to compare with
 //   working  no worse than the last green run
-// "Last green" = the newest earlier run that was neither failed nor worse. Guard: test/unit/admin/search-lab.test.js.
+// "Last green" = the newest earlier run that was neither failed nor worse. Guard: test/unit/admin/search/search-lab.test.js.
 export const TOLERANCE = 0.25;
 const COUNTS = [['in_places', 'jobs in your places'], ['fit70', 'jobs scoring 70+']];
 // One name for each time, used on every screen of the Lab (owner, 18 Oct 2026: "Time to first job" is the number he watches).

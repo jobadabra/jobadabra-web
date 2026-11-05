@@ -1,6 +1,6 @@
 // The owner's page /admin/form-filling/reports ("Reported forms"): every "Report this form" the installs sent, newest first, counts only (the recording is encrypted; the Worker has no host or page).
 // Status: waiting (not yet fetched), fetched (the owner's Mac took it), expired (older than 30 days: the bucket's lifecycle rule has removed the recording). Also the day's totals against the caps.
-// Guarded by test/unit/admin/report-view.test.js.
+// Guarded by test/unit/admin/report/report-view.test.js.
 import {esc} from '../shared/html.js';
 import {viewer} from '../shared/auth.js';
 import {causeWords} from '../shared/report-notify.js';

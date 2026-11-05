@@ -1,7 +1,7 @@
 // The Pro lane's stronger models (owner, 27 Oct 2026: "when the user buys Pro ... we should offer him a better AI experience ... a selling point to upgrade"):
 // a Pro account with credit gets a Claude model on the writing steps where a head-to-head showed it writes better; every other step, and any failure, stays on Workers AI.
 // Free never reaches this file: only free-ai.js calls it, after proLane() found an account with credit.
-// Guard: test/unit/shared/pro-claude.test.js (a route needs its measured gain and case count; the kill switch and the fallback hold).
+// Guard: test/unit/shared/pro/pro-claude.test.js (a route needs its measured gain and case count; the kill switch and the fallback hold).
 
 export const OPUS = 'claude-opus-5-5';
 export const SONNET = 'claude-sonnet-5-5';

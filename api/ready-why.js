@@ -1,5 +1,5 @@
 // Ready to send, why a night's forms still wait (owner, 19 Oct 2026: three forms sat on "Waiting its turn" for 2 h; nothing said whether the night was set for later, never started or silent).
-// The night's state says it in fixed words the app words (desktop/renderer/pages/ready-rows.js): never page text. Guard: test/unit/api/ready-why.test.js.
+// The night's state says it in fixed words the app words (desktop/renderer/pages/ready-rows.js): never page text. Guard: test/unit/api/ready/ready-why.test.js.
 import {LIVE} from './ready-line.js';
 
 export const SILENT_MIN = 5, RUN_MS = 3 * 3600 * 1000;   // RUN_MS: how long a started night lives (ready.js RUN_HOURS)
