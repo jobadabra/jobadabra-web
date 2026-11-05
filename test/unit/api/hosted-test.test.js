@@ -110,6 +110,15 @@ test('the Test sends one short e-mail to the alert address and says why when it 
   assert.match(none.steps.find(s => s.key === 'mail').note, /E-mail alerts are off.*Settings → Notifications/);
 });
 
+test('a site whose migration 0130 did not apply still starts the Test: the press never fails on the checks', async t => {
+  t.mock.method(console, 'error', () => {});
+  const e = env(); await turnOn(e);
+  for (const column of ['ai_at', 'ai_error', 'mail_at', 'mail_error', 'read_at']) e.STATS.db.exec(`ALTER TABLE hosted_runs DROP COLUMN ${column}`);
+  const press = await call(e, 'POST', later(5));
+  assert.equal(press.status, 200);
+  assert.equal(e.HOSTED_QUEUE.sent.length, 1);
+});
+
 test('a server that never reads the profile fails the Test after a minute, said plainly', async () => {
   const e = env(); await turnOn(e);
   await call(e, 'POST', later(5));

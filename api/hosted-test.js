@@ -44,7 +44,9 @@ async function checkMail(env, account, id, now) {
 }
 
 // Both checks a press makes, side by side (each once per run): the Test's AI and e-mail steps.
-const checks = (env, account, id, now) => Promise.all([checkAi(env, id, now), checkMail(env, account, id, now)]);
+// Best effort (Gitar on #417): a schema or D1 error (site.yml's migration step may fail without stopping the deploy) costs the Test its steps, never the press.
+const safely = (step, id) => step.catch(error => console.error(`hosted test check not stamped for ${id}: ${error.message}`));
+const checks = (env, account, id, now) => Promise.all([safely(checkAi(env, id, now), id), safely(checkMail(env, account, id, now), id)]);
 
 // The Test's AI step for run `id`, once: a press that joins an open run (the schedule's own, or a test already running) checks it too (review of hr21:
 // a joined run returned before the check and its AI step failed at 60 s while everything worked). A failed stamp costs the Test its step, not the press.
