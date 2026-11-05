@@ -39,9 +39,9 @@ const STYLE = `${CHIP_STYLE}${BAND_STYLE}${NIGHTLY_STYLE}${VIZ_STYLE}${QUALITY_S
 .rjob:target{outline:2px solid #f5b54a}
 .rjob .src{margin-top:6px;font-size:12px}
 .plumb>summary{cursor:pointer;list-style:none}.plumb>summary::-webkit-details-marker{display:none}.plumb>summary::before{content:'▸ ';color:#f5b54a}.plumb[open]>summary::before{content:'▾ '}
-.plumb>summary:hover{color:#e6e9ec}.plumb>summary .verdict{text-transform:none;letter-spacing:0;font-weight:400}`;
-// Why (5 Nov 2026, owner): the band's chips link to a card inside the closed toggle; a link into it opens it first.
-const OPEN_ON_LINK = `<script>(function(){function open(){var t=document.getElementById(location.hash.slice(1)),d=t&&t.closest('details');if(d)d.open=true;if(t)t.scrollIntoView()}addEventListener('hashchange',open);open()})()</script>`;
+.plumb>summary:hover{color:#e6e9ec}.plumb>summary:focus-visible{outline:2px solid #f5b54a;outline-offset:2px}`;
+// Why (5 Nov 2026, code-review of 3/3): the band's red chips stay OUTSIDE the closed toggle and link to a card inside it; a link into it opens it first (not every browser does that for <details>).
+export const OPEN_ON_LINK = `<script>(function(){function show(){var t=document.getElementById(decodeURIComponent(location.hash.slice(1))),d=t&&t.closest('details');if(d){d.open=true;t.scrollIntoView()}}addEventListener('hashchange',show);show()})()</script>`;
 
 const jobHtml = job => `<section class="card rjob" id="r-${esc(job.id)}">${trendHtml(job)}${job.files?.length ? `<div class="muted src">from ${job.files.map(file => `<code>${esc(file)}</code>`).join(' · ')}</div>` : ''}</section>`;
 
@@ -51,11 +51,13 @@ export function page(built, quality = null) {
   const headline = off.length ? `${off.length} of ${withData.length} numbers off their bar` : `${withData.length} numbers measured, none off their bar`;
   const band = verdictBand({icon: off.length ? '🟠' : '🟢', headline,
     chips: off.map(job => ({label: job.title, tone: 'bad', href: `#r-${job.id}`})), note: 'Measured nightly, report only: none of these blocks a merge. The proofs are on Overview, E2E and Integrations.'});
+  const groups = built.groups.map(group => `<div class="group">${group.icon} ${esc(group.title)} <span class="muted">· ${esc(group.note)}</span></div><div class="rgrid">${group.jobs.map(jobHtml).join('')}</div>`).join('\n');
+  const plumbing = quality ? `<details class="plumb" id="plumbing"><summary class="qhead">⚙️ Plumbing: did the nightly jobs run <span class="muted">· ${built.jobs.length} measurements behind the numbers above</span></summary>${groups}</details>` : groups;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Report only · Testing · Admin</title>
 <link rel="icon" href="/favicon-32.png"><style>${STYLE}</style></head><body><main>
-<header><h1>📊 Report only</h1><span class="muted">${built.groups.length} groups · ${built.jobs.length} measurements · last 14 days</span></header>
-${quality ? board(quality) : ''}${quality ? `<details class="plumb" id="plumbing"><summary class="qhead">⚙️ Plumbing: did the nightly jobs run <span class="muted">· ${esc(headline)} · ${built.jobs.length} measurements behind the numbers above</span></summary>` : ''}${band}
-${built.groups.map(group => `<div class="group">${group.icon} ${esc(group.title)} <span class="muted">· ${esc(group.note)}</span></div><div class="rgrid">${group.jobs.map(jobHtml).join('')}</div>`).join('\n')}${quality ? '</details>' : ''}
+<header><h1>📊 Report only</h1><span class="muted">${quality ? 'how we are doing, last 30 days · the nightly jobs under Plumbing' : `${built.groups.length} groups · ${built.jobs.length} measurements · last 14 days`}</span></header>
+${quality ? board(quality) : ''}${band}
+${plumbing}
 </main>${quality ? VIZ_TOOLTIP + OPEN_ON_LINK : ''}</body></html>`;
 }
 

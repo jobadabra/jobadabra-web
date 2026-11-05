@@ -5,7 +5,8 @@ import worker from '../../../../workers/www/index.js';
 import {PAGES} from '../../../../admin/admin.js';
 import {lastDays, nightlySummary} from '../../../../admin/nightly-summary.js';
 import {finderJobs} from '../../../../admin/report-only-finders.js';
-import {GROUPS, model, page} from '../../../../admin/report-only.js';
+import {GROUPS, OPEN_ON_LINK, model, page} from '../../../../admin/report-only.js';
+import {qualityModel} from '../../../../admin/product-quality-areas.js';
 import {page as overviewPage} from '../../../../admin/testing-overview.js';
 import {resolve} from '../../../../admin/testing-overview-data.js';
 import {reportLine} from '../../../../admin/nightly-summary-html.js';
@@ -87,4 +88,25 @@ test('the route: owner only, in the Testing menu after GTM readiness, every othe
   const html = await owner.text();
   assert.match(html, /Report only/);
   assert.match(html, /aria-current="page">📊 Report only<\/a>/);
+});
+
+test('plumbing toggle (owner, 5 Nov 2026): with the board the nightly cards hide in a closed toggle, the red chips stay visible outside it and a click on one opens it; no board, no toggle', () => {
+  const built = model(nightlySummary({snapshot: nights}, now), [snap(0)], now), html = page(built, qualityModel({}));
+  const toggle = html.indexOf('<details class="plumb" id="plumbing">'), chip = html.indexOf('<a href="#r-quality-ai"><span class="chip bad">Quality AI');
+  assert.ok(toggle > 0 && !/<details class="plumb" id="plumbing" open/.test(html), 'closed by default');
+  assert.ok(html.indexOf('class="qgrid"') < chip && chip < toggle, 'the board, then the red chip, both outside the toggle');
+  const inside = html.slice(toggle, html.indexOf('</details>', toggle) + 10);
+  assert.equal((inside.match(/class="card rjob"/g) || []).length, GROUPS.flatMap(group => group.jobs).length, 'every nightly card is inside the toggle');
+  assert.equal((html.match(/<\/?details/g) || []).filter(tag => tag === '<details').length, (html.match(/<\/details>/g) || []).length, 'every details closes');
+  // The script, run against a stub DOM: a hash on a card inside the toggle opens it and scrolls to it; no hash does nothing.
+  const run = hash => {
+    const calls = [], details = {open: false}, card = {closest: sel => (sel === 'details' ? details : null), scrollIntoView: () => calls.push('scroll')}, handlers = {};
+    new Function('document', 'location', 'addEventListener', OPEN_ON_LINK.replace(/^<script>|<\/script>$/g, ''))({getElementById: id => (id === 'r-quality-ai' ? card : null)}, {hash}, (name, fn) => { handlers[name] = fn; });
+    return {open: details.open, calls, handlers: Object.keys(handlers)};
+  };
+  assert.deepEqual(run('#r-quality-ai'), {open: true, calls: ['scroll'], handlers: ['hashchange']});
+  assert.deepEqual(run(''), {open: false, calls: [], handlers: ['hashchange']});
+  const bare = page(built, null);
+  assert.doesNotMatch(bare, /<details class="plumb"|<script>/, 'a failed board leaves the nightly cards in the open, as before');
+  assert.match(bare, /<a href="#r-quality-ai"><span class="chip bad">Quality AI/);
 });
