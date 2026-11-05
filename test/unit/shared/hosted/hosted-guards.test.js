@@ -112,8 +112,8 @@ test('the run token is an AI key charged as its install (trial budget), and only
 test('the consumer starts one container per message, acknowledges all, and survives a failing container', async () => {
   const acked = [], posts = [];
   const msg = (n) => ({body: {run: `r${n}`, token: `HR1.r${n}.t`, site: 'https://s.test', account: `a${n}`}, ack: () => acked.push(n)});
-  const runner = account => ({fetch: async request => { posts.push([account, JSON.parse(await request.text())]); if (account === 'a2') throw new Error('no container'); return new Response('{}', {status: 200}); }});
-  const done = await consume({messages: [msg(1), msg(2)]}, runner, {error: () => {}});
+  const runner = account => ({fetch: async request => { if (request.method === 'GET') return new Response('{"ok":true}'); posts.push([account, JSON.parse(await request.text())]); if (account === 'a2') throw new Error('no container'); return new Response('{}', {status: 200}); }});
+  const done = await consume({messages: [msg(1), msg(2)]}, runner, {log: () => {}, error: () => {}});
   assert.deepEqual(done, {ok: 1, failed: 1});
   assert.deepEqual(acked.sort(), [1, 2]);
   assert.deepEqual(posts[0], ['a1', {token: 'HR1.r1.t', site: 'https://s.test'}]);
@@ -123,13 +123,44 @@ test('the consumer logs the container\'s status and the reason it gave, never th
   // Why (5 Nov 2026, hr 6/6 try 3): the log said "POST http://container/run" and nothing about why the container answered 500.
   const lines = [];
   const msg = n => ({body: {run: `r${n}`, token: `HR1.r${n}.secret`, site: 'https://s.test', account: `a${n}`}, ack: () => {}});
-  const runner = () => ({fetch: async () => new Response(JSON.stringify({ok: false, error: 'URLError: name resolution HR1.r1.secret'}), {status: 500})});
-  const done = await consume({messages: [msg(1)]}, runner, {error: line => lines.push(line)});
+  const runner = () => ({fetch: async request => request.method === 'GET' ? new Response('{"ok":true}') : new Response(JSON.stringify({ok: false, error: 'URLError: name resolution HR1.r1.secret'}), {status: 500})});
+  const done = await consume({messages: [msg(1)]}, runner, {log: () => {}, error: line => lines.push(line)});
   assert.deepEqual(done, {ok: 0, failed: 1});
   assert.equal(lines.length, 1);
   assert.match(lines[0], /hosted run r1: container answered 500/);
   assert.match(lines[0], /URLError: name resolution/);
   assert.doesNotMatch(lines[0], /HR1\./);
+});
+
+test('the consumer logs which code the container runs (build and start time) before the run, and still runs when that look fails', async () => {
+  // Why (5 Nov 2026, hr 6/6 try 4): the instance's image digest was the new one yet the 500 had the old body; nothing in the log said which code answered.
+  const logs = [], errors = [], posts = [];
+  const msg = n => ({body: {run: `r${n}`, token: `HR1.r${n}.secret`, site: 'https://s.test', account: `a${n}`}, ack: () => {}});
+  const runner = account => ({fetch: async request => {
+    if (request.method === 'GET') { if (account === 'a2') throw new Error('container did not start'); return new Response(JSON.stringify({ok: true, build: 'abc123def456', started: '2026-11-05T01:04:33Z'})); }
+    posts.push(account); return new Response('{}', {status: 200});
+  }});
+  const done = await consume({messages: [msg(1), msg(2)]}, runner, {log: line => logs.push(line), error: line => errors.push(line)});
+  assert.deepEqual(done, {ok: 2, failed: 0});
+  assert.deepEqual(posts.sort(), ['a1', 'a2']);   // a failed look never stops the run
+  assert.deepEqual(logs, ['hosted run r1: container build abc123def456, started 2026-11-05T01:04:33Z']);
+  assert.deepEqual(errors, ['hosted run r2: could not read the container build: container did not start']);
+  assert.doesNotMatch([...logs, ...errors].join(' '), /HR1\./);
+});
+
+test('a look that gets the platform\'s failure text (not the container) logs that status and text, never "build unknown" or a JSON error', async () => {
+  // Why (5 Nov 2026, review of the build stamp): @cloudflare/containers answers 500 "Failed to start container: …" as a plain Response, it does not throw; .json() on it hid the real reason.
+  const errors = [], logs = [];
+  const msg = n => ({body: {run: `r${n}`, token: `HR1.r${n}.secret`, site: 'https://s.test', account: `a${n}`}, ack: () => {}});
+  const answers = {a1: new Response('Failed to start container: no port 8080', {status: 500}), a2: new Response(JSON.stringify({ok: false, error: 'x'}), {status: 429}), a3: new Response('<html>', {status: 200})};
+  const runner = account => ({fetch: async request => request.method === 'GET' ? answers[account] : new Response('{}', {status: 200})});
+  await consume({messages: [msg(1), msg(2), msg(3)]}, runner, {log: line => logs.push(line), error: line => errors.push(line)});
+  assert.deepEqual(logs, []);
+  errors.sort();   // the three runs are concurrent
+  assert.match(errors[0], /^hosted run r1: could not read the container build: it answered 500 Failed to start container: no port 8080$/);
+  assert.match(errors[1], /^hosted run r2: could not read the container build: it answered 429 /);
+  assert.match(errors[2], /^hosted run r3: could not read the container build: /);   // 200 but not JSON
+  assert.doesNotMatch(errors.join('\n'), /unknown/);
 });
 
 test('wrangler.toml binds the state bucket and the queue, and the runner config consumes that queue', () => {

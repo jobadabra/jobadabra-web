@@ -45,13 +45,15 @@ export async function startCloud({kek = 'e2e-kek-not-a-secret', salt = 'e2e-salt
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const site = `http://127.0.0.1:${server.address().port}`;
   env.HOSTED_SITE = site;
-  return {env, site, sent, ai, queue, setRunner: given => { runner = given; },
+  // Why (5 Nov 2026, hr 6/6 try 4): what consume() logged, so the e2e can assert the container's build line (the real container, not a fake, answers GET /).
+  const lines = [];
+  return {env, site, sent, ai, queue, lines, setRunner: given => { runner = given; },
     // What an earlier run would have left in R2 (sealed as the Worker seals it): the key shape is src/hosted-state.js keyOf.
     holdState: async (account, bytes) => env.HOSTED_STATE.put(`hosted/${account}/state.tgz`, await seal(env, account, bytes)),
     // The runner Worker's job: take what the tick queued and start the container for each message (the real consume() waits for the run to finish).
     async drain() {
       const messages = queue.splice(0).map(body => ({body, ack() {}}));
-      return consume({messages}, () => runner, {error: message => console.error(message)});
+      return consume({messages}, () => runner, {log: message => { lines.push(message); console.log(message); }, error: message => { lines.push(message); console.error(message); }});
     },
     close: () => new Promise(resolve => server.close(resolve))};
 }
