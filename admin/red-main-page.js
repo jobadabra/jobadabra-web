@@ -27,7 +27,7 @@ export function page(state, now = Date.now()) {
       : `<p>${chip('✔ main is green', 'good')} No e2e suite is red on main.</p>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Red main · Admin</title><link rel="icon" href="/favicon-32.png">
 <style>${CHIP_STYLE}:root{--bg:#0b0d10;--card:#14181d;--line:#262c33;--text:#f4efe3;--muted:#8d949c;--amber:#f5b54a}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,sans-serif}
-main{max-width:1040px;margin:0 auto;padding:24px 16px 48px}h1{margin:0;font-size:24px}h2{margin:0;font-size:15px}a{color:var(--amber)}.muted{color:var(--muted)}header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+main{max-width:1200px;margin:0 auto;padding:24px 16px 48px}h1{margin:0;font-size:24px}h2{margin:0;font-size:15px}a{color:var(--amber)}.muted{color:var(--muted)}header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0;margin-bottom:12px}.wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:8px}th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;padding:6px 4px}td{padding:6px 4px;border-top:1px solid var(--line);vertical-align:top}</style></head><body><main>
 <header><h1>🚨 Red main</h1><span class="muted">${state?.at ? `updated ${esc(String(state.at).slice(0, 16).replace('T', ' '))} UTC` : 'no data yet'}</span></header>
 <section class="card">${verdict}</section>

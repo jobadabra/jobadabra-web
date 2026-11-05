@@ -84,7 +84,7 @@ ${item.path === '/admin/testing/bug-loop' && data.recall ? `<small class="muted"
 <style>
 :root{--bg:#0b0d10;--card:#14181d;--line:#262c33;--text:#f4efe3;--muted:#8d949c;--amber:#f5b54a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,sans-serif}
-main{max-width:1040px;margin:0 auto;padding:0 16px 48px}h1{margin:0;font-size:24px}h2{margin:0 0 8px;font-size:15px}a{color:var(--amber)}.muted{color:var(--muted)}
+main{max-width:1200px;margin:0 auto;padding:0 16px 48px}h1{margin:0;font-size:24px}h2{margin:0 0 8px;font-size:15px}a{color:var(--amber)}.muted{color:var(--muted)}
 header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0;margin-bottom:12px;display:block}
 .attention li{margin:6px 0;list-style:none}.attention ul{margin:8px 0 0;padding:0}.attention a{color:var(--text);text-decoration:none}.attention a:hover{color:var(--amber)}
