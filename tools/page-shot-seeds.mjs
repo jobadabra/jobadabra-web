@@ -5,6 +5,7 @@ import {LAB_REPO, PUBLIC_REPO, WEB_REPO, githubUrl} from '../shared/repos.js';
 import {aiPersona} from './page-shot-seed-ai-persona.mjs';
 import {aiCostFull} from './page-shot-seed-ai-cost.mjs';
 import {healFull, testingFull} from './page-shot-seed-testing.mjs';
+import {qualityBoard} from './page-shot-seed-quality.mjs';
 const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields)});
 
 export const seeds = {
@@ -491,5 +492,6 @@ export const seeds = {
   'ai-persona': aiPersona,
   'ai-cost-full': context => aiCostFull(context, seeds),   // /admin/ai/costs with every section filled (5 Nov 2026, admin charts)
   'testing-full': context => testingFull(context),   // the three Testing pages with every section filled (5 Nov 2026, admin charts)
+  'product-quality': context => qualityBoard(context, seeds),   // Report only's product-quality board: 30 made-up days of fills, searches, probes and quality nights ([ri], 5 Nov 2026)
   'selfheal-full': context => healFull(context, seeds),   // Self-healing with the three periods and the resolution labels (5 Nov 2026, admin charts)
 };
