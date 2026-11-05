@@ -14,6 +14,7 @@ const KEY = 'index:employers';
 const NOFEED_KEY = 'index:nofeed';
 const SUMMARY_KEY = 'index:summary';   // the website's two counts, written at every publish (the old single-value copy stops once the list outgrows it)
 const GENERATED_KEY = 'index:generated';   // when the central scout last published: installs ask "still this one?" hourly, answered from KV alone
+const KEEP_SHARE = 0.6;   // a publish keeping fewer employers than this share of the stored list is refused (publish)
 const COPY_PREFIX = 'index:copy:', COPY_DAYS = 30;   // the dated copies (keepCopy): written here only, no route reads them
 const BOARDS_KEY = 'index:boards';   // per job board, what it gives people by role, family and place (src/scout.py board_stats): installs order the boards they suggest   // employers with no readable job site, published by the central scout: installs skip them 30 days
 const SYSTEMS = ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'teamtailor', 'join', 'workday', 'umantis', 'successfactors', 'oracle', 'phenom', 'eightfold', 'careers', 'amazon', 'netflix', 'jobsch'];
@@ -280,6 +281,9 @@ async function storeBoardFacts(db, facts, date) {
   if (db.batch) await db.batch(statements); else for (const statement of statements) await statement.run();
 }
 
+// The Brain bot an alert falls back to when the switchboard cannot deliver (shared/notify-send.js).
+const brainBot = env => (env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null);
+
 /**
  * Keeps this publish's body as the UTC day's copy for COPY_DAYS (a later publish that day replaces it). Returns 'kept' or 'failed'; never throws, a copy is never a reason to refuse the index. A failure tells the owner.
  * To go back to a day, from workers/www: `wrangler kv key get --remote --binding WAITLIST index:copy:<day>`, then PUT that body to /api/index with INDEX_PUBLISH_KEY; it passes the same checks as any publish, and replays that day's board facts and stats under today's date.
@@ -290,10 +294,16 @@ async function keepCopy(env, raw, day) {
   try { await env.WAITLIST.put(`${COPY_PREFIX}${day}`, raw, {expirationTtl: COPY_DAYS * 86400}); return 'kept'; }
   catch (error) {
     console.log(`index copy: ${String(error?.message || error).slice(0, 200)}`);
-    const legacy = env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null;
-    await alertOwner(env, 'index-copy-failed', {text: `🗂 Employer list: the copy of ${day} could not be saved. The publish went through, but this day has no way back.`, level: 'problem', legacy}).catch(() => {});
+    await alertOwner(env, 'index-copy-failed', {text: `🗂 Employer list: the copy of ${day} could not be saved. The publish went through, but this day has no way back.`, level: 'problem', legacy: brainBot(env)}).catch(() => {});
     return 'failed';
   }
+}
+
+/** A publish a guard stopped: the 409 the scout shows red, and the owner told. A failed telling never changes the refusal. */
+// Why (5 Nov 2026, owner's brief): the scout's run alone said so, and nobody reads a run that is red every 6 h; `daily` in the registry makes it at most one message a UTC day.
+async function refuse(env, why) {
+  await alertOwner(env, 'index-publish-refused', {text: `🗂 Employer list: a publish was refused, ${why}. The list stays as it was; look at the central scout's last run.`, level: 'problem', legacy: brainBot(env)}).catch(() => {});
+  return text(409, `Refused: ${why}`);
 }
 
 async function publish(request, env) {
@@ -306,12 +316,21 @@ async function publish(request, env) {
   try { body = JSON.parse(raw); } catch { return text(400, 'Send JSON'); }
   const feeds = clean(body.feeds).slice(0, MAX_FEEDS);
   if (!feeds.length) return text(400, 'No valid feeds');
-  // A broken scout run must not wipe the list everyone downloads: a sudden loss of more than half is refused.
-  const inD1 = env.STATS ? ((await env.STATS.prepare('SELECT COUNT(*) AS n FROM index_feeds').first())?.n || 0) : 0;
-  const previous = Math.max(inD1, JSON.parse((await env.WAITLIST.get(KEY)) || '{"feeds":[]}').feeds.length);
-  if (previous >= 10 && feeds.length < previous / 2) return text(409, `Refused: ${feeds.length} feeds would replace ${previous}`);
+  // A broken scout run must not wipe the list everyone downloads: a publish keeping under 60% of the employers is refused.
+  // Why (6 Nov 2026, owner: "Alert on fields, block on employers (Recommended)"): on 2 Nov feeds fell to 57% (6,833 to 3,871) under the old line of half, and every publish was green; normal runs move about 1%.
+  // json_valid: one hand-edited row that is not JSON must not turn every publish into an error (review, 6 Nov 2026).
+  const inD1 = env.STATS ? (await env.STATS.prepare(`SELECT COUNT(*) AS n, COUNT(CASE WHEN json_valid(body) THEN json_extract(body, '$.kinds') END) AS kinds FROM index_feeds`).first()) : null;
+  // Why (6 Nov 2026, review): with D1, D1 alone is the line. The KV copy is rewritten only while the list fits one value, so an old copy would refuse every normal publish.
+  // An emptied table is not a line of zero: then the KV copy is the line, as before D1.
+  const fromD1 = Boolean(inD1?.n), stored = fromD1 ? null : JSON.parse((await env.WAITLIST.get(KEY)) || '{"feeds":[]}').feeds;
+  const previous = fromD1 ? inD1.n : stored.length, previousKinds = fromD1 ? inD1.kinds || 0 : stored.filter(feed => feed.kinds).length, withKinds = feeds.filter(feed => feed.kinds).length;
+  if (previous >= 10 && feeds.length < previous * KEEP_SHARE) return refuse(env, `${feeds.length} feeds would replace ${previous}`);
   const generated = new Date().toISOString();
   if (env.STATS) await store(env.STATS, feeds, generated);
+  // Why (6 Nov 2026, owner: "Alert on fields, block on employers (Recommended)"): on 2 Nov feeds with kinds fell from 3,926 to 9. A big drop of a field is told the same day but never refused:
+  // the scout drops kinds judged before role_kinds.SINCE on purpose when that date moves, and a refusal then would freeze the list. The dated copy makes any drop restorable.
+  // Told right after D1 holds the drop (review): a later write that fails would make the scout's retry compare with the drop, and nobody would hear of it.
+  if (previousKinds >= 10 && withKinds < previousKinds / 2) await alertOwner(env, 'index-kinds-dropped', {text: `🗂 Employer list: a publish kept ${withKinds} feeds with kinds of ${previousKinds}. It went through; if the scout did not mean it, restore the day before (index copies).`, level: 'problem', legacy: brainBot(env)}).catch(() => {});
   await env.WAITLIST?.put(GENERATED_KEY, generated);
   await env.WAITLIST?.put(SUMMARY_KEY, JSON.stringify(summary(feeds)));
   // "No readable job site", checked here like everything published: a key, a name, a host, a date.

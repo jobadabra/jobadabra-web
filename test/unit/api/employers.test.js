@@ -389,14 +389,14 @@ test('a publish keeps the whole body for 30 days', async () => {
   assert.deepEqual(JSON.parse(copy.value), sent);
 });
 
-test('the 2 Nov loss played: a good list, a publish that loses 43% and passes the guard, then one restore of the earlier copy brings everything back', async () => {
+test('a loss the guard lets through (38% of the feeds), then one restore of the earlier copy brings everything back', async () => {
   store.clear();
   const {kept, e: kv} = keeping(), e = {...kv, STATS: d1()}, whole = Array.from({length: 100}, (_, i) => feed(`f${i}`));
   await call(e, 'PUT', auth, {feeds: whole, nofeed: [{key: 'gone', company: 'Gone', host: null, last: '2026-11-01'}]});
   const earlier = onlyCopy(kept).value;   // the day before the loss: a later publish today would replace today's copy, not that one
-  assert.equal((await call(e, 'PUT', auth, {feeds: whole.slice(0, 57)})).status, 200, 'the precondition: the loss got through');
+  assert.equal((await call(e, 'PUT', auth, {feeds: whole.slice(0, 62)})).status, 200, 'the precondition: the loss got through');
   const summary = async () => (await (await worker.fetch(new Request('https://www.jobpilotto.top/api/index?summary=1'), e, {})).json()).employers;
-  assert.equal(await summary(), 57);
+  assert.equal(await summary(), 62);
   assert.equal(store.get('index:nofeed'), '[]');
   assert.equal((await call(e, 'PUT', auth, JSON.parse(earlier))).status, 200);
   assert.equal(await summary(), 100);
@@ -437,4 +437,140 @@ test('a telling that fails too still never refuses the publish', async t => {
   const {e} = keeping(true), put = await call({...e, BRAIN_BOT_TOKEN: 'bot', BRAIN_CHAT_ID: '1'}, 'PUT', auth, {feeds: [feed('a')]});
   assert.equal(put.status, 200);
   assert.equal((await put.json()).copy, 'failed');
+});
+
+// 2 Nov 2026: the scout lost its cache; feeds fell to 57% and feeds with kinds from 3,926 to 9, with every publish green. The owner chose (6 Nov 2026): "Alert on fields, block on employers (Recommended)".
+const hiring = (slug, extra = {}) => feed(slug, {kinds: {software: 1}, ...extra});
+const some = (n, make = feed) => Array.from({length: n}, (_, i) => make(`f${i}`));
+const told = t => {
+  const sent = [];
+  t.mock.method(globalThis, 'fetch', async (url, init) => { sent.push(String(init?.body || '')); return Response.json({ok: true, result: {message_id: 1}}); });
+  return sent;
+};
+const withBot = extra => ({...env(), BRAIN_BOT_TOKEN: 'bot', BRAIN_CHAT_ID: '1', ...extra});
+const kindsStored = async db => (await db.prepare(`SELECT COUNT(json_extract(body, '$.kinds')) AS n FROM index_feeds`).first()).n;
+const keepingKinds = (n, of = 100) => some(of, hiring).map((f, i) => (i < n ? f : feed(f.slug)));
+
+test('the 2 Nov loss played: a publish keeping 57% of the employers is refused, the list stays and the owner is told', async t => {
+  store.clear();
+  const sent = told(t), e = withBot({STATS: d1()});
+  assert.equal((await call(e, 'PUT', auth, {feeds: some(100, hiring)})).status, 200);
+  const put = await call(e, 'PUT', auth, {feeds: [...some(1, hiring), ...some(57).slice(1)]});
+  assert.equal(put.status, 409);
+  assert.match(await put.text(), /57 feeds would replace 100/);
+  assert.equal(await kindsStored(e.STATS), 100, 'the stored list is untouched');
+  assert.match(sent.join(), /57 feeds would replace 100/);
+});
+
+test('60% of the employers kept passes, and a list too small to judge passes', async t => {
+  told(t);
+  store.clear();
+  const e = withBot({STATS: d1()});
+  await call(e, 'PUT', auth, {feeds: some(100)});
+  assert.equal((await call(e, 'PUT', auth, {feeds: some(60)})).status, 200);
+  store.clear();
+  const small = withBot();
+  await call(small, 'PUT', auth, {feeds: some(9)});
+  assert.equal((await call(small, 'PUT', auth, {feeds: some(1)})).status, 200, 'under 10 stored: nothing to judge');
+});
+
+test('a deliberate move of role_kinds.SINCE: most kinds go, the publish passes, and the owner is told the same day', async t => {
+  store.clear();
+  const sent = told(t), e = withBot({STATS: d1()});
+  await call(e, 'PUT', auth, {feeds: some(100, hiring)});
+  assert.equal((await call(e, 'PUT', auth, {feeds: keepingKinds(10)})).status, 200);
+  assert.equal(await kindsStored(e.STATS), 10);
+  assert.match(sent.join(), /kept 10 feeds with kinds of 100/);
+});
+
+test('kinds kept at half, or a list with under 10 kinds, tell nobody', async t => {
+  store.clear();
+  const sent = told(t), e = withBot({STATS: d1()});
+  await call(e, 'PUT', auth, {feeds: some(100, hiring)});
+  await call(e, 'PUT', auth, {feeds: keepingKinds(50)});
+  store.clear();
+  const few = withBot({STATS: d1()});
+  await call(few, 'PUT', auth, {feeds: keepingKinds(9, 30)});
+  await call(few, 'PUT', auth, {feeds: some(30)});
+  assert.doesNotMatch(sent.join(), /feeds with kinds/);
+});
+
+test('with no D1 the kinds count comes from the KV copy', async t => {
+  store.clear();
+  const sent = told(t), e = withBot();
+  await call(e, 'PUT', auth, {feeds: some(20, hiring)});
+  assert.equal((await call(e, 'PUT', auth, {feeds: some(20)})).status, 200);
+  assert.match(sent.join(), /kept 0 feeds with kinds of 20/);
+});
+
+test('with D1 the kinds line is D1\'s count: an old KV copy that is no longer rewritten is not the line', async t => {
+  store.clear();
+  const sent = told(t), e = withBot({STATS: d1()});
+  await call(e, 'PUT', auth, {feeds: some(20, hiring)});
+  store.set('index:employers', JSON.stringify({version: 1, feeds: some(40, hiring)}));   // what an old copy, frozen once the list outgrew one KV value, can hold
+  await call(e, 'PUT', auth, {feeds: [...some(12, hiring), ...some(40).slice(12)]});
+  assert.doesNotMatch(sent.join(), /feeds with kinds/);
+});
+
+test('a refusal by the feed guard tells the owner, and a Telegram outage leaves the refusal as it is', async t => {
+  store.clear();
+  const sent = told(t), e = withBot();
+  await call(e, 'PUT', auth, {feeds: some(20)});
+  assert.equal((await call(e, 'PUT', auth, {feeds: some(5)})).status, 409);
+  assert.match(sent.join(), /5 feeds would replace 20/);
+  t.mock.method(globalThis, 'fetch', async () => { throw new Error('telegram down'); });
+  assert.equal((await call(e, 'PUT', auth, {feeds: some(5)})).status, 409);
+});
+
+test('a Telegram outage never refuses a publish that only lost kinds', async t => {
+  store.clear();
+  told(t);
+  const e = withBot({STATS: d1()});
+  await call(e, 'PUT', auth, {feeds: some(100, hiring)});
+  t.mock.method(globalThis, 'fetch', async () => { throw new Error('telegram down'); });
+  assert.equal((await call(e, 'PUT', auth, {feeds: some(100)})).status, 200);
+});
+
+test('59 of 100 employers kept is refused', async t => {
+  told(t);
+  store.clear();
+  const e = withBot({STATS: d1()});
+  await call(e, 'PUT', auth, {feeds: some(100)});
+  assert.equal((await call(e, 'PUT', auth, {feeds: some(59)})).status, 409);
+});
+
+test('with D1 the employer count is D1\'s: an old KV copy that is no longer rewritten never refuses a normal publish (review)', async t => {
+  told(t);
+  store.clear();
+  const e = withBot({STATS: d1()});
+  await call(e, 'PUT', auth, {feeds: some(20)});
+  store.set('index:employers', JSON.stringify({version: 1, feeds: some(40)}));
+  assert.equal((await call(e, 'PUT', auth, {feeds: some(20)})).status, 200);
+});
+
+test('a publish that writes D1 and then fails still tells the owner its kinds drop: the retry would compare with the drop (review)', async t => {
+  store.clear();
+  const sent = told(t), e = withBot({STATS: d1()});
+  await call(e, 'PUT', auth, {feeds: some(100, hiring)});
+  const breaking = {...e, WAITLIST: {...e.WAITLIST, put: async key => { if (key === 'index:generated') throw new Error('KV down'); }}};
+  await assert.rejects(() => call(breaking, 'PUT', auth, {feeds: some(100)}));
+  assert.match(sent.join(), /kept 0 feeds with kinds of 100/);
+});
+
+test('one stored body that is not JSON never stops a publish (review)', async t => {
+  told(t);
+  store.clear();
+  const e = withBot({STATS: d1()});
+  await call(e, 'PUT', auth, {feeds: some(20, hiring)});
+  e.STATS.db.prepare("UPDATE index_feeds SET body = 'not json' WHERE slug = 'f0'").run();
+  assert.equal((await call(e, 'PUT', auth, {feeds: some(20, hiring)})).status, 200);
+});
+
+test('an emptied D1 table is not a line of zero: the KV copy guards the next publish', async t => {
+  told(t);
+  store.clear();
+  const e = withBot({STATS: d1()});
+  await call(e, 'PUT', auth, {feeds: some(20)});
+  e.STATS.db.prepare('DELETE FROM index_feeds').run();
+  assert.equal((await call(e, 'PUT', auth, {feeds: some(5)})).status, 409);
 });
