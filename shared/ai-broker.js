@@ -36,3 +36,6 @@ export function subscriptionOf(health) {
     claude: claude ? {status: typeof claude.status === 'string' ? claude.status : '', fiveHour: win(claude.fiveHour), sevenDay: win(claude.sevenDay)} : null,
   };
 }
+
+/** The per-job tally from a health answer: {days: {<YYYY-MM-DD>: {"<workflow>|<job>": {calls, tokens}}}}, or null when this broker build has none (an older one). */
+export const jobsOf = health => (health?.jobs && typeof health.jobs.days === 'object' && health.jobs.days !== null ? health.jobs : null);

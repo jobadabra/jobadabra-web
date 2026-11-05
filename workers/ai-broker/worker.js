@@ -14,7 +14,7 @@ import {exhausted, fallbackToday, newNote, apiPrecheck, freeAiStep, apiFinish, n
 import {chainOf, configured, recordOutcome, engineHealth, CHOICES} from './lib/engines.mjs';
 import {CLAUDE_MODELS} from './lib/tiers.mjs';
 import {demotedNow, recordPerf} from './lib/adapt.mjs';
-import {addCall, recentDays, tokensOf, workflowKey, workflowOf} from './lib/tally.mjs';
+import {addCall, addJobCall, jobKey, recentDays, tokensOf, workflowKey, workflowOf} from './lib/tally.mjs';
 
 export {ContainerProxy} from '@cloudflare/containers';   // required by the outbound host list below: without it every start fails with "ctx.exports.ContainerProxy is undefined" (28 Oct 2026)
 
@@ -53,7 +53,7 @@ export class CodexBroker extends Container {
     const url = new URL(request.url);
     if (url.pathname === '/login' && request.method === 'POST') return this.setLogin(await request.text());
     if (url.pathname === '/health') return this.health();
-    if (url.pathname === '/call' && request.method === 'POST') return this.call(request.headers.get('x-lane'), await request.json(), workflowKey(request.headers.get('x-workflow')));
+    if (url.pathname === '/call' && request.method === 'POST') return this.call(request.headers.get('x-lane'), await request.json(), workflowKey(request.headers.get('x-workflow')), jobKey(request.headers.get('x-job')));
     if (url.pathname === '/stop' && request.method === 'POST') { await this.stop(); return json(200, {stopped: true}); }   // the owner's kill test (admin route in front)
     return json(404, {error: 'not found'});
   }
@@ -71,7 +71,7 @@ export class CodexBroker extends Container {
   async health() {
     const meter = (await this.ctx.storage.get('meter')) || newMeter(0);
     // Daily counts describe today, even before the first call after UTC midnight.
-    return json(200, {state: (await this.ctx.storage.get('login')) ? ((await this.ctx.storage.get('lost')) ? 'login-lost' : 'ready') : 'no-login', limits: this.limits, own: meter.tokens, daily: {drift: callsToday(meter, 'drift')}, tally: recentDays(await this.ctx.storage.get('tally')), queue: this.gate.stats(), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
+    return json(200, {state: (await this.ctx.storage.get('login')) ? ((await this.ctx.storage.get('lost')) ? 'login-lost' : 'ready') : 'no-login', limits: this.limits, own: meter.tokens, daily: {drift: callsToday(meter, 'drift')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
   }
 
   // The owner-visible refusals of the Codex login: they stand when Codex is reached, another engine does not hide them.
@@ -82,19 +82,23 @@ export class CodexBroker extends Container {
   }
 
   // One call, answered and then counted for its workflow (lib/tally.mjs). The count never changes the answer: a tally that cannot be written is logged and the reply goes out.
-  async call(lane, body, workflow = 'unknown') {
+  async call(lane, body, workflow = 'unknown', job = '') {
     const started = Date.now();
     const reply = await this.answer(lane, body);
-    await this.countCall(workflow, reply, Date.now() - started).catch(error => console.log(`tally: ${String(error?.message || error).slice(0, 200)}`));
+    await this.countCall(workflow, reply, Date.now() - started, job).catch(error => console.log(`tally: ${String(error?.message || error).slice(0, 200)}`));
     return reply;
   }
 
   // Reads the finished reply's own tokens, engine and time (a refusal has none and still counts as a call), then adds them to today's row in one transaction.
-  async countCall(workflow, reply, elapsed) {
+  async countCall(workflow, reply, elapsed, job = '') {
     const data = reply.ok ? await reply.clone().json().catch(() => ({})) : {};
     const outcome = {ok: reply.ok, tokens: tokensOf(data.tokens), ms: Number.isFinite(data.ms) ? data.ms : elapsed, engine: reply.ok ? String(data.engine || '') : ''};
     const day = new Date(Date.now()).toISOString().slice(0, 10);
     await this.ctx.storage.transaction(async storage => { await storage.put('tally', addCall(await storage.get('tally'), day, workflow, outcome)); });
+    // Why (5 Nov 2026, review): the job count is display only and its own step. Inside the tally's transaction a failing write would roll the workflow count back too.
+    // Why (5 Nov 2026, Gitar): a job row belongs to the tally row that counted its call. Past 60 workflows a day the tally folds a new one into "other", so the job counts under "other" too, never under a name with no row.
+    if (job) await this.ctx.storage.transaction(async storage => { const row = (await storage.get('tally'))?.days?.[day]?.[workflow] ? workflow : 'other'; await storage.put('jobs', addJobCall(await storage.get('jobs'), day, row, job, outcome.tokens)); })
+      .catch(error => console.log(`jobs: ${String(error?.message || error).slice(0, 200)}`));
   }
 
   async answer(lane, body) {
@@ -258,7 +262,7 @@ export default {
       let claims;
       try { claims = await verifyRunToken((request.headers.get('authorization') || '').replace(/^Bearer /, ''), {jwks: jwks(env), audience: audiences(env), repository: repositories(env)}); }
       catch (e) { return json(401, {why: String(e.message)}); }
-      return broker.fetch(new Request('http://c/call', {method: 'POST', body: await request.text(), headers: {'x-lane': laneOf(claims), 'x-workflow': workflowOf(claims)}}));   // Why (3 Nov 2026, owner): built fresh from the verified claims; a header the caller sends is never forwarded
+      return broker.fetch(new Request('http://c/call', {method: 'POST', body: await request.text(), headers: {'x-lane': laneOf(claims), 'x-workflow': workflowOf(claims), 'x-job': jobKey(request.headers.get('x-jobadabra-job'))}}));   // Why (3 Nov 2026, owner): lane and workflow are built fresh from the verified claims; a header the caller sends is never forwarded. Why (5 Nov 2026, owner via mac-32: per-job AI cost): the one exception is the job label, a GitHub job id of a fixed shape that only names a row for display and never decides a lane or a cap
     }
     return json(404, {error: 'not found'});
   },
