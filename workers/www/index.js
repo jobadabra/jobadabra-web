@@ -58,6 +58,8 @@ import {agentsView as aiAgentsView, stepsView as aiStepsView, enginesView as aiE
 import {view as monetizationView} from '../../admin/monetization.js';
 import {launchRoute} from '../../admin/signups.js';
 import {view as emailView} from '../../admin/email.js';
+import {switchPress} from '../../admin/email-switches.js';
+import {withSwitches} from '../../shared/mail-switches.js';
 import * as mailLifecycle from '../../admin/mail-lifecycle.js';
 import * as releaseMail from '../../admin/release-mail.js';   // the What's new mail at a stable release (draft from the promotion, sent by the owner)
 import {ingest as benchmarkIngest, view as benchmarkView} from '../../admin/benchmark.js';
@@ -190,7 +192,8 @@ export async function judgeLearning(db, now = new Date()) {
 
 // Every request runs against a metered database (worker/d1-meter.js): its rows read and written, its route and its caller go to Workers Logs as one JSON line.
 async function metered(request, env, ctx) {
-  const tally = newTally(), withMeter = env.STATS ? {...env, STATS: meter(env.STATS, tally)} : env;
+  const tally = newTally(), laid = await withSwitches(env);   // Why (5 Nov 2026, owner: real switches): the pressed MAIL/MARKETING_MAIL/TRIAL_REMINDERS/MAIL_LAUNCH states lie over the wrangler.toml values for this request; read from the raw binding (not the per-request meter wrapper) so shared/mail-switches.js's 5 s cache is shared across requests
+  const withMeter = laid.STATS ? {...laid, STATS: meter(laid.STATS, tally)} : laid;
   let status = 500;
   try { const response = await route(request, withMeter, ctx); status = response.status; return response; } finally { const line = requestLine(request, status, tally); if (line) console.log(line); }
 }
@@ -215,7 +218,7 @@ async function route(request, env, ctx) {
   if (pathname === '/admin/test-mail') return testMail.view(request, env);   // Bearer only (admin/test-mail.js)
   // The owner's admin pages (admin/admin.js): one menu on all, the same key; never in public/, or they would be served to anyone.
   const admin = {'/admin': overviewView, '/admin/growth/website': stats, '/admin/growth/app': telemetryView, '/admin/growth/insights': intelligenceView, '/admin/job-search/scouting': scoutingView, '/admin/job-search/installs': installsView,
-    '/admin/agents/overview': opsView, '/admin/operations/scheduled': schedulesView, '/admin/operations/notifications': notificationsView, '/admin/testing/synthetic-monitoring': syntheticMonitoringView, '/admin/form-filling/overview': sectionOverview('/admin/form-filling/overview', 'Form filling overview'), '/admin/growth/overview': sectionOverview('/admin/growth/overview', 'Growth overview'), '/admin/agents/build-log': buildLogView, '/admin/testing/pr-checks': prChecksView, '/admin/agents/agent-coding': agentCodingView, '/admin/testing/e2e': e2eIntelView, '/admin/testing/integrations': integrationView, '/admin/testing/gtm-readiness': gtmReadinessView, '/admin/testing/bug-loop': selfHealView, '/admin/testing/red-main': redMainView, '/admin/ai/agents': aiAgentsView, '/admin/ai/steps': aiStepsView, '/admin/ai/engines': aiEnginesView, '/admin/ai/harness': aiHarnessView, '/admin/ai/runs': aiRunsView, '/admin/ai/costs': jobCostView, '/admin/growth/monetization': monetizationView, '/admin/growth/email': emailView, '/admin/growth/promo-codes': promoCodesView, '/admin/form-filling/real-users': realFormFillingView, '/admin/form-filling/learning': formLearningView, '/admin/feedback/inbox': feedbackView,
+    '/admin/agents/overview': opsView, '/admin/operations/scheduled': schedulesView, '/admin/operations/notifications': notificationsView, '/admin/testing/synthetic-monitoring': syntheticMonitoringView, '/admin/form-filling/overview': sectionOverview('/admin/form-filling/overview', 'Form filling overview'), '/admin/growth/overview': sectionOverview('/admin/growth/overview', 'Growth overview'), '/admin/agents/build-log': buildLogView, '/admin/testing/pr-checks': prChecksView, '/admin/agents/agent-coding': agentCodingView, '/admin/testing/e2e': e2eIntelView, '/admin/testing/integrations': integrationView, '/admin/testing/gtm-readiness': gtmReadinessView, '/admin/testing/bug-loop': selfHealView, '/admin/testing/red-main': redMainView, '/admin/ai/agents': aiAgentsView, '/admin/ai/steps': aiStepsView, '/admin/ai/engines': aiEnginesView, '/admin/ai/harness': aiHarnessView, '/admin/ai/runs': aiRunsView, '/admin/ai/costs': jobCostView, '/admin/growth/monetization': monetizationView, '/admin/growth/email': emailView, '/admin/growth/email/switch': switchPress, '/admin/growth/promo-codes': promoCodesView, '/admin/form-filling/real-users': realFormFillingView, '/admin/form-filling/learning': formLearningView, '/admin/feedback/inbox': feedbackView,
     '/admin/agents/access': accessView, '/admin/form-filling/lab': applyingView, '/admin/job-search/lab': searchLabView, '/admin/form-filling/benchmark': benchmarkView, '/admin/job-search/benchmark': benchmarkSearchView, '/admin/growth/brain': brainView, '/admin/testing/sentry': sentryView, '/admin/testing/overview': testingOverviewView, '/admin/testing/ai-persona': aiPersonaView, '/admin/testing/report-only': reportOnlyView, '/admin/form-filling/reports': reportsView}[pathname];   // access: the super admin's only (admin/access.js)
   // A run's HTML report (the link on GitHub's Summary page) and its files (a signed address, no cookie needed), under the E2E page; the old /admin/e2e/… addresses
   // stay answered in place, not redirected: years of Summary pages print them and the report's service worker carries no cookie (admin/e2e-report.js).
@@ -337,7 +340,8 @@ export default {
   email: (message, env) => testMail.receive(message, env),   // Cloudflare Email Routing -> this Worker (dashboard route, admin/test-mail.js)
   queue: (batch, env) => mailUnsub.consume(batch, env),   // Email Sending bounce/complaint events (Queues subscription, api/mail-unsub.js)
   // Daily (wrangler.toml [triggers]): app reports older than 90 days dropped; the top problems go to GitHub triage.
-  async scheduled(event, env, ctx) {
+  async scheduled(event, rawEnv, ctx) {
+    const env = await withSwitches(rawEnv);   // the pressed mail switches, like a request (shared/mail-switches.js)
     // Why (1 Nov 2026, owner: "Timers to site Worker, delete bot"): the old bot Worker's on-time starts (shared/timers.js, dormant until TIMERS=on). The 47 cron is its own trigger and is awaited, so a refused start fails the cron in Cloudflare's history; it never falls through to the daily jobs.
     if (event.cron === TIMERS_OWN_CRON) return runTimers(event, env, {dispatch}).then(() => {});
     if (event.cron === SENTRY_CRON) {   // every 5 minutes: only the Sentry alerts (admin/sentry-alert.js); the daily jobs below run once a day

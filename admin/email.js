@@ -14,6 +14,7 @@ import {newestFirst} from './changelog.js';
 import {latestStableVersion, releaseData} from './release-mail.js';
 import {compose} from '../shared/mail.js';
 import {addressChart, refusedChart, stoppedChart, templateChart} from './email-charts.js';
+import {switchesCard, SWITCH_STYLE} from './email-switches.js';
 import {figure, VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 
 const n = value => (Number(value) || 0).toLocaleString('en-US');
@@ -66,12 +67,11 @@ export function page(data, accounts = null, notice = null, audience = null, rele
   const top = Math.max(1, ...data.perDay.map(row => (row.sent || 0) + (row.refused || 0)));
   const bars = data.perDay.map(row => `<i class="s" style="height:${Math.round(100 * (row.sent || 0) / top)}%" title="${esc(row.day)}: ${n(row.sent)} sent"></i><i class="r" style="height:${Math.round(100 * (row.refused || 0) / top)}%" title="${esc(row.day)}: ${n(row.refused)} refused"></i>`).join('');
   const windows = WINDOWS.map(d => d === data.days ? `<b>${d} days</b>` : `<a href="/admin/growth/email?days=${d}">${d}</a>`).join(' · ');
-  const switches = data.switches.map(s => `<span class="pill ${s.on ? 'on' : 'off'}">${esc(s.name)} ${s.on ? 'on' : 'off'}</span>`).join(' ');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>E-mail · Admin</title>
-<style>.tpl form{margin-top:10px}.tpl button{font:inherit;font-size:13px;color:#f5b54a;background:#1b2027;border:1px solid #f5b54a;border-radius:6px;padding:5px 12px;cursor:pointer}.tpl button:hover{background:#262c33}.tpl button:focus-visible{outline:2px solid #f5b54a;outline-offset:2px}.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}.tile b{display:block;font-size:30px;margin:4px 0}h2{margin:0 0 8px}.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-bottom:16px}
+<style>${SWITCH_STYLE}.tpl form{margin-top:10px}.tpl button{font:inherit;font-size:13px;color:#f5b54a;background:#1b2027;border:1px solid #f5b54a;border-radius:6px;padding:5px 12px;cursor:pointer}.tpl button:hover{background:#262c33}.tpl button:focus-visible{outline:2px solid #f5b54a;outline-offset:2px}.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}.tile b{display:block;font-size:30px;margin:4px 0}h2{margin:0 0 8px}.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-bottom:16px}
 .pill{display:inline-block;padding:1px 10px;border-radius:99px;border:1px solid currentColor;font-size:13px}.pill.on{color:#4cc38a}.pill.off{color:#ff7b70}.tpl iframe{width:100%;height:540px;border:1px solid #2c3340;border-radius:8px;background:#fff}.days{display:flex;align-items:flex-end;gap:2px;height:80px}.days i{flex:1;min-width:2px;border-radius:2px 2px 0 0}.days .s{background:#ff8a4c}.days .r{background:#ff7b70;opacity:.7}${TEMPLATE_STYLE}${VIZ_STYLE}</style></head><body><main>
 <header><h1>✉️ E-mail</h1><span class="muted">What our e-mail did · ${windows}</span></header>${releaseLinks(releases)}
-<section class="card" style="margin-bottom:16px"><h2>Switches</h2>${switches} <span class="muted">· ${n(data.today)} of ${n(data.dayMax)} sent in the last 24 h · ${DAILY_MAX} a day per address (tests aside) · change them in Cloudflare</span></section>
+${switchesCard(data.switches, data.confirm, `${n(data.today)} of ${n(data.dayMax)} sent in the last 24 h · ${DAILY_MAX} a day per address (tests aside) · a press takes effect within seconds; "as deployed" is the Cloudflare value`)}
 ${mailTypesCard(data.dayMax, n)}
 ${accounts ? `<div class="tiles">${tile('Trial accounts', accounts.trial, 'gave an address')}${tile('Confirmed', accounts.confirmed, 'clicked the first mail')}${tile('Unconfirmed', accounts.unconfirmed, 'follow up')}${tile('Always on paused', accounts.paused, 'hosted schedule paused')}${tile('Converted to Pro', accounts.converted, 'trial accounts that paid')}</div>` : ''}
 <div class="tiles">${tile('Sent', data.sent, `last ${data.days} days`)}${tile('Not sent', data.notSent, 'refused before sending')}${tile('Failed', data.failed, 'the provider said no')}${tile('Bounces and complaints', data.stopped, 'addresses stopped, all time')}${tile('Held for the digest', data.held.items, `${n(data.held.accounts)} accounts${data.held.oldest ? ` · oldest ${esc(data.held.oldest.slice(0, 16).replace('T', ' '))}` : ''}`)}</div>
@@ -103,5 +103,7 @@ export async function view(request, env) {
     const mail = previews().find(mail => mail.name === url.searchParams.get('template'));
     return mail ? new Response(templatePage(mail, notice), {headers}) : new Response('Unknown template.', {status: 404});
   }
-  return new Response(page(await collect(env, {days: windowOf(url.searchParams.get('days'))}), await accountsOf(env), notice, (await isOwner(request, env)) ? await audienceRows(env) : null, await releasesOf(env), await realRelease(env)), {headers});
+  const data = await collect(env, {days: windowOf(url.searchParams.get('days'))});
+  data.confirm = url.searchParams.get('confirm') || '';
+  return new Response(page(data, await accountsOf(env), notice, (await isOwner(request, env)) ? await audienceRows(env) : null, await releasesOf(env), await realRelease(env)), {headers});
 }
