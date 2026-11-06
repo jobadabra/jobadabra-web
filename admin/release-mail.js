@@ -5,6 +5,7 @@
 import {equal} from '../shared/guard.js';
 import {isOwner} from '../shared/auth.js';
 import {send} from '../shared/mail.js';
+import {ruleRefusal} from '../shared/mail-registry.js';
 import {alertOwner} from '../shared/notify-send.js';
 import {SITE} from '../shared/mail-frame.js';
 import {newestFirst} from './changelog.js';
@@ -98,6 +99,9 @@ export async function sendAll(env, version, {now = new Date()} = {}) {
   const data = await releaseData(env, {...JSON.parse(row.data), version});
   if (!data) return {refused: 'not stable'};
   if (!data.sections.length) return {refused: 'no changes'};
+  // Why (review of hr-29): the claim below spends the draft for good, so a stopped (or unreadable) rule must refuse before it, or the release could never be sent once turned back on.
+  const ruled = await ruleRefusal(env, 'release');
+  if (ruled) return {refused: ruled === 'rule_off' ? 'stopped in Admin → E-mail → Mails' : 'the mail rules could not be read; try again'};
   const claim = await env.STATS.prepare("UPDATE release_mail SET status = 'sending', data = ? WHERE version = ? AND status = 'draft'").bind(JSON.stringify(data), version).run();
   if (!claim.meta?.changes) return {refused: 'not a draft'};
   let sent = 0, skipped = 0;

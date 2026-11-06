@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
-import {dataFrom, draft, sendAll, audience, ingest, releaseRoute} from '../../../admin/release-mail.js';
+import {dataFrom, draft, sendAll, audience, ingest, releaseData, releaseRoute} from '../../../admin/release-mail.js';
+import {resetRuleCache, setRule} from '../../../shared/mail-registry.js';
 import {ingest as changelogIngest} from '../../../admin/changelog-store.js';
 import {SAMPLES} from '../../../admin/email-preview.js';
-import {compose, stopLink, settingsLink, addrOf} from '../../../shared/mail.js';
+import {compose, send, stopLink, settingsLink, addrOf} from '../../../shared/mail.js';
 import {TEMPLATES} from '../../../shared/mail-templates.js';
 import {createAccount} from '../../../shared/pro.js';
 import {unsubscribe} from '../../../api/mail-unsub.js';
@@ -446,4 +447,20 @@ test('latest stable without a draft shows its real changelog as pending instead 
   assert.match(empty, /November 2026/);
   assert.doesNotMatch(empty, /<form/);
 
+});
+
+test('a stopped "What\'s new" refuses before it spends the draft, and goes once turned back on; the owner can still test it (review of hr-29)', async () => {
+  resetRuleCache();
+  const {e, sent} = setup();
+  e.STATS.db.exec(sql('0138_mail_rule.sql'));
+  await e.WAITLIST.put('signup:wait@example.com', WEB);   // a website signup: in the audience from the start
+  await draft(e, '0.8.42', now);
+  await setRule(e, 'release', false, now);
+  assert.deepEqual(await sendAll(e, '0.8.42', {now}), {refused: 'stopped in Admin → E-mail → Mails'});
+  assert.equal(e.STATS.db.prepare('SELECT status FROM release_mail').get().status, 'draft');
+  assert.equal(sent.length, 0);
+  assert.equal((await send(e, 'release', 'me@example.com', {...(await releaseData(e, {...JSON.parse(e.STATS.db.prepare('SELECT data FROM release_mail').get().data), version: '0.8.42'})), name: '', test: true}, {test: true, ownerTest: true})).ok, true, 'the owner checks a stopped mail in the test inbox');
+  await setRule(e, 'release', true, now);
+  assert.deepEqual(await sendAll(e, '0.8.42', {now}), {sent: 1, skipped: 0});
+  resetRuleCache();
 });

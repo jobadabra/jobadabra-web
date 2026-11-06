@@ -2,6 +2,7 @@
 // ONE mail (weekly on Mondays for an account that chose weekly). New matches and interview notices never wait: api/account-email.js sends them at once. Guard: test/unit/api/account-email.test.js.
 import {addrOf, confirmLink, send, sendTestMail} from '../shared/mail.js';
 import {TEMPLATES} from '../shared/mail-templates.js';
+import {ruleRefusal} from '../shared/mail-registry.js';
 
 const HOLD_MAX = 100;            // per account: a stuck mailbox cannot grow the table
 const KEEP_DAYS = 14;
@@ -32,6 +33,8 @@ export async function deliver(env, account, {subject, html, text, buttons = []},
  * Why (review of hr-23, 5 Nov 2026): an address nobody confirmed may be a stranger's, so it gets the test through deliver(): the confirm link, one mail a day, the 14-day stop.
  */
 export async function testAlert(env, account, now = new Date()) {
+  const ruled = await ruleRefusal(env, 'always-on-test');   // Why (review of hr-29): an unconfirmed address gets the test as a 'message' mail below, so the owner's stop on the test is asked here, for both paths
+  if (ruled) return {ok: false, reason: ruled};
   if (account.email_confirmed_at) return sendTestMail(env, account.email, now);
   const spec = TEMPLATES['always-on-test'];
   const sent = await sendTestMail(env, account.email, now, () => deliver(env, account, {subject: spec.subject(), html: spec.html(), text: spec.text()}, now));
