@@ -5,12 +5,12 @@ import {test} from 'node:test';
 import {KEEP_DAYS, MAX_BYTES, scoutMemory} from '../../../api/scout-memory.js';
 
 const KEY = 'p'.repeat(64);
-const bucket = ({failList = false} = {}) => {
+const bucket = ({failList = false, failDelete = false} = {}) => {
   const kept = new Map();
   let clock = 0;
   return {kept,
     put: async (name, value, options) => { kept.set(name, {bytes: new Uint8Array(value), uploaded: options.uploaded || new Date(Date.parse(options.customMetadata.at) + clock++), ...options}); },
-    delete: async names => { for (const name of [].concat(names)) kept.delete(name); },
+    delete: async names => { if (failDelete) throw new Error('R2 delete failed'); for (const name of [].concat(names)) kept.delete(name); },
     list: async ({prefix, cursor} = {}) => {
       if (failList) throw new Error('R2 list failed');
       const all = [...kept].filter(([key]) => key.startsWith(prefix)).map(([key, o]) => ({key, uploaded: o.uploaded, size: o.bytes.length}));
@@ -67,12 +67,34 @@ test(`a save drops the saves older than ${KEEP_DAYS} days, following every page,
   assert.deepEqual([...e.SCOUT_MEMORY.kept.keys()].sort(), ['scout-memory/2026-10-07-3.tgz', 'scout-memory/2026-10-20-4.tgz', 'scout-memory/2026-11-05-5.tgz', 'scout-memory/2026-11-06-6.tgz']);
 });
 
-test('a trim that fails never loses the save, and the answer says so', async () => {
-  const e = env({SCOUT_MEMORY: bucket({failList: true})});
+test('a save under half the newest copy is refused: an empty start never replaces a good memory (review)', async () => {
+  const e = env();
+  await put(e, {run: '1', body: gzip(10000, 1), now: new Date('2026-11-05T10:00:00Z')});
+  const empty = await put(e, {run: '2', body: gzip(4999, 2), now: new Date('2026-11-06T10:00:00Z')});
+  assert.equal(empty.status, 409);
+  assert.match(await empty.text(), /4999 bytes would replace 10000/);
+  assert.equal(e.SCOUT_MEMORY.kept.size, 1);
+  assert.equal((await get(e)).headers.get('X-Scout-Memory'), '2026-11-05-1', 'the good memory is still the one read back');
+  assert.equal((await put(e, {run: '3', body: gzip(5000, 3), now: new Date('2026-11-06T11:00:00Z')})).status, 200, 'half is enough: the memory may shrink some');
+});
+
+test('refused saves never age out the good copies: the trim runs only after a save is kept', async () => {
+  const e = env();
+  await put(e, {run: '1', body: gzip(10000), now: new Date('2026-10-01T10:00:00Z')});
+  assert.equal((await put(e, {run: '2', body: gzip(100), now: new Date('2026-11-06T10:00:00Z')})).status, 409);
+  assert.deepEqual([...e.SCOUT_MEMORY.kept.keys()], ['scout-memory/2026-10-01-1.tgz']);
+});
+
+test('a trim that fails never loses the save, and the answer says so; a list that fails stores nothing', async () => {
+  const e = env({SCOUT_MEMORY: bucket({failDelete: true})});
+  await put(e, {run: '1', now: new Date('2026-10-01T10:00:00Z')});
   const answer = await put(e);
   assert.equal(answer.status, 200);
   assert.deepEqual(await answer.json(), {ok: true, key: '2026-11-06-42118339535', bytes: 1000, dropped: 'failed'});
-  assert.equal(e.SCOUT_MEMORY.kept.size, 1);
+  assert.equal(e.SCOUT_MEMORY.kept.size, 2);
+  const blind = env({SCOUT_MEMORY: bucket({failList: true})});
+  assert.equal((await put(blind)).status, 503, 'the half-size check cannot run');
+  assert.equal(blind.SCOUT_MEMORY.kept.size, 0);
 });
 
 test('refuses a body over the cap, an empty one, one that is not gzip, and a run that is not a run id', async () => {
