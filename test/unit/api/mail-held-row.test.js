@@ -49,6 +49,22 @@ test('a mail turned off while it waits never goes out; the rest of the digest do
   assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'person_off'").get().n, 1);
 });
 
+test('the same mail waiting three times reaches the person once; a different one stays', async () => {
+  // Owner's inbox, 6 Nov 2026: the Focus reminders of 11:00, 15:00 and 19:00 said the same, and the digest printed the block three times under "3 items".
+  const {e, sent} = await person();
+  for (let i = 0; i < 3; i++) await wait(e, 'Your focus: 2 waiting for you');
+  await sendDigests(e, morning);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].subject, 'Your focus: 2 waiting for you');
+  assert.equal(sent[0].text.split('2 waiting for you').length - 1, 2, 'once in the title, once in the body');
+  assert.equal(held(e), 0, 'the copies do not wait for tomorrow');
+  sent.length = 0;
+  await wait(e, 'Your focus: 2 waiting for you');
+  await wait(e, 'Your focus: 1 waiting for you');
+  await sendDigests(e, morning);
+  assert.equal(sent[0].subject, 'Your Jobadabra update: 2 items');
+});
+
 test('when every waiting mail was turned off nothing is sent and nothing stays on our server', async () => {
   const {e, sent} = await person();
   await wait(e, 'Weekly words', 'app-weekly');
