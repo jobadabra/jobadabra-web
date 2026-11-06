@@ -23,9 +23,10 @@ export function ranOutOf(note) {
 }
 
 /** A verdict.json as CI uploads it -> the record kept for one night: {night, run, state, head, rows: [{persona, label, kind, why, local, found, seconds, ranOut}]}, or {error}. Counts are whole numbers or null. */
-export function clean(verdict, {night, run = null} = {}) {
+export function clean(verdict, {night, run = null} = {}, now = new Date()) {
   if (!verdict || typeof verdict !== 'object' || Array.isArray(verdict)) return {error: 'the verdict is an object'};
-  if (!DAY.test(night || '')) return {error: 'night is YYYY-MM-DD'};
+  if (!DAY.test(night || '') || Number.isNaN(Date.parse(night))) return {error: 'night is YYYY-MM-DD'};
+  if (night > new Date(now.getTime() + 86400000).toISOString().slice(0, 10)) return {error: 'night is not in the future'};   // Why (6 Nov 2026, review): a night dated 2099 would sort newest for 30 nights and every real night after it would be "not the newest", so no alert
   if (run != null && !RUN.test(run)) return {error: 'run is the number of the workflow run'};
   const rows = verdict.rows;
   if (!Array.isArray(rows) || !rows.length || rows.length > MAX_ROWS || !rows.every(row => row && typeof row === 'object' && !Array.isArray(row))) return {error: `rows are 1 to ${MAX_ROWS} personas`};
@@ -48,7 +49,7 @@ const answer = (status, body) => Response.json(body, {status, headers: {'Cache-C
 
 /** Stores one night (an upload of the same night replaces it), keeps the newest KEEP_NIGHTS, judges the night, and tells the owner when the NEWEST night dropped (an older night filled in late is never news). */
 export async function ingest(env, verdict, {night, run}, now = new Date(), fetcher = fetch) {
-  const record = clean(verdict, {night, run});
+  const record = clean(verdict, {night, run}, now);
   if (record.error) return {status: 400, body: {ok: false, error: record.error}};
   const kept = [{...record, at: now.toISOString()}, ...(await nights(env)).filter(item => item.night !== night)].sort((a, b) => b.night.localeCompare(a.night)).slice(0, KEEP_NIGHTS);
   await writeState(env, STATE_KEY, {nights: kept}, now);

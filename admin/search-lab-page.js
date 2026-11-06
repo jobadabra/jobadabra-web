@@ -78,7 +78,7 @@ export async function view(request, env) {
   let sessionChecks = [];
   try { sessionChecks = env.STATS && tab === 'checks' ? await checks(env.STATS) : []; } catch { sessionChecks = []; }
   let nightRows = [];
-  try { nightRows = env.STATS && tab === 'night' ? judgeAll(await nights(env)) : []; } catch (error) { console.error(`night search: nights unreadable: ${error?.message || error}`); nightRows = []; }
+  try { nightRows = env.STATS && tab === 'night' ? judgeAll(await nights(env)) : []; } catch (error) { console.error(`night search: nights unreadable: ${error?.message || error}`); nightRows = null; }   // Why (6 Nov 2026, review): null says "could not be read"; [] would say "no night uploaded yet", the silent miss this tab exists to end
   let sending = null;
   try { sending = env.STATS && tab === 'real' ? await canSend(env.STATS) : null; } catch { sending = null; }
   return new Response(page(all, drawRows, tab, real, sending, sessionChecks, nightRows), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});

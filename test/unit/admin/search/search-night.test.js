@@ -243,3 +243,20 @@ test('the Job search page has the tab: linked in the tab row and drawn when chos
   assert.match(html, /measured 2 of 6/);
   assert.doesNotMatch(page([], [], 'draws', [], null, [], six), /measured 2 of 6/, 'only on its own tab');
 });
+
+test('a night dated in the future is refused: it would sort newest and silence every real night after it (review, 6 Nov 2026)', async () => {
+  const {env, tg} = await setup();
+  for (const night of ['2099-01-01', '2026-11-08', '2026-13-45']) {
+    const response = await put(real('2026-11-06'), {night, env, tg});
+    assert.deepEqual([night, response.status], [night, 400]);
+  }
+  assert.deepEqual(await nights(env), [], 'nothing kept');
+  assert.equal((await put(real('2026-11-06'), {night: '2026-11-07', env, tg})).status, 200, 'a clock a day ahead of the Worker (CI in another zone) is still taken');
+});
+
+test('a store that cannot be read says "could not be read", never "No night uploaded yet" (review, 6 Nov 2026)', () => {
+  const html = nightSection(null);
+  assert.match(html, /could not be read/);
+  assert.doesNotMatch(html, /No night uploaded yet|0 of 6|NaN|undefined/);
+  assert.match(page([], [], 'night', [], null, [], null), /could not be read/);
+});

@@ -28,10 +28,11 @@ const nightRow = night => `<tr><td>${esc(night.night)}${night.run ? ` <a class="
 
 /**
  * The tab's body.
- * @param {object[]} judged the stored nights, newest first, each judged (admin/search-night-judge.js judgeAll)
+ * @param {object[]|null} judged the stored nights (null = the store could not be read), newest first, each judged (admin/search-night-judge.js judgeAll)
  * @returns {string} HTML; with no night, a card that says nothing was uploaded yet (never a row of zeros)
  */
 export function nightSection(judged) {
+  if (!judged) return '<section class="card"><h2>The nights could not be read</h2><p class="muted">The store of the nightly Search check did not answer, so this tab cannot say whether a night dropped. Reload in a minute; the Worker log names the cause.</p></section>';
   if (!judged.length) return '<section class="card"><h2>No night uploaded yet</h2><p class="muted">The nightly Search check (<code>search-personas.yml</code>, six fictional candidates) uploads its verdict here when it ends. Until it does, nothing is measured: no row below stands in for it.</p></section>';
   const [last] = judged, shown = judged.slice(0, 14);
   const band = verdictBand({icon: last.dropped ? '🔴' : '🟢', headline: `Night ${last.night}: measured ${last.measured} of ${last.total}`,
