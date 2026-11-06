@@ -223,8 +223,8 @@ PRs 1 to 3 ship with every new row **off**; existing mails keep today's behaviou
 | 1–2 | ✅ merged | web#452 |
 | 3 | ✅ merged, live | web#456 |
 | 4 | ▶️ shipping (pane), switches dark behind `MAIL_SWITCHES_SHOWN=false` until 5b merges | public repo, "[hr] 4/8 You choose each mail in Automation and Notifications" |
-| 5 | ▶️ open | web#460 footers in two short lines (owner: "Loks like essays/novels", "Redo it"); Mac-only defaults: only New matches (digest) and Weekly summary on |
-| 5b | ⏳ next | site: store the row with a held mail so the digest obeys a row turned off; answer `/api/mail/choices` rows for `no_address` (ok: true, choice ''). Then flip `MAIL_SWITCHES_SHOWN` |
+| 5 | ✅ merged | web#460 footers in two short lines (owner: "Loks like essays/novels", "Redo it"); Mac-only defaults: only New matches (digest) and Weekly summary on |
+| 5b | ▶️ open | site: store the row with a held mail so the digest obeys a row turned off; answer `/api/mail/choices` rows for `no_address` (ok: true, choice ''). Then flip `MAIL_SWITCHES_SHOWN` |
 | 8a | ▶️ open (pane) | web#459 the site's data promise as three levels with chips: your computer, your own Notion ("your personal cloud"), our servers; `privacy.html` and `terms.html` stay for row 8's legal read |
 | 6, 7, 8 | ⏳ | new mails; Tips and Come back (+ news consent after the first sent application, Backlog); privacy page and terms with a legal read |
 
