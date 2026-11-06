@@ -206,9 +206,9 @@ test('the slice needs a token like the whole list, and a later publish replaces 
   await call(e, 'PUT', auth, {feeds: Array.from({length: 12}, (_, i) => feed(`f${i}`, {regions: ['europe']}))});
   assert.equal((await sliced(e, 'europe', {})).status, 401);
   assert.equal((await call(e, 'PUT', auth, {feeds: [feed('only', {regions: ['europe']})]})).status, 409, 'a sudden loss is refused');
-  await call(e, 'PUT', auth, {feeds: Array.from({length: 10}, (_, i) => feed(`g${i}`, {regions: ['europe']}))});
+  await call(e, 'PUT', auth, {feeds: Array.from({length: 11}, (_, i) => feed(`g${i}`, {regions: ['europe']}))});
   const got = await (await sliced(e, 'europe', await holder())).json();
-  assert.deepEqual(got.feeds.map(f => f.slug).sort(), Array.from({length: 10}, (_, i) => `g${i}`).sort());
+  assert.deepEqual(got.feeds.map(f => f.slug).sort(), Array.from({length: 11}, (_, i) => `g${i}`).sort());
 });
 
 test('a list too large for one KV value still goes to D1, and a call without regions gets the fresh whole list, not the stale KV copy', async () => {
@@ -389,14 +389,14 @@ test('a publish keeps the whole body for 30 days', async () => {
   assert.deepEqual(JSON.parse(copy.value), sent);
 });
 
-test('a loss the guard lets through (38% of the feeds), then one restore of the earlier copy brings everything back', async () => {
+test('a loss the guard lets through (9% of the feeds), then one restore of the earlier copy brings everything back', async () => {
   store.clear();
   const {kept, e: kv} = keeping(), e = {...kv, STATS: d1()}, whole = Array.from({length: 100}, (_, i) => feed(`f${i}`));
   await call(e, 'PUT', auth, {feeds: whole, nofeed: [{key: 'gone', company: 'Gone', host: null, last: '2026-11-01'}]});
   const earlier = onlyCopy(kept).value;   // the day before the loss: a later publish today would replace today's copy, not that one
-  assert.equal((await call(e, 'PUT', auth, {feeds: whole.slice(0, 62)})).status, 200, 'the precondition: the loss got through');
+  assert.equal((await call(e, 'PUT', auth, {feeds: whole.slice(0, 91)})).status, 200, 'the precondition: the loss got through');
   const summary = async () => (await (await worker.fetch(new Request('https://www.jobpilotto.top/api/index?summary=1'), e, {})).json()).employers;
-  assert.equal(await summary(), 62);
+  assert.equal(await summary(), 91);
   assert.equal(store.get('index:nofeed'), '[]');
   assert.equal((await call(e, 'PUT', auth, JSON.parse(earlier))).status, 200);
   assert.equal(await summary(), 100);
@@ -439,7 +439,7 @@ test('a telling that fails too still never refuses the publish', async t => {
   assert.equal((await put.json()).copy, 'failed');
 });
 
-// 2 Nov 2026: the scout lost its cache; feeds fell to 57% and feeds with kinds from 3,926 to 9, with every publish green. The owner chose (6 Nov 2026): "Alert on fields, block on employers (Recommended)".
+// 2 Nov 2026: the scout lost its cache; feeds fell to 57% and feeds with kinds from 3,926 to 9, with every publish green. The owner chose (6 Nov 2026): "Alert on fields, block on employers (Recommended)", then "Refuse a loss over 10% (Recommended)".
 const hiring = (slug, extra = {}) => feed(slug, {kinds: {software: 1}, ...extra});
 const some = (n, make = feed) => Array.from({length: n}, (_, i) => make(`f${i}`));
 const told = t => {
@@ -462,12 +462,12 @@ test('the 2 Nov loss played: a publish keeping 57% of the employers is refused, 
   assert.match(sent.join(), /57 feeds would replace 100/);
 });
 
-test('60% of the employers kept passes, and a list too small to judge passes', async t => {
+test('90% of the employers kept passes, and a list too small to judge passes', async t => {
   told(t);
   store.clear();
   const e = withBot({STATS: d1()});
   await call(e, 'PUT', auth, {feeds: some(100)});
-  assert.equal((await call(e, 'PUT', auth, {feeds: some(60)})).status, 200);
+  assert.equal((await call(e, 'PUT', auth, {feeds: some(90)})).status, 200);
   store.clear();
   const small = withBot();
   await call(small, 'PUT', auth, {feeds: some(9)});
@@ -531,12 +531,12 @@ test('a Telegram outage never refuses a publish that only lost kinds', async t =
   assert.equal((await call(e, 'PUT', auth, {feeds: some(100)})).status, 200);
 });
 
-test('59 of 100 employers kept is refused', async t => {
+test('89 of 100 employers kept is refused', async t => {
   told(t);
   store.clear();
   const e = withBot({STATS: d1()});
   await call(e, 'PUT', auth, {feeds: some(100)});
-  assert.equal((await call(e, 'PUT', auth, {feeds: some(59)})).status, 409);
+  assert.equal((await call(e, 'PUT', auth, {feeds: some(89)})).status, 409);
 });
 
 test('with D1 the employer count is D1\'s: an old KV copy that is no longer rewritten never refuses a normal publish (review)', async t => {
