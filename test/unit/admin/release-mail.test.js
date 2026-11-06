@@ -175,8 +175,8 @@ test('the news list shows every address with its source and what each type does 
   const rows = await audienceRows(e), by = Object.fromEntries(rows.map(r => [r.email, r]));
   assert.deepEqual(rows.map(r => [r.email, r.source, r.releases]).sort(), [['a@example.com', 'both', true], ['app@example.com', 'waitlist', false], ['never@example.com', 'account', false], ['stop@example.com', 'account', false], ['w@example.com', 'waitlist', true]]);
   assert.deepEqual([by['a@example.com'].tips, by['w@example.com'].tips, by['w@example.com'].launch, by['app@example.com'].launch, by['never@example.com'].launch], [true, false, true, true, false], 'tips need a tick; the Pro launch also reaches every waitlist signup');
-  assert.deepEqual([by['never@example.com'].releasesWhy, by['stop@example.com'].releasesWhy, by['app@example.com'].releasesWhy], ['not asked yet', 'stopped', 'Pro mail only'], 'a confirmed address waits for the card');
-  assert.match(audienceCard(rows), /2 New releases, 1 Tips and tricks, 0 Job digest, 5 addresses/);
+  assert.deepEqual([by['never@example.com'].releasesWhy, by['stop@example.com'].releasesWhy, by['app@example.com'].releasesWhy], ['not ticked', 'stopped', 'not ticked'], 'What\'s new needs a yes');
+  assert.match(audienceCard(rows), /2 What's new, 1 News and tips, 0 Job digest, 5 addresses/);
   const page = async headers => (await emailView(new Request('https://www.jobadabra.top/admin/growth/email?tab=people', {headers}), e)).text();
   assert.match(await page({Authorization: 'Bearer owner-key'}), /w@example\.com/);
   assert.doesNotMatch(await page({}), /w@example\.com/);

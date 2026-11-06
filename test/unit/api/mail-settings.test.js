@@ -48,24 +48,24 @@ test('saving turns service mail off and on and sets the digest cadence', async (
   assert.ok(id);
 });
 
-test('the two news boxes show what the site holds: releases on for a confirmed address, tips only with a tick; an unticked default is a stop, an unticked tips is nothing', async () => {
-  // Why (owner, 5 Nov 2026: "this should be on by default. Only "Tips and tricks" should be disabled by default"): shared/mail-lists.js.
+test('the two news boxes show what the site holds: each only with a yes; unticking a yes is a stop, an unticked box is nothing', async () => {
+  // Why (owner, 6 Nov 2026: "Only Trial reminder on"): shared/mail-lists.js.
   const e = {...env(), MARKETING_MAIL: 'on'};
   await createAccount(e, 'me@example.com', now, {plan: 'trial'});
   const box = async (to, name) => new RegExp(`name="${name}"[^>]* checked`).test(await (await settings(new Request(await settingsLink(e, to)), e, now)).text());
   const stops = () => e.STATS.db.prepare("SELECT list FROM mail_off WHERE list IN ('releases', 'tips')").all().map(r => r.list);
   assert.deepEqual([await box('me@example.com', 'releases'), await box('me@example.com', 'tips')], [false, false], 'unconfirmed: the sender sends no news yet');
-  assert.equal(await box('wait@example.com', 'releases'), true, 'an address with no account has no confirm step to wait for');
+  assert.equal(await box('wait@example.com', 'releases'), true, 'an address with no account is a waitlist signup: the page must show the mail it gets, so it can be stopped here');
   e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
-  assert.deepEqual([await box('me@example.com', 'releases'), await box('me@example.com', 'tips')], [true, false]);
+  assert.deepEqual([await box('me@example.com', 'releases'), await box('me@example.com', 'tips')], [false, false]);
   const link = await settingsLink(e, 'me@example.com');
   await save(e, link, {service: 'on', releases: 'on'});
-  assert.deepEqual(stops(), [], 'a box left as it was takes nothing back');
+  assert.deepEqual(stops(), [], 'a tick takes nothing back');
   await save(e, link, {service: 'on', releases: 'on', tips: 'on'});
   assert.equal(await box('me@example.com', 'tips'), true);
   assert.equal(e.STATS.db.prepare("SELECT via FROM mail_on WHERE list = 'tips'").get().via, 'mail-settings', 'a tick is stored with where it was given');
   await save(e, link, {service: 'on'});
-  assert.deepEqual(stops().sort(), ['releases', 'tips'], 'unticking a yes or a default is a stop');
+  assert.deepEqual(stops().sort(), ['releases', 'tips'], 'unticking a yes is a stop');
   assert.deepEqual([await box('me@example.com', 'releases'), await box('me@example.com', 'tips')], [false, false]);
   assert.equal(e.STATS.db.prepare('SELECT COUNT(*) n FROM mail_on').get().n, 0);
 });

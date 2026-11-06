@@ -62,7 +62,7 @@ export async function releaseData(env, data, {status = 'draft'} = {}) {
     sections: (fresh?.sections || []).map(section => ({...data.sections?.find(saved => saved.title === section.title && saved.text === section.text), ...section}))};
 }
 
-// Everyone New releases reaches (shared/mail-lists.js), once each. send() judges each address again at sending.
+// Everyone What's new reaches (shared/mail-lists.js), once each. send() judges each address again at sending.
 export const audience = async env => (await audienceRows(env)).filter(row => row.releases).map(row => row.email);
 
 // Called by the promotion: only a stable version may draft its complete stable-to-stable window once. -> {drafted} | {exists} | {empty: nothing a user would notice}

@@ -132,8 +132,8 @@ test('the page prints the agreed mail rules from the code: three types, who gets
   const {env} = await fill();
   const html = page(await collect(env, {now}), null, null, null, [], undefined, 'settings');
   const card = html.slice(html.indexOf('id="mail-types"'), html.indexOf('</section>', html.indexOf('id="mail-types"')));
-  for (const type of MAIL_TYPES) assert.ok(card.includes(type.name) && card.includes(type.who.slice(0, 20)), type.id);
-  assert.match(card, /Tips and tricks<\/b><\/td><td>[^<]*<\/td><td><span class="pill off">Off/);
+  for (const type of MAIL_TYPES) assert.ok(card.includes(type.name.replace("'", '&#39;')) && card.includes(type.who.slice(0, 20)), type.id);
+  assert.match(card, /News and tips<\/b><\/td><td>[^<]*<\/td><td><span class="pill off">Off/);
   assert.ok(card.includes(`${DAILY_MAX} mails a day`) && card.includes('stops that type only'));
 });
 

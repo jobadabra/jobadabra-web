@@ -62,19 +62,21 @@ Owner, 6 Nov 2026: "on Mac only, the defualt notifications should be off for any
 
 Owner, 6 Nov 2026 (replacing the 5 Nov "consent" wording): the address found in the CV is presented as saved for the person's own notifications ("We shuold rather say that we detected it and we'll save it for future app notifications"), and the CV switch is "for enabling the email notifications", "On by default". Continue with it on sends the address to our site and turns on the suggested rows for the person's mode, each changeable in Settings → Notifications; turned off, nothing leaves the Mac and the step counts as asked. Notifications inside the app start on (nothing leaves the Mac); e-mail starts with that press, or later with one press in Notifications ("App on; e-mail off until one press"). Left off, it is suggested once at the moments it helps: an application needs the person, Always on, the first sent application. Asking for our news comes after the first sent application (owner: "we want lateron to ask for their consent on that, after first sent applciation"). A row the person has set is never reset by a mode change.
 
-## Jobadabra's mails: five, in their own card
+## Jobadabra's mails: five mails, two switches
 
-Owner, 6 Nov 2026: "We should think/define a number of approximate 5 promotional emails to bring user back, to keep them engaged, to remind about us", and "I'd keep What's new separate".
+Owner, 6 Nov 2026: "We should think/define a number of approximate 5 promotional emails to bring user back, to keep them engaged, to remind about us", "I'd keep What's new separate", then on five switches: "I think we went too granular. What user will agree on deliberately ticking \"Come back\"?", and on two: "I like the 2 switches".
 
-| Mail | What | State |
-|---|---|---|
-| What's new | a release, nothing else | built |
-| News and offers | "Pro is out", "we doubled our jobs list", offers | built as Pro is out; widen it |
-| Trial reminder | the trial nears its end, or ended. Needs no news tick (facts about their own trial, owner's choice), stays off until the owner turns it on | built, off |
-| Tips and tricks | general tips from our own library | row 7 |
-| Come back | quiet for 3 months | row 7 |
+| Mail | What | Switch | State |
+|---|---|---|---|
+| What's new | a release, nothing else | What's new | built |
+| News and offers | "Pro is out", "we doubled our jobs list", offers | News and tips | built as Pro is out |
+| Tips and tricks | general tips from our own library | News and tips | row 7 |
+| Come back | quiet for 3 months | News and tips | row 7 |
+| Trial reminder | the trial nears its end, or ended. Facts about their own trial | none: goes without a tick, stops from the mail | built, off until the owner turns it on |
 
-In the app: a "News from Jobadabra" card under Notifications with one switch each, replacing today's single tick; all off until the person says yes, asked once after the first sent application. At most one of these mails per person per week.
+In the app: a "News from Jobadabra" card under Notifications with the two switches, replacing today's single tick. Both off until the person says yes (owner, 6 Nov 2026: replaces 5 Nov's "on by default"), asked once after the first sent application. At most one What's new or News and tips mail per person per week.
+
+A switch is for a choice a person would make, so the site keeps its two lists (`releases`, `tips`). Come back therefore reaches only people who said yes; reaching everyone would need the legal read and breaks "news needs its own tick". Not built.
 
 ## Every mail says why it came
 
@@ -236,10 +238,10 @@ PRs 1 to 3 ship with every new row **off**; existing mails keep today's behaviou
 | Spec | ✅ merged | web#447 |
 | 1–2 | ✅ merged | web#452 |
 | 3 | ✅ merged, live | web#456 |
-| 4 | ▶️ shipping (pane), switches dark behind `MAIL_SWITCHES_SHOWN=false` until 5b merges | public repo, "[hr] 4/8 You choose each mail in Automation and Notifications" |
+| 4 | ✅ merged, switches shown | public #3335 |
 | 5 | ✅ merged | web#460 footers in two short lines (owner: "Loks like essays/novels", "Redo it"); Mac-only defaults: only New matches (digest) and Weekly summary on |
-| 5b | ▶️ open | site: store the row with a held mail so the digest obeys a row turned off; answer `/api/mail/choices` rows for `no_address` (ok: true, choice ''). Then flip `MAIL_SWITCHES_SHOWN` |
-| 8a | ▶️ open (pane) | web#459 the site's data promise as three levels with chips: your computer, your own Notion ("your personal cloud"), our servers; `privacy.html` and `terms.html` stay for row 8's legal read |
-| 7a | ⏳ | the five mails above: the card in the app, News and offers, the weekly cap |
+| 5b | ✅ merged, migration 0139 applied | web#463 |
+| 8a | ✅ merged | web#459 the data promise as three levels with chips; `privacy.html` and `terms.html` stay for row 8 |
+| 7a | ▶️ site first, then the app card | two switches on `/api/mail/choices`, What's new off until a yes, the weekly cap |
 | 6, 7, 8 | ⏳ | new mails; Tips and Come back (+ news consent after the first sent application, Backlog); privacy page and terms with a legal read |
 

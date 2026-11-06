@@ -10,13 +10,14 @@ export function mailTypesCard(dayMax, n) {
   const rules = [
     'Each mail\'s stop link stops that type only. A bounce or a complaint stops all four.',
     'The boxes in the app and on the e-mail settings page show what the site holds. No stored answer means the default applies.',
-    'An unconfirmed address gets no New releases, no Tips and tricks and no Job digest.',
-    'New releases start ticked, but no release mail goes until the person has answered the question in the app. A website waitlist signup counts as answered.',
+    'An unconfirmed address gets no What\'s new, no News and tips and no Job digest.',
+    'What\'s new and News and tips are off until the person says yes. A website waitlist signup counts as a yes to What\'s new.',
+    'At most one What\'s new or News and tips mail per person per week.',
     'People who joined the waitlist from the app get only the Pro launch mail until the app\'s dialog names release mails.',
     `Per address: ${DAILY_MAX} mails a day, all types together. Test mails sit outside this limit.`,
     'The alert test mail goes at most once a day per address.',
     `Whole product: ${n(dayMax)} mails a day, test mails included.`,
-    'New releases and Tips and tricks need the MARKETING_MAIL switch on. The Pro launch also needs MAIL_LAUNCH.',
+    'What\'s new and News and tips need the MARKETING_MAIL switch on. The Pro launch also needs MAIL_LAUNCH.',
   ].map(rule => `<li>${esc(rule)}</li>`).join('');
   return `<section class="card" id="mail-types" style="margin-bottom:16px"><h2>Mail types and rules</h2><div style="overflow-x:auto"><table><tr><th>Type</th><th>Carries</th><th>Starts</th><th>Who gets it</th></tr>${rows}</table></div><ul>${rules}</ul></section>`;
 }

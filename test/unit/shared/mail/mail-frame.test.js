@@ -44,8 +44,8 @@ test('every template goes through the frame: logo, title, footer with stop + set
   for (const [name, spec] of Object.entries(TEMPLATES)) {
     const {e, sent} = setup({MARKETING_MAIL: 'on'});
     await createAccount(e, 'me@example.com', now, {plan: 'trial'});
-    e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();   // news goes only to a confirmed address; Tips and tricks also needs its tick (shared/mail-lists.js)
-    e.STATS.db.prepare("INSERT INTO mail_on (addr, list, via, at) SELECT email_hash, 'tips', 'card', 'x' FROM pro_accounts").run();
+    e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();   // news goes only to a confirmed address with a yes (shared/mail-lists.js)
+    for (const list of ['tips', 'releases']) e.STATS.db.prepare("INSERT INTO mail_on (addr, list, via, at) SELECT email_hash, ?, 'card', 'x' FROM pro_accounts").run(list);
     assert.equal((await send(e, name, 'me@example.com', SAMPLES[name], {now})).ok, true, name);
     const {html, text} = sent[0];
     assert.ok(html.includes('data-jp-frame="1"') && html.includes('<title>'), `${name}: framed`);
