@@ -67,11 +67,11 @@ test('every template goes through the frame: logo, title, footer with stop + set
     assert.equal(download, owner !== 'yours' && owner !== 'account' && !spec.essential, `${name}: "Don't have the app?" only where the reader may not have it`);
     if (spec.essential || owner === 'account') { assert.ok(!/Stop these e/.test(html) && !sent[0].headers, `${name}: an Account mail has nothing to stop`); continue; }
     const stop = (await stopLink(e, 'me@example.com', spec.list)).replaceAll('&', '&amp;'), settings = (await settingsLink(e, 'me@example.com')).replaceAll('&', '&amp;');
-    assert.ok(html.includes(`href="${stop}"`) && text.includes(`Stop these e-mails: ${stop.replaceAll('&amp;', '&')}`) && sent[0].headers['List-Unsubscribe'], `${name}: a stop link, in both versions and the header`);
+    assert.ok(html.includes(`href="${stop}"`) && text.includes(`Stop these emails: ${stop.replaceAll('&amp;', '&')}`) && sent[0].headers['List-Unsubscribe'], `${name}: a stop link, in both versions and the header`);
     if (owner === 'yours') {
-      assert.ok(foot.includes('You chose these in the app: Settings → Notifications.<br>') && !foot.includes('E-mail settings'), `${name}: where to change it, no settings page`);
+      assert.ok(foot.includes('You chose these in the app: Settings → Notifications.<br>') && !foot.includes('Email settings'), `${name}: where to change it, no settings page`);
       assert.equal(foot.includes('How we keep your data'), ['digest', 'always-on-paused'].includes(name), `${name}: only hosted Always on links what we store`);
-    } else assert.ok(html.includes(`href="${settings}"`) && html.includes('E-mail settings') && text.includes(settings.replaceAll('&amp;', '&')), `${name}: news has the stop and the settings page`);
+    } else assert.ok(html.includes(`href="${settings}"`) && html.includes('Email settings') && text.includes(settings.replaceAll('&amp;', '&')), `${name}: news has the stop and the settings page`);
   }
 });
 

@@ -9,7 +9,7 @@
 // Every sentence must stay true: a test pins each one (test/unit/shared/mail/mail-footer.test.js).
 import {mailOf} from './mail-registry.js';
 
-// Why (6 Nov 2026, owner: "Keep promise, cut extras"): the footer says who chose the mail, never where it was written; the server keeps nothing after sending.
+// Why (6 Nov 2026, owner: "Keep promise, cut extras"): the footer says who chose the mail, never where it was written. Our server keeps nothing once a mail is sent (a mail waiting for the digest waits at most 14 days: /trust).
 const YOURS = 'You chose these in the app: Settings → Notifications.';
 const ACCOUNT = {
   'account-code': 'A security e-mail, sent even if you stopped others.',
@@ -18,7 +18,8 @@ const ACCOUNT = {
   'feedback-update': 'About a report you sent.',
   'always-on-test': 'You pressed Test in the app.',
 };
-const NEWS = 'Same news for everyone. You ticked this.';
+// Why (review of hr-32): pro-launch also reaches people who only joined the Pro list, so not "You ticked this".
+const NEWS = 'Same news for everyone. You asked for it.';
 const HOSTED = ['digest', 'always-on-paused'];   // written by our servers for hosted Always on: its footer links what we store
 
 /**

@@ -56,9 +56,9 @@ A mail about work done on the Mac can only go while the app is open, and its row
 | Nothing found for days | not shown | after 3 days |
 | Job digest | daily | daily |
 | Weekly summary | Mondays | Mondays |
+| What's new, Tips and tricks | off | off |
 
 Owner, 6 Nov 2026: "on Mac only, the defualt notifications should be off for any automations, because they get the notification in the app... Only Weekly Summary and Jobs digest can be on".
-| What's new, Tips and tricks | off | off |
 
 Owner, 6 Nov 2026 (replacing the 5 Nov "consent" wording): the address found in the CV is presented as saved for the person's own notifications ("We shuold rather say that we detected it and we'll save it for future app notifications"), and the CV switch is "for enabling the email notifications", "On by default". Continue with it on sends the address to our site and turns on the suggested rows for the person's mode, each changeable in Settings → Notifications; turned off, nothing leaves the Mac and the step counts as asked. Notifications inside the app start on (nothing leaves the Mac); e-mail starts with that press, or later with one press in Notifications ("App on; e-mail off until one press"). Left off, it is suggested once at the moments it helps: an application needs the person, Always on, the first sent application. Asking for our news comes after the first sent application (owner: "we want lateron to ask for their consent on that, after first sent applciation"). A row the person has set is never reset by a mode change.
 
@@ -68,8 +68,8 @@ Owner, 6 Nov 2026, on the first version: "these footers looks horriable. Loks li
 
 | Mail | Line 1 | Line 2 |
 |---|---|---|
-| The person's own (app, their GitHub, our digest) | "You chose these in the app: Settings → Notifications." | Stop these e-mails · jobadabra.top (hosted Always on adds "How we keep your data" → /trust) |
-| Jobadabra's news | "Same news for everyone. You ticked this." | Stop these e-mails · E-mail settings · jobadabra.top, then "Don't have the app? Download Jobadabra" (news also reaches people without the app) |
+| The person's own (app, their GitHub, our digest) | "You chose these in the app: Settings → Notifications." | Stop these emails · jobadabra.top (hosted Always on adds "How we keep your data" → /trust) |
+| Jobadabra's news | "Same news for everyone. You asked for it." | Stop these emails · Email settings · jobadabra.top, then "Don't have the app? Download Jobadabra" (news also reaches people without the app) |
 | Account | a few words: "This address was entered in Jobadabra.", "A security e-mail, sent even if you stopped others." | jobadabra.top; no stop link, no List-Unsubscribe header |
 
 Owner, 6 Nov 2026, asked whether people care where a mail was written: "Keep promise, cut extras". The server still keeps nothing after sending; the footer no longer says where each mail was written. The web stop link stays on the person's own mails because someone who lost the app cannot reach Settings while their own GitHub keeps mailing them.

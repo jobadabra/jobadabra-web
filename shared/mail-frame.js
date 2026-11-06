@@ -1,5 +1,5 @@
 // The one frame every e-mail goes through (owner, 17 Oct 2026): a branded card with the logo, a title, the content, at most one yellow button and a footer saying why the person gets it,
-// with download, "Stop these emails", "Email settings" and jobadabra.top. Email-safe: a table layout, inline styles, a hosted https logo, light colours inline with a dark-mode override in <style>.
+// in at most two short lines (why, then the links its owner allows: shared/mail-footer.js). Email-safe: a table layout, inline styles, a hosted https logo, light colours inline with a dark-mode override in <style>.
 // shared/mail.js applies it in send(), so no template can skip it; each template supplies only its content. A plain-text twin comes from frameText(). Guard: test/unit/shared/mail/mail-frame.test.js.
 import {DARK, LIGHT as C} from './mail-palette.js';
 export const SITE = 'https://www.jobadabra.top';
@@ -48,7 +48,7 @@ const personalHtml = () => `<table role="presentation" width="100%" cellpadding=
 // html: {title, body (html), button: {label, url} | null, why, links: {stop, settings} | null, trust, download}. links null = nothing to stop (an Account mail).
 // The footer is two short lines (owner, 6 Nov 2026: "Loks like essays/novels"): `why`, then the links joined by " · "; `download` adds "Don't have the app?" (news only:
 // owner, 6 Nov 2026: "we shouldn't show Downlaod on user app email notifications. Of course they have the app"). `trust` links what hosted Always on stores.
-const footLinks = (links, trust) => [links && ['Stop these e-mails', links.stop], links?.settings && ['E-mail settings', links.settings], trust && ['How we keep your data', `${SITE}/trust`], ['jobadabra.top', SITE]].filter(Boolean);
+const footLinks = (links, trust) => [links && ['Stop these emails', links.stop], links?.settings && ['Email settings', links.settings], trust && ['How we keep your data', `${SITE}/trust`], ['jobadabra.top', SITE]].filter(Boolean);
 export function frameHtml({title, body, button: action, why, links, hero, trust = false, download = false}) {
   const foot = footLinks(links, trust).map(([label, url]) => link(url, label)).join(' · ');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>${esc(title)}</title>${STYLE}</head>`

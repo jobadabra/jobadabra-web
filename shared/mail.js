@@ -70,7 +70,7 @@ const WHY = {service: 'You set up Jobadabra with this address.', jobdigest: 'You
 export function compose(template, data = {}, given = null) {
   const spec = TEMPLATES[template];
   // Why each mail came and which links it carries: by who owns it (shared/mail-footer.js, spec PR 5). An Account mail has no stop link and no List-Unsubscribe header.
-  const foot = footerOf(template, spec.essential ? 'A security email, sent even if you stopped other emails.' : WHY[spec.list]);
+  const foot = footerOf(template, WHY[spec.list]);
   const links = given && foot.stop ? {stop: given.stop, settings: foot.settings ? given.settings : null} : null;
   const frame = {title: spec.title(data), why: foot.why, button: spec.button?.(data) || null, links, trust: foot.trust, download: foot.download};
   const headers = links ? {'List-Unsubscribe': `<${links.stop}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'} : undefined;
@@ -103,7 +103,9 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
   if (env.MAIL !== 'on' || !env.EMAIL || !env.STATS) return {ok: false, reason: 'off'};
   let claimed = null;   // the marker of the mail_log row holding this call's room until the provider has answered
   try {
-    const verdict = await mailAllowed(env, to, spec.list, {...spec, test});
+    // Why (review of hr-32, 6 Nov 2026): a mail with no stop link (an Account mail) is never held by a stop pressed on another mail of its list; a bounce or complaint ('all') still holds it.
+    // A `probe` (the Always on Test) stays held: it exists to tell the person whether their alerts would arrive.
+    const verdict = await mailAllowed(env, to, spec.list, {...spec, essential: spec.essential || (!spec.probe && !footerOf(template).stop), test});
     const addr = await addrOf(to);
     if (!verdict.ok) { if (verdict.reason !== 'bad_address' && verdict.reason !== 'marketing_off') await record(env, now, addr, spec.list, logged, verdict.reason); return verdict; }
     const ruled = ownerTest ? '' : await ruleRefusal(env, template);   // the owner's stop on this one mail, or 'rule_held' when the stops cannot be read (spec 2026-11-05-service-mail-rules-design.md)
@@ -123,7 +125,7 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
     if (Number(changes) !== 1) { await record(env, now, addr, spec.list, logged, 'rate'); return {ok: false, reason: 'rate'}; }
     claimed = marker;
     const appVersion = await appVersionOf(env, addr);
-    const stop = spec.essential || !footerOf(template).stop ? null : await stopLink(env, to, spec.list);
+    const stop = !spec.essential && footerOf(template).stop ? await stopLink(env, to, spec.list) : null;
     const {subject, text, html, headers} = compose(template, {...data, appVersion}, stop && {stop, settings: await settingsLink(env, to)});
     const result = await env.EMAIL.send({from: FROM[spec.list], replyTo: REPLY_TO, to: clean(to), subject, text, html, ...(headers && {headers})});
     const id = result?.messageId || null, mine = claimed;

@@ -7,6 +7,8 @@ import {test} from 'node:test';
 import {address, notify} from '../../../../api/account-email.js';
 import {sendDigests} from '../../../../api/mail-held.js';
 import {footerOf} from '../../../../shared/mail-footer.js';
+import {addrOf, send} from '../../../../shared/mail.js';
+import {SAMPLES} from '../../../../admin/email-preview.js';
 import {MAILS, resetRuleCache} from '../../../../shared/mail-registry.js';
 import {tokenFor} from '../../../../shared/guard.js';
 import {mintTrialKey} from '../../../../shared/trial-key.js';
@@ -20,8 +22,11 @@ test('each owner gets its footer: Account has nothing to stop, Yours says where 
     if (mail.owner === 'yours') assert.deepEqual([foot.stop, foot.settings, foot.download, foot.trust], [true, false, false, ['digest', 'always-on-paused'].includes(mail.id)], mail.id);
     assert.ok(foot.why.length <= 60, `${mail.id}: a few words, not a paragraph (owner, 6 Nov 2026)`);
   }
-  for (const template of ['welcome', 'confirm-resend']) assert.doesNotMatch(footerOf(template).why, /Ignore/, `${template}: its body already says "Ignore this email"`);
-  assert.equal(footerOf('release').why, 'Same news for everyone. You ticked this.');
+  // Every sentence, pinned: each must stay true (the confirm mails' body already says "Ignore this email"; pro-launch also reaches people who only joined the Pro list).
+  assert.deepEqual(Object.fromEntries(['account-code', 'welcome', 'confirm-resend', 'feedback-update', 'always-on-test', 'message', 'digest', 'release', 'pro-launch'].map(t => [t, footerOf(t).why])), {
+    'account-code': 'A security e-mail, sent even if you stopped others.', welcome: 'This address was entered in Jobadabra.', 'confirm-resend': 'A new link was asked for in Jobadabra.',
+    'feedback-update': 'About a report you sent.', 'always-on-test': 'You pressed Test in the app.', message: YOURS, digest: YOURS,
+    release: 'Same news for everyone. You asked for it.', 'pro-launch': 'Same news for everyone. You asked for it.'});
   assert.equal(footerOf('trial-left', 'old line').why, 'old line', 'the trial mails keep their line until they are redesigned');
 });
 
@@ -53,5 +58,16 @@ test('an app mail carries one plain line and the way to change it, whether the M
   await post(e, await appKey(), {subject: 'Insight', html: '<b>An insight</b>', kind: 'activity'});
   await sendDigests(e, new Date('2026-11-07T08:00:00Z'));
   assert.equal(sent.length, 3, 'the Mac\'s mail, the repo\'s mail and the digest');
-  for (const mail of sent) assert.ok(mail.text.includes(`${YOURS}\nStop these e-mails: `) && !/kept no copy|Your own GitHub|Written on your Mac|Download Jobadabra/.test(mail.text), mail.subject);
+  for (const mail of sent) assert.ok(mail.text.includes(`${YOURS}\nStop these emails: `) && !/kept no copy|Your own GitHub|Written on your Mac|Download Jobadabra/.test(mail.text), mail.subject);
+});
+
+test('a stop pressed on the person\'s own mail never holds an Account mail, which has no stop link of its own; a bounce still holds it', async () => {
+  const sent = [], e = {MAIL: 'on', STATS: d1(), STATS_SALT: 'salt', UNSUB_SECRET: 'u', EMAIL: {send: async m => { sent.push(m); return {messageId: `m${sent.length}`}; }}};
+  const addr = await addrOf('me@example.com');
+  e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'service', 'unsubscribed', 'x')").run(addr);   // Gmail's one-click Unsubscribe on a digest
+  assert.equal((await send(e, 'message', 'me@example.com', {subject: 'Matches', html: '<b>3</b>'}, {now})).reason, 'unsubscribed', 'the person\'s own mail obeys the stop');
+  for (const template of ['welcome', 'feedback-update']) assert.equal((await send(e, template, 'me@example.com', SAMPLES[template], {now})).ok, true, `${template}: they asked for it`);
+  assert.equal((await send(e, 'always-on-test', 'me@example.com', {}, {now})).reason, 'unsubscribed', 'the Always on Test tells the truth: their alerts would not arrive');
+  e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'all', 'bounce', 'x')").run(addr);
+  assert.equal((await send(e, 'welcome', 'me@example.com', SAMPLES.welcome, {now})).reason, 'suppressed', 'a bounce or complaint still holds every mail');
 });
