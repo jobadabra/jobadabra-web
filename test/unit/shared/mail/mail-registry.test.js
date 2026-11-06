@@ -6,7 +6,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {send} from '../../../../shared/mail.js';
 import {testAlert} from '../../../../api/mail-held.js';
-import {MAILS, OWNERS, resetRuleCache, ruleRefusal, ruleRows, setRule, storedRules} from '../../../../shared/mail-registry.js';
+import {APP_ROWS, MAILS, OWNERS, resetRuleCache, ruleRefusal, ruleRows, setRule, storedRules} from '../../../../shared/mail-registry.js';
 import {TEMPLATES} from '../../../../shared/mail-templates.js';
 
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
@@ -24,7 +24,8 @@ const env = (STATS = d1()) => ({STATS, MAIL: 'on', EMAIL: mailer(), STATS_SALT: 
 const broken = message => ({prepare: () => ({bind() { return this; }, all: async () => { throw new Error(message); }, run: async () => { throw new Error(message); }, first: async () => { throw new Error(message); }})});
 
 test('every template has exactly one entry and a known owner; sign-in and confirm are locked', () => {
-  assert.deepEqual(MAILS.map(mail => mail.id).sort(), Object.keys(TEMPLATES).sort());
+  assert.deepEqual(MAILS.filter(mail => !mail.template).map(mail => mail.id).sort(), Object.keys(TEMPLATES).sort());
+  assert.equal(new Set(MAILS.map(mail => mail.id)).size, MAILS.length, 'one entry per id');
   assert.ok(MAILS.every(mail => OWNERS.some(owner => owner.id === mail.owner) && mail.name && mail.when));
   assert.deepEqual(MAILS.filter(mail => mail.locked).map(mail => mail.id).sort(), ['account-code', 'confirm-resend', 'welcome']);
   for (const id of ['account-code', 'confirm-resend']) assert.equal(TEMPLATES[id].essential, true, `${id}: locked mail is the essential one`);
@@ -62,22 +63,23 @@ test('a missing table means nothing was pressed: mail goes', async () => {
   assert.equal(await ruleRefusal(e, 'message'), '');
 });
 
-test('any other read error with no good answer holds every unlocked mail, never a locked one, and is not cached', async () => {
+test('any other read error with no good answer holds every mail the owner can stop, never a locked or Yours one, and is not cached', async () => {
   const good = d1();   // built (and the cache reset) before the failing reads, so nothing clears the slot between them and the check below
   const e = {STATS: broken('D1 is down')};
-  assert.equal(await ruleRefusal(e, 'message'), 'rule_held');
+  assert.equal(await ruleRefusal(e, 'feedback-update'), 'rule_held');
   assert.equal(await ruleRefusal(e, 'welcome'), '');
+  assert.equal(await ruleRefusal(e, 'digest'), '', 'a Yours mail never waits for the owner\'s rules');
   assert.equal((await storedRules(e)).held, true);
-  assert.equal(await ruleRefusal({STATS: good}, 'message'), '', 'the failure was not cached: the next read answers');
+  assert.equal(await ruleRefusal({STATS: good}, 'feedback-update'), '', 'the failure was not cached: the next read answers');
   assert.equal((await storedRules({STATS: good})).held, false);
 });
 
 test('a read error after a good answer keeps the last good answer, stop included', async () => {
   const e = env();
-  await setRule(e, 'digest', false, now);
+  await setRule(e, 'release', false, now);
   await storedRules(e, {fresh: true});
   const down = {STATS: broken('D1 is down')};
-  assert.equal((await storedRules(down, {fresh: true})).off.digest, true);
+  assert.equal((await storedRules(down, {fresh: true})).off.release, true);
   assert.equal((await storedRules(down, {fresh: true})).held, false);
 });
 
@@ -99,4 +101,13 @@ test('a stopped Always on test holds the Test press for confirmed and unconfirme
   }
   assert.equal(e.EMAIL.sent.length, 0);
   assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'claimed'").get().n, 0);
+});
+
+test('the app\'s own mails are the spec\'s six rows, each a Yours mail sent as `message`, with a suggested default for Mac and for Always on', () => {
+  assert.deepEqual(APP_ROWS, ['app-matches', 'app-needs-you', 'app-applied', 'app-weekly', 'app-stopped', 'app-nothing']);
+  for (const id of APP_ROWS) {
+    const mail = MAILS.find(each => each.id === id);
+    assert.deepEqual([mail.owner, mail.template, !!mail.locked], ['yours', 'message', false], id);
+    for (const mode of ['mac', 'always']) assert.ok(['no', 'digest', 'mail', 'hidden'].includes(mail.suggested[mode]), `${id} ${mode}`);
+  }
 });

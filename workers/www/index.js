@@ -105,6 +105,7 @@ import * as mailUnsub from '../../api/mail-unsub.js';
 import * as mailHeld from '../../api/mail-held.js';
 import * as mailSettings from '../../api/mail-settings.js';
 import * as accountEmail from '../../api/account-email.js';
+import {choices as mailChoices} from '../../api/mail-choices.js';
 import {status as proStatus} from '../../shared/pro.js';
 import * as proSignin from '../../api/pro-signin.js';
 import {redeem as promoRedeem} from '../../shared/promo.js';
@@ -303,6 +304,7 @@ async function route(request, env, ctx) {
   if (pathname === '/api/account/email/resend') return accountEmail.resend(request, env);   // the confirm link again (api/account-email.js)
   if (pathname === '/api/account/email') return accountEmail.address(request, env, new Date(), fetch, ctx);   // the person's address and marketing opt-in (api/account-email.js)
   if (pathname === '/api/notify/email') return accountEmail.notify(request, env);   // a Telegram-style message by e-mail (api/account-email.js)
+  if (pathname === '/api/mail/choices') return mailChoices(request, env);   // the person's choice per app mail, read and set by the app (api/mail-choices.js)
   if (pathname === '/api/trial/status') return trialStatus(request, env);   // the free trial, one answer for the app and Always on (shared/trial.js)
   if (pathname === '/api/hosted/schedule') return hosted.schedule(request, env);   // hosted Always on: the install's schedule (shared/hosted.js; 404 while HOSTED_ALWAYS_ON is off)
   if (pathname === '/api/hosted/result') return hosted.result(request, env);   // a container's one result post (run token)
