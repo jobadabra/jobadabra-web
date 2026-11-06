@@ -1,4 +1,4 @@
-// The product-quality board (owner, 5 Nov 2026: "tell me what's the quality of our product... using graphs"): the judging helpers, the five areas from fixed inputs, "not measured" and "Too few installs (n)"
+// The product-quality board (owner, 5 Nov 2026: "tell me what's the quality of our product... using graphs"): the judging helpers, the six areas from fixed inputs, "not measured" and "Too few installs (n)"
 // instead of a number, and the one reader against a real SQLite with the site's migrations. Pure inputs and a temp database: no network, no AI.
 import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
@@ -10,6 +10,7 @@ import {aiQuality, areasOf, bugs, formFilling, reliability, speed} from '../../.
 import {loadInputs, loadQuality} from '../../../../admin/product-quality-data.js';
 import {chartOf} from '../../../../admin/product-quality-charts.js';
 import {areaCard, board} from '../../../../admin/product-quality-html.js';
+import {search} from '../../../../admin/product-quality-search.js';
 import worker from '../../../../workers/www/index.js';
 
 const now = new Date('2026-11-05T10:00:00Z');
@@ -115,11 +116,41 @@ test('old data is "not measured", not "Too few installs (0)": the thin rule only
 });
 
 test('nothing read: every area says "not measured" with its reason, none shows a 0, the verdict says so', () => {
-  const areas = areasOf({days, fill: null, nightly: null, answers: null, searches: null, probes: null, crashes: null, sentry: null, newProblems: null, snapshot: null, finders: null});
-  assert.equal(areas.length, 5);
+  const areas = areasOf({days, fill: null, nightly: null, answers: null, searches: null, probes: null, crashes: null, sentry: null, newProblems: null, snapshot: null, finders: null, searchNights: null});
+  assert.equal(areas.length, 6);
   for (const area of areas) assert.deepEqual([area.value, area.tone, area.trend, area.word, area.series.length], [null, 'none', 'none', 'not measured', 0], area.id);
   const verdict = verdictOf(areas);
-  assert.deepEqual([verdict.icon, verdict.headline, verdict.counts], ['⚪', '0 of 5 areas on target · Form filling, AI quality, Speed, Reliability, Bugs not measured', {good: 0, warn: 0, bad: 0, none: 5}]);
+  assert.deepEqual([verdict.icon, verdict.headline, verdict.counts], ['⚪', '0 of 6 areas on target · Form filling, AI quality, Speed, Search, Reliability, Bugs not measured', {good: 0, warn: 0, bad: 0, none: 6}]);
+});
+
+// A stored night as admin/search-night.js keeps it: `measured` personas of six found a right job, each with `local` right local jobs; `ran` = the steps time ran out for in every persona.
+const night = (back, measured, {local = 3, ran = []} = {}) => ({night: DAYS(back), rows: Array.from({length: 6}, (_, i) => ({persona: i + 1, kind: i < measured ? 'measured' : 'unmeasured', local, seconds: 20, ranOut: ran}))});
+const nightsOf = (from, to, measured, extra) => Array.from({length: from - to + 1}, (_, i) => night(to + i, measured, extra));   // newest first
+
+test('Search: the average of personas measured, red when the newest night dropped, first week and not measured as on every area', () => {
+  const steady = nightsOf(13, 1, 5), steadyArea = search({days, searchNights: [night(0, 5), ...steady]});
+  assert.deepEqual([steadyArea.value, steadyArea.unit, steadyArea.trend, steadyArea.tone, steadyArea.word], ['5', ' of 6', 'same', 'good', '→ same'], 'five of six every night: steady');
+  assert.equal(steadyArea.series.length, 30);
+  assert.equal(steadyArea.series.filter(point => point.value == null).length, 16, 'a night that did not run is a gap, never a 0');
+  const dropped = search({days, searchNights: [night(0, 2), ...steady]});
+  assert.deepEqual([dropped.trend, dropped.tone, dropped.word, dropped.value], ['worse', 'bad', '↓ worse', '4.6'], 'measured 2 of 6 against five before: red; (2 + 6 × 5) over 7 nights');
+  assert.match(dropped.subs[0], new RegExp(`Newest night \\(${DAYS(0)}\\): measured 2 of 6 · only 2 of 6 measured \\(under 4\\)`));
+  assert.match(dropped.subs[1], /Relevant local jobs: median 18 a night \(last 7 nights\)/);
+  const slipped = search({days, searchNights: nightsOf(13, 7, 6).concat(nightsOf(6, 0, 4))});
+  assert.deepEqual([slipped.trend, slipped.tone], ['worse', 'warn'], 'the average fell but the newest night is still fine: to watch, not red');
+  const first = search({days, searchNights: [night(0, 1), night(1, 6)]});
+  assert.deepEqual([first.trend, first.tone, first.delta], ['worse', 'bad', 'no earlier week to compare with'], 'under 4 of 6 is a drop even in the first week');
+  assert.deepEqual([search({days, searchNights: [night(0, 5)]}).trend, search({days, searchNights: [night(0, 5)]}).tone], ['new', 'good']);
+  const out = search({days, searchNights: [night(0, 5, {ran: ['employer sites']}), ...steady]});
+  assert.match(out.subs[0], /time ran out for employer sites in 6 of 6/, 'the other two reasons turn it red too');
+});
+
+test('Search: no night is "not measured" with its reason, never 0; a stopped job is the news', () => {
+  for (const [searchNights, label] of [[null, 'the nightly search results could not be read'], [[], 'no nightly search stored in the last 30 days'], [nightsOf(25, 20, 6), 'no nightly search in the last 14 days']]) {
+    const area = search({days, searchNights});
+    assert.deepEqual([area.value, area.trend, area.tone, area.series.length, area.label], [null, 'none', 'none', 0, label]);
+  }
+  assert.equal(search({days, searchNights: [night(40, 6)]}).trend, 'none', 'a night older than the 30 days is not on the board');
 });
 
 test('the verdict names what slips and what to watch', () => {
@@ -162,13 +193,13 @@ test('the reader: one pass over the site tables gives the inputs; a broken sourc
   assert.equal((await loadInputs(env, now)).finders, 4, 'a snapshot of the last 7 days counts (fixed + queued)');
   db.exec('DELETE FROM selfheal_snapshots');
   const areas = areasOf(inputs);
-  assert.deepEqual(areas.map(area => [area.id, area.trend]), [['form', 'new'], ['ai', 'none'], ['speed', 'thin'], ['reliability', 'new'], ['bugs', 'none']]);
+  assert.deepEqual(areas.map(area => [area.id, area.trend]), [['form', 'new'], ['ai', 'none'], ['speed', 'thin'], ['search', 'none'], ['reliability', 'new'], ['bugs', 'none']]);
   assert.equal(areas[0].value, '70', '28 of 40 required fields filled in the last 7 days');
   STATS.db.exec('DROP TABLE synthetic_probes');
   const broken = await loadInputs(env, now);
   assert.equal(broken.probes, null);
   assert.equal(broken.fill.rows.length, 3, 'the other sources still answer');
-  assert.equal(areasOf(broken)[3].tone, 'none');
+  assert.equal(areasOf(broken)[4].tone, 'none');
 });
 
 test('the board draws every value escaped, and an unknown tone never prints "undefined"', () => {
@@ -196,7 +227,7 @@ test('the page never goes down with the board: a failing board is null, the page
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /Plumbing: did the nightly jobs run/);
-  assert.match(html, /0 of 5 areas on target/);
+  assert.match(html, /0 of 6 areas on target/);
   assert.ok(errors.mock.calls.some(call => /fill cards unreadable: boom/.test(String(call.arguments[0]))), 'the broken source is named in the log');
 });
 
