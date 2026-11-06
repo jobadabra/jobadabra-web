@@ -120,4 +120,10 @@ test("a press on a mail's Open button keeps only its day; any other page view ke
   assert.equal(press.source, 'mail-digest');
   assert.equal(press.at, `${press.day}T00:00:00.000Z`);
   assert.notEqual(view.at, `${view.day}T00:00:00.000Z`);
+  // Gitar on #476: the same visit's Download click carries the mail source (track.js) and keeps only its day too.
+  await worker.fetch(request('/download/mac?from=hero&page=/&src=mail-digest'), e, {});
+  await worker.fetch(request('/download/mac?from=hero&page=/&src=google.com'), e, {});
+  const [fromMail, other] = e.STATS.db.prepare('SELECT at, day FROM downloads ORDER BY rowid').all();
+  assert.equal(fromMail.at, `${fromMail.day}T00:00:00.000Z`);
+  assert.notEqual(other.at, `${other.day}T00:00:00.000Z`);
 });

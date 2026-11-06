@@ -188,13 +188,15 @@ test('the four number tables are charts with the table behind "Show table"; the 
 
 test("an Open press counts once per visitor for its mail, inside the window; other pages and sources do not", async () => {
   const {env} = await fill();
-  const visit = env.STATS.db.prepare("INSERT INTO visits (day, at, visitor, page, source, country, device) VALUES ('d', ?, ?, ?, ?, '', '')");
+  const insert = env.STATS.db.prepare("INSERT INTO visits (day, at, visitor, page, source, country, device) VALUES (?, ?, ?, ?, ?, '', '')");
+  const visit = {run: (at, ...rest) => insert.run(at.slice(0, 10), at, ...rest)};
   visit.run('2026-10-26T12:00:00Z', 'v1', '/open', 'mail-digest');
   visit.run('2026-10-26T12:01:00Z', 'v1', '/open', 'mail-digest');      // pressed twice
   visit.run('2026-10-26T12:02:00Z', 'v2', '/open.html', 'mail-digest');
   visit.run('2026-10-26T12:03:00Z', 'v3', '/pricing', 'mail-digest');   // walked on through the site
   visit.run('2026-10-26T12:04:00Z', 'v4', '/open', 'google.com');
   visit.run('2026-08-01T12:00:00Z', 'v5', '/open', 'mail-digest');      // outside the window
+  env.STATS.db.prepare("INSERT INTO visits (day, at, visitor, page, source, country, device) VALUES ('2026-10-19', '2026-10-19T00:00:00.000Z', 'v6', '/open', 'mail-digest', '', '')").run();   // the window's first day, kept by its day only (Gitar on #476)
   const data = await collect(env, {days: 7, now});
-  assert.deepEqual(data.byTemplate.map(r => [r.template, r.opened]), [['welcome', 0], ['digest', 2]]);
+  assert.deepEqual(data.byTemplate.map(r => [r.template, r.opened]), [['welcome', 0], ['digest', 3]]);
 });

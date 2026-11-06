@@ -21,7 +21,7 @@ export async function collect(env, {days = 7, now = new Date()} = {}) {
   const [perDay, sentByTemplate, presses, refused, recent, offReasons, confirmed, unconfirmed, service, releases, tips, digest, held, heldOldest, today] = await Promise.all([
     many(env, "SELECT substr(at, 1, 10) AS day, SUM(status = 'sent') AS sent, SUM(status NOT IN ('sent', 'claimed')) AS refused FROM mail_log WHERE at >= ? GROUP BY day ORDER BY day", since),
     many(env, "SELECT template, SUM(status = 'sent') AS sent, SUM(status NOT IN ('sent', 'claimed')) AS refused, MAX(CASE WHEN status = 'sent' THEN at END) AS last FROM mail_log WHERE at >= ? GROUP BY template ORDER BY sent DESC", since),
-    many(env, "SELECT substr(source, 6) AS template, COUNT(DISTINCT visitor) AS n FROM visits WHERE page IN ('/open', '/open.html') AND source LIKE 'mail-%' AND at >= ? GROUP BY source", since),
+    many(env, "SELECT substr(source, 6) AS template, COUNT(DISTINCT visitor) AS n FROM visits WHERE page IN ('/open', '/open.html') AND source LIKE 'mail-%' AND day >= ? GROUP BY source", since.slice(0, 10)),   // by day: a press keeps only its day (api/downloads.js stamp)
     many(env, "SELECT status AS reason, COUNT(*) AS n FROM mail_log WHERE status NOT IN ('sent', 'claimed') AND at >= ? GROUP BY status ORDER BY n DESC", since),
     many(env, "SELECT at, addr, template, status FROM mail_log WHERE status NOT IN ('sent', 'claimed') ORDER BY at DESC LIMIT 10"),
     many(env, "SELECT reason, list, COUNT(*) AS n FROM mail_off WHERE list NOT LIKE 'app-%' GROUP BY reason, list ORDER BY n DESC"),
