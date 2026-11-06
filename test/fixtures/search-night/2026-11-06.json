@@ -1,0 +1,228 @@
+{
+ "state": "success",
+ "head": "🟢 measured 2 of 6 · every press ≤ 180 s · quality: shown, not gated (main reached 0 right jobs in one of its last 10 runs)",
+ "rows": [
+  {
+   "persona": 1,
+   "label": "p1 Truck Driver (Class CE), Sofia",
+   "main": [
+    0,
+    0,
+    0
+   ],
+   "local": 9,
+   "found": 36,
+   "seconds": 154,
+   "usd": 0,
+   "billing": "subscription",
+   "mark": "🟢",
+   "why": "",
+   "kind": "measured",
+   "reasons": [],
+   "engine": "codex (gpt-6-luna)",
+   "funnel_note": "places worked out at 17 s; web search started at 18 s; employers named at 54 s; time ran out for: employer sites, job boards, free job APIs, descriptions, scoring the job boards' jobs"
+  },
+  {
+   "persona": 2,
+   "label": "p2 HR Generalist, Cluj-Napoca",
+   "main": [
+    0,
+    0,
+    0
+   ],
+   "local": 0,
+   "found": 0,
+   "seconds": 157,
+   "usd": 0,
+   "billing": "subscription",
+   "mark": "⚪",
+   "why": "no job scored",
+   "kind": "nothing",
+   "reasons": [],
+   "engine": "codex (gpt-6-luna)",
+   "funnel_note": "places worked out at 22 s; web search started at 23 s; employers named at 57 s; time ran out for: job boards, employer sites, free job APIs, descriptions, scoring the job boards' jobs"
+  },
+  {
+   "persona": 3,
+   "label": "p3 Carpenter, Brussels",
+   "main": [
+    0,
+    0,
+    0
+   ],
+   "local": 0,
+   "found": 10,
+   "seconds": 156,
+   "usd": 0,
+   "billing": "subscription",
+   "mark": "⚪",
+   "why": "scored 3, none right role and place",
+   "kind": "none-right",
+   "reasons": [],
+   "engine": "codex (gpt-6-luna)",
+   "funnel_note": "places worked out at 20 s; web search started at 21 s; employers named at 54 s; time ran out for: employer sites, job boards, free job APIs, descriptions, scoring the job boards' jobs"
+  },
+  {
+   "persona": 4,
+   "label": "p4 Warehouse Operator, Zurich",
+   "main": [
+    0,
+    0,
+    0
+   ],
+   "local": 0,
+   "found": 3,
+   "seconds": 178,
+   "usd": 0,
+   "billing": "subscription",
+   "mark": "⚪",
+   "why": "scored 2, none right role and place",
+   "kind": "none-right",
+   "reasons": [],
+   "engine": "codex (gpt-6-luna)",
+   "funnel_note": "places worked out at 11 s; web search started at 12 s; employers named at 47 s; time ran out for: job boards, employer sites, free job APIs, descriptions, scoring the job boards' jobs, finding more employers"
+  },
+  {
+   "persona": 5,
+   "label": "p5 Chef de Partie, Krakow",
+   "main": [
+    0,
+    0,
+    0
+   ],
+   "local": 4,
+   "found": 13,
+   "seconds": 165,
+   "usd": 0,
+   "billing": "subscription",
+   "mark": "🟢",
+   "why": "",
+   "kind": "measured",
+   "reasons": [],
+   "engine": "codex (gpt-6-luna)",
+   "funnel_note": "places worked out at 23 s; web search started at 24 s; employers named at 57 s; time ran out for: employer sites, job boards, free job APIs, descriptions, scoring the job boards' jobs"
+  },
+  {
+   "persona": 6,
+   "label": "p6 Digital Marketing Manager, Zagreb",
+   "main": [
+    0,
+    0,
+    0
+   ],
+   "local": 0,
+   "found": 0,
+   "seconds": 158,
+   "usd": 0,
+   "billing": "subscription",
+   "mark": "⚪",
+   "why": "no job scored",
+   "kind": "nothing",
+   "reasons": [],
+   "engine": "codex (gpt-6-luna)",
+   "funnel_note": "places worked out at 17 s; web search started at 18 s; employers named at 52 s; time ran out for: job boards, employer sites, free job APIs, descriptions, scoring the job boards' jobs"
+  }
+ ],
+ "main_runs": 34,
+ "quality": {
+  "mode": "shown",
+  "measured": 10,
+  "total": 13,
+  "floor": null,
+  "red": false,
+  "why": "main reached 0 right jobs in one of its last 10 runs"
+ },
+ "unavailable": "",
+ "personas": {
+  "1": {
+   "persona": 1,
+   "label": "p1 Truck Driver (Class CE), Sofia",
+   "funnel_note": "places worked out at 17 s; web search started at 18 s; employers named at 54 s; time ran out for: employer sites, job boards, free job APIs, descriptions, scoring the job boards' jobs",
+   "seconds": 154,
+   "code": 0,
+   "crashes": 0,
+   "scored": 0,
+   "engine": "codex (gpt-6-luna)",
+   "found": 36,
+   "local": 9,
+   "usd": 0,
+   "billing": "subscription",
+   "non_haiku": 0
+  },
+  "2": {
+   "persona": 2,
+   "label": "p2 HR Generalist, Cluj-Napoca",
+   "funnel_note": "places worked out at 22 s; web search started at 23 s; employers named at 57 s; time ran out for: job boards, employer sites, free job APIs, descriptions, scoring the job boards' jobs",
+   "seconds": 157,
+   "code": 0,
+   "crashes": 0,
+   "scored": 0,
+   "engine": "codex (gpt-6-luna)",
+   "found": 0,
+   "local": 0,
+   "usd": 0,
+   "billing": "subscription",
+   "non_haiku": 0
+  },
+  "3": {
+   "persona": 3,
+   "label": "p3 Carpenter, Brussels",
+   "funnel_note": "places worked out at 20 s; web search started at 21 s; employers named at 54 s; time ran out for: employer sites, job boards, free job APIs, descriptions, scoring the job boards' jobs",
+   "seconds": 156,
+   "code": 0,
+   "crashes": 0,
+   "scored": 3,
+   "engine": "codex (gpt-6-luna)",
+   "found": 10,
+   "local": 0,
+   "usd": 0,
+   "billing": "subscription",
+   "non_haiku": 0
+  },
+  "4": {
+   "persona": 4,
+   "label": "p4 Warehouse Operator, Zurich",
+   "funnel_note": "places worked out at 11 s; web search started at 12 s; employers named at 47 s; time ran out for: job boards, employer sites, free job APIs, descriptions, scoring the job boards' jobs, finding more employers",
+   "seconds": 178,
+   "code": 0,
+   "crashes": 0,
+   "scored": 2,
+   "engine": "codex (gpt-6-luna)",
+   "found": 3,
+   "local": 0,
+   "usd": 0,
+   "billing": "subscription",
+   "non_haiku": 0
+  },
+  "5": {
+   "persona": 5,
+   "label": "p5 Chef de Partie, Krakow",
+   "funnel_note": "places worked out at 23 s; web search started at 24 s; employers named at 57 s; time ran out for: employer sites, job boards, free job APIs, descriptions, scoring the job boards' jobs",
+   "seconds": 165,
+   "code": 0,
+   "crashes": 0,
+   "scored": 3,
+   "engine": "codex (gpt-6-luna)",
+   "found": 13,
+   "local": 4,
+   "usd": 0,
+   "billing": "subscription",
+   "non_haiku": 0
+  },
+  "6": {
+   "persona": 6,
+   "label": "p6 Digital Marketing Manager, Zagreb",
+   "funnel_note": "places worked out at 17 s; web search started at 18 s; employers named at 52 s; time ran out for: job boards, employer sites, free job APIs, descriptions, scoring the job boards' jobs",
+   "seconds": 158,
+   "code": 0,
+   "crashes": 0,
+   "scored": 0,
+   "engine": "codex (gpt-6-luna)",
+   "found": 0,
+   "local": 0,
+   "usd": 0,
+   "billing": "subscription",
+   "non_haiku": 0
+  }
+ }
+}

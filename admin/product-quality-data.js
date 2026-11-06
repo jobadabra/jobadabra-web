@@ -9,6 +9,7 @@ import {lastDays, loadNightlySummary} from './nightly-summary.js';
 import {finderJobs} from './report-only-finders.js';
 import {issues} from './sentry.js';
 import {snapshots} from './selfheal.js';
+import {nights} from './search-night.js';
 import {readCard} from '../shared/synthetic.js';
 import {MIN_INSTALLS} from '../shared/thin-data.js';
 import {WEEK, WINDOW} from './product-quality.js';
@@ -26,7 +27,7 @@ async function sampleIn(db, from) {
 }
 
 /**
- * Everything the five areas need, read once. Each key is null when its source is missing or unreadable.
+ * Everything the six areas need, read once. Each key is null when its source is missing or unreadable.
  * @param {object} env the Worker env (STATS D1, SENTRY_AUTH_TOKEN)
  * @param {Date} [now]
  * @param {{healing?: object[]}} [shared] the self-healing snapshots when the page already read them (one read per view)
@@ -34,7 +35,7 @@ async function sampleIn(db, from) {
  */
 export async function loadInputs(env, now = new Date(), {healing: known} = {}) {
   const days = lastDays(now, WINDOW), from = days[0], db = env.STATS, week = since(now, 1), fortnight = since(now, 2), real = (id, ...args) => safe(id, () => FORM_FILLING[id](env, ...args));
-  const [fill, nightly, answers, searches, probes, crashes, sentry, newProblems, snapshot, healing] = await Promise.all([
+  const [fill, nightly, answers, searches, probes, crashes, sentry, newProblems, snapshot, healing, searchNights] = await Promise.all([
     db ? safe('fill cards', async () => ({
       rows: await rowsOf(db, "SELECT day, SUM(filled) AS filled, SUM(required) AS required FROM fill_cards WHERE source = 'user' AND day >= ? GROUP BY day", from),
       sample: await sampleIn(db, fortnight),
@@ -50,10 +51,11 @@ export async function loadInputs(env, now = new Date(), {healing: known} = {}) {
     env.SENTRY_AUTH_TOKEN ? safe('Sentry', async () => (await issues(env, 'users')).length) : null,
     db ? safe('new problems', async () => rowsOf(db, "SELECT first AS day, COUNT(*) AS n FROM (SELECT MIN(day) AS first FROM telemetry WHERE kind IN ('crash', 'run_failed') GROUP BY fingerprint) WHERE first >= ? GROUP BY first", from)) : null,
     db ? safe('e2e snapshot', () => readSnapshot(db)) : null,
-    known !== undefined ? known : db ? safe('self-healing snapshots', () => snapshots(env)) : []]);
+    known !== undefined ? known : db ? safe('self-healing snapshots', () => snapshots(env)) : [],
+    db ? safe('night search', () => nights(env)) : null]);
   // Why (Gitar on #412): a finder count is a rolling 7 days, so only a snapshot of the last 7 days counts; a stopped job is "not measured", not a stale number labelled as this week.
   const filed = finderJobs(healing || [], days.slice(-WEEK)).filter(job => job.id.startsWith('finder-') && job.value !== '–').map(job => Number(job.value));
-  return {days, fill, nightly, answers, searches, probes, crashes, sentry, newProblems, snapshot, finders: filed.length ? filed.reduce((sum, n) => sum + n, 0) : null};
+  return {days, fill, nightly, answers, searches, probes, crashes, sentry, newProblems, snapshot, finders: filed.length ? filed.reduce((sum, n) => sum + n, 0) : null, searchNights};
 }
 
 /**

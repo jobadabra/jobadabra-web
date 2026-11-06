@@ -1,9 +1,10 @@
-// The five areas of the product-quality board, each built from ALREADY-READ inputs (admin/product-quality-data.js reads; admin/product-quality.js holds the judging helpers). A missing or empty source
+// The six areas of the product-quality board, each built from ALREADY-READ inputs (admin/product-quality-data.js reads; admin/product-quality.js holds the judging helpers). A missing or empty source
 // gives "not measured" with its reason; real-user numbers under 3 installs give "Too few installs (n)". Guard: test/unit/admin/report/product-quality.test.js.
 //
-// inputs = {days: 'YYYY-MM-DD'[] (oldest first, 30), fill, nightly, answers, searches, probes, crashes, sentry, newProblems, snapshot, finders}; each is null when its source could not be read.
+// inputs = {days: 'YYYY-MM-DD'[] (oldest first, 30), fill, nightly, answers, searches, probes, crashes, sentry, newProblems, snapshot, finders, searchNights}; each is null when its source could not be read.
 import {judge, median, notMeasured, round, toneOf, deltaText, verdictOf, weeks, WEEK, WORDS} from './product-quality.js';
 import {MIN_INSTALLS} from '../shared/thin-data.js';
+import {search} from './product-quality-search.js';
 
 const isNum = value => typeof value === 'number' && Number.isFinite(value);
 const trendOf = (now, before, options) => judge(now, before, options) ?? 'new';
@@ -116,8 +117,8 @@ export const GAPS = [
   {area: 'AI quality per step', question: 'right / total per prompt', why: 'Not collected: prompt cases are stored as one total per night, not per prompt.'},
 ];
 
-/** The five areas, in page order. */
-export const areasOf = inputs => [formFilling(inputs), aiQuality(inputs), speed(inputs), reliability(inputs), bugs(inputs)];
+/** The six areas, in page order (Search, owner 6 Nov 2026, sits after Speed: both are about finding jobs). */
+export const areasOf = inputs => [formFilling(inputs), aiQuality(inputs), speed(inputs), search(inputs), reliability(inputs), bugs(inputs)];
 
 /** What the page draws: the areas, the verdict over them, the two things nothing collects yet. */
 export function qualityModel(inputs) {
