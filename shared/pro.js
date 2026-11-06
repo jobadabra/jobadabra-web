@@ -17,11 +17,14 @@ export const promoOn = env => planOn(env) || env.PRO_PLAN === 'promo';
 const stamp = date => date.toISOString();
 const parseKey = key => { const [tag, install, token] = String(key || '').split('.'); return tag === 'JPF1' && install && token ? {install, token} : null; };   // as free-ai.js (not imported: it imports this lane)
 
-// The account a (raw) install id belongs to, or null.
-export async function accountOf(env, install) {
+// The account a (raw) install id belongs to, or null; throws if it cannot be read. For a caller that must tell "no account" from "not read" (api/mail-choices.js).
+export async function readAccount(env, install) {
   if (!env.STATS || !install) return null;
-  return (await env.STATS.prepare('SELECT a.* FROM pro_devices d JOIN pro_accounts a ON a.id = d.account WHERE d.install = ?').bind(install).first().catch(() => null)) || null;
+  return (await env.STATS.prepare('SELECT a.* FROM pro_devices d JOIN pro_accounts a ON a.id = d.account WHERE d.install = ?').bind(install).first()) || null;
 }
+
+// The same, with a failed read as null.
+export const accountOf = (env, install) => readAccount(env, install).catch(() => null);
 
 // An account for an e-mail (the same e-mail is the same account) -> its id. `plan: 'trial'` makes a trial account (onboarding, no payment: no Pro lane, no credit);
 // a payment makes or finds the account and flips it to Pro (makePro). An existing account is never downgraded or restarted by asking again.

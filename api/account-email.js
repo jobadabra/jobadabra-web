@@ -130,7 +130,7 @@ export async function notify(request, env, now = new Date()) {
   const buttons = (Array.isArray(body.buttons) ? body.buttons : []).slice(0, 6).filter(b => b && /^https:\/\//.test(b.url) && b.text).map(b => ({text: String(b.text).slice(0, 80), url: String(b.url).slice(0, 500)}));
   const item = {subject: String(body.subject || '').slice(0, 150), html, text, buttons};
   const row = APP_ROWS.includes(body.mail) ? body.mail : '';
-  const toHold = async () => { const refused = await heldRefusal(env, account.email, row, now); return refused ? {ok: false, reason: refused} : hold(env, account, item, now); };
+  const toHold = async () => { const refused = await heldRefusal(env, account.email, row, now); return refused ? {ok: false, reason: refused} : hold(env, account, {...item, row}, now); };
   if (body.kind === 'activity') return json(200, await toHold());   // not new matches, not urgent: waits for the daily or weekly digest (api/mail-held.js)
   const result = await deliver(env, account, item, now, {row});
   if (result.reason === 'unconfirmed') return json(200, await toHold());   // today's one mail to an unconfirmed address went: this one waits for the digest, never dropped

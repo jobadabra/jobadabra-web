@@ -26,7 +26,7 @@ export const MAILS = [
   // the app applies them (PR 4), the site stores only what a person changed (mail_off / mail_on, list = the row id).
   {id: 'app-matches', template: 'message', owner: 'yours', name: 'New matches', when: 'a search finds new jobs', suggested: {mac: 'digest', always: 'digest'}},
   {id: 'app-needs-you', template: 'message', owner: 'yours', name: 'An application needs you', when: 'an application waits for the person', suggested: {mac: 'no', always: 'mail'}},
-  {id: 'app-applied', template: 'message', owner: 'yours', name: 'Applied for you', when: 'Full automation sent an application', suggested: {mac: 'no', always: 'no'}},
+  {id: 'app-applied', template: 'message', owner: 'yours', name: 'Applied for you', when: 'Full automation sent an application', suggested: {mac: 'no', always: 'mail'}},
   {id: 'app-weekly', template: 'message', owner: 'yours', name: 'Weekly summary', when: "the person's day, Mondays by default", suggested: {mac: 'mail', always: 'mail'}},
   {id: 'app-stopped', template: 'message', owner: 'yours', name: 'Always on stopped working', when: 'a run on GitHub fails', suggested: {mac: 'hidden', always: 'mail'}},
   {id: 'app-nothing', template: 'message', owner: 'yours', name: 'Nothing found for days', when: 'days of runs with no new match', suggested: {mac: 'hidden', always: 'mail'}},

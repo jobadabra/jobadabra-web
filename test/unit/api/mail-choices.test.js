@@ -13,7 +13,7 @@ import {tokenFor} from '../../../shared/guard.js';
 import {mintTrialKey} from '../../../shared/trial-key.js';
 
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
-function d1(files = ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql', '0135_mail_on.sql', '0138_mail_rule.sql']) {
+function d1(files = ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql', '0135_mail_on.sql', '0138_mail_rule.sql', '0139_mail_held_row.sql']) {
   resetRuleCache();
   const db = new DatabaseSync(':memory:');
   for (const file of files) db.exec(sql(file));
