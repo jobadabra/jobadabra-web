@@ -199,13 +199,13 @@ const withWaitlist = e => { e.WAITLIST = {get: async key => ({'signup:web@exampl
 const news = async (e, install = 'install-aaaa') => { const got = await call(address, e, install, 'GET'); return {releases: got.releases, tips: got.tips, answered: got.newsAnswered, old: got.marketing}; };
 const rows = (e, sql) => e.STATS.db.prepare(sql).all().map(row => ({...row}));
 
-test('the owner\'s case: a confirmed address with no stop shows New releases on and Tips and tricks off, never answered', async () => {
+test('the owner\'s case: a confirmed address with no stop shows both news switches off, never answered', async () => {
   // Why (5 Nov 2026): the owner's box showed "Also send me product news" ticked while the site held no tick (their row: marketing_opt_in 0, no stop on file). GET said "no stop", not "ticked".
   const {e} = setup();
   await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});
   assert.deepEqual(await news(e), {releases: false, tips: false, answered: false, old: false}, 'unconfirmed: the sender sends no news');
   e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
-  assert.deepEqual(await news(e), {releases: true, tips: false, answered: false, old: false}, 'releases are a default, tips need a tick; the app\'s old box reads tips');
+  assert.deepEqual(await news(e), {releases: false, tips: false, answered: false, old: false}, 'both need a yes (owner, 6 Nov 2026); the app\'s old box reads tips');
   assert.deepEqual(rows(e, 'SELECT * FROM mail_on'), [], 'a default stores nothing');
 });
 
@@ -214,7 +214,7 @@ test('a PUT with releases and tips stores each answer apart; a missing field cha
   await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});
   e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
   await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', tips: true, newsVia: 'card'});
-  assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true});
+  assert.deepEqual(await news(e), {releases: false, tips: true, answered: true, old: true});
   assert.deepEqual(rows(e, 'SELECT list, via FROM mail_on'), [{list: 'tips', via: 'card'}], 'only what was pressed; the via says where');
   await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', releases: false});
   assert.deepEqual(await news(e), {releases: false, tips: true, answered: true, old: true}, 'stopping releases leaves tips');
@@ -225,7 +225,7 @@ test('a PUT with releases and tips stores each answer apart; a missing field cha
   assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true}, 'a save with no news field changes nothing');
 });
 
-test('the old box from an app already out is the Tips and tricks box: true is a tips yes and never touches releases; false stops only what was a yes', async () => {
+test('the old box from an app already out says "product news and the Pro launch offer": true is a yes to both; false stops only what was a yes', async () => {
   // Why (review of #hr-24, 5 Nov 2026): the app sends marketing on every save, so a never-answered box must not become a stop that later beats a waitlist signup.
   const {e} = setup();
   const stops = () => rows(e, "SELECT COUNT(*) n FROM mail_off WHERE list IN ('releases', 'tips')")[0].n;
@@ -233,9 +233,9 @@ test('the old box from an app already out is the Tips and tricks box: true is a 
   await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: false});
   assert.equal(stops(), 0);
   await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: true});
-  assert.deepEqual(rows(e, 'SELECT list, via FROM mail_on ORDER BY list'), [{list: 'tips', via: 'old-box'}]);
+  assert.deepEqual(rows(e, 'SELECT list, via FROM mail_on ORDER BY list'), [{list: 'releases', via: 'old-box'}, {list: 'tips', via: 'old-box'}]);
   await call(address, e, 'install-aaaa', 'PUT', {email: 'new@example.com', marketing: false});
-  assert.equal(stops(), 1, 'the tips stop only');
+  assert.equal(stops(), 2, 'each yes it gave is taken back');
   const listed = withWaitlist(setup().e);
   await call(address, listed, 'install-bbbb', 'PUT', {email: 'web@example.com', marketing: false});
   assert.equal((await news(listed, 'install-bbbb')).releases, true, 'the website waitlist signup still counts: the unticked box took nothing back');
@@ -264,7 +264,7 @@ test('a Pro account saves its choices at its own address; only changing the addr
   await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com'});
   e.STATS.db.prepare("UPDATE pro_accounts SET plan = 'pro'").run();
   assert.equal((await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com', tips: true})).status, 200);
-  assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true}, 'a Pro account counts as confirmed');
+  assert.deepEqual(await news(e), {releases: false, tips: true, answered: true, old: true}, 'a Pro account counts as confirmed');
   assert.equal((await call(address, e, 'install-aaaa', 'PUT', {email: 'other@example.com'})).status, 409);
   for (const list of ['releases', 'tips']) e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES ((SELECT email_hash FROM pro_accounts), ?, 'unsubscribe', 'x')").run(list);
   await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com', releases: true, tips: true});

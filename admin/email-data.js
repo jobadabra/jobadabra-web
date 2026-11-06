@@ -27,7 +27,7 @@ export async function collect(env, {days = 7, now = new Date()} = {}) {
     one(env, 'SELECT COUNT(*) AS n FROM pro_accounts WHERE email_confirmed_at IS NOT NULL'),
     one(env, 'SELECT COUNT(*) AS n FROM pro_accounts WHERE email_confirmed_at IS NULL'),
     one(env, `SELECT COUNT(*) AS n FROM pro_accounts a WHERE a.service_mail_off_at IS NULL AND ${NOT_STOPPED('service')}`),
-    one(env, `SELECT COUNT(*) AS n FROM pro_accounts a WHERE (a.email_confirmed_at IS NOT NULL OR a.plan = 'pro') AND ${NOT_STOPPED('releases')} AND (EXISTS (SELECT 1 FROM mail_on y WHERE y.addr = a.email_hash AND y.list IN ('releases', 'tips')) OR EXISTS (SELECT 1 FROM mail_off o WHERE o.addr = a.email_hash AND o.list IN ('releases', 'tips')))`),
+    one(env, `SELECT COUNT(*) AS n FROM pro_accounts a WHERE (a.email_confirmed_at IS NOT NULL OR a.plan = 'pro') AND ${NOT_STOPPED('releases')} AND EXISTS (SELECT 1 FROM mail_on y WHERE y.addr = a.email_hash AND y.list = 'releases')`),
     one(env, `SELECT COUNT(*) AS n FROM pro_accounts a JOIN mail_on y ON y.addr = a.email_hash AND y.list = 'tips' WHERE (a.email_confirmed_at IS NOT NULL OR a.plan = 'pro') AND ${NOT_STOPPED('tips')}`),
     one(env, `SELECT COUNT(*) AS n FROM pro_accounts a JOIN mail_on y ON y.addr = a.email_hash AND y.list = 'jobdigest' WHERE (a.email_confirmed_at IS NOT NULL OR a.plan = 'pro') AND ${NOT_STOPPED('jobdigest')}`),
     one(env, 'SELECT COUNT(*) AS n, COUNT(DISTINCT account) AS accounts FROM mail_held'),

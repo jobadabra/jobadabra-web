@@ -1,8 +1,8 @@
-// The e-mail settings page a mail's footer links to (owner, 17 Oct 2026): service mail on/off, the digest daily or weekly, New releases and Tips and tricks on/off. No sign-in: the signed link is the one the stop link uses
+// The e-mail settings page a mail's footer links to (owner, 17 Oct 2026): service mail on/off, the digest daily or weekly, What's new and News and tips on/off. No sign-in: the signed link is the one the stop link uses
 // (tokenFor(address digest, 'unsub-service')). GET shows the form (a mail scanner opening the link changes nothing); POST saves. Both news boxes show off and locked while env.MARKETING_MAIL is not "on". Guard: test/unit/api/mail-settings.test.js.
 import {equal, tokenFor} from '../shared/guard.js';
 import {esc} from '../shared/mail-frame.js';
-import {NEWS, newsAnswer, newsFacts, sayYes} from '../shared/mail-lists.js';
+import {NEWS, NEWS_SWITCHES, newsAnswer, newsFacts, sayYes} from '../shared/mail-lists.js';
 import {CADENCES} from './mail-held.js';
 import {page, switchOff} from './mail-unsub.js';
 
@@ -15,7 +15,9 @@ async function stateOf(env, addr) {
   const account = await env.STATS.prepare('SELECT email, plan, email_confirmed_at, service_mail_off_at, digest_cadence FROM pro_accounts WHERE email_hash = ?').bind(addr).first().catch(() => null);
   const lists = new Set(off.map(r => r.list));
   // Why (5 Nov 2026): an address with no account has no confirm step to wait for (the waitlist); an account's address counts once it is confirmed, like the sender reads it (shared/mail-lists.js).
-  const facts = {...await newsFacts(env, addr, account?.email || null), confirmed: !account || !!account.email_confirmed_at || account.plan === 'pro'};
+  const held = await newsFacts(env, addr, account?.email || null);
+  // Why (review of hr-36): the link holds only a digest, so a waitlist entry cannot be looked up here. An address with no account got its link as a waitlist signup: show What's new on, or the person could not stop it on this page.
+  const facts = {...held, confirmed: !account || !!account.email_confirmed_at || account.plan === 'pro', signup: account ? held.signup : 'news'};
   return {blocked: lists.has('all'), service: !lists.has('service') && !account?.service_mail_off_at, cadence: account?.digest_cadence || 'daily', news: Object.fromEntries(NEWS.map(list => [list, newsAnswer(list, facts)])), account};
 }
 
@@ -46,8 +48,7 @@ export async function settings(request, env, now = new Date()) {
   const body = `${st.blocked ? '<p><b>Mail to this address is stopped</b> after a bounce or a complaint. Write to hello@jobadabra.top to turn it back on.</p>' : ''}`
     + `<form method="post" class="fields">${row('service', st.service, 'Jobadabra emails', 'New matches, your digest and account notices.', st.blocked)}`
     + `<p><label><b>Digest</b><br><select name="cadence"${st.blocked ? ' disabled' : ''}>${CADENCES.map(c => `<option value="${c}"${st.cadence === c ? ' selected' : ''}>${c === 'daily' ? 'One email a day' : 'One email a week (Mondays)'}</option>`).join('')}</select></label><br><small>Everything except new matches, which arrive at once.</small></p>`
-    + `${row('releases', marketingOn && st.news.releases, 'New releases', marketingOn ? 'What is new in each version.' : OFF, !marketingOn || st.blocked)}`
-    + `${row('tips', marketingOn && st.news.tips, 'Tips and tricks', marketingOn ? 'Tips, and offers like the Pro launch.' : OFF, !marketingOn || st.blocked)}`
+    + NEWS_SWITCHES.map(({id, name, when}) => row(id, marketingOn && st.news[id], name, marketingOn ? `${when}.` : OFF, !marketingOn || st.blocked)).join('')
     + `<button${st.blocked ? ' disabled' : ''}>Save</button></form>`;
   return page('Email settings', body);
 }

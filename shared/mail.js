@@ -59,6 +59,12 @@ export async function mailAllowed(env, to, list = 'service', {essential = false,
   return {ok: true};
 }
 
+// Why (owner, 6 Nov 2026: "At most one of these mails per person per week"): the mails we choose to send never pile up; a person's own mails and Account mails do not count.
+async function newsThisWeek(env, addr, now) {
+  const since = new Date(now.getTime() - 7 * DAY).toISOString();
+  return !!await env.STATS.prepare(`SELECT 1 AS y FROM mail_log WHERE addr = ? AND list IN (${NEWS.map(() => '?').join(', ')}) AND status = 'sent' AND template NOT LIKE 'test:%' AND at >= ? LIMIT 1`).bind(addr, ...NEWS, since).first();
+}
+
 async function record(env, now, addr, list, template, status, id = null) {
   await env.STATS?.prepare('INSERT INTO mail_log (at, addr, list, template, status, message_id) VALUES (?, ?, ?, ?, ?, ?)').bind(now.toISOString(), addr, list, template, status, id).run().catch(() => {});
 }
@@ -110,6 +116,7 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
     if (!verdict.ok) { if (verdict.reason !== 'bad_address' && verdict.reason !== 'marketing_off') await record(env, now, addr, spec.list, logged, verdict.reason); return verdict; }
     const ruled = ownerTest ? '' : await ruleRefusal(env, template);   // the owner's stop on this one mail, or 'rule_held' when the stops cannot be read (spec 2026-11-05-service-mail-rules-design.md)
     if (ruled) { await record(env, now, addr, spec.list, logged, ruled); return {ok: false, reason: ruled}; }
+    if (NEWS.includes(spec.list) && !test && !ownerTest && await newsThisWeek(env, addr, now)) { await record(env, now, addr, spec.list, logged, 'week_cap'); return {ok: false, reason: 'week_cap'}; }
     const unwanted = row && !test ? await choiceRefusal(env, addr, row) : '';   // one of the app's own mails (`row`, e.g. 'app-matches'): the person's choice for it
     if (unwanted) { await record(env, now, addr, spec.list, logged, unwanted); return {ok: false, reason: unwanted}; }
     // Why (jobadabra-web#431; 20 of 20 parallel sends went out in the review of #430): the room under both caps is CLAIMED in one statement before the provider is asked (D1 runs a statement alone,
