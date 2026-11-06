@@ -74,6 +74,7 @@ test('a choice that cannot be read holds the digest for the next run: it never s
   assert.deepEqual(await sendDigests(e, morning), {sent: 0, kept: 1});
   e.STATS.prepare = real;
   assert.deepEqual([sent.length, held(e)], [0, 1]);
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'choice_held'").get().n, 0, 'waiting is not a refused send: "Why mail was not sent" stays true');
   await sendDigests(e, morning);
   assert.equal(sent.length, 1);
 });

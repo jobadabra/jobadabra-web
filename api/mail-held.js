@@ -1,6 +1,7 @@
 // The e-mail digest of everything that is not a new-matches mail (owner, 17 Oct 2026): mail-check results, insights, finished jobs wait here, and the daily cron sends each account
 // ONE mail (weekly on Mondays for an account that chose weekly). New matches and interview notices never wait: api/account-email.js sends them at once. Guard: test/unit/api/account-email.test.js.
 import {addrOf, confirmLink, heldRefusal, send, sendTestMail} from '../shared/mail.js';
+import {choiceRefusal} from '../shared/mail-choices.js';
 import {TEMPLATES} from '../shared/mail-templates.js';
 import {ruleRefusal} from '../shared/mail-registry.js';
 
@@ -52,8 +53,12 @@ export async function hold(env, account, item, now = new Date()) {
 
 // Each app mail among `rows` -> the person's verdict on it now ('' = still wanted): they may have turned it off after it was held (owner, 6 Nov 2026: "Keep promise, cut extras", in place of a digest kept on the Mac).
 async function verdicts(env, account, rows, now) {
-  const found = new Map();
-  for (const id of new Set(rows.map(row => row.mail_row).filter(Boolean))) found.set(id, await heldRefusal(env, account.email, id, now));
+  const found = new Map(), addr = await addrOf(account.email);
+  for (const id of new Set(rows.map(row => row.mail_row).filter(Boolean))) {
+    const reason = await choiceRefusal(env, addr, id);
+    if (reason === 'person_off') await heldRefusal(env, account.email, id, now);   // Why (Gitar on #463): only a dropped mail is logged; a digest that waits for a failed read was refused nothing
+    found.set(id, reason);
+  }
   return found;
 }
 
