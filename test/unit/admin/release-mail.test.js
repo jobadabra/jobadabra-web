@@ -370,8 +370,8 @@ test('sent release previews and test copies retain the sent snapshot after chang
 
 test('the release action opens the installed app even for an older saved download URL', () => {
   const mail = compose('release', {...SAMPLES.release, updateUrl: 'https://www.jobadabra.top/download'});
-  assert.match(mail.html, /href="https:\/\/www\.jobadabra\.top\/open\?view=jobs"[^>]*>Open Jobadabra App<\/a>/);
-  assert.match(mail.text, /Open Jobadabra App: https:\/\/www\.jobadabra\.top\/open\?view=jobs/);
+  assert.match(mail.html, /href="https:\/\/www\.jobadabra\.top\/open\?view=jobs&amp;utm_source=mail-release"[^>]*>Open Jobadabra App<\/a>/);
+  assert.match(mail.text, /Open Jobadabra App: https:\/\/www\.jobadabra\.top\/open\?view=jobs&utm_source=mail-release/);
   assert.doesNotMatch(mail.html, /Download latest version/);
   assert.match(mail.html, /Download Jobadabra/);
   assert.match(mail.html, /<ol[^>]*>/);

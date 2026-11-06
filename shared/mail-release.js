@@ -1,6 +1,6 @@
 // Compact release emails: the frame's header and title, then the complete changes grouped under New / Improved / Fixed.
 // Email-safe tables and inline styles keep the preview and delivered email consistent. Test copies identify themselves in HTML, text and subject.
-import {appButton} from './app-needs.js';
+import {appButton, fromMail} from './app-needs.js';
 import {button, esc, SITE} from './mail-frame.js';
 import {LIGHT as C} from './mail-palette.js';
 
@@ -9,7 +9,8 @@ const emphasis = text => esc(text).replace(/\*([^*]+)\*/g, '<strong style="font-
 // Why (5 Nov 2026, owner): recipients already have the app; opening it is primary, downloading stays in the footer.
 const OPEN_APP = `${SITE}/open?view=jobs`;
 // An app known to be too old is sent to the download page instead (shared/app-needs.js).
-const openAction = version => appButton({label: 'Open Jobadabra App', url: OPEN_APP}, version);
+// Why (review of hr-39): the release draws its Open button in the body, not as the frame's button, so it names its mail here for the Admin press count.
+const openAction = version => appButton(fromMail({label: 'Open Jobadabra App', url: OPEN_APP}, 'release'), version);
 const plain = text => String(text ?? '').replace(/\*([^*]+)\*/g, '$1');
 const LABELS = {features: 'New', improvements: 'Improved', fixes: 'Fixed'};
 const labelOf = section => LABELS[section.kind] || 'Improved';

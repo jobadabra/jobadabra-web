@@ -107,3 +107,14 @@ test('the Open button names its mail and nothing else; any other link stays as i
   assert.deepEqual(fromMail(update, 'release'), update);
   assert.equal(fromMail(null, 'release'), null);
 });
+
+test('a real release mail and a real digest carry their own name on the Open button', async () => {
+  const {compose} = await import('../../../../shared/mail.js');
+  const {SAMPLES} = await import('../../../../admin/email-preview.js');
+  for (const template of ['release', 'digest']) {
+    const mail = compose(template, {...SAMPLES[template], openUrl: undefined, appVersion: '0.9.13'});   // the gallery's digest links the site, a real one /open
+    assert.ok(mail.text.includes(`/open?view=jobs&utm_source=mail-${template}`), template);
+  }
+  const old = compose('release', {...SAMPLES.release, appVersion: '0.9.6'});
+  assert.ok(!old.text.includes('utm_source') && old.text.includes('/download'), 'an old app still gets the download page, untagged');
+});

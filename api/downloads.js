@@ -44,6 +44,10 @@ async function base(request, env, now) {
     device: device(request.headers.get('User-Agent') || '')};
 }
 
+// A press on a mail's Open button (shared/app-needs.js fromMail). Why (review of hr-39, owner: "Count presses, anonymous"): it keeps only its day,
+// so its time cannot be lined up with the one person's mail in mail_log.
+const mailPress = source => String(source || '').startsWith('mail-');
+
 // POST /api/hit {page, source}: one page view.
 export async function hit(request, env, now = new Date()) {
   if (request.method !== 'POST') return new Response(null, {status: 405});
@@ -52,7 +56,7 @@ export async function hit(request, env, now = new Date()) {
   try { body = JSON.parse(await request.text()); } catch { /* an empty beacon still counts */ }
   const row = await base(request, env, now);
   await env.STATS.prepare('INSERT INTO visits (day, at, visitor, page, source, country, device) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(row.day, row.at, row.visitor, clip(body.page) || '/', clip(body.source, 60) || 'direct', row.country, row.device).run();
+    .bind(row.day, mailPress(body.source) ? `${row.day}T00:00:00.000Z` : row.at, row.visitor, clip(body.page) || '/', clip(body.source, 60) || 'direct', row.country, row.device).run();
   return new Response(null, {status: 204});
 }
 

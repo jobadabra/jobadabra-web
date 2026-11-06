@@ -110,3 +110,14 @@ test('the Download button serves the latest stable release under its own name, e
   assert.equal(await versioned('mac', {}, async () => new Response('', {status: 403}), null), null);  // GitHub busy: the fixed name
 });
 
+
+test("a press on a mail's Open button keeps only its day; any other page view keeps its time", async () => {
+  // Review of hr-39 (owner, 6 Nov 2026: "Count presses, anonymous"): a time to the second could be lined up with the one person's mail in mail_log.
+  const e = env();
+  await worker.fetch(request('/api/hit', {method: 'POST', body: JSON.stringify({page: '/open', source: 'mail-digest'})}), e, {});
+  await worker.fetch(request('/api/hit', {method: 'POST', body: JSON.stringify({page: '/', source: 'google.com'})}), e, {});
+  const [press, view] = e.STATS.db.prepare('SELECT at, day, source FROM visits ORDER BY rowid').all();
+  assert.equal(press.source, 'mail-digest');
+  assert.equal(press.at, `${press.day}T00:00:00.000Z`);
+  assert.notEqual(view.at, `${view.day}T00:00:00.000Z`);
+});
