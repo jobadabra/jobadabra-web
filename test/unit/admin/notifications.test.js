@@ -143,6 +143,14 @@ test('a refused form keeps the Admin look: through the real route the 400 page h
     assert.ok(html.includes('class="admin-nav"') && html.includes('✈ Admin'), 'the Admin top bar is there');
     assert.ok(html.includes('.admin-nav'), 'the shared stylesheet is there');
   }
+  const real = globalThis.fetch;   // the owner's case: a valid bot token whose bot has had no message yet (Telegram's getUpdates is empty); the route has no injected fetcher
+  globalThis.fetch = async url => (/api\.telegram\.org\/bot[^/]+\/getMe/.test(String(url)) ? new Response(JSON.stringify({ok: true, result: {username: 'jobadabra_ci_bot'}})) : /getUpdates/.test(String(url)) ? new Response(JSON.stringify({ok: true, result: []})) : real(url));
+  try {
+    const res = await post(e, {action: 'connect', channel: 'engineering', token: TOKEN, chat: ''}), html = await res.text();
+    assert.equal(res.status, 400);
+    assert.match(html, /The bot has no message yet: send it any message in Telegram, then press Connect again\./);
+    assert.ok(html.includes('class="admin-nav"') && html.includes('.admin-nav'), 'the owner\'s refusal keeps the top bar and the stylesheet');
+  } finally { globalThis.fetch = real; }
   const ok = await (await get(e, '/admin/operations/notifications')).text();
   assert.ok(ok.includes('class="admin-nav"'), 'control: the normal GET has the bar too');
 });

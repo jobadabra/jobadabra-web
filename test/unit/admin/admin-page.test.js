@@ -17,7 +17,7 @@ test('an HTML page keeps the Admin look at 200, 400 and 404 (a refused form, a r
 });
 
 test('a redirect, a plain-text 404 and JSON pass untouched', async () => {
-  for (const response of [new Response(null, {status: 303, headers: {Location: '/admin'}}), page(404, 'Not found', 'text/plain'), page(200, '{"a":1}', 'application/json')]) {
+  for (const response of [new Response(null, {status: 303, headers: {Location: '/admin'}}), page(404, 'Not found', 'text/plain'), new Response(null, {status: 304, headers: {'Content-Type': 'text/html'}}), page(200, '{"a":1}', 'application/json')]) {
     const res = await adminPage(response, '/admin', {role: 'superadmin'});
     assert.equal(res, response);
   }
