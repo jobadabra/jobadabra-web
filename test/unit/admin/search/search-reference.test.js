@@ -37,13 +37,15 @@ test('the week is stored and read back as the tab reads it; a source that was no
   assert.deepEqual(await reference(e), {1: counts(31, 24, 20, 17), 3: counts(14, 14, 14, null)});
 });
 
-test('the tab shows the reference per candidate: "7 of 24 reachable", the totals, and a dash where Google Jobs was not read', async () => {
+test('the tab shows the reference per candidate: "7 of 24 on EURES" when EURES alone was read (the owner\'s choice), the older "reachable" note when Google Jobs was too', async () => {
   const e = env();
   await put(e, body());
   const night = cleanNight({state: 'success', head: '🟢 measured 2 of 2', rows: [{persona: 1, label: 'p1 A', kind: 'measured', local: 7, found: 9}, {persona: 3, label: 'p3 B', kind: 'measured', local: 5, found: 6}]}, {night: '2026-11-06'});
   const html = nightSection(judgeAll([night]), await reference(e));
   assert.match(html, /7 of 24 reachable<div class="why">of 31 total · EURES 20 · Google Jobs 17</);
-  assert.match(html, /5 of 14 reachable<div class="why">of 14 total · EURES 14 · Google Jobs –</, 'null is a dash, not a zero');
+  assert.match(html, /5 of 14 on EURES/);
+  assert.doesNotMatch(html.match(/5 of 14 on EURES[^<]*<\/td>/)[0], /Google|reachable/, 'no Google figure where Google was not read');
+  assert.match(nightSection(judgeAll([night]), {1: counts(31, 24, 20, 0)}), /7 of 24 reachable<div class="why">of 31 total · EURES 20 · Google Jobs 0</, 'a Google figure of 0 is a figure: the older note stays');
 });
 
 test('the latest week replaces the one before, and an older week never replaces a newer one', async () => {
