@@ -20,6 +20,7 @@ import {ingestRoute as searchLabDrawIngest} from '../../admin/search-lab-draws.j
 import {realGaps as searchLabRealGaps} from '../../admin/search-lab-real-gaps.js';
 import {ingestRoute as sessionChecksIngest} from '../../admin/session-checks.js';
 import {ingestRoute as searchNightIngest} from '../../admin/search-night.js';
+import {checkMissing as searchNightMissing, isCheckTick as isSearchNightTick} from '../../admin/search-night-missing.js';
 import {discoveryInput} from '../../shared/discovery-candidates.js';
 import {meter, newTally, requestLine} from './d1-meter.js';
 import {apexRedirect, pageRedirect} from '../../shared/hosts.js';
@@ -363,6 +364,7 @@ export default {
       ctx.waitUntil(startIntelCollectors(env, new Date(event.scheduledTime || Date.now()), dispatch).then(async results => { await recordStarts(env.STATS, results, new Date(event.scheduledTime || Date.now())); for (const {workflow, error} of results) { if (error) console.error(`${workflow.replace('.yml', '')} start failed: ${error}; GitHub's own schedule is the backup`); else console.log(`scheduled ${workflow} cron=*/5`); } }));
       // Why (5 Nov 2026, Gitar on #439): the promise is a reply within 24 hours, so the owner is warned within the hour; the daily block below would warn up to a day late. One tick an hour (minute 10); the once-per-report flag stops a double ping.
       const tickAt = new Date(event.scheduledTime || Date.now());
+      if (isSearchNightTick(tickAt)) ctx.waitUntil(searchNightMissing(env, tickAt).then(done => { if (done.missing) console.log(`search night missing: alert ${done.alert}`); }).catch(error => console.error(`search night missing: ${error.message}`)));   // 06:30 UTC: no night filed for today = the owner is told once (admin/search-night-missing.js)
       if (tickAt.getUTCMinutes() === 10) ctx.waitUntil(pingOverdue(env, tickAt).catch(error => console.error(`feedback overdue ping: ${error.message}`)));   // a report 24 h old with no reply: the owner is told once (shared/feedback-overdue.js)
       return;
     }

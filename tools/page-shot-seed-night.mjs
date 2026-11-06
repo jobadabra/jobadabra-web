@@ -20,3 +20,20 @@ export async function searchNight({env}, seeds) {
   kept.push(clean(real('2026-11-05'), {night: night(1), run: '41938128120'}), clean(real('2026-11-06'), {night: night(0), run: '42133678718'}));
   await writeState(env, STATE_KEY, {nights: kept.reverse().map(item => ({...item, at: `${item.night}T04:00:00.000Z`}))}, now);
 }
+
+// 18 fixed personas (6 Nov 2026, owner: "6 personas is too narrow"): the real six, then twelve MADE-UP ones (role x country), seven healthy nights and a newest night that dropped (8 of 18 measured, employer sites out of time in 13),
+// and a weekly reference record (counts only) for four of them, so the tab shows its three yardsticks. Nothing here is a real person or a real count.
+const LABELS = ['p7 Registered Nurse, Lyon', 'p8 Electrician, Gdansk', 'p9 Data Analyst, Lisbon', 'p10 Accountant, Vienna', 'p11 Software Engineer, Berlin', 'p12 Chef, Madrid', 'p13 Teacher, Prague',
+  'p14 Warehouse Operator, Rotterdam', 'p15 Sales Representative, Milan', 'p16 Mechanic, Brno', 'p17 Social Worker, Dublin', 'p18 Pharmacist, Athens'];
+
+/** @param {{env: object}} context the seed context; `seeds` the seed table */
+export async function searchNight18({env}, seeds) {
+  await seeds['product-quality']({env});
+  const now = new Date(), night = back => new Date(now.getTime() - back * DAY).toISOString().slice(0, 10), base = real('2026-11-06').rows.map(row => row.label).concat(LABELS), kept = [];
+  const build = (back, measured, out) => clean({state: 'success', head: `measured ${measured} of 18 · every press ≤ 180 s`, rows: base.map((label, i) => ({persona: i + 1, label, kind: i < measured ? 'measured' : 'unmeasured', why: i < measured ? '' : 'time ran out',
+    local: i < measured ? 2 + ((back + i) % 4) : 0, found: 8 + (i % 5), seconds: 90 + 5 * ((back + i) % 6), funnel_note: `places worked out at 17 s; time ran out for: ${i < out ? 'employer sites, ' : ''}job boards`}))}, {night: night(back), run: String(41000000000 + back)});
+  for (let back = 7; back >= 1; back--) kept.push(build(back, 15 + (back % 2), 0));
+  kept.push(build(0, 8, 13));
+  await writeState(env, STATE_KEY, {nights: kept.reverse().map(item => ({...item, at: `${item.night}T04:00:00.000Z`}))}, now);
+  await writeState(env, 'search-reference', {week: night(2), personas: {1: {total: 14, reachable: 9, eures: 6, google: 8}, 2: {total: 0, reachable: 0, eures: 0, google: 0}, 3: {total: 22, reachable: 11, eures: 9, google: 13}, 5: {total: 10, reachable: 7, eures: 4, google: 6}}}, now);
+}
