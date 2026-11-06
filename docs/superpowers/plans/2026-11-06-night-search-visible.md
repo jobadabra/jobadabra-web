@@ -29,9 +29,11 @@ Design: three yardsticks per persona, shown together on the Night search tab: (1
 | 4/5 | jobadabra (public): the 18 fixed personas in `gate-personas.json`, the 18-job matrix, the gate pooling 18 | the gate's own tests; one hand dispatch from main after merge |
 | 5/6 | jobadabra-web: `PUT /search-check/reference` stores the weekly reference (counts only, latest week replaces) that the tab already reads (split off 6 Nov 2026: the site lands first) | `search-reference.test.js` |
 | 6/6 | jobadabra (public): the weekly reference job (EURES direct + Google Jobs behind a fake; no live SerpAPI run before the owner's quota decision) | tests on fakes |
+| 7/7 | jobadabra-web: the reference note reads "N of X on EURES" (no Google figure, no "reachable") after the owner kept SerpApi for the central scout (6 Nov 2026) | `search-reference.test.js` |
 
 ## Progress (stage 2)
 - [x] 3/5 site: scaled thresholds, usual, reference columns, missing-night alert
 - [x] 4/5 public: 18 fixed personas
 - [ ] 5/6 site: the reference store route
-- [ ] 6/6 public: the weekly reference job
+- [ ] 6/6 public: the EURES reference job
+- [ ] 7/7 site: the reference note says "on EURES"

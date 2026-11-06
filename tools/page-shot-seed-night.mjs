@@ -37,5 +37,5 @@ export async function searchNight18({env}, seeds) {
   for (let back = 7; back >= 1; back--) kept.push(build(back, 15 + (back % 2), 0));
   kept.push(build(0, 8, 13));
   await writeState(env, STATE_KEY, {nights: kept.reverse().map(item => ({...item, at: `${item.night}T04:00:00.000Z`}))}, now);
-  await writeState(env, 'search-reference', {week: night(2), personas: {1: {total: 14, reachable: 9, eures: 6, google: 8}, 2: {total: 0, reachable: 0, eures: 0, google: 0}, 3: {total: 22, reachable: 11, eures: 9, google: 13}, 5: {total: 10, reachable: 7, eures: 4, google: 6}}}, now);
+  await writeState(env, 'search-reference', {week: night(2), personas: {1: {total: 14, reachable: 14, eures: 14}, 2: {total: 0, reachable: 0, eures: 0}, 3: {total: 22, reachable: 22, eures: 22}, 5: {total: 10, reachable: 10, eures: 10}}}, now);
 }

@@ -1,6 +1,6 @@
 // The weekly reference of the nightly Search check (owner, 6 Nov 2026: "how to know if it's a good or bad result?", chose "EURES direct + Google Jobs weekly"): once a week CI reads, outside the app, how many right-role
 // jobs exist in each fictional candidate's city (EURES's public API and Google Jobs), and sends only counts here: PUT /search-check/reference?week=YYYY-Www (Bearer REPLAYS_PUBLISH_KEY, the key the night upload uses).
-// The Night search tab shows each candidate's night against it ("found 7 of 31 reachable"). The latest week replaces the one before: a reference is how the world is now, not a history. Counts only, no job,
+// The Night search tab shows each candidate's night against it ("found 7 of 31 on EURES"). The latest week replaces the one before: a reference is how the world is now, not a history. Counts only, no job,
 // employer or link text. Read back by reference() in admin/search-night.js (same key). Guard: test/unit/admin/search/search-reference.test.js.
 import {equal} from '../shared/guard.js';
 import {writeState} from './ci-state.js';
