@@ -5,4 +5,4 @@
 export {CHIP_STYLE, chip} from '../tools/ci-intel/lib/chip.mjs';
 
 // The pages that draw value cells with chip(), or show a chip page's section (installsimpact: scouting's served table): the guard test checks each one.
-export const CHIP_PAGES = ['ai-persona-page', 'promo-codes', 'access', 'e2e-page', 'e2e-green', 'e2e-beta', 'integration-page', 'coverage-card', 'clock-moved-card', 'gtm-readiness', 'report-only', 'product-quality-html', 'telemetry', 'selfheal', 'selfheal-cards', 'red-main-page', 'scoutingadmin', 'benchmark-search-page', 'installsimpact', 'intel-start-line', 'testing-overview', 'testing-overview-map', 'synthetic-monitoring', 'verdict-band', 'viz-core'];
+export const CHIP_PAGES = ['ai-persona-page', 'promo-codes', 'access', 'e2e-page', 'e2e-green', 'e2e-beta', 'integration-page', 'coverage-card', 'clock-moved-card', 'gtm-readiness', 'report-only', 'product-quality-html', 'telemetry', 'selfheal', 'selfheal-cards', 'red-main-page', 'scoutingadmin', 'benchmark-search-page', 'installsimpact', 'intel-start-line', 'testing-overview', 'testing-overview-map', 'synthetic-monitoring', 'verdict-band', 'viz-core', 'search-night-page', 'search-lab-page'];
