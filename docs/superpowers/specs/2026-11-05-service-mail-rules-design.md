@@ -64,17 +64,15 @@ Owner, 6 Nov 2026 (replacing the 5 Nov "consent" wording): the address found in 
 
 ## Every mail says why it came
 
-| Mail | Footer |
-|---|---|
-| The app's own mail (from the Mac or their own GitHub) | "You chose this in the Jobadabra app." |
-| Always on, our servers | "You get this because you turned on Always on. Your profile is stored encrypted, kept apart per account and deleted when you turn it off. We use it only to run your search, never for marketing." |
-| Jobadabra's news | "News from Jobadabra, the same for everyone. Nothing here comes from your search or profile. You ticked this, and one click stops it." |
-| Come back | "We wrote because the app has not reached us in 3 months. Nothing else about you was used. You ticked this, and one click stops it." |
-| Account | no unsubscribe, no headers. The confirm mails say where the address came from; their body already says "Didn't ask for this? Ignore this email." |
+Owner, 6 Nov 2026, on the first version: "these footers looks horriable. Loks like essays/novels", and "we shouldn't show \"Downlaod\" on user app email notifications". So every footer is at most two short lines: why, in a few words, then the links joined by " · ". A fact that needs a sentence sits behind a link.
 
-Owner, 6 Nov 2026, asked whether people care where a mail was written: "Keep promise, cut extras". The server still keeps nothing after sending, but the footer no longer says where each mail was written: nobody reads it, and one plain line is always true.
+| Mail | Line 1 | Line 2 |
+|---|---|---|
+| The person's own (app, their GitHub, our digest) | "You chose these in the app: Settings → Notifications." | Stop these e-mails · jobadabra.top (hosted Always on adds "How we keep your data" → /trust) |
+| Jobadabra's news | "Same news for everyone. You ticked this." | Stop these e-mails · E-mail settings · jobadabra.top, then "Don't have the app? Download Jobadabra" (news also reaches people without the app) |
+| Account | a few words: "This address was entered in Jobadabra.", "A security e-mail, sent even if you stopped others." | jobadabra.top; no stop link, no List-Unsubscribe header |
 
-Every Yours mail then ends with the same two lines: "Change it in Settings → Notifications." and, small, "Can't open the app? Stop these e-mails." The web link stays because someone who uninstalled the app or lost their Mac cannot reach Settings, while their own GitHub repo keeps mailing them; they would press Report spam, which hurts delivery of sign-in codes too (owner: "there should be a link for us to intervene and stop that email sending"). `send()` refuses it whichever mode wrote the mail, so it works with the app gone. It stops the mail, not the searches: our servers pause after 14 days without the app, and a person's own repo keeps running. Today only `account-code` and `confirm-resend` go without a stop link: `welcome`, `feedback-update` and `always-on-test` change.
+Owner, 6 Nov 2026, asked whether people care where a mail was written: "Keep promise, cut extras". The server still keeps nothing after sending; the footer no longer says where each mail was written. The web stop link stays on the person's own mails because someone who lost the app cannot reach Settings while their own GitHub keeps mailing them.
 
 ## What we can say (read 5 Nov 2026)
 

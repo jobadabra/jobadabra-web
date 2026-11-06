@@ -11,17 +11,17 @@ import {MAILS, resetRuleCache} from '../../../../shared/mail-registry.js';
 import {tokenFor} from '../../../../shared/guard.js';
 import {mintTrialKey} from '../../../../shared/trial-key.js';
 
-const YOURS = 'You chose this in the Jobadabra app.';
+const YOURS = 'You chose these in the app: Settings → Notifications.';
 
 test('each owner gets its footer: Account has nothing to stop, Yours says where to change it, our news is the same for everyone and one click stops it', () => {
   for (const mail of MAILS.filter(each => !each.template)) {
     const foot = footerOf(mail.id, 'old line');
-    if (mail.owner === 'account') assert.deepEqual([foot.stop, foot.change], [false, false], mail.id);
-    if (mail.owner === 'yours') assert.deepEqual([foot.stop, foot.change, foot.settings], [true, true, false], mail.id);
+    if (mail.owner === 'account') assert.deepEqual([foot.stop, foot.download], [false, false], mail.id);
+    if (mail.owner === 'yours') assert.deepEqual([foot.stop, foot.settings, foot.download, foot.trust], [true, false, false, ['digest', 'always-on-paused'].includes(mail.id)], mail.id);
+    assert.ok(foot.why.length <= 60, `${mail.id}: a few words, not a paragraph (owner, 6 Nov 2026)`);
   }
   for (const template of ['welcome', 'confirm-resend']) assert.doesNotMatch(footerOf(template).why, /Ignore/, `${template}: its body already says "Ignore this email"`);
-  assert.equal(footerOf('release').why, 'News from Jobadabra, the same for everyone. Nothing here comes from your search or profile. You ticked this, and one click stops it.');
-  assert.match(footerOf('digest').why, /^You get this because you turned on Always on\. .* never for marketing\.$/);
+  assert.equal(footerOf('release').why, 'Same news for everyone. You ticked this.');
   assert.equal(footerOf('trial-left', 'old line').why, 'old line', 'the trial mails keep their line until they are redesigned');
 });
 
@@ -53,5 +53,5 @@ test('an app mail carries one plain line and the way to change it, whether the M
   await post(e, await appKey(), {subject: 'Insight', html: '<b>An insight</b>', kind: 'activity'});
   await sendDigests(e, new Date('2026-11-07T08:00:00Z'));
   assert.equal(sent.length, 3, 'the Mac\'s mail, the repo\'s mail and the digest');
-  for (const mail of sent) assert.ok(mail.text.includes(`${YOURS}\n`) && !/kept no copy|Your own GitHub|Written on your Mac/.test(mail.text) && mail.text.includes("Change it in Settings → Notifications.\nCan't open the app? Stop these e-mails: "));
+  for (const mail of sent) assert.ok(mail.text.includes(`${YOURS}\nStop these e-mails: `) && !/kept no copy|Your own GitHub|Written on your Mac|Download Jobadabra/.test(mail.text), mail.subject);
 });

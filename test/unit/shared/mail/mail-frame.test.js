@@ -51,7 +51,6 @@ test('every template goes through the frame: logo, title, footer with stop + set
     assert.ok(html.includes('data-jp-frame="1"') && html.includes('<title>'), `${name}: framed`);
     assert.ok(html.includes('https://www.jobadabra.top/images/logo-mark.png') && !html.includes('data:'), `${name}: hosted logo`);
     assert.ok(html.includes('>jobadabra.top</a>') && text.split('\n').includes('https://www.jobadabra.top'), `${name}: site link`);
-    assert.ok(html.includes('>Download Jobadabra</a>') && html.includes('href="https://www.jobadabra.top/download"') && text.includes('Download Jobadabra: https://www.jobadabra.top/download'), `${name}: permanent download footer`);
     // The owner's personal footer and Reply-To (owner, 5 Nov 2026: "Questions? Just reply to this email. It comes straight to me."): every mail, security ones too, through the one frame.
     assert.ok(html.includes('Questions? Just reply to this email. It comes straight to me.') && html.includes('Igor, builder of Jobadabra · Geneva') && html.includes('src="https://www.jobadabra.top/images/igor-footer.png"'), `${name}: the owner's footer`);
     assert.ok(text.includes('Questions? Just reply to this email. It comes straight to me.\nIgor, builder of Jobadabra · Geneva'), `${name}: the text twin has the footer`);
@@ -59,15 +58,20 @@ test('every template goes through the frame: logo, title, footer with stop + set
     assert.match(sent[0].from, /no-reply@jobadabra\.top/, `${name}: From stays no-reply@`);
     assert.ok(html.split(`background:${LIGHT.fill}`).length - 1 <= 1, `${name}: at most one yellow button`);   // the app's yellow (shared/mail-palette.js); it counted the old orange until 28 Oct 2026 and so could never fail (Gitar, #220)
     assert.ok(!/<(script|form|iframe)/i.test(html), `${name}: email-safe`);
-    // Why (spec PR 5, "Every mail says why it came"): Account mail has nothing to stop; Yours mail says where to change it, with a small web stop; our news has the stop and the settings page.
-    const owner = mailOf(name).owner;
+    // Why (spec PR 5; owner, 6 Nov 2026: "Loks like essays/novels", "we shouldn't show Downlaod on user app email notifications"): two short footer lines at most;
+    // Account mail has nothing to stop; Yours mail says where to change it, with a web stop; only news (and the old trial mails) offer the download.
+    const owner = mailOf(name)?.owner;
+    const foot = html.slice(html.lastIndexOf('<p class="jp-muted"'));
+    assert.ok(foot.split('<br>').length <= (owner === 'yours' || owner === 'account' ? 2 : 3), `${name}: the footer is at most two short lines (plus the download line for news)`);
+    const download = html.includes('>Download Jobadabra</a>') && text.includes('Download Jobadabra: https://www.jobadabra.top/download');
+    assert.equal(download, owner !== 'yours' && owner !== 'account' && !spec.essential, `${name}: "Don't have the app?" only where the reader may not have it`);
     if (spec.essential || owner === 'account') { assert.ok(!/Stop these e/.test(html) && !sent[0].headers, `${name}: an Account mail has nothing to stop`); continue; }
     const stop = (await stopLink(e, 'me@example.com', spec.list)).replaceAll('&', '&amp;'), settings = (await settingsLink(e, 'me@example.com')).replaceAll('&', '&amp;');
-    assert.ok(html.includes(`href="${stop}"`) && text.includes(stop.replaceAll('&amp;', '&')) && sent[0].headers['List-Unsubscribe'], `${name}: a stop link, in both versions and the header`);
+    assert.ok(html.includes(`href="${stop}"`) && text.includes(`Stop these e-mails: ${stop.replaceAll('&amp;', '&')}`) && sent[0].headers['List-Unsubscribe'], `${name}: a stop link, in both versions and the header`);
     if (owner === 'yours') {
-      assert.ok(html.includes('Change it in Settings → Notifications.') && html.includes("Can't open the app? <a") && !html.includes('Email settings'), `${name}: the two Yours lines`);
-      assert.ok(text.includes("Change it in Settings → Notifications.\nCan't open the app? Stop these e-mails: "), `${name}: the text twin has them`);
-    } else assert.ok(html.includes(`href="${settings}"`) && html.includes('Email settings') && text.includes(settings.replaceAll('&amp;', '&')), `${name}: news has the stop and the settings page`);
+      assert.ok(foot.includes('You chose these in the app: Settings → Notifications.<br>') && !foot.includes('E-mail settings'), `${name}: where to change it, no settings page`);
+      assert.equal(foot.includes('How we keep your data'), ['digest', 'always-on-paused'].includes(name), `${name}: only hosted Always on links what we store`);
+    } else assert.ok(html.includes(`href="${settings}"`) && html.includes('E-mail settings') && text.includes(settings.replaceAll('&amp;', '&')), `${name}: news has the stop and the settings page`);
   }
 });
 
@@ -81,7 +85,7 @@ test('the digest is job rows with a fit chip and one "Open in Jobadabra" button;
   assert.ok(sent[0].text.includes('https://www.jobadabra.top/open?view=jobs'));
   assert.ok(sent[0].html.includes('Example Bank · Zürich · Hybrid') && sent[0].html.includes('jp-fit') && sent[0].html.includes('Open in Jobadabra'));
   assert.match(sent[0].text, /Senior Site Reliability Engineer \(Example Bank · Zürich · Hybrid\) fit 86/);
-  assert.ok(sent[1].html.includes('482913') && sent[1].html.includes('sent even if you stopped other emails'));
+  assert.ok(sent[1].html.includes('482913') && sent[1].html.includes('A security e-mail, sent even if you stopped others.'));
 });
 
 test('while the marketing flag is off no service mail carries a Pro or product-news line', async () => {

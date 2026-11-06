@@ -72,7 +72,7 @@ export function compose(template, data = {}, given = null) {
   // Why each mail came and which links it carries: by who owns it (shared/mail-footer.js, spec PR 5). An Account mail has no stop link and no List-Unsubscribe header.
   const foot = footerOf(template, spec.essential ? 'A security email, sent even if you stopped other emails.' : WHY[spec.list]);
   const links = given && foot.stop ? {stop: given.stop, settings: foot.settings ? given.settings : null} : null;
-  const frame = {title: spec.title(data), why: foot.why, button: spec.button?.(data) || null, links, change: foot.change};
+  const frame = {title: spec.title(data), why: foot.why, button: spec.button?.(data) || null, links, trust: foot.trust, download: foot.download};
   const headers = links ? {'List-Unsubscribe': `<${links.stop}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'} : undefined;
   return {subject: spec.subject(data), text: frameText({...frame, body: spec.text(data)}), html: frameHtml({...frame, body: spec.html(data), hero: spec.hero?.(data)}), headers};
 }

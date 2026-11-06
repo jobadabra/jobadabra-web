@@ -45,23 +45,24 @@ const personalHtml = () => `<table role="presentation" width="100%" cellpadding=
   + `<td valign="middle" style="text-align:left"><p class="jp-ink" style="margin:0;color:${C.ink};font:14px/1.45 ${FONT}">${ASK}</p>`
   + `<p class="jp-muted" style="margin:1px 0 0;color:${C.muted};font:13px/1.4 ${FONT}">${SIGNED}</p></td></tr></table></td></tr></table>`;
 
-// html: {title, body (html), button: {label, url} | null, why, links: {stop, settings} | null}. links null = nothing to stop (a security mail): only the site link shows.
-// `change` (a Yours mail, spec PR 5): "Change it in Settings → Notifications." then, small, "Can't open the app? Stop these e-mails." instead of the plain links.
-export const CHANGE = 'Change it in Settings → Notifications.';
-export function frameHtml({title, body, button: action, why, links, hero, change = false}) {
-  const foot = change && links ? `${esc(CHANGE)}<br><small>Can't open the app? ${link(links.stop, 'Stop these e-mails')}</small><br>${link(SITE, 'jobadabra.top')}`
-    : [links && link(links.stop, 'Stop these emails'), links?.settings && link(links.settings, 'Email settings'), link(SITE, 'jobadabra.top')].filter(Boolean).join(' · ');
+// html: {title, body (html), button: {label, url} | null, why, links: {stop, settings} | null, trust, download}. links null = nothing to stop (an Account mail).
+// The footer is two short lines (owner, 6 Nov 2026: "Loks like essays/novels"): `why`, then the links joined by " · "; `download` adds "Don't have the app?" (news only:
+// owner, 6 Nov 2026: "we shouldn't show Downlaod on user app email notifications. Of course they have the app"). `trust` links what hosted Always on stores.
+const footLinks = (links, trust) => [links && ['Stop these e-mails', links.stop], links?.settings && ['E-mail settings', links.settings], trust && ['How we keep your data', `${SITE}/trust`], ['jobadabra.top', SITE]].filter(Boolean);
+export function frameHtml({title, body, button: action, why, links, hero, trust = false, download = false}) {
+  const foot = footLinks(links, trust).map(([label, url]) => link(url, label)).join(' · ');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>${esc(title)}</title>${STYLE}</head>`
     + `<body class="jp-bg" style="margin:0;background:${C.bg}"><table role="presentation" data-jp-frame="1" width="100%" cellpadding="0" cellspacing="0" class="jp-bg" style="background:${C.bg}"><tr><td align="center" style="padding:22px 14px">`
     + `<table role="presentation" width="560" cellpadding="0" cellspacing="0" class="jp-card" style="width:100%;max-width:560px;background:${C.card};border:1px solid ${C.line};border-radius:12px;font:15px/1.55 ${FONT};color:${C.ink}">`
     + (hero || `<tr><td class="jp-line" style="padding:16px 22px;border-bottom:1px solid ${C.line}"><img src="${LOGO}" width="32" height="28" alt="" style="vertical-align:middle;border:0"> <b class="jp-ink" style="vertical-align:middle;margin-left:8px;font-size:15px">Jobadabra</b></td></tr>`)
     + `<tr><td class="jp-pad jp-ink" style="padding:22px">${hero ? '' : `<h1 class="jp-ink" style="margin:0 0 10px;font-size:20px;line-height:1.3">${esc(title)}</h1>`}${body}${action ? button(action) : ''}</td></tr></table>`
     + personalHtml()
-    + `<p class="jp-muted" style="max-width:560px;margin:10px auto 0;color:${C.muted};font:12px/1.5 ${FONT};text-align:center">${esc(why)}<br>${foot}<br>Don't have the app? ${link(`${SITE}/download`, 'Download Jobadabra')}</p>`
+    + `<p class="jp-muted" style="max-width:560px;margin:10px auto 0;color:${C.muted};font:12px/1.5 ${FONT};text-align:center">${why ? `${esc(why)}<br>` : ''}${foot}${download ? `<br>Don't have the app? ${link(`${SITE}/download`, 'Download Jobadabra')}` : ''}</p>`
     + `</td></tr></table></body></html>`;
 }
 
-export function frameText({title, body, button: action, why, links, change = false}) {
-  return [title, '', body, action ? `\n${action.label}: ${action.url}` : '', '', '--', ASK, SIGNED, '', why,
-    change && links ? `${CHANGE}\nCan't open the app? Stop these e-mails: ${links.stop}` : links ? [`Stop these emails: ${links.stop}`, links.settings && `Email settings: ${links.settings}`].filter(Boolean).join('\n') : '', SITE, `Don't have the app? Download Jobadabra: ${SITE}/download`].filter(part => part !== null && part !== undefined && part !== false).join('\n').replace(/\n{3,}/g, '\n\n');
+export function frameText({title, body, button: action, why, links, trust = false, download = false}) {
+  return [title, '', body, action ? `\n${action.label}: ${action.url}` : '', '', '--', ASK, SIGNED, '', why || null,
+    ...footLinks(links, trust).map(([label, url]) => url === SITE ? SITE : `${label}: ${url}`), download ? `Don't have the app? Download Jobadabra: ${SITE}/download` : null]
+    .filter(part => part !== null && part !== undefined && part !== false).join('\n').replace(/\n{3,}/g, '\n\n');
 }
