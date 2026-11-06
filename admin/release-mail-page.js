@@ -67,7 +67,7 @@ async function releasePost(request, env, url) {
   if (row && action === 'test') {   // the real draft, to one address the owner types; sends nothing else
     const to = String(form.get('to') || '').trim(), data = await releaseData(env, {...JSON.parse(row.data), version}, {status: row.status});
     if (!data) return new Response('Release emails are available only for stable versions.', {status: 409});
-    const result = validAddress(to) ? await send(env, 'release', to, {...data, name: '', test: true}, {test: true}) : {ok: false, reason: 'bad_address'};
+    const result = validAddress(to) ? await send(env, 'release', to, {...data, name: '', test: true}, {test: true, ownerTest: true}) : {ok: false, reason: 'bad_address'};
     done = result.ok ? `Test of release ${version} sent to ${to}. Subject: ${compose('release', {...data, test: true}).subject}. This test did not send the release to your audience.` : `Test of release ${version} not sent (${result.reason}).`;
   } else if (row && draft && action === 'headline') {
     const data = JSON.parse(row.data); data.intro = String(form.get('headline') || '').trim().slice(0, 120); data.headline = data.intro;

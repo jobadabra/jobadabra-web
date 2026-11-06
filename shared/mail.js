@@ -79,8 +79,10 @@ export function compose(template, data = {}, links = null) {
  * `test`: a test send (a Test press, the admin page's test buttons). Why (owner, 5 Nov 2026: "test emmail are aside of this cap"): it is logged as `test:<template>`,
  * never refused by DAILY_MAX and never takes its room; GLOBAL_DAY_MAX still counts it. A mark in the template name, not a new column: a failed migration only warns
  * (site.yml), and a missing column would stop every mail.
+ * `ownerTest`: the owner's own test from Admin (test inbox, a release test). It skips the owner's stop on that mail, so a stopped mail can be checked before it is turned back on
+ * (review of hr-29). A person's Test press is `test` only and stays stoppable.
  */
-export async function send(env, template, to, data = {}, {now = new Date(), test = false} = {}) {
+export async function send(env, template, to, data = {}, {now = new Date(), test = false, ownerTest = false} = {}) {
   const spec = TEMPLATES[template];
   const logged = test ? `test:${template}` : template;
   if (!spec) return {ok: false, reason: 'bad_template'};
@@ -90,7 +92,7 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
     const verdict = await mailAllowed(env, to, spec.list, {...spec, test});
     const addr = await addrOf(to);
     if (!verdict.ok) { if (verdict.reason !== 'bad_address' && verdict.reason !== 'marketing_off') await record(env, now, addr, spec.list, logged, verdict.reason); return verdict; }
-    const ruled = await ruleRefusal(env, template);   // the owner's stop on this one mail, or 'rule_held' when the stops cannot be read (spec 2026-11-05-service-mail-rules-design.md)
+    const ruled = ownerTest ? '' : await ruleRefusal(env, template);   // the owner's stop on this one mail, or 'rule_held' when the stops cannot be read (spec 2026-11-05-service-mail-rules-design.md)
     if (ruled) { await record(env, now, addr, spec.list, logged, ruled); return {ok: false, reason: ruled}; }
     // Why (jobadabra-web#431; 20 of 20 parallel sends went out in the review of #430): the room under both caps is CLAIMED in one statement before the provider is asked (D1 runs a statement alone,
     // as in sendTestMail), so calls that arrive together cannot all read the same count. A live claim counts like a sent mail; one older than CLAIM_MS is a Worker that died and counts for nothing.

@@ -76,7 +76,7 @@ export function page(data, accounts = null, notice = null, audience = null, rele
 ${table('Why mail was not sent', ['Reason', 'Mails'], data.refused.map(r => [esc(r.reason), n(r.n)]), refusedChart(data.refused))}</div>
 ${table('Last 10 refusals and failures', ['When (UTC)', 'Address (hash)', 'Template', 'Why'], data.recent.map(r => [esc(r.at.slice(0, 16).replace('T', ' ')), `<code>${esc(r.addr)}</code>`, esc(r.template), esc(r.status)]))}`,
     settings: `${switchesCard(data.switches, data.confirm, `${n(data.today)} of ${n(data.dayMax)} sent in the last 24 h · ${DAILY_MAX} a day per address (tests aside) · a press takes effect within seconds; "as deployed" is the Cloudflare value`)}
-${rulesCard(data.rules || [], data.byTemplate)}
+${rulesCard(data.rules || [], data.byTemplate, data.confirm)}
 ${mailTypesCard(data.dayMax, n)}`,
     people: `${accounts ? `<div class="tiles">${tile('Trial accounts', accounts.trial, 'gave an address')}${tile('Confirmed', accounts.confirmed, 'clicked the first mail')}${tile('Unconfirmed', accounts.unconfirmed, 'follow up')}${tile('Always on paused', accounts.paused, 'hosted schedule paused')}${tile('Converted to Pro', accounts.converted, 'trial accounts that paid')}</div>` : ''}
 <div class="pair">${table('Addresses', ['Group', 'Accounts'], [['Confirmed', n(data.confirmed)], ['Unconfirmed', n(data.unconfirmed)], ['Service', n(data.types.service)], ['New releases', n(data.types.releases)], ['Tips and tricks', n(data.types.tips)], ['Job digest', n(data.types.jobdigest)]], addressChart([['Confirmed', data.confirmed], ['Unconfirmed', data.unconfirmed], ['Service', data.types.service], ['New releases', data.types.releases], ['Tips and tricks', data.types.tips], ['Job digest', data.types.jobdigest]]))}

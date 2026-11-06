@@ -29,7 +29,7 @@ export async function testSend(request, env) {
     data = row && await releaseData(env, {...JSON.parse(row.data), version}, {status: row.status});
     if (data) data = {...data, name: '', test: true};
   }
-  const result = data ? await send(env, template, to, data, {test: true}) : {ok: false, reason: 'no_release'};
+  const result = data ? await send(env, template, to, data, {test: true, ownerTest: true}) : {ok: false, reason: 'no_release'};
   if (template === 'release' && data && form.get('detail') === '1') {
     const done = result.ok ? `Test of release ${data.version} sent to ${to}. The broadcast is unchanged.` : `Test of release ${data.version} not sent (${result.reason}).`;
     return new Response(null, {status: 303, headers: {Location: `/admin/growth/email?${new URLSearchParams({release: data.version, done})}`, 'Cache-Control': 'no-store'}});

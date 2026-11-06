@@ -52,3 +52,18 @@ test('only the owner, from this site, can press; a locked or unknown mail is ref
   assert.equal((await press(env, {id: 'nope', state: 'off'})).status, 400);
   assert.equal(env.STATS.db.prepare('SELECT COUNT(*) AS n FROM mail_rule').get().n, 0);
 });
+
+test('turning one of Jobadabra\'s mails back on asks once; a person\'s own mail goes back on in one press', async () => {
+  const env = setup();
+  await press(env, {id: 'release', state: 'off'});
+  const asked = await press(env, {id: 'release', state: 'on'});
+  assert.equal(asked.headers.get('Location'), '/admin/growth/email?tab=settings&confirm=release#mails');
+  assert.equal(env.STATS.db.prepare("SELECT enabled FROM mail_rule WHERE id = 'release'").get().enabled, 0, 'nothing stored before the second press');
+  const html = card(page({...await collect(env, {days: 7}), confirm: 'release'}, null, null, null, [], null, 'settings'));
+  assert.ok(html.includes('Turn <b>What&#39;s new</b> back on?') && html.includes('name="confirmed" value="1"'));
+  await press(env, {id: 'release', state: 'on', confirmed: '1'});
+  assert.equal(env.STATS.db.prepare("SELECT enabled FROM mail_rule WHERE id = 'release'").get().enabled, 1);
+  await press(env, {id: 'digest', state: 'off'});
+  assert.equal((await press(env, {id: 'digest', state: 'on'})).headers.get('Location'), '/admin/growth/email?tab=settings#mails');
+  assert.equal(env.STATS.db.prepare("SELECT enabled FROM mail_rule WHERE id = 'digest'").get().enabled, 1);
+});

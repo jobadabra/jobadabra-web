@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {send} from '../../../../shared/mail.js';
+import {testAlert} from '../../../../api/mail-held.js';
 import {MAILS, OWNERS, resetRuleCache, ruleRefusal, ruleRows, setRule, storedRules} from '../../../../shared/mail-registry.js';
 import {TEMPLATES} from '../../../../shared/mail-templates.js';
 
@@ -41,6 +42,7 @@ test('a stop holds that one mail in send(), logs rule_off, and leaves the others
   const held = await send(e, 'feedback-update', 'a@example.com', {}, {now});
   assert.deepEqual(held, {ok: false, reason: 'rule_off'});
   assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE template = 'feedback-update' AND status = 'rule_off'").get().n, 1);
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'claimed'").get().n, 0, 'a refused mail takes no room under the caps');
   assert.equal((await send(e, 'message', 'a@example.com', {text: 'hi', html: 'hi'}, {now})).ok, true);
   assert.equal(await setRule(e, 'feedback-update', true, now), true);
   assert.equal(await ruleRefusal(e, 'feedback-update'), '');
@@ -61,13 +63,13 @@ test('a missing table means nothing was pressed: mail goes', async () => {
 });
 
 test('any other read error with no good answer holds every unlocked mail, never a locked one, and is not cached', async () => {
-  resetRuleCache();
+  const good = d1();   // built (and the cache reset) before the failing reads, so nothing clears the slot between them and the check below
   const e = {STATS: broken('D1 is down')};
   assert.equal(await ruleRefusal(e, 'message'), 'rule_held');
   assert.equal(await ruleRefusal(e, 'welcome'), '');
   assert.equal((await storedRules(e)).held, true);
-  const good = env();
-  assert.equal(await ruleRefusal(good, 'message'), '', 'the failure was not cached: the next read answers');
+  assert.equal(await ruleRefusal({STATS: good}, 'message'), '', 'the failure was not cached: the next read answers');
+  assert.equal((await storedRules({STATS: good})).held, false);
 });
 
 test('a read error after a good answer keeps the last good answer, stop included', async () => {
@@ -87,4 +89,14 @@ test('Admin rows: owner, state, when pressed; locked rows are always on', async 
   const release = rows.find(row => row.id === 'release');
   assert.deepEqual([release.owner, release.on, release.at], ['jobadabra', false, now.toISOString()]);
   assert.equal(rows.find(row => row.id === 'account-code').on, true);
+});
+
+test('a stopped Always on test holds the Test press for confirmed and unconfirmed addresses alike, leaving no day claim (review of hr-29)', async () => {
+  const e = env();
+  await setRule(e, 'always-on-test', false, now);
+  for (const account of [{id: 'a1', email: 'yes@example.com', email_confirmed_at: 'x'}, {id: 'a2', email: 'new@example.com', email_confirmed_at: null}]) {
+    assert.deepEqual(await testAlert(e, account, now), {ok: false, reason: 'rule_off'}, account.email);
+  }
+  assert.equal(e.EMAIL.sent.length, 0);
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'claimed'").get().n, 0);
 });
