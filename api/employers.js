@@ -317,8 +317,8 @@ async function publish(request, env) {
   const feeds = clean(body.feeds).slice(0, MAX_FEEDS);
   if (!feeds.length) return text(400, 'No valid feeds');
   // A broken scout run must not wipe the list everyone downloads: a publish keeping under 90% of the employers is refused.
-  // Why (6 Nov 2026, owner: "Alert on fields, block on employers (Recommended)", then "Refuse a loss over 10% (Recommended)"): on 2 Nov feeds fell to 57% (6,833 to 3,871) under the old line of half,
-  // and every publish was green. Normal runs drop about 0.7% (48 of 6,833 feeds over 4 days), so 10% also catches a smaller breakage, like one big job host down during a run.
+  // Why (6 Nov 2026, owner: "Alert on fields, block on employers (Recommended)", then "Refuse a loss over 10% (Recommended)", replacing #453's 60%): on 2 Nov feeds fell to 57% (6,833 to 3,871) under the old line of half,
+  // and every publish was green. The line compares counts: a run that loses some employers and finds others is judged by what it keeps. Normal runs drop about 0.7% (48 of 6,833 feeds over 4 days), so 10% also catches a smaller breakage, like one big job host down during a run.
   // A planned big cleanup would be refused too; none is planned, and the dated copies make any drop restorable.
   // json_valid: one hand-edited row that is not JSON must not turn every publish into an error (review, 6 Nov 2026).
   const inD1 = env.STATS ? (await env.STATS.prepare(`SELECT COUNT(*) AS n, COUNT(CASE WHEN json_valid(body) THEN json_extract(body, '$.kinds') END) AS kinds FROM index_feeds`).first()) : null;
