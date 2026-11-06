@@ -20,6 +20,7 @@ export default async function* siteTestReporter(source) {
   const count = {pass: 0, fail: 0, skipped: 0, todo: 0};
   const names = new Map(), output = new Map(), notes = [], filesTimed = [], printedOutput = new Set(), failedFiles = new Set();
   let total = 0, ended = 0;
+  const atOnce = Number(process.argv.concat(process.execArgv).map(arg => /^--test-concurrency=(\d+)$/.exec(arg)?.[1]).find(Boolean)) || Math.max(1, os.availableParallelism() - 1);   // node's own default is cpus - 1
   const here = file => path.relative(process.cwd(), file || '') || file || '';
   const progress = () => `${ended} of ${total || '?'} files · ${count.pass} passed · ${count.fail} failed · ${Math.round((Date.now() - started) / 1000)} s\n`;
   const fileOutput = function* (file) {
@@ -76,7 +77,7 @@ export default async function* siteTestReporter(source) {
   if (notes.length) yield `\n${notes.join('\n')}\n`;
   if (filesTimed.length) {
     const top = filesTimed.sort((a, b) => b.ms - a.ms).slice(0, slowest);
-    yield `\nslowest files (${Math.max(1, os.availableParallelism() - 1)} run at once):\n${top.map(({file, ms}) => `  ${seconds(ms).padStart(6)} s  ${here(file)}`).join('\n')}\n`;
+    yield `\nslowest files (${atOnce} run at once):\n${top.map(({file, ms}) => `  ${seconds(ms).padStart(6)} s  ${here(file)}`).join('\n')}\n`;
   }
   const skipped = count.skipped ? `, ${count.skipped} skipped` : '', todo = count.todo ? `, ${count.todo} todo` : '';
   yield `\nsite-tests: ${count.pass} passed, ${count.fail} failed${skipped}${todo} in ${ended} files, ${seconds(Date.now() - started)} s\n`;
