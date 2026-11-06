@@ -14,7 +14,7 @@ const KEY = 'index:employers';
 const NOFEED_KEY = 'index:nofeed';
 const SUMMARY_KEY = 'index:summary';   // the website's two counts, written at every publish (the old single-value copy stops once the list outgrows it)
 const GENERATED_KEY = 'index:generated';   // when the central scout last published: installs ask "still this one?" hourly, answered from KV alone
-const KEEP_SHARE = 0.6;   // a publish keeping fewer employers than this share of the stored list is refused (publish)
+const KEEP_SHARE = 0.9;   // a publish keeping fewer employers than this share of the stored list is refused (publish)
 const COPY_PREFIX = 'index:copy:', COPY_DAYS = 30;   // the dated copies (keepCopy): written here only, no route reads them
 const BOARDS_KEY = 'index:boards';   // per job board, what it gives people by role, family and place (src/scout.py board_stats): installs order the boards they suggest   // employers with no readable job site, published by the central scout: installs skip them 30 days
 const SYSTEMS = ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'teamtailor', 'join', 'workday', 'umantis', 'successfactors', 'oracle', 'phenom', 'eightfold', 'careers', 'amazon', 'netflix', 'jobsch'];
@@ -316,8 +316,10 @@ async function publish(request, env) {
   try { body = JSON.parse(raw); } catch { return text(400, 'Send JSON'); }
   const feeds = clean(body.feeds).slice(0, MAX_FEEDS);
   if (!feeds.length) return text(400, 'No valid feeds');
-  // A broken scout run must not wipe the list everyone downloads: a publish keeping under 60% of the employers is refused.
-  // Why (6 Nov 2026, owner: "Alert on fields, block on employers (Recommended)"): on 2 Nov feeds fell to 57% (6,833 to 3,871) under the old line of half, and every publish was green; normal runs move about 1%.
+  // A broken scout run must not wipe the list everyone downloads: a publish keeping under 90% of the employers is refused.
+  // Why (6 Nov 2026, owner: "Alert on fields, block on employers (Recommended)", then "Refuse a loss over 10% (Recommended)", replacing #453's 60%): on 2 Nov feeds fell to 57% (6,833 to 3,871) under the old line of half,
+  // and every publish was green. The line compares counts: a run that loses some employers and finds others is judged by what it keeps. Normal runs drop about 0.7% (48 of 6,833 feeds over 4 days), so 10% also catches a smaller breakage, like one big job host down during a run.
+  // A planned big cleanup would be refused too; none is planned, and the dated copies make any drop restorable.
   // json_valid: one hand-edited row that is not JSON must not turn every publish into an error (review, 6 Nov 2026).
   const inD1 = env.STATS ? (await env.STATS.prepare(`SELECT COUNT(*) AS n, COUNT(CASE WHEN json_valid(body) THEN json_extract(body, '$.kinds') END) AS kinds FROM index_feeds`).first()) : null;
   // Why (6 Nov 2026, review): with D1, D1 alone is the line. The KV copy is rewritten only while the list fits one value, so an old copy would refuse every normal publish.
