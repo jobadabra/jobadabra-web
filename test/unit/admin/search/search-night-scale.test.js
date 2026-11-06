@@ -112,7 +112,7 @@ test('reference(): the weekly record per persona id as counts; none, a bad id or
 test('a night that never arrived alerts once at 06:30 UTC: no night for the UTC day tells, a night there is silent, the second send that day is held, the next day tells again', async () => {
   const env = {STATS: d1(), NOTIFY_SECRET: 'vault-secret'}, tg = telegram(), at = hhmm => new Date(`2026-11-07T${hhmm}:00Z`);
   assert.equal((await connect(env, 'engineering', TOKEN, '', tg.fetcher, at('06:00'))).ok, true);
-  assert.deepEqual([CHECK_AT, isCheckTick(at('06:30')), isCheckTick(at('06:25')), isCheckTick(at('18:30'))], ['06:30', true, false, false]);
+  assert.deepEqual([CHECK_AT, isCheckTick(at('06:30')), isCheckTick(at('06:25')), isCheckTick(at('07:25')), isCheckTick(at('07:30')), isCheckTick(at('18:30'))], ['06:30', true, false, true, false, false], 'a window, so one skipped tick does not bring the silence back');
   await store([night('2026-11-06')], env, at('01:00'));   // yesterday's night is there; today's is not
   assert.deepEqual(await checkMissing(env, at('06:30'), tg.fetcher), {missing: true, alert: 'sent'});
   assert.match(tg.sends()[0].body.text, /^🔎 Night search: no result last night\nhttps:\/\/www\.jobadabra\.top\/admin\/job-search\/lab\?tab=night$/);
@@ -125,7 +125,7 @@ test('a night that never arrived alerts once at 06:30 UTC: no night for the UTC 
   assert.equal(tg.sends().length, 2);
 });
 
-test('the Worker\'s five-minute tick runs the check at 06:30 UTC and at no other tick; a failing check is logged, never thrown', async t => {
+test('the Worker\'s five-minute tick runs the check from 06:30 UTC for an hour and at no other tick; a failing check is logged, never thrown', async t => {
   const env = {STATS: d1(), NOTIFY_SECRET: 'vault-secret', STATS_KEY: 'k3y', STATS_SALT: 's', ASSETS: {fetch: () => new Response('asset')}}, tg = telegram();
   assert.equal((await connect(env, 'engineering', TOKEN, '', tg.fetcher, new Date('2026-11-07T05:00:00Z'))).ok, true);
   const real = globalThis.fetch, errors = t.mock.method(console, 'error', () => {});
@@ -138,6 +138,8 @@ test('the Worker\'s five-minute tick runs the check at 06:30 UTC and at no other
     await tick('06:30');
     assert.equal(tg.sends().length, 1);
     assert.match(tg.sends()[0].body.text, /no result last night/);
+    await tick('06:35');
+    assert.equal(tg.sends().length, 1, 'a later tick of the window sends nothing more (the daily limit)');
     await store([night('2026-11-07')], env, new Date('2026-11-07T06:31:00Z'));
     await tick('06:30');
     assert.equal(tg.sends().length, 1, 'a night filed: nothing more');

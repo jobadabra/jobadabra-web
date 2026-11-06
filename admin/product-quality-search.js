@@ -12,16 +12,17 @@ const isNum = value => typeof value === 'number' && Number.isFinite(value);
  * @returns {object} an area of admin/product-quality-areas.js
  */
 export function search({days, searchNights}) {
-  const base = {id: 'search', area: 'Search', question: 'Does the nightly search still find jobs?', kind: 'line', subs: [], src: 'the nightly search check (six fictional job seekers)'};
+  const base = {id: 'search', area: 'Search', question: 'Does the nightly search still find jobs?', kind: 'line', subs: [], src: 'the nightly search check (the fixed fictional job seekers)'};
   if (!searchNights) return notMeasured(base, 'the nightly search results could not be read');
-  const nights = judgeAll([...searchNights].sort((a, b) => b.night.localeCompare(a.night))).filter(item => days.includes(item.night));   // each night against the ones before it, in or out of the 30 days
-  if (!nights.length) return notMeasured(base, 'no nightly search stored in the last 30 days');   // no night yet is "not measured", never 0
-  const newest = nights[0], byNight = new Map(nights.map(item => [item.night, item]));
+  const judged = judgeAll([...searchNights].sort((a, b) => b.night.localeCompare(a.night))).filter(item => days.includes(item.night));   // each night against the ones before it, in or out of the 30 days
+  if (!judged.length) return notMeasured(base, 'no nightly search stored in the last 30 days');   // no night yet is "not measured", never 0
+  // Why (6 Nov 2026, review): only nights with the newest night's persona count are one series, as in the judge: an average of 6-persona and 18-persona nights would read "better" just because the set tripled.
+  const newest = judged[0], nights = judged.filter(item => item.total === newest.total), byNight = new Map(nights.map(item => [item.night, item]));
   if (!days.slice(-2 * WEEK).includes(newest.night)) return notMeasured(base, 'no nightly search in the last 14 days');   // a stopped job is the news, not an old number
   const series = days.map(day => (byNight.has(day) ? {day, value: byNight.get(day).measured, n: 1} : {day, value: null}));
   const now = pooled(series.slice(-WEEK)), before = pooled(series.slice(-2 * WEEK, -WEEK));
   if (now == null) return notMeasured(base, 'no nightly search in the last 7 days');
-  // Why (6 Nov 2026): red is the judge's verdict on the newest night, also in the first week (measured under 4 of 6 is a drop with no earlier week to compare); an average that fell with no drop is only "to watch".
+  // Why (6 Nov 2026): red is the judge's verdict on the newest night, also in the first week (measured under two thirds of the personas is a drop with no earlier week to compare); an average that fell with no drop is only "to watch".
   const trend = newest.dropped ? 'worse' : judge(now, before, {tolerance: 0.5}) ?? 'new';
   const tone = newest.dropped ? 'bad' : toneOf(trend, now);
   const local = median(nights.filter(item => days.slice(-WEEK).includes(item.night)).map(item => item.local).filter(isNum));
