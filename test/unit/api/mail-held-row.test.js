@@ -66,7 +66,7 @@ test('a mail turned on again before the digest goes out', async () => {
   assert.ok(sent[0].text.includes('Weekly words'));
 });
 
-test('a choice that cannot be read holds the digest for the next day: it never sends more than the person chose', async () => {
+test('a choice that cannot be read holds the digest for the next run: it never sends more than the person chose', async () => {
   const {e, sent} = await person();
   await wait(e, 'Weekly words', 'app-weekly');
   const real = e.STATS.prepare;
@@ -92,4 +92,17 @@ test('a person with no address yet still reads the rows, so the app can show the
   assert.deepEqual(read.rows.map(row => [row.id, row.choice]), APP_ROWS.map(id => [id, '']));
   assert.deepEqual(read.rows.find(row => row.id === 'app-stopped').suggested, {mac: 'hidden', always: 'mail'});
   assert.equal((await (await call(choices, e, 'POST', {mail: 'app-weekly', on: true})).json()).reason, 'no_address');
+});
+
+test('an account that cannot be read answers 503, never "nothing chosen": the app would write its defaults over the person\'s off', async () => {
+  const {e} = await person();
+  await call(choices, e, 'POST', {mail: 'app-matches', on: false});
+  const real = e.STATS.prepare;
+  e.STATS.prepare = text => { if (/FROM pro_devices/.test(text)) throw new Error('D1 is down'); return real(text); };
+  for (const [method, body] of [['GET'], ['POST', {mail: 'app-matches', on: true}]]) {
+    const response = await call(choices, e, method, body);
+    assert.deepEqual([response.status, (await response.json()).reason], [503, 'not_read'], method);
+  }
+  e.STATS.prepare = real;
+  assert.equal((await (await call(choices, e, 'GET')).json()).rows.find(row => row.id === 'app-matches').choice, 'off');
 });

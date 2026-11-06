@@ -73,7 +73,7 @@ export async function sendDigests(env, now = new Date()) {
     if (account.digest_cadence === 'weekly' && now.getUTCDay() !== 1) { done.kept++; continue; }
     const held = (await env.STATS.prepare('SELECT * FROM mail_held WHERE account = ? ORDER BY id LIMIT 30').bind(account.id).all()).results || [];
     const refused = await verdicts(env, account, held, now);
-    if ([...refused.values()].includes('choice_held')) { done.kept++; continue; }   // a failed read never sends more than the person chose: the digest waits for the next day
+    if ([...refused.values()].includes('choice_held')) { done.kept++; continue; }   // a failed read never sends more than the person chose: the digest waits for the next run
     for (const [id, reason] of refused) if (reason) await env.STATS.prepare('DELETE FROM mail_held WHERE account = ? AND mail_row = ?').bind(account.id, id).run();
     const rows = held.filter(row => !refused.get(row.mail_row));
     if (!rows.length) continue;
