@@ -1,7 +1,7 @@
 // Our e-mail sender (Cloudflare Email Sending, binding EMAIL): send(env, template, to, data) is the one way any code mails a person. It refuses (never throws) on a bad address,
 // a bounce/complaint, a stop from the template's list, news its rules hold back (shared/mail-lists.js), the owner's stop on that mail (shared/mail-registry.js), or more than DAILY_MAX mails a day to one address; it adds the footer, the one-click
 // unsubscribe link and headers, and logs the mail (hash of the address, never the body) in mail_log. Switch: env.MAIL = "on" (anything else sends nothing). Guard: test/unit/shared/mail/mail.test.js.
-import {appVersionOf} from './app-needs.js';
+import {appVersionOf, fromMail} from './app-needs.js';
 import {digestOf, tokenFor} from './guard.js';
 import {frameHtml, frameText, REPLY_TO, SITE} from './mail-frame.js';
 import {NEWS, OPT_IN, newsFacts, newsRefusal} from './mail-lists.js';
@@ -78,7 +78,7 @@ export function compose(template, data = {}, given = null) {
   // Why each mail came and which links it carries: by who owns it (shared/mail-footer.js, spec PR 5). An Account mail has no stop link and no List-Unsubscribe header.
   const foot = footerOf(template, WHY[spec.list]);
   const links = given && foot.stop ? {stop: given.stop, settings: foot.settings ? given.settings : null} : null;
-  const frame = {title: spec.title(data), why: foot.why, button: spec.button?.(data) || null, links, trust: foot.trust, download: foot.download};
+  const frame = {title: spec.title(data), why: foot.why, button: fromMail(spec.button?.(data), template) || null, links, trust: foot.trust, download: foot.download};
   const headers = links ? {'List-Unsubscribe': `<${links.stop}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'} : undefined;
   return {subject: spec.subject(data), text: frameText({...frame, body: spec.text(data)}), html: frameHtml({...frame, body: spec.html(data)}), headers};
 }

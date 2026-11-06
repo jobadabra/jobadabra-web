@@ -51,3 +51,8 @@ test('the note names the first app version that opens it (shared/app-needs.js) a
   assert.ok(note.includes('href="/download"') && /Update/.test(note));
   assert.match(page, /id="open-fallback"[^>]*\bhidden\b/);
 });
+
+test('the page counts a press before it hands over to the app', () => {
+  // Owner, 6 Nov 2026: "Count presses, anonymous". After the hand-over the page may be gone, so the count goes first.
+  assert.ok(page.indexOf('/track.js') > 0 && page.indexOf('/track.js') < page.indexOf('/open.js'));
+});

@@ -18,9 +18,10 @@ export const hashOf = addr => String(addr || '').slice(0, 8);   // addr is alrea
 
 export async function collect(env, {days = 7, now = new Date()} = {}) {
   const since = new Date(now.getTime() - days * DAY).toISOString();
-  const [perDay, byTemplate, refused, recent, offReasons, confirmed, unconfirmed, service, releases, tips, digest, held, heldOldest, today] = await Promise.all([
+  const [perDay, sentByTemplate, presses, refused, recent, offReasons, confirmed, unconfirmed, service, releases, tips, digest, held, heldOldest, today] = await Promise.all([
     many(env, "SELECT substr(at, 1, 10) AS day, SUM(status = 'sent') AS sent, SUM(status NOT IN ('sent', 'claimed')) AS refused FROM mail_log WHERE at >= ? GROUP BY day ORDER BY day", since),
     many(env, "SELECT template, SUM(status = 'sent') AS sent, SUM(status NOT IN ('sent', 'claimed')) AS refused, MAX(CASE WHEN status = 'sent' THEN at END) AS last FROM mail_log WHERE at >= ? GROUP BY template ORDER BY sent DESC", since),
+    many(env, "SELECT substr(source, 6) AS template, COUNT(DISTINCT visitor) AS n FROM visits WHERE page IN ('/open', '/open.html') AND source LIKE 'mail-%' AND at >= ? GROUP BY source", since),
     many(env, "SELECT status AS reason, COUNT(*) AS n FROM mail_log WHERE status NOT IN ('sent', 'claimed') AND at >= ? GROUP BY status ORDER BY n DESC", since),
     many(env, "SELECT at, addr, template, status FROM mail_log WHERE status NOT IN ('sent', 'claimed') ORDER BY at DESC LIMIT 10"),
     many(env, "SELECT reason, list, COUNT(*) AS n FROM mail_off WHERE list NOT LIKE 'app-%' GROUP BY reason, list ORDER BY n DESC"),
@@ -35,6 +36,7 @@ export async function collect(env, {days = 7, now = new Date()} = {}) {
     one(env, "SELECT COUNT(*) AS n FROM mail_log WHERE status = 'sent' AND at >= ?", new Date(now.getTime() - DAY).toISOString()),
   ]);
   const testMail = await many(env, 'SELECT received_at, to_addr, subject FROM test_mail ORDER BY received_at DESC LIMIT 5');   // test-account-* inboxes only (admin/test-mail.js)
+  const byTemplate = sentByTemplate.map(row => ({...row, opened: presses.find(press => press.template === row.template)?.n || 0}));
   const sent = perDay.reduce((total, row) => total + (row.sent || 0), 0), notSent = perDay.reduce((total, row) => total + (row.refused || 0), 0);
   const failed = refused.find(row => row.reason === 'failed')?.n || 0;
   const stopped = offReasons.filter(row => row.reason === 'bounce' || row.reason === 'complaint').reduce((total, row) => total + row.n, 0);

@@ -16,7 +16,7 @@ import {view} from '../../../admin/email.js';
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0078_test_mail.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql', '0093_changelog.sql', '0105_changelog_plain.sql', '0117_release_mail.sql']) db.exec(sql(file));
+  for (const file of ['0001_stats.sql', '0078_test_mail.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql', '0093_changelog.sql', '0105_changelog_plain.sql', '0117_release_mail.sql']) db.exec(sql(file));
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values), run: async () => db.prepare(text).run(...args),
     all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
   return {db, prepare: text => statement(text)};
@@ -184,4 +184,17 @@ test('the four number tables are charts with the table behind "Show table"; the 
   assert.match(overview, /By template<\/h2><div class="vz">[\s\S]*?<details class="vz-more"><summary>Show table[\s\S]*?<th>Template<\/th>/);
   for (const html of [overview, people]) assert.equal((html.match(/id="tip"/g) || []).length, 1);
   assert.match(overview, /Last 10 refusals and failures<\/h2><table>/);   // a log stays a table
+});
+
+test("an Open press counts once per visitor for its mail, inside the window; other pages and sources do not", async () => {
+  const {env} = await fill();
+  const visit = env.STATS.db.prepare("INSERT INTO visits (day, at, visitor, page, source, country, device) VALUES ('d', ?, ?, ?, ?, '', '')");
+  visit.run('2026-10-26T12:00:00Z', 'v1', '/open', 'mail-digest');
+  visit.run('2026-10-26T12:01:00Z', 'v1', '/open', 'mail-digest');      // pressed twice
+  visit.run('2026-10-26T12:02:00Z', 'v2', '/open.html', 'mail-digest');
+  visit.run('2026-10-26T12:03:00Z', 'v3', '/pricing', 'mail-digest');   // walked on through the site
+  visit.run('2026-10-26T12:04:00Z', 'v4', '/open', 'google.com');
+  visit.run('2026-08-01T12:00:00Z', 'v5', '/open', 'mail-digest');      // outside the window
+  const data = await collect(env, {days: 7, now});
+  assert.deepEqual(data.byTemplate.map(r => [r.template, r.opened]), [['welcome', 0], ['digest', 2]]);
 });
