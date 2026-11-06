@@ -123,6 +123,7 @@ import {brain} from '../../api/brain.js';
 import {attribution, purge as purgeNets} from '../../api/attribution.js';
 import {log as brainLog, view as brainView} from '../../shared/brainlog.js';
 import {index as employerIndex} from '../../api/employers.js';
+import {scoutMemory} from '../../api/scout-memory.js';
 import {coverage} from '../../api/coverage.js';
 import * as pool from '../../api/pool.js';
 import * as testMail from '../../admin/test-mail.js';   // test-account-*@ inboxes for the tests (Email Worker + /admin/test-mail)
@@ -270,6 +271,7 @@ async function route(request, env, ctx) {
   if (pathname === '/ai-cost/data' && request.method === 'GET') return jobCostSpent(request, env);   // a day's reported spend for CI's budget guard (same key)
   if (pathname === '/ai-cost/data' && request.method === 'PUT') return jobCostIngest(request, env);   // each scheduled job reports its AI cost (Bearer AI_COST_PUBLISH_KEY)
   if (pathname === '/api/index') return employerIndex(request, env);
+  if (pathname === '/api/scout-memory') return scoutMemory(request, env);   // the central scout saves and restores its memory (Bearer INDEX_PUBLISH_KEY, private R2 SCOUT_MEMORY)
   if (pathname === '/api/synthetic/last') return synthetic.lastRoute(request, env);   // when the newest probe round ran, only that (shared/synthetic.js; the bot Worker's heartbeat)
   if (pathname === '/api/coverage' && request.method === 'GET') return coverage(env);   // the website's public numbers (counts only, api/coverage.js)
   if (pathname === '/api/recipes') return recipeLibrary.recipes(request, env);
