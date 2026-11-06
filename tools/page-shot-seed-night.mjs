@@ -9,7 +9,8 @@ const DAY = 86400000, real = name => JSON.parse(readFileSync(new URL(`../test/fi
 
 /** @param {{env: object}} context the seed context; `seeds` the seed table (for the product-quality seed this one lays itself over) */
 export async function searchNight({env}, seeds) {
-  await seeds['product-quality']({env});
+  // Why (6 Nov 2026, #461 red): the admin walks run every seed on ONE database, and the quality seed's fill cards have fixed ids, so a second run died on UNIQUE fill_cards.id.
+  if (!await env.STATS.prepare("SELECT 1 AS x FROM fill_cards WHERE id = 'demo-0-0'").first()) await seeds['product-quality']({env});
   const now = new Date(), night = back => new Date(now.getTime() - back * DAY).toISOString().slice(0, 10), kept = [];
   const healthy = real('2026-11-06');
   for (let back = 11; back >= 2; back--) {   // nine healthy nights: five of six press measured, a few right local jobs each
