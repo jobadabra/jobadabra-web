@@ -21,7 +21,8 @@ const seconds = value => (value == null ? '–' : `${value} s`);
 const sinceUsual = row => (row.usual == null ? '<span class="muted">usual: after 7 nights</span>' : `<span class="muted">usual ${num(row.usual)}</span>${isNum(row.local) && row.local < row.usual ? ` ${chip('↓ under its usual', 'warn')}` : ''}`);
 const isNum = value => typeof value === 'number' && Number.isFinite(value);
 const reference = (row, ref) => (!ref ? '<span class="muted">no reference yet</span>'
-  : !ref.total ? '<span class="muted">no reference</span>'
+  : ref.total === 0 && ref.eures === 0 ? '<span class="muted">EURES lists none</span>'   // Why (6 Nov 2026, coordinator): a stored 0 with EURES's own count 0 is a real read (EURES lists no right job for that region and role), not a failed one; a 0 without it claims nothing
+    : !ref.total ? '<span class="muted">no reference</span>'
     : ref.google == null ? `${num(row.local)} of ${num(ref.total)} on EURES`   // Why (6 Nov 2026, owner: "I'd rather keep it for central scout"): the reference is EURES's list alone, so no Google figure and no "reachable" (= total) is printed
       : `${num(row.local)} of ${num(ref.reachable)} reachable<div class="why">of ${num(ref.total)} total · EURES ${num(ref.eures)} · Google Jobs ${num(ref.google)}</div>`);
 const personaRow = (row, refs = {}) => `<tr><td><b>${esc(row.label)}</b></td><td>${kindChip(row.kind)}${row.why ? `<div class="why">${esc(row.why)}</div>` : ''}</td><td class="num">${num(row.local)} · ${num(row.found)}<div>${sinceUsual(row)}</div></td>`
