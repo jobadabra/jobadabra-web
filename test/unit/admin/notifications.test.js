@@ -132,3 +132,25 @@ test('POST /ops/notify: the CI key only, an unknown event is refused, a held ale
   assert.deepEqual(await (await ask({event: 'main-red', text: 'x', fallback: true})).json(), {ok: true, sent: false, logged: true});
   assert.match(await (await get(e, '/admin/operations/notifications')).text(), /1 sent without switchboard \(7 d\)/);
 });
+
+test('a refused form keeps the Admin look: through the real route the 400 page has the top bar and the stylesheet, and still says why (owner, 6 Nov 2026: "seems like the page UI is broken")', async () => {
+  const e = env();
+  for (const [fields, why] of [[{action: 'connect', channel: 'engineering', token: 'nope'}, /not a bot token/], [{action: 'test', channel: 'marketing'}, /No bot connected/], [{action: 'mode', event: 'beta-published', mode: 'daily'}, /not allowed for this alert/]]) {
+    const res = await post(e, fields);
+    const html = await res.text();
+    assert.equal(res.status, 400);
+    assert.match(html, why, 'the reason is still shown');
+    assert.ok(html.includes('class="admin-nav"') && html.includes('✈ Admin'), 'the Admin top bar is there');
+    assert.ok(html.includes('.admin-nav'), 'the shared stylesheet is there');
+  }
+  const real = globalThis.fetch;   // the owner's case: a valid bot token whose bot has had no message yet (Telegram's getUpdates is empty); the route has no injected fetcher
+  globalThis.fetch = async url => (/api\.telegram\.org\/bot[^/]+\/getMe/.test(String(url)) ? new Response(JSON.stringify({ok: true, result: {username: 'jobadabra_ci_bot'}})) : /getUpdates/.test(String(url)) ? new Response(JSON.stringify({ok: true, result: []})) : real(url));
+  try {
+    const res = await post(e, {action: 'connect', channel: 'engineering', token: TOKEN, chat: ''}), html = await res.text();
+    assert.equal(res.status, 400);
+    assert.match(html, /The bot has no message yet: send it any message in Telegram, then press Connect again\./);
+    assert.ok(html.includes('class="admin-nav"') && html.includes('.admin-nav'), 'the owner\'s refusal keeps the top bar and the stylesheet');
+  } finally { globalThis.fetch = real; }
+  const ok = await (await get(e, '/admin/operations/notifications')).text();
+  assert.ok(ok.includes('class="admin-nav"'), 'control: the normal GET has the bar too');
+});
