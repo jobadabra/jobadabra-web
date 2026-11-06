@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
+import {mailOf} from '../../../../shared/mail-registry.js';
 import {sourceFiles} from '../../../lib/source-files.js';
 import {send, settingsLink, stopLink} from '../../../../shared/mail.js';
 import {TEMPLATES} from '../../../../shared/mail-templates.js';
@@ -58,10 +59,15 @@ test('every template goes through the frame: logo, title, footer with stop + set
     assert.match(sent[0].from, /no-reply@jobadabra\.top/, `${name}: From stays no-reply@`);
     assert.ok(html.split(`background:${LIGHT.fill}`).length - 1 <= 1, `${name}: at most one yellow button`);   // the app's yellow (shared/mail-palette.js); it counted the old orange until 28 Oct 2026 and so could never fail (Gitar, #220)
     assert.ok(!/<(script|form|iframe)/i.test(html), `${name}: email-safe`);
-    if (spec.essential) { assert.ok(!html.includes('Stop these emails') && !sent[0].headers, `${name}: a security mail has nothing to stop`); continue; }
+    // Why (spec PR 5, "Every mail says why it came"): Account mail has nothing to stop; Yours mail says where to change it, with a small web stop; our news has the stop and the settings page.
+    const owner = mailOf(name).owner;
+    if (spec.essential || owner === 'account') { assert.ok(!/Stop these e/.test(html) && !sent[0].headers, `${name}: an Account mail has nothing to stop`); continue; }
     const stop = (await stopLink(e, 'me@example.com', spec.list)).replaceAll('&', '&amp;'), settings = (await settingsLink(e, 'me@example.com')).replaceAll('&', '&amp;');
-    assert.ok(html.includes(`href="${stop}"`) && html.includes(`href="${settings}"`) && html.includes('Stop these emails') && html.includes('Email settings'), `${name}: footer links`);
-    assert.ok(text.includes(stop.replaceAll('&amp;', '&')) && text.includes(settings.replaceAll('&amp;', '&')), `${name}: the text twin has both links`);
+    assert.ok(html.includes(`href="${stop}"`) && text.includes(stop.replaceAll('&amp;', '&')) && sent[0].headers['List-Unsubscribe'], `${name}: a stop link, in both versions and the header`);
+    if (owner === 'yours') {
+      assert.ok(html.includes('Change it in Settings → Notifications.') && html.includes("Can't open the app? <a") && !html.includes('Email settings'), `${name}: the two Yours lines`);
+      assert.ok(text.includes("Change it in Settings → Notifications.\nCan't open the app? Stop these e-mails: "), `${name}: the text twin has them`);
+    } else assert.ok(html.includes(`href="${settings}"`) && html.includes('Email settings') && text.includes(settings.replaceAll('&amp;', '&')), `${name}: news has the stop and the settings page`);
   }
 });
 

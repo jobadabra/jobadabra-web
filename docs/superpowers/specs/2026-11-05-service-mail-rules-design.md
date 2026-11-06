@@ -48,30 +48,33 @@ A mail about work done on the Mac can only go while the app is open, and its row
 
 | Row | Mac only | Always on |
 |---|---|---|
-| Find jobs: new matches | no e-mail | in the digest |
+| Find jobs: new matches | in the digest | in the digest |
 | Applying: applied for you | no e-mail | no e-mail |
-| Applying: an application needs you | e-mail | e-mail |
+| Applying: an application needs you | no e-mail | e-mail |
 | Gmail: interview reminder | no e-mail | no e-mail |
 | Always on stopped working | not shown | e-mail |
 | Nothing found for days | not shown | after 3 days |
-| Job digest | off | daily |
-| Weekly summary | off | Mondays |
+| Job digest | daily | daily |
+| Weekly summary | Mondays | Mondays |
+
+Owner, 6 Nov 2026: "on Mac only, the defualt notifications should be off for any automations, because they get the notification in the app... Only Weekly Summary and Jobs digest can be on".
 | What's new, Tips and tricks | off | off |
 
-"An application needs you" starts on because the CV switch already promises it ("E-mail me when an application needs me or a strong match comes in"). Turning on Always on asks for the address, and the Always on column follows from that press, so the card's "New matches by e-mail every morning" stays true. A row the person has set is never reset by a mode change.
+Owner, 6 Nov 2026 (replacing the 5 Nov "consent" wording): the address found in the CV is presented as saved for the person's own notifications ("We shuold rather say that we detected it and we'll save it for future app notifications"), and the CV switch is "for enabling the email notifications", "On by default". Continue with it on sends the address to our site and turns on the suggested rows for the person's mode, each changeable in Settings → Notifications; turned off, nothing leaves the Mac and the step counts as asked. Notifications inside the app start on (nothing leaves the Mac); e-mail starts with that press, or later with one press in Notifications ("App on; e-mail off until one press"). Left off, it is suggested once at the moments it helps: an application needs the person, Always on, the first sent application. Asking for our news comes after the first sent application (owner: "we want lateron to ask for their consent on that, after first sent applciation"). A row the person has set is never reset by a mode change.
 
 ## Every mail says why it came
 
 | Mail | Footer |
 |---|---|
-| Written on the Mac | "Written on your Mac by Jobadabra. It passed through our mail service to reach you, and we kept no copy. You chose this in Settings → Notifications." |
+| The app's own mail (from the Mac or their own GitHub) | "You chose this in the Jobadabra app." |
 | Always on, our servers | "You get this because you turned on Always on. Your profile is stored encrypted, kept apart per account and deleted when you turn it off. We use it only to run your search, never for marketing." |
-| Always on, own accounts | "Your own GitHub ran this search. You chose this in Settings → Notifications." |
 | Jobadabra's news | "News from Jobadabra, the same for everyone. Nothing here comes from your search or profile. You ticked this, and one click stops it." |
 | Come back | "We wrote because the app has not reached us in 3 months. Nothing else about you was used. You ticked this, and one click stops it." |
-| Account | no unsubscribe, no headers. "Wasn't you? Ignore this mail." on the confirm mails |
+| Account | no unsubscribe, no headers. The confirm mails say where the address came from; their body already says "Didn't ask for this? Ignore this email." |
 
-Every Yours mail then ends with the same two lines: "Change this in the Jobadabra app: Settings → Notifications." and, small, "Can't open the app? Stop these e-mails." The web link stays because someone who uninstalled the app or lost their Mac cannot reach Settings, while their own GitHub repo keeps mailing them; they would press Report spam, which hurts delivery of sign-in codes too (owner: "there should be a link for us to intervene and stop that email sending"). `send()` refuses it whichever mode wrote the mail, so it works with the app gone. It stops the mail, not the searches: our servers pause after 14 days without the app, and a person's own repo keeps running. Today only `account-code` and `confirm-resend` go without a stop link: `welcome`, `feedback-update` and `always-on-test` change.
+Owner, 6 Nov 2026, asked whether people care where a mail was written: "Keep promise, cut extras". The server still keeps nothing after sending, but the footer no longer says where each mail was written: nobody reads it, and one plain line is always true.
+
+Every Yours mail then ends with the same two lines: "Change it in Settings → Notifications." and, small, "Can't open the app? Stop these e-mails." The web link stays because someone who uninstalled the app or lost their Mac cannot reach Settings, while their own GitHub repo keeps mailing them; they would press Report spam, which hurts delivery of sign-in codes too (owner: "there should be a link for us to intervene and stop that email sending"). `send()` refuses it whichever mode wrote the mail, so it works with the app gone. It stops the mail, not the searches: our servers pause after 14 days without the app, and a person's own repo keeps running. Today only `account-code` and `confirm-resend` go without a stop link: `welcome`, `feedback-update` and `always-on-test` change.
 
 ## What we can say (read 5 Nov 2026)
 

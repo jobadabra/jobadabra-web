@@ -24,10 +24,10 @@ export const MAILS = [
   // The app's own mails, told apart by `mail` on POST /api/notify/email (spec #447 §1; PR 3). Virtual: they go as the `message` template, so its stop holds them too.
   // `suggested`: the spec's defaults per mode (§ Suggested defaults: 'no' = no e-mail, 'digest' = in the digest, 'mail' = an e-mail, 'hidden' = not shown in that mode);
   // the app applies them (PR 4), the site stores only what a person changed (mail_off / mail_on, list = the row id).
-  {id: 'app-matches', template: 'message', owner: 'yours', name: 'New matches', when: 'a search finds new jobs', suggested: {mac: 'no', always: 'digest'}},
-  {id: 'app-needs-you', template: 'message', owner: 'yours', name: 'An application needs you', when: 'an application waits for the person', suggested: {mac: 'mail', always: 'mail'}},
+  {id: 'app-matches', template: 'message', owner: 'yours', name: 'New matches', when: 'a search finds new jobs', suggested: {mac: 'digest', always: 'digest'}},
+  {id: 'app-needs-you', template: 'message', owner: 'yours', name: 'An application needs you', when: 'an application waits for the person', suggested: {mac: 'no', always: 'mail'}},
   {id: 'app-applied', template: 'message', owner: 'yours', name: 'Applied for you', when: 'Full automation sent an application', suggested: {mac: 'no', always: 'no'}},
-  {id: 'app-weekly', template: 'message', owner: 'yours', name: 'Weekly summary', when: "the person's day, Mondays by default", suggested: {mac: 'no', always: 'mail'}},
+  {id: 'app-weekly', template: 'message', owner: 'yours', name: 'Weekly summary', when: "the person's day, Mondays by default", suggested: {mac: 'mail', always: 'mail'}},
   {id: 'app-stopped', template: 'message', owner: 'yours', name: 'Always on stopped working', when: 'a run on GitHub fails', suggested: {mac: 'hidden', always: 'mail'}},
   {id: 'app-nothing', template: 'message', owner: 'yours', name: 'Nothing found for days', when: 'days of runs with no new match', suggested: {mac: 'hidden', always: 'mail'}},
   {id: 'release', owner: 'jobadabra', name: "What's new", when: 'you press send on a release'},

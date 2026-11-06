@@ -46,8 +46,11 @@ const personalHtml = () => `<table role="presentation" width="100%" cellpadding=
   + `<p class="jp-muted" style="margin:1px 0 0;color:${C.muted};font:13px/1.4 ${FONT}">${SIGNED}</p></td></tr></table></td></tr></table>`;
 
 // html: {title, body (html), button: {label, url} | null, why, links: {stop, settings} | null}. links null = nothing to stop (a security mail): only the site link shows.
-export function frameHtml({title, body, button: action, why, links, hero}) {
-  const foot = [links && link(links.stop, 'Stop these emails'), links && link(links.settings, 'Email settings'), link(SITE, 'jobadabra.top')].filter(Boolean).join(' · ');
+// `change` (a Yours mail, spec PR 5): "Change it in Settings → Notifications." then, small, "Can't open the app? Stop these e-mails." instead of the plain links.
+export const CHANGE = 'Change it in Settings → Notifications.';
+export function frameHtml({title, body, button: action, why, links, hero, change = false}) {
+  const foot = change && links ? `${esc(CHANGE)}<br><small>Can't open the app? ${link(links.stop, 'Stop these e-mails')}</small><br>${link(SITE, 'jobadabra.top')}`
+    : [links && link(links.stop, 'Stop these emails'), links?.settings && link(links.settings, 'Email settings'), link(SITE, 'jobadabra.top')].filter(Boolean).join(' · ');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>${esc(title)}</title>${STYLE}</head>`
     + `<body class="jp-bg" style="margin:0;background:${C.bg}"><table role="presentation" data-jp-frame="1" width="100%" cellpadding="0" cellspacing="0" class="jp-bg" style="background:${C.bg}"><tr><td align="center" style="padding:22px 14px">`
     + `<table role="presentation" width="560" cellpadding="0" cellspacing="0" class="jp-card" style="width:100%;max-width:560px;background:${C.card};border:1px solid ${C.line};border-radius:12px;font:15px/1.55 ${FONT};color:${C.ink}">`
@@ -58,7 +61,7 @@ export function frameHtml({title, body, button: action, why, links, hero}) {
     + `</td></tr></table></body></html>`;
 }
 
-export function frameText({title, body, button: action, why, links}) {
+export function frameText({title, body, button: action, why, links, change = false}) {
   return [title, '', body, action ? `\n${action.label}: ${action.url}` : '', '', '--', ASK, SIGNED, '', why,
-    links ? `Stop these emails: ${links.stop}\nEmail settings: ${links.settings}` : '', SITE, `Don't have the app? Download Jobadabra: ${SITE}/download`].filter(part => part !== null && part !== undefined && part !== false).join('\n').replace(/\n{3,}/g, '\n\n');
+    change && links ? `${CHANGE}\nCan't open the app? Stop these e-mails: ${links.stop}` : links ? [`Stop these emails: ${links.stop}`, links.settings && `Email settings: ${links.settings}`].filter(Boolean).join('\n') : '', SITE, `Don't have the app? Download Jobadabra: ${SITE}/download`].filter(part => part !== null && part !== undefined && part !== false).join('\n').replace(/\n{3,}/g, '\n\n');
 }
