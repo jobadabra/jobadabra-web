@@ -132,6 +132,12 @@ bucket_name = "lab-fills"
 binding = "FEEDBACK_FILES"
 bucket_name = "feedback-files"
 
+# The central scout's memory (api/scout-memory.js): the gzipped tar of jobs.sqlite, cache and geo.json, saved after each run and read back when the lab's GitHub cache is missing.
+# Private (no r2.dev domain), 30 days, the code drops older copies on each save. Created 6 Nov 2026 through the Cloudflare API.
+[[r2_buckets]]
+binding = "SCOUT_MEMORY"
+bucket_name = "scout-memory"
+
 # Hosted Always on (api/hosted-state.js, hosted-tick.js): the person's encrypted state, and the Queue the cron tick fills; the runner Worker (hosted-runner/) consumes it and starts the container.
 # Secret: HOSTED_KEK (Worker secret; the key of every account's state is derived from it). Created 16 Oct 2026: bucket hosted-state, queue hosted-runs.
 [[r2_buckets]]
