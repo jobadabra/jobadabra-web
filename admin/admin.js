@@ -176,9 +176,10 @@ export function withNav(html, active, who) {
   out = out.includes('</header>') ? out.replace('</header>', `</header>${question(active)}`) : out.replace('</nav>', `</nav>${question(active)}`);
   return out.replace('</body>', `<script>${TABLE_SCRIPT}\n${TABLE_TOOLS_SCRIPT}</script><script>${PALETTE_SCRIPT}</script></body>`);
 }
-// A page response with the menu added; anything that is not an HTML page (a 404, a redirect, JSON) passes untouched.
+// A page response with the menu added; anything that is not an HTML page (a plain 404, a redirect, JSON) passes untouched.
+// Why (6 Nov 2026, owner: "seems like the page UI is broken"): a refused form answers an HTML page with a 400 and a "run not kept" page a 404; keyed on `response.ok` they came out without the top bar and the stylesheet. The content type decides, never the status.
 export async function adminPage(response, active, who) {
-  if (!response.ok || !/text\/html/.test(response.headers.get('Content-Type') || '')) return response;
+  if (!/text\/html/.test(response.headers.get('Content-Type') || '')) return response;
   const headers = new Headers(response.headers);
   headers.set('X-Robots-Tag', 'noindex');
   return new Response(withNav(await response.text(), active, who), {status: response.status, headers});

@@ -132,3 +132,17 @@ test('POST /ops/notify: the CI key only, an unknown event is refused, a held ale
   assert.deepEqual(await (await ask({event: 'main-red', text: 'x', fallback: true})).json(), {ok: true, sent: false, logged: true});
   assert.match(await (await get(e, '/admin/operations/notifications')).text(), /1 sent without switchboard \(7 d\)/);
 });
+
+test('a refused form keeps the Admin look: through the real route the 400 page has the top bar and the stylesheet, and still says why (owner, 6 Nov 2026: "seems like the page UI is broken")', async () => {
+  const e = env();
+  for (const [fields, why] of [[{action: 'connect', channel: 'engineering', token: 'nope'}, /not a bot token/], [{action: 'test', channel: 'marketing'}, /No bot connected/], [{action: 'mode', event: 'beta-published', mode: 'daily'}, /not allowed for this alert/]]) {
+    const res = await post(e, fields);
+    const html = await res.text();
+    assert.equal(res.status, 400);
+    assert.match(html, why, 'the reason is still shown');
+    assert.ok(html.includes('class="admin-nav"') && html.includes('✈ Admin'), 'the Admin top bar is there');
+    assert.ok(html.includes('.admin-nav'), 'the shared stylesheet is there');
+  }
+  const ok = await (await get(e, '/admin/operations/notifications')).text();
+  assert.ok(ok.includes('class="admin-nav"'), 'control: the normal GET has the bar too');
+});
