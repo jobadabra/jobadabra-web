@@ -104,7 +104,7 @@ test('a bad upload is refused with a reason and keeps nothing: too big, not JSON
   const {env, tg} = await setup();
   const big = {...verdict(), padding: 'x'.repeat(MAX_BYTES)};
   const cases = [[big, {}, 413], ['not json', {}, 400], [{state: 'success', head: 'x'}, {}, 400], [{...verdict(), rows: []}, {}, 400], [verdict(), {night: 'yesterday'}, 400],
-    [{...verdict(), rows: Array.from({length: 13}, (_, i) => row(i + 1, 'measured', 1))}, {}, 400], [{...verdict(), rows: [null]}, {}, 400], [[1, 2], {}, 400], [verdict(), {run: 'abc'}, 400]];
+    [{...verdict(), rows: Array.from({length: 41}, (_, i) => row(i + 1, 'measured', 1))}, {}, 400], [{...verdict(), rows: [null]}, {}, 400], [[1, 2], {}, 400], [verdict(), {run: 'abc'}, 400]];
   for (const [body, options, status] of cases) {
     const response = await put(body, {...options, env, tg});
     assert.equal(response.status, status, JSON.stringify(options) + String(body).slice(0, 20));

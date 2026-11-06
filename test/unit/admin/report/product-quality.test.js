@@ -145,6 +145,14 @@ test('Search: the average of personas measured, red when the newest night droppe
   assert.match(out.subs[0], /time ran out for employer sites in 6 of 6/, 'the other two reasons turn it red too');
 });
 
+test('Search: nights of another persona count are not one series: 6-persona nights then 18-persona nights read as the first week of the 18, never "better" because the set tripled (review, 6 Nov 2026)', () => {
+  const big = (back, measured) => ({night: DAYS(back), rows: Array.from({length: 18}, (_, i) => ({persona: i + 1, kind: i < measured ? 'measured' : 'unmeasured', local: 3, seconds: 20, ranOut: []}))});
+  const mixed = search({days, searchNights: [big(0, 18), big(1, 18), big(2, 18), ...nightsOf(9, 3, 6)]});
+  assert.deepEqual([mixed.value, mixed.unit, mixed.trend, mixed.delta], ['18', ' of 18', 'new', 'no earlier week to compare with'], 'only the 18-persona nights are the series');
+  assert.equal(mixed.series.filter(point => point.value != null).length, 3);
+  assert.match(mixed.subs[1], /median 54 a night/, 'pooled local jobs of the 18-persona nights only, not 18 mixed with 54');
+});
+
 test('Search: no night is "not measured" with its reason, never 0; a stopped job is the news', () => {
   for (const [searchNights, label] of [[null, 'the nightly search results could not be read'], [[], 'no nightly search stored in the last 30 days'], [nightsOf(25, 20, 6), 'no nightly search in the last 14 days']]) {
     const area = search({days, searchNights});

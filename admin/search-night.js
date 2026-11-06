@@ -8,7 +8,7 @@ import {alertOwner} from '../shared/notify-send.js';
 import {writeState} from './ci-state.js';
 import {alertText, judgeAll} from './search-night-judge.js';
 
-export const STATE_KEY = 'search-nights', KEEP_NIGHTS = 30, MAX_BYTES = 65536, MAX_ROWS = 12;
+export const STATE_KEY = 'search-nights', KEEP_NIGHTS = 30, MAX_BYTES = 65536, MAX_ROWS = 40;   // Why (6 Nov 2026): 18 fixed personas a night (owner: "6 personas is too narrow"); the cap was 12 and would have refused the first 18-persona verdict with a 400, silent again. 40 leaves room; 18 rows are about 20 KB of the 64 KB
 // The row kinds of the gate (tools/persona-search/gate.py row_verdict): 🟢 measured, ⚪ none-right (scored, none right role and place), ⚪ nothing (no job scored), unmeasured (errored, refused or too slow), fault.
 export const KINDS = ['measured', 'none-right', 'nothing', 'unmeasured', 'fault'];
 const DAY = /^\d{4}-\d\d-\d\d$/, RUN = /^\d{1,20}$/, RAN_OUT = 'time ran out for: ';
@@ -43,6 +43,19 @@ export async function nights(env) {
   const row = await env.STATS.prepare('SELECT body FROM ci_state WHERE key = ?').bind(STATE_KEY).first();
   const list = row ? JSON.parse(row.body)?.nights : [];
   return (Array.isArray(list) ? list : []).filter(night => night && DAY.test(night.night || '') && Array.isArray(night.rows));
+}
+
+export const REFERENCE_KEY = 'search-reference';
+/**
+ * The latest weekly reference per persona id: {<persona>: {total, reachable, eures, google}} (counts of right local jobs that exist, read outside the app; no job or employer text), {} until the weekly job has stored one.
+ * Why (6 Nov 2026, owner: "how to know if it's a good or bad result?"): the tab's "found N of X"; the record's shape is fixed here so the weekly job writes what the tab reads. Throws when the store cannot be read.
+ * @param {object} env the Worker env (STATS D1)
+ */
+export async function reference(env) {
+  const row = await env.STATS.prepare('SELECT body FROM ci_state WHERE key = ?').bind(REFERENCE_KEY).first();
+  const personas = row ? JSON.parse(row.body)?.personas : null;
+  if (!personas || typeof personas !== 'object' || Array.isArray(personas)) return {};
+  return Object.fromEntries(Object.entries(personas).filter(([id]) => /^\d{1,3}$/.test(id)).map(([id, item]) => [Number(id), {total: count(item?.total), reachable: count(item?.reachable), eures: count(item?.eures), google: count(item?.google)}]));
 }
 
 const answer = (status, body) => Response.json(body, {status, headers: {'Cache-Control': 'no-store'}});

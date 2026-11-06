@@ -1,10 +1,10 @@
 // The "Night search" tab of /admin/job-search/lab (owner, 6 Nov 2026: "the nightly search persona... I see nowhere in Admin... Where should I see it the search dropped?"): the newest night first, red with the
-// reasons when it dropped (admin/search-night-judge.js, the same verdict the alert and the Report only chip read), the six fictional candidates as chips, what time ran out for, and the last 14 nights as a strip.
+// reasons when it dropped (admin/search-night-judge.js, the same verdict the alert and the Report only chip read), every fictional candidate as a row with its three yardsticks (the floor: measured, its own 7 nights: usual, the weekly reference: found N of X), what time ran out for, and the last 14 nights as a strip.
 // Counts, seconds and the gate's fixed words only (admin/search-night.js); every value is escaped. Guard: test/unit/admin/search/search-night.test.js.
 import {esc} from '../shared/html.js';
 import {BAND_STYLE, verdictBand} from './verdict-band.js';
 import {CHIP_STYLE, chip} from './chip.js';
-import {EMPLOYER_SITES, HISTORY, MIN_MEASURED, OUT_MIN, SPREADS, reasonWords} from './search-night-judge.js';
+import {EMPLOYER_SITES, HISTORY, SPREADS, reasonWords} from './search-night-judge.js';
 
 export const NIGHT_CSS = `${CHIP_STYLE}${BAND_STYLE}
 .nstrip{display:flex;align-items:flex-end;gap:3px;height:56px}.nstrip i{display:block;flex:1;background:#5fb3ff;opacity:.75;border-radius:2px 2px 0 0}.nstrip i.weak{background:#ff8a80;opacity:1}
@@ -16,7 +16,15 @@ const kindChip = kind => chip(...KIND[kind] || KIND.unknown);
 const num = value => (value == null ? '–' : Number(value).toLocaleString('en-US'));
 const seconds = value => (value == null ? '–' : `${value} s`);
 
-const personaRow = row => `<tr><td><b>${esc(row.label)}</b></td><td>${kindChip(row.kind)}${row.why ? `<div class="why">${esc(row.why)}</div>` : ''}</td><td class="num">${num(row.local)} · ${num(row.found)}</td><td class="num">${seconds(row.seconds)}</td>`
+// The three yardsticks of one persona (owner, 6 Nov 2026: "how to know if it's a good or bad result?"): the floor is the result chip (measured = a right job within the press limit); `usual` its own median of the last HISTORY nights
+// (shown under it, a lower night is a muted note, never an alarm on its own); the weekly reference `ref` = {total, reachable, eures, google} counts of right local jobs that exist (admin/search-night.js reference()).
+const sinceUsual = row => (row.usual == null ? '<span class="muted">usual: after 7 nights</span>' : `<span class="muted">usual ${num(row.usual)}</span>${isNum(row.local) && row.local < row.usual ? ` ${chip('↓ under its usual', 'warn')}` : ''}`);
+const isNum = value => typeof value === 'number' && Number.isFinite(value);
+const reference = (row, ref) => (!ref ? '<span class="muted">no reference yet</span>'
+  : !ref.total ? '<span class="muted">no reference</span>'
+    : `${num(row.local)} of ${num(ref.reachable)} reachable<div class="why">of ${num(ref.total)} total · EURES ${num(ref.eures)} · Google Jobs ${num(ref.google)}</div>`);
+const personaRow = (row, refs = {}) => `<tr><td><b>${esc(row.label)}</b></td><td>${kindChip(row.kind)}${row.why ? `<div class="why">${esc(row.why)}</div>` : ''}</td><td class="num">${num(row.local)} · ${num(row.found)}<div>${sinceUsual(row)}</div></td>`
+  + `<td class="num">${reference(row, refs[row.persona])}</td><td class="num">${seconds(row.seconds)}</td>`
   + `<td><div class="nsteps">${row.ranOut.length ? row.ranOut.map(step => chip(esc(step), step === EMPLOYER_SITES ? 'bad' : 'off')).join('') : '<span class="muted">nothing</span>'}</div></td></tr>`;
 
 // Oldest left; a bar is the share of personas measured that night, red when the night dropped.
@@ -29,18 +37,19 @@ const nightRow = night => `<tr><td>${esc(night.night)}${night.run ? ` <a class="
 /**
  * The tab's body.
  * @param {object[]|null} judged the stored nights (null = the store could not be read), newest first, each judged (admin/search-night-judge.js judgeAll)
+ * @param {object} [refs] the latest weekly reference per persona id, {<persona>: {total, reachable, eures, google}}; {} until the weekly job has run
  * @returns {string} HTML; with no night, a card that says nothing was uploaded yet (never a row of zeros)
  */
-export function nightSection(judged) {
+export function nightSection(judged, refs = {}) {
   if (!judged) return '<section class="card"><h2>The nights could not be read</h2><p class="muted">The store of the nightly Search check did not answer, so this tab cannot say whether a night dropped. Reload in a minute; the Worker log names the cause.</p></section>';
-  if (!judged.length) return '<section class="card"><h2>No night uploaded yet</h2><p class="muted">The nightly Search check (<code>search-personas.yml</code>, six fictional candidates) uploads its verdict here when it ends. Until it does, nothing is measured: no row below stands in for it.</p></section>';
+  if (!judged.length) return '<section class="card"><h2>No night uploaded yet</h2><p class="muted">The nightly Search check (<code>search-personas.yml</code>, the fixed set of fictional candidates) uploads its verdict here when it ends. Until it does, nothing is measured: no row below stands in for it.</p></section>';
   const [last] = judged, shown = judged.slice(0, 14);
   const band = verdictBand({icon: last.dropped ? '🔴' : '🟢', headline: `Night ${last.night}: measured ${last.measured} of ${last.total}`,
     chips: last.dropped ? reasonWords(last).map(label => ({label, tone: 'bad'})) : [{label: 'nothing dropped', tone: 'good'}],
     note: last.head.replace(/^[\p{Extended_Pictographic}‍️\s]+/u, '') || 'the check\'s own line was empty'});
   return `${band}
-<section class="card"><h2>The six candidates, night ${esc(last.night)}</h2><div class="scroll"><table><tr><th>Candidate</th><th>Result</th><th class="num">Relevant local · found</th><th class="num">Press</th><th>Time ran out for</th></tr>${last.rows.map(personaRow).join('')}</table></div>
+<section class="card"><h2>The ${last.total} candidates, night ${esc(last.night)}</h2><div class="scroll"><table><tr><th>Candidate</th><th>Result</th><th class="num">Relevant local · found</th><th class="num">Found of reference</th><th class="num">Press</th><th>Time ran out for</th></tr>${last.rows.map(row => personaRow(row, refs)).join('')}</table></div>
 <p class="muted">${last.out ? `On this night time ran out for employer sites in ${last.out} of ${last.total} personas.` : 'On this night employer sites were read in every persona.'}</p></section>
 <section class="card"><h2>Last ${shown.length} night${shown.length === 1 ? '' : 's'}</h2>${strip(shown)}<div class="scroll"><table><tr><th>Night</th><th class="num">Measured</th><th class="num">Relevant local jobs</th><th class="num">Press (median)</th><th class="num">Employer sites out of time</th><th>Result</th></tr>${shown.map(nightRow).join('')}</table></div></section>
-<section class="card"><h2>How a night is judged</h2><p class="muted">A night <b>dropped</b> when any of three things holds: fewer than ${MIN_MEASURED} of the six candidates were measured (a candidate is measured when the check found at least one right job for them); the relevant local jobs of all six, added up, fell below the median of the last ${HISTORY} nights minus ${SPREADS} spreads (the same rule the PR gate uses, a spread being the standard deviation of those nights; silent until ${HISTORY} earlier nights are stored); or time ran out for employer sites in ${OUT_MIN} or more candidates. A dropped night tells you once a day (Operations → Notifications, "Night search dropped"). The last 30 nights are kept; counts and seconds only, no job or company text.</p></section>`;
+<section class="card"><h2>How a night is judged</h2><p class="muted">A night <b>dropped</b> when any of three things holds: fewer than two thirds of the candidates were measured (a candidate is measured when the check found at least one right job for them, within the press limit); the relevant local jobs of all candidates, added up, fell below the median of the last ${HISTORY} nights with the same candidates minus ${SPREADS} spreads (the same rule the PR gate uses, a spread being the standard deviation of those nights; silent until ${HISTORY} earlier nights are stored); or time ran out for employer sites in two thirds or more of the candidates. Each candidate also shows its own usual (its median of those nights) and, once the weekly reference has run, how many of the right local jobs that exist (EURES and Google Jobs, read outside the app) the night found. A candidate under its own usual is shown, never alarmed on its own. A dropped night tells you once a day (Operations → Notifications, "Night search dropped"). The last 30 nights are kept; counts and seconds only, no job or company text.</p></section>`;
 }

@@ -14,5 +14,22 @@ Design: one verdict owns "the night dropped" (`admin/search-night-judge.js`); th
 | 2/2 | jobadabra (public): `search-personas.yml` uploads `verdict.json` at its end (`if: always()`, never fails the run); `docs/site-routes.json` lists the route | `agent-run-upload.test.mjs`-style test; the next nightly run shows its row |
 
 ## Progress
-- [ ] 1/2 site route, store, tab, Report only area, alert
-- [ ] 2/2 public workflow uploads the verdict
+- [x] 1/2 site route, store, tab, Report only area, alert (#461)
+- [x] 2/2 public workflow uploads the verdict (jobadabra #3337)
+
+## Stage 2: 18 fixed personas, each against its own baseline (owner, 6 Nov 2026)
+Owner: "6 personas is too narrow and could not tell the full story" -> "18: 6 fixed + 12 rotating", then "Bu those 12 rotating, how I would be able to understand what's the baseline?" -> all 18 FIXED (no rotation), and "how to know if it's a good or bad result?" -> "EURES direct + Google Jobs weekly".
+Design: three yardsticks per persona, shown together on the Night search tab: (1) its own last 7 nights ("usual"; a drop is what alerts), (2) the floor (the result chip: a right job within the press limit), (3) the weekly reference X (how many right local jobs exist: EURES direct + Google Jobs through SerpAPI, read outside the app, counts only, tagged reachable without a login or not).
+- Every threshold is a share of the night's own personas (two thirds: 6 -> 4, 18 -> 12), and a night is only compared with earlier nights of the same persona count, so a changed set starts its own silent first week.
+- A night that never arrives (the compare step crashes, the run is cancelled, the upload is refused) alerts once at 06:30 UTC on the Worker's five-minute tick, under the same alert kind and switch.
+
+| PR | What | Proof |
+|---|---|---|
+| 3/5 | jobadabra-web: thresholds as shares, per-persona usual, "found N of X" columns (the reference record's shape), the 06:30 missing-night alert, the upload cap 12 -> 40 rows | `search-night-scale.test.js`, `search-night.test.js` |
+| 4/5 | jobadabra (public): the 18 fixed personas in `gate-personas.json`, the 18-job matrix, the gate pooling 18 | the gate's own tests; one hand dispatch from main after merge |
+| 5/5 | the weekly reference job (EURES + Google Jobs behind a fake; no live SerpAPI run before the owner's quota decision) and its store route | tests on fakes |
+
+## Progress (stage 2)
+- [ ] 3/5 site: scaled thresholds, usual, reference columns, missing-night alert
+- [ ] 4/5 public: 18 fixed personas
+- [ ] 5/5 weekly reference job
