@@ -27,9 +27,11 @@ Design: three yardsticks per persona, shown together on the Night search tab: (1
 |---|---|---|
 | 3/5 | jobadabra-web: thresholds as shares, per-persona usual, "found N of X" columns (the reference record's shape), the 06:30 missing-night alert, the upload cap 12 -> 40 rows | `search-night-scale.test.js`, `search-night.test.js` |
 | 4/5 | jobadabra (public): the 18 fixed personas in `gate-personas.json`, the 18-job matrix, the gate pooling 18 | the gate's own tests; one hand dispatch from main after merge |
-| 5/5 | the weekly reference job (EURES + Google Jobs behind a fake; no live SerpAPI run before the owner's quota decision) and its store route | tests on fakes |
+| 5/6 | jobadabra-web: `PUT /search-check/reference` stores the weekly reference (counts only, latest week replaces) that the tab already reads (split off 6 Nov 2026: the site lands first) | `search-reference.test.js` |
+| 6/6 | jobadabra (public): the weekly reference job (EURES direct + Google Jobs behind a fake; no live SerpAPI run before the owner's quota decision) | tests on fakes |
 
 ## Progress (stage 2)
-- [ ] 3/5 site: scaled thresholds, usual, reference columns, missing-night alert
-- [ ] 4/5 public: 18 fixed personas
-- [ ] 5/5 weekly reference job
+- [x] 3/5 site: scaled thresholds, usual, reference columns, missing-night alert
+- [x] 4/5 public: 18 fixed personas
+- [ ] 5/6 site: the reference store route
+- [ ] 6/6 public: the weekly reference job
