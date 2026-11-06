@@ -49,16 +49,16 @@ A mail about work done on the Mac can only go while the app is open, and its row
 | Row | Mac only | Always on |
 |---|---|---|
 | Find jobs: new matches | in the digest | in the digest |
-| Applying: applied for you | no e-mail | no e-mail |
+| Applying: applied for you | no e-mail | e-mail |
 | Applying: an application needs you | no e-mail | e-mail |
-| Gmail: interview reminder | no e-mail | no e-mail |
+| Gmail: interview reminder | no e-mail | e-mail |
 | Always on stopped working | not shown | e-mail |
 | Nothing found for days | not shown | after 3 days |
 | Job digest | daily | daily |
 | Weekly summary | Mondays | Mondays |
 | What's new, Tips and tricks | off | off |
 
-Owner, 6 Nov 2026: "on Mac only, the defualt notifications should be off for any automations, because they get the notification in the app... Only Weekly Summary and Jobs digest can be on".
+Owner, 6 Nov 2026: "on Mac only, the defualt notifications should be off for any automations, because they get the notification in the app... Only Weekly Summary and Jobs digest can be on". And: "When the user activates Always on, then all the automation notifications shuold turn to on, by default": turning Always on on turns every row on, except a row the person pressed off themselves (only the person decides).
 
 Owner, 6 Nov 2026 (replacing the 5 Nov "consent" wording): the address found in the CV is presented as saved for the person's own notifications ("We shuold rather say that we detected it and we'll save it for future app notifications"), and the CV switch is "for enabling the email notifications", "On by default". Continue with it on sends the address to our site and turns on the suggested rows for the person's mode, each changeable in Settings → Notifications; turned off, nothing leaves the Mac and the step counts as asked. Notifications inside the app start on (nothing leaves the Mac); e-mail starts with that press, or later with one press in Notifications ("App on; e-mail off until one press"). Left off, it is suggested once at the moments it helps: an application needs the person, Always on, the first sent application. Asking for our news comes after the first sent application (owner: "we want lateron to ask for their consent on that, after first sent applciation"). A row the person has set is never reset by a mode change.
 
