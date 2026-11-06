@@ -21,21 +21,20 @@ const CODE = /\.(js|mjs|cjs)$/;
 const NO_EFFECT = /\.md$|^LICENSE|\.gitignore$/;
 const KNOWN = /^(tools|desktop|tests|web|admin|api|shared|workers|db|test|jobs|media|\.github|docs)\//;
 const DEPENDENCIES = /(^|\/)(package(-lock)?\.json|requirements[^/]*\.txt|pyproject\.toml|eslint\.config\.mjs)$/;
-// What runs the site tests themselves; a change here can break any test without reaching it.
-const RUNNER = /^(tools\/(site-picks\.mjs|site-tests\.sh|tree\.sh|overlay\.sh|lay-private\.sh|layout-map\.txt|site-guards\.sh|site-run\.sh|site-test-reporter\.mjs)|\.github\/workflows\/tests\.yml)$/;
+// Why (6 Nov 2026, owner: "Only what it reaches (Recommended)", for a PR that changes only the test workflow or the test tools): these files used to mean every test (web#461 ran 324 files, 105-163 s,
+// to check a reporter edit). They now pick what they reach like any file: the tests that import or name them (site-picks.test.js, site-test-reporter.test.js), the workflow-reading tests for tests.yml.
+// A break they cause elsewhere shows on main, which runs every test; dependencies below still run all, because a new package can break any file.
 
-// The browser and route walks: each opens every page of one kind, ~290 s of the 370 s a PR's tests took on web#450 (a privacy-page change that ran the admin walks: 147 s for 955 tests).
-// Why (6 Nov 2026, owner: "site tests… is too slow? … Can we optimize?"): a walk is picked only by changes that can alter the pages it walks. Each entry lists the changed paths that cannot:
-// `ignores` are dropped from the change list for that walk alone; the rest is unchanged: a change to the walk, its tool or anything it imports still picks it.
-// `scans: false` also turns off "runs a tool, so it may read the whole tree" for that walk; only page-shot's test needs it (its `node tools/page-shot.mjs` reads two pages through the Worker).
-// The sitemap phone walk (test/integration/no-sideways.test.js) needs no entry: its tool serves web/public itself and imports nothing else, so only web/ and its own files pick it.
-// Main and the daily run pass no change list and run every walk.
+// The browser walks: each opens every page of one kind, ~160 s of the ~270 s of test time on a wide run (web#464: palette-pages 53 s, page-shot 29 s, admin-no-sideways 27 s, table-tools 24 s, email-template-view 14 s, no-sideways 12 s).
+// Why (6 Nov 2026, owner: "Yes, walks on main only (Recommended)", after six 3-at-a-time and six 6-at-a-time reruns showed no gain; the walks had stopped 3 of 273 PRs since 27 Oct, all demo-data crashes): a PR never picks these six.
+// The one exception is a PR that edits a walk's own test file: the walk it changed runs, so a walk change is still proved. Main and the daily run pass no change list and run every walk.
+// Replaces the per-walk `ignores`/`scans` rules of web#458 for these six (a walk was picked by anything that could alter its pages, which still ran them on most admin PRs).
+const BROWSER_WALKS = /^test\/(integration\/(palette-pages|admin-no-sideways|table-tools|email-template-view|no-sideways)|tooling\/page-shot)\.test\.js$/;
+// The route walks stay picked by what can alter their pages: they are not browsers and cost seconds.
 const STATIC_PAGE = file => file.startsWith('web/') && !CODE.test(file);   // web/public is served as static assets: the Worker never reads a page's html, css or image
 const WALKS = [
   // admin pages are drawn by the Worker from admin/, api/, shared/ code, not from web/public
-  {test: /^test\/(integration\/(palette-pages|admin-no-sideways|table-tools|email-template-view|release-mail-layout)|unit\/admin\/admin-urls|unit\/workers\/www\/site-routes)\.test\.js$/, ignores: STATIC_PAGE},
-  // page-shot's test renders /admin/growth/promo-codes (admin code, picked by import) and /download (download.html and the shared stylesheets stay inputs): another page's html cannot break it
-  {test: /^test\/tooling\/page-shot\.test\.js$/, ignores: file => STATIC_PAGE(file) && /\.html$/.test(file) && file !== 'web/public/download.html', scans: false},
+  {test: /^test\/(integration\/release-mail-layout|unit\/admin\/admin-urls|unit\/workers\/www\/site-routes)\.test\.js$/, ignores: STATIC_PAGE},
 ];
 
 // mapText: tools/layout-map.txt; a path of this repo -> its path in the joined tree, where tests and imports live
@@ -47,8 +46,8 @@ export function joinedPath(file, mapText) {
 
 // root: the joined tree; changed: joined-tree paths -> {all: reason} or {tests: [paths]}. Invariant: when in doubt, every test runs.
 export function pick(root, changed) {
-  const everything = changed.find(file => RUNNER.test(file)) || changed.find(file => DEPENDENCIES.test(file));
-  if (everything) return {all: `test runner or dependencies: ${everything}`};
+  const everything = changed.find(file => DEPENDENCIES.test(file));
+  if (everything) return {all: `dependencies: ${everything}`};
   const unknown = changed.find(file => !KNOWN.test(file) && !NO_EFFECT.test(file));
   if (unknown) return {all: `no test area for ${unknown}`};
 
@@ -104,12 +103,13 @@ export function pick(root, changed) {
   const all = changes(changed), walks = WALKS.map(walk => ({...walk, changes: changes(changed.filter(file => !walk.ignores(file)))}));
   const tests = allTests(path.join(root, 'test')).sort();
   return {tests: tests.filter(test => {
+    if (BROWSER_WALKS.test(rel(test))) return all.files.has(test);   // only its own file picks a browser walk
     const walk = walks.find(entry => entry.test.test(rel(test))), {list: paths, files: changedFiles, workflows} = (walk || {changes: all}).changes;
     const source = text(test), reached = [...reach(test)];
     const readers = reached.filter(file => READS_TREE.test(rel(file)) && !HARNESS.test(rel(file)));
     const listed = [...reached.flatMap(folders), ...readers.flatMap(valueFolders)];   // only test helpers and tools: in the Worker, `admin/${page}` is a URL, not a file
     return reached.some(file => changedFiles.has(file)) || (workflows && WORKFLOW_FOLDER.test(source)) || paths.some(file => readers.some(seen => names(text(seen), file)))
-      || (walk?.scans !== false && (scans(test) || readers.some(scans))) || paths.some(file => listed.some(folder => file.startsWith(folder)));
+      || scans(test) || readers.some(scans) || paths.some(file => listed.some(folder => file.startsWith(folder)));
   }).map(rel)};
 }
 

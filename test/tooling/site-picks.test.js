@@ -40,7 +40,7 @@ const TREE = {
   'test/tooling/page-shot.test.js': "import {execFileSync} from 'node:child_process';\nexecFileSync('node', ['tools/page-shot.mjs']);\n",
   'test/unit/workers/www/site-routes.test.js': "import worker from '../../../../workers/www/index.js';\n",
 };
-const ADMIN_WALKS = ['test/integration/palette-pages.test.js', 'test/unit/workers/www/site-routes.test.js'];
+const BROWSER_WALKS = ['palette-pages', 'admin-no-sideways', 'table-tools', 'email-template-view', 'no-sideways'].map(name => `test/integration/${name}.test.js`).concat('test/tooling/page-shot.test.js');
 
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'site-picks-')));
 for (const [name, text] of Object.entries(TREE)) {
@@ -99,8 +99,16 @@ test('an unrelated test is left out', () => {
   assert.ok(!picked('admin/page.js').includes('test/admin/alone.test.js'));
 });
 
-test('what runs the tests, dependencies and an unknown path run every test', () => {
-  for (const file of ['tools/layout-map.txt', 'tools/site-picks.mjs', '.github/workflows/tests.yml', 'workers/www/package.json', 'somewhere/new.js']) assert.ok(pick(root, [file]).all, file);
+test('dependencies and an unknown path run every test', () => {
+  for (const file of ['workers/www/package.json', 'somewhere/new.js']) assert.ok(pick(root, [file]).all, file);
+});
+
+test('the test workflow and the test tools run only what they reach, not every test (owner, 6 Nov 2026: "Only what it reaches")', () => {
+  for (const file of ['tools/layout-map.txt', 'tools/site-picks.mjs', 'tools/site-tests.sh', 'tools/site-test-reporter.mjs', '.github/workflows/tests.yml']) {
+    const out = pick(root, [file]);
+    assert.ok(!out.all && out.tests.length > 0 && out.tests.length < Object.keys(TREE).filter(name => name.endsWith('.test.js')).length, `${file}: ${JSON.stringify(out)}`);
+  }
+  assert.ok(!picked('tools/site-test-reporter.mjs').includes('test/admin/alone.test.js'));
 });
 
 test('a path of this repo becomes its joined-tree path; the longest folder wins', () => {
@@ -111,29 +119,32 @@ test('a path of this repo becomes its joined-tree path; the longest folder wins'
   assert.equal(joinedPath('admin/z.js', map), 'admin/z.js');
 });
 
-// Why (6 Nov 2026, owner: "site tests… is too slow?"): web#450 (a privacy-page change) ran every admin walk, ~290 s of its tests; a page's html reaches only the walks of public pages.
-test('a public page change runs the sitemap phone walk, not the admin walks', () => {
+// Why (6 Nov 2026, owner: "Yes, walks on main only (Recommended)"; the walks had stopped 3 of 273 PRs since 27 Oct, all demo-data crashes): a PR never picks the six browser walks, except by editing the walk's own test file.
+// The fixtures stand in for them at their real paths; the tree has no walk named email-template-view or table-tools, so add them as empty files first.
+for (const walk of BROWSER_WALKS) if (!fs.existsSync(path.join(root, walk))) { fs.mkdirSync(path.dirname(path.join(root, walk)), {recursive: true}); fs.writeFileSync(path.join(root, walk), "const tool = new URL('../../tools/admin-check.mjs', import.meta.url).pathname;\n"); }
+
+test('no change a PR can make picks a browser walk', () => {
+  for (const change of [['admin/page.js'], ['admin/page.css'], ['web/public/home.css', 'web/public/download.html'], ['tools/page-shot.mjs'], ['tools/worker-server.mjs'], ['tools/admin-check.mjs'], ['workers/www/index.js'], ['tools/site-picks.mjs']]) {
+    const tests = picked(...change);
+    for (const walk of BROWSER_WALKS) assert.ok(!tests.includes(walk), `${walk} picked by ${change}`);
+  }
+});
+
+test('a PR that edits a walk\'s own test file runs that walk, and only that one', () => {
+  for (const walk of BROWSER_WALKS) {
+    const tests = picked(walk);
+    assert.ok(tests.includes(walk), walk);
+    for (const other of BROWSER_WALKS.filter(name => name !== walk)) assert.ok(!tests.includes(other), `${other} picked by ${walk}`);
+  }
+});
+
+test('a public page change still runs the rest of the web rule, without the sitemap phone walk', () => {
   const tests = picked('test/unit/website/landing.test.js', 'web/public/home.css', 'web/public/index.html', 'web/public/privacy.html', 'web/public/trust.html');
-  assert.ok(tests.includes('test/integration/no-sideways.test.js'));
-  for (const walk of ADMIN_WALKS) assert.ok(!tests.includes(walk), walk);
+  assert.ok(!tests.includes('test/integration/no-sideways.test.js'));
   assert.ok(tests.includes('test/web/phone.test.js'), 'the rest of the rule is unchanged');
 });
 
-test('page-shot renders /download: that page and the shared stylesheets pick it, another page does not', () => {
-  assert.ok(!picked('web/public/privacy.html', 'web/public/trust.html').includes('test/tooling/page-shot.test.js'));
-  for (const file of ['web/public/download.html', 'web/public/home.css', 'admin/page.js']) assert.ok(picked(file).includes('test/tooling/page-shot.test.js'), file);
-});
-
-test('an admin code change runs the admin walks and the route walk, not the sitemap walk', () => {
-  const tests = picked('admin/page.js');
-  for (const walk of ADMIN_WALKS) assert.ok(tests.includes(walk), walk);
-  assert.ok(!tests.includes('test/integration/no-sideways.test.js'));
-});
-
-test('a change to a walk\'s tool or to the Worker still runs the walk', () => {
-  assert.ok(picked('tools/page-shot.mjs').includes('test/tooling/page-shot.test.js'));
-  assert.ok(picked('tools/worker-server.mjs').includes('test/tooling/page-shot.test.js'));
-  assert.ok(picked('tools/admin-check.mjs').includes('test/integration/palette-pages.test.js'));
+test('an admin code change still runs the route walk (not a browser)', () => {
+  assert.ok(picked('admin/page.js').includes('test/unit/workers/www/site-routes.test.js'));
   assert.ok(picked('workers/www/index.js').includes('test/unit/workers/www/site-routes.test.js'));
-  assert.ok(picked('test/tooling/page-shot.test.js').includes('test/tooling/page-shot.test.js'));
 });
