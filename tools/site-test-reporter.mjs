@@ -16,7 +16,7 @@ const TICK = Symbol('tick');
 
 export default async function* siteTestReporter(source) {
   const started = Date.now();
-  const every = Number(process.env.SITE_TEST_PROGRESS_MS) || 15000, slowest = Number(process.env.SITE_TEST_SLOWEST) || 40;
+  const every = Number(process.env.SITE_TEST_PROGRESS_MS) || 15000, slowest = Number(process.env.SITE_TEST_SLOWEST) || 5;
   const count = {pass: 0, fail: 0, skipped: 0, todo: 0};
   const names = new Map(), output = new Map(), notes = [], filesTimed = [], printedOutput = new Set(), failedFiles = new Set();
   let total = 0, ended = 0;
