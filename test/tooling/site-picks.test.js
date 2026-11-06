@@ -99,8 +99,16 @@ test('an unrelated test is left out', () => {
   assert.ok(!picked('admin/page.js').includes('test/admin/alone.test.js'));
 });
 
-test('what runs the tests, dependencies and an unknown path run every test', () => {
-  for (const file of ['tools/layout-map.txt', 'tools/site-picks.mjs', '.github/workflows/tests.yml', 'workers/www/package.json', 'somewhere/new.js']) assert.ok(pick(root, [file]).all, file);
+test('dependencies and an unknown path run every test', () => {
+  for (const file of ['workers/www/package.json', 'somewhere/new.js']) assert.ok(pick(root, [file]).all, file);
+});
+
+test('the test workflow and the test tools run only what they reach, not every test (owner, 6 Nov 2026: "Only what it reaches")', () => {
+  for (const file of ['tools/layout-map.txt', 'tools/site-picks.mjs', 'tools/site-tests.sh', 'tools/site-test-reporter.mjs', '.github/workflows/tests.yml']) {
+    const out = pick(root, [file]);
+    assert.ok(!out.all && out.tests.length > 0 && out.tests.length < Object.keys(TREE).filter(name => name.endsWith('.test.js')).length, `${file}: ${JSON.stringify(out)}`);
+  }
+  assert.ok(!picked('tools/site-test-reporter.mjs').includes('test/admin/alone.test.js'));
 });
 
 test('a path of this repo becomes its joined-tree path; the longest folder wins', () => {

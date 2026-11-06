@@ -21,8 +21,9 @@ const CODE = /\.(js|mjs|cjs)$/;
 const NO_EFFECT = /\.md$|^LICENSE|\.gitignore$/;
 const KNOWN = /^(tools|desktop|tests|web|admin|api|shared|workers|db|test|jobs|media|\.github|docs)\//;
 const DEPENDENCIES = /(^|\/)(package(-lock)?\.json|requirements[^/]*\.txt|pyproject\.toml|eslint\.config\.mjs)$/;
-// What runs the site tests themselves; a change here can break any test without reaching it.
-const RUNNER = /^(tools\/(site-picks\.mjs|site-tests\.sh|tree\.sh|overlay\.sh|lay-private\.sh|layout-map\.txt|site-guards\.sh|site-run\.sh|site-test-reporter\.mjs)|\.github\/workflows\/tests\.yml)$/;
+// Why (6 Nov 2026, owner: "Only what it reaches (Recommended)", for a PR that changes only the test workflow or the test tools): these files used to mean every test (web#461 ran 324 files, 105-163 s,
+// to check a reporter edit). They now pick what they reach like any file: the tests that import or name them (site-picks.test.js, site-test-reporter.test.js), the workflow-reading tests for tests.yml.
+// A break they cause elsewhere shows on main, which runs every test; dependencies below still run all, because a new package can break any file.
 
 // The browser and route walks: each opens every page of one kind, ~290 s of the 370 s a PR's tests took on web#450 (a privacy-page change that ran the admin walks: 147 s for 955 tests).
 // Why (6 Nov 2026, owner: "site tests… is too slow? … Can we optimize?"): a walk is picked only by changes that can alter the pages it walks. Each entry lists the changed paths that cannot:
@@ -47,8 +48,8 @@ export function joinedPath(file, mapText) {
 
 // root: the joined tree; changed: joined-tree paths -> {all: reason} or {tests: [paths]}. Invariant: when in doubt, every test runs.
 export function pick(root, changed) {
-  const everything = changed.find(file => RUNNER.test(file)) || changed.find(file => DEPENDENCIES.test(file));
-  if (everything) return {all: `test runner or dependencies: ${everything}`};
+  const everything = changed.find(file => DEPENDENCIES.test(file));
+  if (everything) return {all: `dependencies: ${everything}`};
   const unknown = changed.find(file => !KNOWN.test(file) && !NO_EFFECT.test(file));
   if (unknown) return {all: `no test area for ${unknown}`};
 
