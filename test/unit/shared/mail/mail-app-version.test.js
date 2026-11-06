@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
-import {NEEDS, appButton, appCan, versionAtLeast} from '../../../../shared/app-needs.js';
+import {NEEDS, appButton, appCan, versionAtLeast, fromMail} from '../../../../shared/app-needs.js';
 import {send} from '../../../../shared/mail.js';
 import {createAccount} from '../../../../shared/pro.js';
 
@@ -69,7 +69,7 @@ test("the owner's case: an install on 0.9.6 gets 'Update Jobadabra' to the downl
 test('an install that can open it still gets the Open button; the newest version it reported counts', async () => {
   for (const versions of [['0.9.12'], [['0.9.6', '0.9.12']]]) {
     const mail = await mailTo(versions);
-    assert.ok(mail.html.includes(`href="${OPEN}"`) && mail.html.includes('>Open in Jobadabra</a>'), JSON.stringify(versions));
+    assert.ok(mail.html.includes(`href="${OPEN}&amp;utm_source=mail-digest"`) && mail.html.includes('>Open in Jobadabra</a>'), JSON.stringify(versions));
   }
 });
 
@@ -80,7 +80,7 @@ test('several installs: one that can open is enough', async () => {
 
 test('no version known (no installs, no report): the Open button stays, nothing is guessed', async () => {
   const mail = await mailTo([]);
-  assert.ok(mail.html.includes(`href="${OPEN}"`));
+  assert.ok(mail.html.includes(`href="${OPEN}&amp;utm_source=mail-digest"`));
 });
 
 test('a notification mail from the app (message) swaps every /open button for an old app, and leaves other links', async () => {
@@ -97,4 +97,24 @@ test("the release mail's 'Open Jobadabra App' button is swapped the same way", a
   assert.ok(!old.html.includes('/open?view=') && old.html.includes('>Update Jobadabra</a>') && !old.text.includes('/open?view='));
   const fresh = await mailTo(['0.9.12'], 'release', data);
   assert.ok(fresh.html.includes('>Open Jobadabra App</a>'));
+});
+
+test('the Open button names its mail and nothing else; any other link stays as it was', () => {
+  const tagged = fromMail({label: 'Open', url: OPEN}, 'release');
+  assert.deepEqual([...new URL(tagged.url).searchParams.keys()], ['view', 'utm_source']);
+  assert.equal(new URL(tagged.url).searchParams.get('utm_source'), 'mail-release');
+  const update = {label: 'Update Jobadabra', url: DOWNLOAD};
+  assert.deepEqual(fromMail(update, 'release'), update);
+  assert.equal(fromMail(null, 'release'), null);
+});
+
+test('a real release mail and a real digest carry their own name on the Open button', async () => {
+  const {compose} = await import('../../../../shared/mail.js');
+  const {SAMPLES} = await import('../../../../admin/email-preview.js');
+  for (const template of ['release', 'digest']) {
+    const mail = compose(template, {...SAMPLES[template], openUrl: undefined, appVersion: '0.9.13'});   // the gallery's digest links the site, a real one /open
+    assert.ok(mail.text.includes(`/open?view=jobs&utm_source=mail-${template}`), template);
+  }
+  const old = compose('release', {...SAMPLES.release, appVersion: '0.9.6'});
+  assert.ok(!old.text.includes('utm_source') && old.text.includes('/download'), 'an old app still gets the download page, untagged');
 });

@@ -38,3 +38,8 @@ test('an AI step: the money is the bar, calls and cost per call sit under the na
   assert.match(html, /width:100\.0%/);
   assert.equal(stepCostChart([]), '');
 });
+
+test('by template: the people who pressed Open stand beside the mails sent; a mail nobody pressed says nothing', () => {
+  assert.match(templateChart([{...templates[0], opened: 7}]), /10 not sent · 7 pressed Open · last 2026-11-05/);
+  assert.doesNotMatch(templateChart(templates), /pressed Open/);
+});

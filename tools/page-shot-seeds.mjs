@@ -240,6 +240,10 @@ export const seeds = {...notifySeeds,
       .bind(`acc_demo_${i}`, `demohash${i}`, `demo${i}@example.invalid`, new Date(today - i * 86400000).toISOString(), i < 6 ? new Date(today - i * 86400000).toISOString() : null, i % 3 === 0 ? 1 : 0).run();
     await env.STATS.prepare("INSERT INTO mail_on (addr, list, via, at) SELECT email_hash, 'tips', 'card', created_at FROM pro_accounts WHERE marketing_opt_in = 1").run().catch(() => {});   // 3 Tips and tricks ticks (5 Nov 2026, the three mail types); the old tree has no mail_on table
     await env.STATS.prepare("INSERT INTO test_mail (received_at, to_addr, from_addr, subject, body) VALUES (?, 'test-account-admin@jobpilotto.top', 'notifications@jobadabra.top', 'Confirm your email for Jobadabra', 'Demo')").bind(new Date(today - 600000).toISOString()).run();
+    for (const [template, presses] of [['digest', 23], ['message', 6], ['release', 4]]) for (let i = 0; i < presses; i++) {   // made-up Open presses (hr-39): day only, one visitor each
+      const day = new Date(today - (i % 7) * 86400000).toISOString().slice(0, 10);
+      await env.STATS.prepare("INSERT INTO visits (day, at, visitor, page, source, country, device) VALUES (?, ?, ?, '/open', ?, 'CH', 'Mac')").bind(day, `${day}T00:00:00.000Z`, `press-${template}-${i}`, `mail-${template}`).run();
+    }
     for (const account of ['acc_demo1', 'acc_demo2']) await env.STATS.prepare("INSERT INTO mail_held (account, at, subject, html, text) VALUES (?, ?, 'Demo', '<p>Demo</p>', 'Demo')").bind(account, new Date(today - 3600000).toISOString()).run();
   },
   'random-draws': async ({env}) => {   // made-up draws of the search robot (26 Oct 2026): an old-shape draw, a wide first search, a weak field change; the wide columns only where the schema has them

@@ -31,6 +31,17 @@ export function appButton(button, version) {
   return {...button, ...('text' in button ? {text: 'Update Jobadabra'} : {label: 'Update Jobadabra'}), url: `${SITE}/download`};
 }
 
+/**
+ * A mail's Open button, with the mail it came from: /open counts the press like any page view (website/public/track.js), and Admin sets it against the mails sent.
+ * Why (owner, 6 Nov 2026: "Count presses, anonymous"): the mail's name only, never the person; before adding default mails we must see whether a mail brings anyone back.
+ */
+export function fromMail(button, template) {
+  if (!isOpenLink(button?.url)) return button;
+  const url = new URL(button.url);
+  url.searchParams.set('utm_source', `mail-${template}`);
+  return {...button, url: url.href};
+}
+
 /** The newest app version any install of this address last reported, or null (no account, no install, no report, a read error). `addr` = mail.js addrOf(). */
 export async function appVersionOf(env, addr) {
   try {

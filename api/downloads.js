@@ -44,6 +44,11 @@ async function base(request, env, now) {
     device: device(request.headers.get('User-Agent') || '')};
 }
 
+// The time a row keeps. A visit that came from a mail's Open button (shared/app-needs.js fromMail) keeps only its day, on every row it leaves:
+// track.js carries that source to later pages and Download links. Why (review of hr-39 and Gitar on #476, owner: "Count presses, anonymous"):
+// a time to the second could be lined up with the one person's mail in mail_log.
+const stamp = (row, source) => (String(source || '').startsWith('mail-') ? `${row.day}T00:00:00.000Z` : row.at);
+
 // POST /api/hit {page, source}: one page view.
 export async function hit(request, env, now = new Date()) {
   if (request.method !== 'POST') return new Response(null, {status: 405});
@@ -52,7 +57,7 @@ export async function hit(request, env, now = new Date()) {
   try { body = JSON.parse(await request.text()); } catch { /* an empty beacon still counts */ }
   const row = await base(request, env, now);
   await env.STATS.prepare('INSERT INTO visits (day, at, visitor, page, source, country, device) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(row.day, row.at, row.visitor, clip(body.page) || '/', clip(body.source, 60) || 'direct', row.country, row.device).run();
+    .bind(row.day, stamp(row, body.source), row.visitor, clip(body.page) || '/', clip(body.source, 60) || 'direct', row.country, row.device).run();
   return new Response(null, {status: 204});
 }
 
@@ -90,7 +95,7 @@ export async function record(request, env, {platform, button, page = 'unknown', 
   const row = await base(request, env, now);
   await env.STATS.prepare(
     'INSERT INTO downloads (day, at, visitor, platform, button, page, source, country, device, net) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(row.day, row.at, row.visitor, platform, button, page, source || 'direct', row.country, row.device, await net(request, env)).run();
+    .bind(row.day, stamp(row, source), row.visitor, platform, button, page, source || 'direct', row.country, row.device, await net(request, env)).run();
 }
 
 export async function download(request, env, ctx, now = new Date()) {
@@ -99,13 +104,12 @@ export async function download(request, env, ctx, now = new Date()) {
   if (!FILES[platform] && !STORES[platform]) return new Response('Not found', {status: 404});
   const target = STORES[platform] || await versioned(platform, env, env.fetcher || globalThis.fetch) || RELEASE + FILES[platform];  // env.fetcher: tests
   if (env.STATS && request.method === 'GET' && !isBot(request)) {
+    const source = clip(url.searchParams.get('src'), 60) || sourceOf(request.headers.get('Referer'), url.hostname);
     // net: the network's hash, so the app's first start can learn this click's channel (api/attribution.js)
     const save = Promise.all([base(request, env, now), net(request, env)]).then(([row, network]) => env.STATS.prepare(
       'INSERT INTO downloads (day, at, visitor, platform, button, page, source, country, device, net) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(row.day, row.at, row.visitor, platform, clip(url.searchParams.get('from'), 30) || 'unknown',
-        clip(url.searchParams.get('page')) || 'unknown',
-        clip(url.searchParams.get('src'), 60) || sourceOf(request.headers.get('Referer'), url.hostname),
-        row.country, row.device, network).run()).catch(error => console.log('download stat failed', error.message));
+      .bind(row.day, stamp(row, source), row.visitor, platform, clip(url.searchParams.get('from'), 30) || 'unknown',
+        clip(url.searchParams.get('page')) || 'unknown', source, row.country, row.device, network).run()).catch(error => console.log('download stat failed', error.message));
     if (ctx?.waitUntil) ctx.waitUntil(save); else await save;
   }
   // Never kept by the browser: the next click asks again and gets the newest release.

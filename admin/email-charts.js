@@ -6,11 +6,11 @@ import {bars, stacks} from './viz.js';
 const num = value => (Number(value) || 0).toLocaleString('en-US');
 const rowsOf = (rows, value, label) => bars(rows.map(row => ({label: label(row), value: Number(value(row)) || 0, text: num(value(row))})));
 
-/** Mail per template: one bar per template sized by its total, split into sent and not sent. rows = data.byTemplate [{template, sent, refused, last}]. */
+/** Mail per template: one bar per template sized by its total, split into sent and not sent. rows = data.byTemplate [{template, sent, refused, opened, last}]; `opened` = people who pressed its Open button. */
 export function templateChart(rows) {
   return stacks(rows.map(row => ({
     label: row.template, parts: [{value: Number(row.sent) || 0, tone: 's1'}, {value: Number(row.refused) || 0, tone: 's2'}],
-    text: `${num(row.sent)} sent`, sub: `${num(row.refused)} not sent${row.last ? ` · last ${row.last.slice(0, 10)}` : ''}`,
+    text: `${num(row.sent)} sent`, sub: `${num(row.refused)} not sent${row.opened ? ` · ${num(row.opened)} pressed Open` : ''}${row.last ? ` · last ${row.last.slice(0, 10)}` : ''}`,
     tip: `${row.template} · ${num(row.sent)} sent · ${num(row.refused)} not sent${row.last ? ` · last sent ${row.last.slice(0, 16).replace('T', ' ')}` : ''}`,
   })), [['s1', 'Sent'], ['s2', 'Not sent']], {scale: true});
 }
