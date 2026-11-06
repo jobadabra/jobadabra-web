@@ -80,7 +80,7 @@ export function compose(template, data = {}, given = null) {
   const links = given && foot.stop ? {stop: given.stop, settings: foot.settings ? given.settings : null} : null;
   const frame = {title: spec.title(data), why: foot.why, button: spec.button?.(data) || null, links, trust: foot.trust, download: foot.download};
   const headers = links ? {'List-Unsubscribe': `<${links.stop}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'} : undefined;
-  return {subject: spec.subject(data), text: frameText({...frame, body: spec.text(data)}), html: frameHtml({...frame, body: spec.html(data), hero: spec.hero?.(data)}), headers};
+  return {subject: spec.subject(data), text: frameText({...frame, body: spec.text(data)}), html: frameHtml({...frame, body: spec.html(data)}), headers};
 }
 
 /**

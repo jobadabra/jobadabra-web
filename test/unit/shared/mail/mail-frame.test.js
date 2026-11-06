@@ -7,7 +7,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {mailOf} from '../../../../shared/mail-registry.js';
 import {sourceFiles} from '../../../lib/source-files.js';
-import {send, settingsLink, stopLink} from '../../../../shared/mail.js';
+import {compose, send, settingsLink, stopLink} from '../../../../shared/mail.js';
 import {TEMPLATES} from '../../../../shared/mail-templates.js';
 import {createAccount} from '../../../../shared/pro.js';
 
@@ -135,3 +135,23 @@ test('every mail: the signature on the card\'s text edge, a line under it, then 
     assert.match(html, /\.jp-pad \{ padding:18px !important; \} \.jp-foot \{ padding:0 18px !important; \}/, `${name}: on phones it follows the card`);
   }
 });
+
+test('the release mail is compact, with the header and colours of every other mail', () => {
+  // Why (owner, 6 Nov 2026: "make this one more compact", "having consistent header", "be consistent between dark/light").
+  const change = (kind, title) => ({kind, title, text: 'Text.'});
+  const sections = [change('features', 'One'), change('improvements', 'Two'), change('features', 'Three'), change('fixes', 'Four')];
+  const {html, text} = compose('release', {version: '0.9.13', previousStable: '0.9.9', month: 'November 2026', sections});
+  const card = compose('welcome', {confirmUrl: 'https://x/c'}).html;
+  const header = mail => mail.slice(mail.indexOf('class="jp-card"'), mail.indexOf('<h1'));
+  assert.equal(header(html), header(card), 'the same header as a welcome mail');
+  assert.match(html, /<h1 class="jp-ink"[^>]*>What.{1,6}s new in version 0\.9\.13<\/h1>/);
+  const labels = [...html.matchAll(/class="jp-sig"[^>]*>(New|Improved|Fixed)</g)].map(found => found[1]);
+  assert.deepEqual(labels, ['New', 'Improved', 'Fixed'], 'one label per group, even when changes arrive mixed');
+  assert.ok(html.indexOf('One.') < html.indexOf('Three.') && html.indexOf('Three.') < html.indexOf('Two.'), 'each change sits under its own label');
+  assert.doesNotMatch(html, /#132439/, 'no fixed dark block: the card follows the theme');
+  const asked = compose('release', {version: '1', month: 'A & B', sections: [{kind: 'features', title: 'Why not?', text: 'T', image: {url: 'https://x/i.png'}}]}).html;
+  assert.ok(asked.includes('Why not?</strong>') && asked.includes('A &amp; B'), 'a title keeps its own ending; the date is escaped once');
+  assert.match(asked, /<img class="jp-line"/, 'a picture\'s border follows dark mode');
+  for (const title of ['One', 'Two', 'Three', 'Four']) assert.match(text, new RegExp(`: ${title}\\. Text\\.`), 'the text twin has every change');
+});
+

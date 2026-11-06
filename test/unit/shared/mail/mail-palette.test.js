@@ -30,7 +30,6 @@ test('the yellow button, the links and the pills are readable (4.5:1) in both th
   assert.ok(contrast(DARK.signal, DARK.card) >= 4.5, 'link on the dark card');
   assert.ok(contrast(LIGHT.softInk, LIGHT.soft) >= 4.5, 'pill, light');
   assert.ok(contrast(DARK.softInk, DARK.soft) >= 4.5, 'pill, dark');
-  assert.ok(contrast(LIGHT.onHero, LIGHT.hero) >= 4.5 && contrast(LIGHT.onHeroMuted, LIGHT.hero) >= 4.5, 'text on the hero band');
 });
 
 test('no template carries the old orange, and a template with a button carries the yellow with dark ink', () => {

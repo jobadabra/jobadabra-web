@@ -15,9 +15,6 @@ export const TOKENS = {
   softInk: ['--signal-ink', '#6b4300', '#ffc95c'],
   good: ['--good', '#1f7a4d', '#5fd39a'],
   goodSoft: ['--good-soft', '#e3f4ea', '#0f2a1d'],
-  hero: ['--navy', '#132439', '#0d131a'],              // the release mail's hero band
-  onHero: ['--on-navy', '#e3ebf5', '#e3ebf5'],
-  onHeroMuted: ['--on-navy-muted', '#93a4ba', '#93a4ba'],
 };
 const pick = index => Object.fromEntries(Object.entries(TOKENS).map(([name, token]) => [name, token[index]]));
 export const LIGHT = pick(1);

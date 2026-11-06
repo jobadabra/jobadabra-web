@@ -50,13 +50,13 @@ const personalHtml = () => `<table role="presentation" cellpadding="0" cellspaci
 // The footer is two short lines (owner, 6 Nov 2026: "Loks like essays/novels"): `why`, then the links joined by " · "; `download` adds "Don't have the app?" (news only:
 // owner, 6 Nov 2026: "we shouldn't show Downlaod on user app email notifications. Of course they have the app"). `trust` links what hosted Always on stores.
 const footLinks = (links, trust) => [links && ['Stop these emails', links.stop], links?.settings && ['Email settings', links.settings], trust && ['How we keep your data', `${SITE}/trust`], ['jobadabra.top', SITE]].filter(Boolean);
-export function frameHtml({title, body, button: action, why, links, hero, trust = false, download = false}) {
+export function frameHtml({title, body, button: action, why, links, trust = false, download = false}) {
   const foot = footLinks(links, trust).map(([label, url]) => link(url, label)).join(' · ');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>${esc(title)}</title>${STYLE}</head>`
     + `<body class="jp-bg" style="margin:0;background:${C.bg}"><table role="presentation" data-jp-frame="1" width="100%" cellpadding="0" cellspacing="0" class="jp-bg" style="background:${C.bg}"><tr><td align="center" style="padding:22px 14px">`
     + `<table role="presentation" width="560" cellpadding="0" cellspacing="0" class="jp-card" style="width:100%;max-width:560px;background:${C.card};border:1px solid ${C.line};border-radius:12px;font:15px/1.55 ${FONT};color:${C.ink}">`
-    + (hero || `<tr><td class="jp-line" style="padding:16px 22px;border-bottom:1px solid ${C.line}"><img src="${LOGO}" width="32" height="28" alt="" style="vertical-align:middle;border:0"> <b class="jp-ink" style="vertical-align:middle;margin-left:8px;font-size:15px">Jobadabra</b></td></tr>`)
-    + `<tr><td class="jp-pad jp-ink" style="padding:22px">${hero ? '' : `<h1 class="jp-ink" style="margin:0 0 10px;font-size:20px;line-height:1.3">${esc(title)}</h1>`}${body}${action ? button(action) : ''}</td></tr></table>`
+    + `<tr><td class="jp-line" style="padding:16px 22px;border-bottom:1px solid ${C.line}"><img src="${LOGO}" width="32" height="28" alt="" style="vertical-align:middle;border:0"> <b class="jp-ink" style="vertical-align:middle;margin-left:8px;font-size:15px">Jobadabra</b></td></tr>`
+    + `<tr><td class="jp-pad jp-ink" style="padding:22px"><h1 class="jp-ink" style="margin:0 0 10px;font-size:20px;line-height:1.3">${esc(title)}</h1>${body}${action ? button(action) : ''}</td></tr></table>`
     + `<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;margin:18px auto 0"><tr><td class="jp-foot" align="left" style="padding:0 22px">${personalHtml()}`
     + `<p class="jp-muted jp-line" style="margin:14px 0 0;padding-top:12px;border-top:1px solid ${C.line};color:${C.muted};font:12px/1.5 ${FONT};text-align:center">${why ? `${esc(why)}<br>` : ''}${foot}${download ? `<br>Don't have the app? ${link(`${SITE}/download`, 'Download Jobadabra')}` : ''}</p></td></tr></table>`
     + `</td></tr></table></body></html>`;
