@@ -1,6 +1,6 @@
 // The e-mail digest of everything that is not a new-matches mail (owner, 17 Oct 2026): mail-check results, insights, finished jobs wait here, and the daily cron sends each account
 // ONE mail (weekly on Mondays for an account that chose weekly). New matches and interview notices never wait: api/account-email.js sends them at once. Guard: test/unit/api/account-email.test.js.
-import {addrOf, confirmLink, send, sendTestMail} from '../shared/mail.js';
+import {addrOf, confirmLink, heldRefusal, send, sendTestMail} from '../shared/mail.js';
 import {TEMPLATES} from '../shared/mail-templates.js';
 import {ruleRefusal} from '../shared/mail-registry.js';
 
@@ -44,9 +44,17 @@ export async function testAlert(env, account, now = new Date()) {
 export async function hold(env, account, item, now = new Date()) {
   const {n} = await env.STATS.prepare('SELECT COUNT(*) AS n FROM mail_held WHERE account = ?').bind(account.id).first();
   if (n >= HOLD_MAX) return {ok: false, reason: 'full'};
-  await env.STATS.prepare('INSERT INTO mail_held (account, at, subject, html, text, buttons) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(account.id, now.toISOString(), item.subject, item.html, item.text, JSON.stringify(item.buttons || [])).run();
+  // Why (spec PR 5): `mail_row` is written only when the mail names its row, so a deploy whose migration did not apply (site.yml only warns) never loses a mail from today's app.
+  const column = item.row ? ', mail_row' : '', slot = item.row ? ', ?' : '', values = [account.id, now.toISOString(), item.subject, item.html, item.text, JSON.stringify(item.buttons || []), ...(item.row ? [item.row] : [])];
+  await env.STATS.prepare(`INSERT INTO mail_held (account, at, subject, html, text, buttons${column}) VALUES (?, ?, ?, ?, ?, ?${slot})`).bind(...values).run();
   return {ok: true, held: true};
+}
+
+// Each app mail among `rows` -> the person's verdict on it now ('' = still wanted): they may have turned it off after it was held (owner, 6 Nov 2026: "Keep promise, cut extras", in place of a digest kept on the Mac).
+async function verdicts(env, account, rows, now) {
+  const found = new Map();
+  for (const id of new Set(rows.map(row => row.mail_row).filter(Boolean))) found.set(id, await heldRefusal(env, account.email, id, now));
+  return found;
 }
 
 function digestOf(rows) {
@@ -63,7 +71,11 @@ export async function sendDigests(env, now = new Date()) {
   const accounts = (await env.STATS.prepare("SELECT a.id, a.email, a.email_confirmed_at, a.digest_cadence FROM pro_accounts a WHERE EXISTS (SELECT 1 FROM mail_held h WHERE h.account = a.id) LIMIT 500").all()).results || [];
   for (const account of accounts) {
     if (account.digest_cadence === 'weekly' && now.getUTCDay() !== 1) { done.kept++; continue; }
-    const rows = (await env.STATS.prepare('SELECT id, subject, html, text, buttons FROM mail_held WHERE account = ? ORDER BY id LIMIT 30').bind(account.id).all()).results || [];
+    const held = (await env.STATS.prepare('SELECT * FROM mail_held WHERE account = ? ORDER BY id LIMIT 30').bind(account.id).all()).results || [];
+    const refused = await verdicts(env, account, held, now);
+    if ([...refused.values()].includes('choice_held')) { done.kept++; continue; }   // a failed read never sends more than the person chose: the digest waits for the next day
+    for (const [id, reason] of refused) if (reason) await env.STATS.prepare('DELETE FROM mail_held WHERE account = ? AND mail_row = ?').bind(account.id, id).run();
+    const rows = held.filter(row => !refused.get(row.mail_row));
     if (!rows.length) continue;
     const result = await deliver(env, account, digestOf(rows), now);
     if (result.ok || ['unsubscribed', 'suppressed', 'unconfirmed_stopped'].includes(result.reason)) {   // sent, or the person does not want it: either way it is not held again

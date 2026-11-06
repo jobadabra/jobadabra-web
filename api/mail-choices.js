@@ -14,7 +14,8 @@ export async function choices(request, env, now = new Date()) {
   if (!install || !env.STATS) return json(401, {ok: false, reason: 'unauthorized'});
   if (!['GET', 'POST'].includes(request.method)) return json(405, {ok: false});
   const account = await accountOf(env, install);
-  if (!account?.email) return json(200, {ok: false, reason: 'no_address'});
+  const rows = (stored = {}) => json(200, {ok: true, rows: APP_ROWS.map(id => { const {name, when, suggested} = mailOf(id); return {id, name, when, suggested, choice: stored[id] || ''}; })});
+  if (!account?.email) return request.method === 'GET' ? rows() : json(200, {ok: false, reason: 'no_address'});   // Why (PR 4): the app shows the rows before any address reached the site; the first press saves the address, then the choice
   const addr = await addrOf(account.email);
   if (request.method === 'POST') {
     // Why (review of hr-31): the repo key (JPT1) an Always on repo holds may read, never write: a leaked copy must not turn a person's "off" back on. Only the app's own key (JPF1) writes.
@@ -26,5 +27,5 @@ export async function choices(request, env, now = new Date()) {
   }
   let stored;
   try { stored = await choicesOf(env, addr); } catch { return json(503, {ok: false, reason: 'not_read'}); }   // never answer "nothing chosen" when the read failed
-  return json(200, {ok: true, rows: APP_ROWS.map(id => { const {name, when, suggested} = mailOf(id); return {id, name, when, suggested, choice: stored[id] || ''}; })});
+  return rows(stored);
 }
