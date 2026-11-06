@@ -4,7 +4,7 @@ import {appButton} from './app-needs.js';
 import {purchaseCreditWords} from './credit-purchase-words.js';
 import {codeBox, esc, jobRows, jobText, link} from './mail-frame.js';
 import {LIGHT as C} from './mail-palette.js';
-import {releaseHero, releaseHtml, releaseSubject, releaseText} from './mail-release.js';
+import {releaseHtml, releaseSubject, releaseText, releaseTitle} from './mail-release.js';
 
 // A message the app or an Always on run would send on Telegram, in the same layout: data {subject, html, text, buttons: [{text, url}], confirmUrl} (html/text from api/mail-html.js).
 // The first button is the frame's one orange button; the others are links under the text.
@@ -95,8 +95,7 @@ export const TEMPLATES = {
   // The "What's new" mail at a stable release (shared/mail-release.js), held as a draft on /admin/growth/email until the owner clicks "Send to everyone". Data: see mail-release.js.
   'release': {list: 'releases',
     subject: releaseSubject,
-    title: releaseSubject,
-    hero: releaseHero,
+    title: releaseTitle,
     text: releaseText,
     html: releaseHtml},
 };

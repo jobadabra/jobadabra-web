@@ -250,12 +250,12 @@ test('a saved old draft picks up the complete changelog in preview, test and bro
   await e.WAITLIST.put('signup:audience@example.com', WEB);
   const request = (fields) => new Request('https://www.jobadabra.top/admin/growth/email?release=0.8.42', {headers: {Authorization: 'Bearer owner-key', Origin: 'https://www.jobadabra.top'}, ...(fields ? {method: 'POST', body: new URLSearchParams(fields)} : {})});
   const html = await (await emailView(request(), e)).text();
-  assert.match(html, /Version 0\.8\.42/);
+  assert.match(html, /version 0\.8\.42/i);
   assert.match(html, /A fix/);
   await emailView(request({action: 'test', to: 'reviewer@example.com'}), e);
   await emailView(request({action: 'send'}), e);
   for (const mail of sent) {
-    assert.match(mail.html, /Version 0\.8\.42/);
+    assert.match(mail.html, /version 0\.8\.42/i);
     for (const label of ['New', 'Fixed', 'A fix', 'Calendar']) assert.ok(mail.html.includes(label));
     assert.match(mail.text, /Fixed: A fix/);
   }
@@ -394,7 +394,7 @@ test('the release template opens the newest real stable draft, while gallery and
   const page = await (await emailView(new Request('https://www.jobadabra.top/admin/growth/email?tab=templates', {headers}), e)).text();
   assert.match(page, /Latest stable release/);
   assert.match(page, /Latest stable change/);
-  assert.doesNotMatch(page, /Version 0\.8\.42|See why each job fits/);
+  assert.doesNotMatch(page, /new in version 0\.8\.42|See why each job fits/);
   await emailView(new Request('https://www.jobadabra.top/admin/growth/email', {method: 'POST', headers, body: new URLSearchParams({template: 'release', mine: '1', to: 'reviewer@example.com', release: '0.9.10'})}), e);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].subject, "[TEST] Jobadabra 0.9.10 · What's new");
