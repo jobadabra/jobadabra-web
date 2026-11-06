@@ -116,3 +116,22 @@ test("the owner's footer photo is a small round PNG served by the site (96 px, t
   assert.equal(png[25], 6, 'RGBA, so the corners can be transparent');
   assert.ok(png.length < 40_000, 'small enough for a mail');
 });
+
+test('every mail: the signature on the card\'s text edge, a line under it, then the small lines centred', async () => {
+  // Why (owner, 6 Nov 2026: "I don't like this center vs left alignemtn", "Let's have a separator line", "between these 2 blocks").
+  for (const name of Object.keys(TEMPLATES)) {
+    const {e, sent} = setup({MARKETING_MAIL: 'on'});
+    await createAccount(e, 'me@example.com', now, {plan: 'trial'});
+    e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
+    for (const list of ['tips', 'releases']) e.STATS.db.prepare("INSERT INTO mail_on (addr, list, via, at) SELECT email_hash, ?, 'card', 'x' FROM pro_accounts").run(list);
+    assert.equal((await send(e, name, 'me@example.com', SAMPLES[name], {now})).ok, true, name);
+    const html = sent[0].html, after = html.slice(html.lastIndexOf('</table>', html.indexOf('Questions?')));   // from the card's end: the signature and footer
+    const line = after.indexOf('border-top:1px solid'), signature = after.slice(0, line), small = after.slice(line);
+    assert.ok(line > after.indexOf('Questions?'), `${name}: the line comes after the signature`);
+    assert.doesNotMatch(signature, /text-align:center|<table[^>]*align="center"/, `${name}: the signature is not centred`);
+    assert.match(signature, /<td class="jp-foot" align="left" style="padding:0 22px">/, `${name}: padded like the card's text`);
+    assert.match(after, /class="jp-muted jp-line"[^>]*text-align:center/, `${name}: the small lines are centred, and the line follows dark mode`);
+    assert.ok(small.includes('jobadabra.top') && small.indexOf('</td>') > small.lastIndexOf('jobadabra.top'), `${name}: in the same cell, so the line is as wide as the signature's column`);
+    assert.match(html, /\.jp-pad \{ padding:18px !important; \} \.jp-foot \{ padding:0 18px !important; \}/, `${name}: on phones it follows the card`);
+  }
+});
