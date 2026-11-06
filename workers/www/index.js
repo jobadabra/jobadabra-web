@@ -395,3 +395,4 @@ export default {
     ctx.waitUntil((env.STATS ? tidyKnowledge(env.STATS) : Promise.resolve({dropped: 0})).catch(error => console.error(`knowledge tidy: ${error.message}`)));
   },
 };
+// TEMP: wide-run timing (reverted)
