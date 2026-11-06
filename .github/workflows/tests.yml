@@ -15,8 +15,12 @@ permissions:
   contents: read
   pull-requests: read   # the PR's changed files: media tests run only when it touches media
 
+# Why (6 Nov 2026, owner: "red" on web #459, Gitar approved, 3/4): a push and the description edit ship makes a second later are two runs on ONE commit. They shared this group, so one cancelled
+# the other (runs 42141912996 and 42141914994: the job of one started at 01:09:36, was cancelled at 01:10:42 by the other), and the cancelled "All checks passed" stays on the commit:
+# GitHub's merge state read BLOCKED beside a green run. Only a push (or open) replaces an older run now; an edit or a reopen (same head commit) gets a group of its own (its run id), so it neither cancels nor is cancelled.
+# A run of an edit on an older commit after a push is harmless (it writes on that commit). Known limit: two edits seconds apart both run on the commit, each checking the body it was started with. pr-gate.yml in the public repo splits 'text' from 'code' for the same reason.
 concurrency:
-  group: tests-${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
+  group: tests-${{ github.event_name == 'pull_request' && ((github.event.action == 'edited' || github.event.action == 'reopened') && format('same-commit-{0}', github.run_id) || github.head_ref) || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
