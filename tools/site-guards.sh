@@ -32,5 +32,5 @@ if [ "${MEDIA_TOOLS:-1}" = 0 ]; then
   echo "site-guards: this pull request changes no media file: media tests not run here (main and the daily run run them): $skipped"
 fi
 # shellcheck disable=SC2086
-node --test $node_files || status=1
+node --test "--test-reporter=$priv/tools/site-test-reporter.mjs" $node_files || status=1   # summary and failures only (6 Nov 2026, owner: "I want only the summary")
 exit $status
