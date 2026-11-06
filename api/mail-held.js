@@ -62,10 +62,13 @@ async function verdicts(env, account, rows, now) {
   return found;
 }
 
+/** The digest of `rows`, oldest first. A mail held twice with the same words is printed once, and counts once. */
 function digestOf(rows) {
-  const subject = rows.length === 1 ? rows[0].subject : `Your Jobadabra update: ${rows.length} items`;
-  const buttons = rows.flatMap(row => JSON.parse(row.buttons || '[]')).slice(0, 6);
-  return {subject, html: rows.map(row => row.html).join('<hr>'), text: rows.map(row => row.text).join('\n\n---\n\n'), buttons};
+  // Why (6 Nov 2026, the owner's inbox): the Focus reminders of 11:00, 15:00 and 19:00 said the same, and the mail printed the block three times under "3 items". Here, not in hold(): installed apps keep sending them.
+  const once = [...new Map(rows.map(row => [JSON.stringify([row.subject, row.text]), row])).values()];
+  const subject = once.length === 1 ? once[0].subject : `Your Jobadabra update: ${once.length} items`;
+  const buttons = once.flatMap(row => JSON.parse(row.buttons || '[]')).slice(0, 6);
+  return {subject, html: once.map(row => row.html).join('<hr>'), text: once.map(row => row.text).join('\n\n---\n\n'), buttons};
 }
 
 // -> {sent, kept}: accounts mailed and accounts whose digest waits (weekly day not reached, or the sender refused).
