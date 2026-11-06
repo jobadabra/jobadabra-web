@@ -104,8 +104,8 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
   let claimed = null;   // the marker of the mail_log row holding this call's room until the provider has answered
   try {
     // Why (review of hr-32, 6 Nov 2026): a mail with no stop link (an Account mail) is never held by a stop pressed on another mail of its list; a bounce or complaint ('all') still holds it.
-    // A `probe` (the Always on Test) stays held: it exists to tell the person whether their alerts would arrive.
-    const verdict = await mailAllowed(env, to, spec.list, {...spec, essential: spec.essential || (!spec.probe && !footerOf(template).stop), test});
+    // `heldByStops` keeps a mail held anyway: the Always on Test (it tells whether alerts would arrive) and a report's update (the reply shows in the app).
+    const verdict = await mailAllowed(env, to, spec.list, {...spec, essential: spec.essential || (!spec.heldByStops && !footerOf(template).stop), test});
     const addr = await addrOf(to);
     if (!verdict.ok) { if (verdict.reason !== 'bad_address' && verdict.reason !== 'marketing_off') await record(env, now, addr, spec.list, logged, verdict.reason); return verdict; }
     const ruled = ownerTest ? '' : await ruleRefusal(env, template);   // the owner's stop on this one mail, or 'rule_held' when the stops cannot be read (spec 2026-11-05-service-mail-rules-design.md)

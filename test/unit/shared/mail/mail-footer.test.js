@@ -61,12 +61,12 @@ test('an app mail carries one plain line and the way to change it, whether the M
   for (const mail of sent) assert.ok(mail.text.includes(`${YOURS}\nStop these emails: `) && !/kept no copy|Your own GitHub|Written on your Mac|Download Jobadabra/.test(mail.text), mail.subject);
 });
 
-test('a stop pressed on the person\'s own mail never holds an Account mail, which has no stop link of its own; a bounce still holds it', async () => {
+test('a stop pressed on the person\'s own mail never holds the confirm mail, which has no stop link of its own; a bounce still holds it', async () => {
   const sent = [], e = {MAIL: 'on', STATS: d1(), STATS_SALT: 'salt', UNSUB_SECRET: 'u', EMAIL: {send: async m => { sent.push(m); return {messageId: `m${sent.length}`}; }}};
   const addr = await addrOf('me@example.com');
   e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'service', 'unsubscribed', 'x')").run(addr);   // Gmail's one-click Unsubscribe on a digest
   assert.equal((await send(e, 'message', 'me@example.com', {subject: 'Matches', html: '<b>3</b>'}, {now})).reason, 'unsubscribed', 'the person\'s own mail obeys the stop');
-  for (const template of ['welcome', 'feedback-update']) assert.equal((await send(e, template, 'me@example.com', SAMPLES[template], {now})).ok, true, `${template}: they asked for it`);
+  for (const template of ['welcome']) assert.equal((await send(e, template, 'me@example.com', SAMPLES[template], {now})).ok, true, `${template}: they asked for it`);
   assert.equal((await send(e, 'always-on-test', 'me@example.com', {}, {now})).reason, 'unsubscribed', 'the Always on Test tells the truth: their alerts would not arrive');
   e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'all', 'bounce', 'x')").run(addr);
   assert.equal((await send(e, 'welcome', 'me@example.com', SAMPLES.welcome, {now})).reason, 'suppressed', 'a bounce or complaint still holds every mail');

@@ -42,7 +42,7 @@ export const TEMPLATES = {
     html: () => `<p>You asked for the confirm link again. Press it and your Jobadabra mails reach you.</p>${muted("Didn't ask for this? Ignore this email; nothing changes.")}`},
   // The owner's answer to a feedback the person sent from the app (shared/feedback-reply.js, owner 3 Nov 2026): "fixed" or "we saw it and parked it". Only when the person gave this address and the owner ticked it.
   // A service mail (never a promotion). Data: {kind: 'fixed' | 'deferred', on: 'YYYY-MM-DD', excerpt, message}.
-  'feedback-update': {list: 'service',
+  'feedback-update': {list: 'service', heldByStops: true,   // a person who stopped our mail reads the reply in the app (test/unit/shared/feedback/feedback-reply.test.js)
     subject: () => 'About your feedback',
     title: ({kind}) => (kind === 'fixed' ? 'Your feedback is fixed' : 'Thanks for your feedback'),
     text: ({on, excerpt, message}) => `You wrote on ${on}: "${excerpt}"\n\n${message}`,
@@ -80,7 +80,7 @@ export const TEMPLATES = {
     text: ({reason}) => (reason === 'inactive' ? "You haven't opened Jobadabra for 14 days, so the daily searches stopped. Open the app to resume." : 'Your free trial has ended, so the daily searches stopped.'),
     html: ({reason}) => (reason === 'inactive' ? "<p>You haven't opened Jobadabra for 14 days, so the daily searches stopped. Open the app to resume.</p>" : '<p>Your free trial has ended, so the daily searches stopped.</p>')},
   // Always on's Test (api/hosted-test.js; owner, 5 Nov 2026: "The test should include also a notification test"): proves the alert channel reaches the person. No data.
-  'always-on-test': {list: 'service', probe: true,   // Why (review of hr-32): it measures whether alerts reach the person, so every stop alerts obey holds it too
+  'always-on-test': {list: 'service', heldByStops: true,   // Why (review of hr-32): it measures whether alerts reach the person, so every stop alerts obey holds it too
     subject: () => 'Always on test: your alerts reach you',
     title: () => 'Your alerts reach you',
     text: () => 'You pressed Test on Always on. This e-mail is how we tell you about new jobs when a search finds some.',
