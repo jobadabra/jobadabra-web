@@ -39,7 +39,8 @@ export const jobText = (rows = []) => rows.map(job => `- ${job.title}${[job.comp
 export const codeBox = code => `<p class="jp-box jp-ink" style="font:700 30px ui-monospace,Menlo,monospace;letter-spacing:.3em;background:${C.quiet};border-radius:10px;padding:14px;text-align:center;margin:8px 0 14px">${esc(code)}</p>`;
 
 // The owner's personal footer: a round photo and a line, under the card of every mail (a table, no CSS a mail client may drop). Its text twin is frameText's "--" block.
-// Why (owner, 6 Nov 2026: "Everything left"): the signature and the footer sit in one cell padded like the card's, so all of it starts where the card's text starts, on phones too (.jp-foot follows .jp-pad).
+// Why (owner, 6 Nov 2026: "I don't like this center vs left alignemtn", then "Let's have a separator line"): the signature starts where the card's text starts, on phones too (.jp-foot follows .jp-pad);
+// a line under it closes that column, so the two centred small lines read as their own block.
 const personalHtml = () => `<table role="presentation" cellpadding="0" cellspacing="0"><tr>`
   + `<td width="48" valign="middle" style="width:48px;padding:0 12px 0 0"><img src="${PHOTO}" width="48" height="48" alt="" style="display:block;width:48px;height:48px;border:0;border-radius:50%"></td>`
   + `<td valign="middle" style="text-align:left"><p class="jp-ink" style="margin:0;color:${C.ink};font:14px/1.45 ${FONT}">${ASK}</p>`
@@ -57,7 +58,7 @@ export function frameHtml({title, body, button: action, why, links, hero, trust 
     + (hero || `<tr><td class="jp-line" style="padding:16px 22px;border-bottom:1px solid ${C.line}"><img src="${LOGO}" width="32" height="28" alt="" style="vertical-align:middle;border:0"> <b class="jp-ink" style="vertical-align:middle;margin-left:8px;font-size:15px">Jobadabra</b></td></tr>`)
     + `<tr><td class="jp-pad jp-ink" style="padding:22px">${hero ? '' : `<h1 class="jp-ink" style="margin:0 0 10px;font-size:20px;line-height:1.3">${esc(title)}</h1>`}${body}${action ? button(action) : ''}</td></tr></table>`
     + `<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;margin:18px auto 0"><tr><td class="jp-foot" align="left" style="padding:0 22px">${personalHtml()}`
-    + `<p class="jp-muted" style="margin:10px 0 0;color:${C.muted};font:12px/1.5 ${FONT};text-align:left">${why ? `${esc(why)}<br>` : ''}${foot}${download ? `<br>Don't have the app? ${link(`${SITE}/download`, 'Download Jobadabra')}` : ''}</p></td></tr></table>`
+    + `<p class="jp-muted jp-line" style="margin:14px 0 0;padding-top:12px;border-top:1px solid ${C.line};color:${C.muted};font:12px/1.5 ${FONT};text-align:center">${why ? `${esc(why)}<br>` : ''}${foot}${download ? `<br>Don't have the app? ${link(`${SITE}/download`, 'Download Jobadabra')}` : ''}</p></td></tr></table>`
     + `</td></tr></table></body></html>`;
 }
 
