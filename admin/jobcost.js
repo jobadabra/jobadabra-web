@@ -53,7 +53,13 @@ const money = n => `$${(Number(n) || 0).toFixed(2)}`;
 export const PROVIDERS = {anthropic: 'Claude (Anthropic)', openai: 'OpenAI'};
 const providerOf = row => (row.provider === 'openai' ? 'openai' : 'anthropic');
 
-export function summarize(rows, billed = [], now = new Date(), range = '30d') {
+// Why (6 Nov 2026, the 2nd time after 3 Nov): `now` had a real-clock default, so a test with dated rows that forgot it went red for every PR once the days aged
+// out of the 30-day window. A missing clock is now an error at once, not a time bomb.
+const clock = now => { if (!(now instanceof Date) || Number.isNaN(now.getTime())) throw new TypeError('jobcost: pass `now` (a Date): the windows count back from it'); return now; };
+
+/** Totals over the window `range` ending at `now` (required: see clock). */
+export function summarize(rows, billed = [], now, range = '30d') {
+  clock(now);
   const today = now.toISOString().slice(0, 10), from = dayFrom(now, range), since = now.getTime() - RANGES[range].hours * 3600000;
   const month = new Date(now.getTime() - 29 * 86400000).toISOString().slice(0, 10);
   const thirty = rows.filter(row => row.day >= month);   // today and the day table do not follow the range
@@ -82,7 +88,8 @@ export function summarize(rows, billed = [], now = new Date(), range = '30d') {
 }
 
 // Pure: per tracked API key, its cost today, over 7 and over 30 days (rows: {day, key, usd}).
-export function byKey(rows, now = new Date(), range = '30d') {
+export function byKey(rows, now, range = '30d') {
+  clock(now);
   const day = n => new Date(now.getTime() - n * 86400000).toISOString().slice(0, 10), today = day(0), week = day(6), month = day(29), from = dayFrom(now, range);
   const keys = {};
   for (const row of rows) {
@@ -93,7 +100,7 @@ export function byKey(rows, now = new Date(), range = '30d') {
   return Object.values(keys).filter(k => k.range > 0 || RANGES[range].hours >= 720).sort((a, b) => b.range - a.range);
 }
 
-export function page(rows, billed = [], keyRows = [], start = '', now = new Date(), range = '30d', freeRows = [], accountToday = null, trial = null, web = null, lines = undefined, pro = null, fallback = null, chain = null, tally = null, subscriptions = null, jobs = null) {
+export function page(rows, billed = [], keyRows = [], start = '', now, range = '30d', freeRows = [], accountToday = null, trial = null, web = null, lines = undefined, pro = null, fallback = null, chain = null, tally = null, subscriptions = null, jobs = null) {
   const spaceRows = keyRows.filter(row => String(row.key).startsWith('ws.')).map(row => ({...row, key: row.key.slice(3)}));   // a workspace's days: the sum of its keys (ai-cost-report.mjs)
   const s = summarize(rows, billed, now, range), keys = byKey(keyRows.filter(row => !String(row.key).startsWith('ws.')), now, range), spaces = byKey(spaceRows, now, range), r = RANGES[range], last = `Last ${r.label}`, daily = r.hours <= 24;
   const fresh = range === '30d' && start && start > new Date(now.getTime() - 29 * 86400000).toISOString().slice(0, 10);   // the start date is inside the 30 days: say so

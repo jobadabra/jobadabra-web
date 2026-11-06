@@ -28,7 +28,7 @@ test('the page names jobs, shows the groups and says when there is no billing re
   assert.match(html, /Central scout/);
   assert.match(html, /Discovery/);
   assert.match(html, /no billing report yet/);
-  assert.match(page([], []), /Nothing reported yet/);
+  assert.match(page([], [], [], '', now), /Nothing reported yet/);
 });
 
 test('/ai-cost is owner-only and never a static page', async () => {
@@ -62,7 +62,7 @@ test('per-key rows: stored by name, a real key is refused, and the card shows to
   const now = new Date('2026-10-07T12:00:00Z');
   const keys = byKey([{day: '2026-10-07', key: 'e2e', usd: 1}, {day: '2026-10-02', key: 'e2e', usd: 2}, {day: '2026-09-20', key: 'e2e', usd: 4}, {day: '2026-08-01', key: 'e2e', usd: 100}], now);
   assert.deepEqual(keys, [{key: 'e2e', today: 1, week: 3, month: 7, range: 7, last: '2026-10-07'}]);
-  assert.match(page([], [], [{day: '2026-10-07', key: 'job-pilotto-e2e-testing', usd: 1}]), /By API key[\s\S]*job-pilotto-e2e-testing/);
+  assert.match(page([], [], [{day: '2026-10-07', key: 'job-pilotto-e2e-testing', usd: 1}], '', now), /By API key[\s\S]*job-pilotto-e2e-testing/);
 });
 
 // 7 Oct 2026 (owner: "$30 a week" for e2e): CI reads a day's reported e2e spend to skip the paid judge once over budget (desktop/e2e/ai-spend.mjs).
@@ -281,4 +281,9 @@ test('the AI cost page shows the limits rings from the broker health, above who 
   const html = await (await view(new Request('https://x.dev/admin/ai/costs', {headers: {Authorization: 'Bearer fixture-owner'}}), env)).text();
   assert.match(html, /id="ai-limits"/); assert.match(html, />55%</); assert.match(html, />80%</); assert.match(html, />30%</);
   assert.ok(html.indexOf('id="ai-limits"') < html.indexOf('id="ai-broker-today"'));
+});
+
+// Why (6 Nov 2026): the 2nd time a dated test aged out of the window because page() fell back to the real clock (3 Nov, then 6 Nov: red for every PR). No clock is an error now.
+test('the cost page and its sums refuse to run without a clock, so no test can lean on today\'s date', () => {
+  for (const call of [() => page([], []), () => summarize([], []), () => byKey([]), () => page([], [], [], '', 'yesterday')]) assert.throws(call, /pass `now`/);
 });
