@@ -22,7 +22,21 @@ const NO_EFFECT = /\.md$|^LICENSE|\.gitignore$/;
 const KNOWN = /^(tools|desktop|tests|web|admin|api|shared|workers|db|test|jobs|media|\.github|docs)\//;
 const DEPENDENCIES = /(^|\/)(package(-lock)?\.json|requirements[^/]*\.txt|pyproject\.toml|eslint\.config\.mjs)$/;
 // What runs the site tests themselves; a change here can break any test without reaching it.
-const RUNNER = /^(tools\/(site-picks\.mjs|site-tests\.sh|tree\.sh|overlay\.sh|lay-private\.sh|layout-map\.txt|site-guards\.sh|site-run\.sh)|\.github\/workflows\/tests\.yml)$/;
+const RUNNER = /^(tools\/(site-picks\.mjs|site-tests\.sh|tree\.sh|overlay\.sh|lay-private\.sh|layout-map\.txt|site-guards\.sh|site-run\.sh|site-test-reporter\.mjs)|\.github\/workflows\/tests\.yml)$/;
+
+// The browser and route walks: each opens every page of one kind, ~290 s of the 370 s a PR's tests took on web#450 (a privacy-page change that ran the admin walks: 147 s for 955 tests).
+// Why (6 Nov 2026, owner: "site tests… is too slow? … Can we optimize?"): a walk is picked only by changes that can alter the pages it walks. Each entry lists the changed paths that cannot:
+// `ignores` are dropped from the change list for that walk alone; the rest is unchanged: a change to the walk, its tool or anything it imports still picks it.
+// `scans: false` also turns off "runs a tool, so it may read the whole tree" for that walk; only page-shot's test needs it (its `node tools/page-shot.mjs` reads two pages through the Worker).
+// The sitemap phone walk (test/integration/no-sideways.test.js) needs no entry: its tool serves web/public itself and imports nothing else, so only web/ and its own files pick it.
+// Main and the daily run pass no change list and run every walk.
+const STATIC_PAGE = file => file.startsWith('web/') && !CODE.test(file);   // web/public is served as static assets: the Worker never reads a page's html, css or image
+const WALKS = [
+  // admin pages are drawn by the Worker from admin/, api/, shared/ code, not from web/public
+  {test: /^test\/(integration\/(palette-pages|admin-no-sideways|table-tools|email-template-view|release-mail-layout)|unit\/admin\/admin-urls|unit\/workers\/www\/site-routes)\.test\.js$/, ignores: STATIC_PAGE},
+  // page-shot's test renders /admin/growth/promo-codes (admin code, picked by import) and /download (download.html and the shared stylesheets stay inputs): another page's html cannot break it
+  {test: /^test\/tooling\/page-shot\.test\.js$/, ignores: file => STATIC_PAGE(file) && /\.html$/.test(file) && file !== 'web/public/download.html', scans: false},
+];
 
 // mapText: tools/layout-map.txt; a path of this repo -> its path in the joined tree, where tests and imports live
 export function joinedPath(file, mapText) {
@@ -82,16 +96,20 @@ export function pick(root, changed) {
   const scans = file => SCAN.test(text(file).replace(IMPORT_LINE, '').replace(FOLDER_READ, (read, url, joined) => named(file, url, joined) ? '' : read));
   const names = (source, file) => source.includes(file) || (path.basename(file).length >= 6 && source.includes(path.basename(file)));
 
-  const changedFiles = new Set(changed.map(file => path.resolve(root, file)));
-  if (changed.some(file => PAGES.test(file) && !CODE.test(file))) changedFiles.add(path.resolve(root, 'workers/www/index.js'));   // a page's html or css: the Worker serves it by path
-  const workflows = changed.some(file => file.startsWith('.github/workflows/'));
+  const changes = list => {
+    const files = new Set(list.map(file => path.resolve(root, file)));
+    if (list.some(file => PAGES.test(file) && !CODE.test(file))) files.add(path.resolve(root, 'workers/www/index.js'));   // a page's html or css: the Worker serves it by path
+    return {list, files, workflows: list.some(file => file.startsWith('.github/workflows/'))};
+  };
+  const all = changes(changed), walks = WALKS.map(walk => ({...walk, changes: changes(changed.filter(file => !walk.ignores(file)))}));
   const tests = allTests(path.join(root, 'test')).sort();
   return {tests: tests.filter(test => {
+    const walk = walks.find(entry => entry.test.test(rel(test))), {list: paths, files: changedFiles, workflows} = (walk || {changes: all}).changes;
     const source = text(test), reached = [...reach(test)];
     const readers = reached.filter(file => READS_TREE.test(rel(file)) && !HARNESS.test(rel(file)));
     const listed = [...reached.flatMap(folders), ...readers.flatMap(valueFolders)];   // only test helpers and tools: in the Worker, `admin/${page}` is a URL, not a file
-    return reached.some(file => changedFiles.has(file)) || (workflows && WORKFLOW_FOLDER.test(source)) || changed.some(file => readers.some(seen => names(text(seen), file)))
-      || scans(test) || readers.some(scans) || changed.some(file => listed.some(folder => file.startsWith(folder)));
+    return reached.some(file => changedFiles.has(file)) || (workflows && WORKFLOW_FOLDER.test(source)) || paths.some(file => readers.some(seen => names(text(seen), file)))
+      || (walk?.scans !== false && (scans(test) || readers.some(scans))) || paths.some(file => listed.some(folder => file.startsWith(folder)));
   }).map(rel)};
 }
 

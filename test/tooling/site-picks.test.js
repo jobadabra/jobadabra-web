@@ -32,7 +32,15 @@ const TREE = {
   'test/admin/kit-user.test.js': "import {seed} from '../shared/kit.js';\n",
   'test/admin/named-kit-user.test.js': "import {seeds} from '../shared/named-kit.js';\n",
   'test/admin/alone.test.js': 'export const nothing = 1;\n',
+  // the browser and route walks, at their real paths (WALKS in tools/site-picks.mjs)
+  'tools/admin-check.mjs': "import './worker-server.mjs';\n",
+  'tools/page-shot.mjs': "import './worker-server.mjs';\n",
+  'test/integration/palette-pages.test.js': "const tool = new URL('../../tools/admin-check.mjs', import.meta.url).pathname;\n",
+  'test/integration/no-sideways.test.js': "const tool = new URL('../../tools/phone-width.mjs', import.meta.url).pathname;\n",
+  'test/tooling/page-shot.test.js': "import {execFileSync} from 'node:child_process';\nexecFileSync('node', ['tools/page-shot.mjs']);\n",
+  'test/unit/workers/www/site-routes.test.js': "import worker from '../../../../workers/www/index.js';\n",
 };
+const ADMIN_WALKS = ['test/integration/palette-pages.test.js', 'test/unit/workers/www/site-routes.test.js'];
 
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'site-picks-')));
 for (const [name, text] of Object.entries(TREE)) {
@@ -101,4 +109,31 @@ test('a path of this repo becomes its joined-tree path; the longest folder wins'
   assert.equal(joinedPath('ops/db/migrations/1.sql', map), 'db/migrations/1.sql');
   assert.equal(joinedPath('test/desktop/y.test.js', map), 'desktop/test/y.test.js');
   assert.equal(joinedPath('admin/z.js', map), 'admin/z.js');
+});
+
+// Why (6 Nov 2026, owner: "site tests… is too slow?"): web#450 (a privacy-page change) ran every admin walk, ~290 s of its tests; a page's html reaches only the walks of public pages.
+test('a public page change runs the sitemap phone walk, not the admin walks', () => {
+  const tests = picked('test/unit/website/landing.test.js', 'web/public/home.css', 'web/public/index.html', 'web/public/privacy.html', 'web/public/trust.html');
+  assert.ok(tests.includes('test/integration/no-sideways.test.js'));
+  for (const walk of ADMIN_WALKS) assert.ok(!tests.includes(walk), walk);
+  assert.ok(tests.includes('test/web/phone.test.js'), 'the rest of the rule is unchanged');
+});
+
+test('page-shot renders /download: that page and the shared stylesheets pick it, another page does not', () => {
+  assert.ok(!picked('web/public/privacy.html', 'web/public/trust.html').includes('test/tooling/page-shot.test.js'));
+  for (const file of ['web/public/download.html', 'web/public/home.css', 'admin/page.js']) assert.ok(picked(file).includes('test/tooling/page-shot.test.js'), file);
+});
+
+test('an admin code change runs the admin walks and the route walk, not the sitemap walk', () => {
+  const tests = picked('admin/page.js');
+  for (const walk of ADMIN_WALKS) assert.ok(tests.includes(walk), walk);
+  assert.ok(!tests.includes('test/integration/no-sideways.test.js'));
+});
+
+test('a change to a walk\'s tool or to the Worker still runs the walk', () => {
+  assert.ok(picked('tools/page-shot.mjs').includes('test/tooling/page-shot.test.js'));
+  assert.ok(picked('tools/worker-server.mjs').includes('test/tooling/page-shot.test.js'));
+  assert.ok(picked('tools/admin-check.mjs').includes('test/integration/palette-pages.test.js'));
+  assert.ok(picked('workers/www/index.js').includes('test/unit/workers/www/site-routes.test.js'));
+  assert.ok(picked('test/tooling/page-shot.test.js').includes('test/tooling/page-shot.test.js'));
 });
