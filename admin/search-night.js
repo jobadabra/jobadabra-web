@@ -6,6 +6,7 @@
 import {equal} from '../shared/guard.js';
 import {alertOwner} from '../shared/notify-send.js';
 import {writeState} from './ci-state.js';
+import {COUNTERS} from './search-night-counters.js';
 import {alertText, judgeAll} from './search-night-judge.js';
 
 export const STATE_KEY = 'search-nights', KEEP_NIGHTS = 30, MAX_BYTES = 65536, MAX_ROWS = 40;   // Why (6 Nov 2026): 18 fixed personas a night (owner: "6 personas is too narrow"); the cap was 12 and would have refused the first 18-persona verdict with a 400, silent again. 40 leaves room; 18 rows are about 20 KB of the 64 KB
@@ -14,6 +15,8 @@ export const KINDS = ['measured', 'none-right', 'nothing', 'unmeasured', 'fault'
 const DAY = /^\d{4}-\d\d-\d\d$/, RUN = /^\d{1,20}$/, RAN_OUT = 'time ran out for: ';
 const text = (value, max) => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 const count = value => (Number.isInteger(value) && value >= 0 && value <= 1e7 ? value : null);
+// The press's step counters (tools/persona-search/gate.py row 'counters'): whole numbers or null; no counters object = nothing claimed (null), never zeros.
+const counters = raw => (raw && typeof raw === 'object' && !Array.isArray(raw) ? Object.fromEntries(COUNTERS.map(({key}) => [key, count(raw[key])])) : null);
 
 // The steps a press ran out of time for, from the gate's funnel note ("...; time ran out for: employer sites, job boards"): the gate writes the note's last part from a list, so a comma splits it.
 // Why (6 Nov 2026): the verdict carries only this note, not the list; the real notes of 5 and 6 Nov are pinned in the test, so a wording change in the gate fails here instead of silently ending the alert.
@@ -22,7 +25,7 @@ export function ranOutOf(note) {
   return at < 0 ? [] : String(note).slice(at + RAN_OUT.length).split(';')[0].split(',').map(step => text(step, 40)).filter(Boolean).slice(0, 8);
 }
 
-/** A verdict.json as CI uploads it -> the record kept for one night: {night, run, state, head, rows: [{persona, label, kind, why, local, found, seconds, ranOut}]}, or {error}. Counts are whole numbers or null. */
+/** A verdict.json as CI uploads it -> the record kept for one night: {night, run, state, head, rows: [{persona, label, kind, why, local, found, seconds, ranOut, counters}]}, or {error}. Counts are whole numbers or null. */
 export function clean(verdict, {night, run = null} = {}, now = new Date()) {
   if (!verdict || typeof verdict !== 'object' || Array.isArray(verdict)) return {error: 'the verdict is an object'};
   if (!DAY.test(night || '') || Number.isNaN(Date.parse(night))) return {error: 'night is YYYY-MM-DD'};
@@ -32,7 +35,7 @@ export function clean(verdict, {night, run = null} = {}, now = new Date()) {
   if (!Array.isArray(rows) || !rows.length || rows.length > MAX_ROWS || !rows.every(row => row && typeof row === 'object' && !Array.isArray(row))) return {error: `rows are 1 to ${MAX_ROWS} personas`};
   return {night, run, state: text(verdict.state, 20), head: text(verdict.head, 300), rows: rows.map((row, index) => ({
     persona: Number.isInteger(row.persona) && row.persona > 0 && row.persona < 100 ? row.persona : index + 1, label: text(row.label, 80), kind: KINDS.includes(row.kind) ? row.kind : 'unknown', why: text(row.why, 120),
-    local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note)}))};
+    local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note), counters: counters(row.counters)}))};
 }
 
 /**
