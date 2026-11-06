@@ -51,7 +51,9 @@ test('reportRefusal logs the named error and tells once: the run before red mean
   const error = new AiRefused('capped', BUDGET);
   await reportRefusal(error, {job: 'Changelog publish', effect: 'Plain entries went out.', workflow: 'w.yml', zurichHour: 14, env, fetch, run: runs('success')});
   assert.equal(told.length, 1);
-  assert.match(told[0], /Changelog publish: AI skipped \(limit\).*\nPlain entries went out\./);
+  // Why (6 Nov 2026, public jobadabra#3345; owner: "make it human readable"): Telegram carries the plain cause, never the broker's raw words; a `budget:` reason reads as the allowance, and the job's effect line follows.
+  assert.match(told[0], /^⚠️ Changelog publish: 💳 The AI plan's allowance is used up\nPlain entries went out\.$/);
+  assert.doesNotMatch(told[0], /budget:|AI skipped/, 'no raw broker words in the message');
   await reportRefusal(error, {job: 'Changelog publish', workflow: 'w.yml', zurichHour: 14, env, fetch, run: runs('failure')});
   assert.equal(told.length, 1, 'already red before: no second message');
 });
