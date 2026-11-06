@@ -184,7 +184,7 @@ The owner is still deciding replies while the Mac is off. The interview reminder
 | 2 | site | Admin → Settings: the list by owner | the owner: sees who decides what |
 | 3 | site | stored choices per row, `notify/email` accepts `kind`, the mail settings page rows | a person: the footer link changes the same rows |
 | 4 | public | the switches in Automation and Notifications with suggested defaults, the Mac or Always on line, the Always on pitch; the engine sends kinds and honours rows | a person chooses each mail and knows when it can arrive |
-| 5 | site + public | Mac mail is not stored; footers by source; no unsubscribe on Account mail | a person sees why a mail came, and it is true |
+| 5 | site | footers by owner in two short lines; no unsubscribe on Account mail; the digest obeys a row the person turned off (the row is stored with a held mail). Owner, 6 Nov 2026, "Keep promise, cut extras": the Mac does not keep its own digest | a person sees why a mail came, and it is true |
 | 6 | site + public | the new mails, one PR each, each off until the owner turns it on | Always on and Full automation people |
 | 7 | site | Tips and tricks from a general library; the Come back mail | people who ticked them |
 | 8 | site | the privacy line on the website, after 4 and 5, with one legal read | people deciding whether to trust us |
@@ -214,3 +214,17 @@ PRs 1 to 3 ship with every new row **off**; existing mails keep today's behaviou
 
 - How many people have Always on (hosted or GitHub): the audience for the Always on defaults. Read from `hosted_schedules` and the engine's notify calls once PR 3 logs the kind.
 - How many people change a suggested default, by row, once PR 4 ships: a default nobody keeps is the wrong default.
+
+## Progress (6 Nov 2026)
+
+| Row | State | PRs |
+|---|---|---|
+| Spec | ✅ merged | web#447 |
+| 1–2 | ✅ merged | web#452 |
+| 3 | ✅ merged, live | web#456 |
+| 4 | ▶️ shipping (pane), switches dark behind `MAIL_SWITCHES_SHOWN=false` until 5b merges | public repo, "[hr] 4/8 You choose each mail in Automation and Notifications" |
+| 5 | ▶️ open | web#460 footers in two short lines (owner: "Loks like essays/novels", "Redo it"); Mac-only defaults: only New matches (digest) and Weekly summary on |
+| 5b | ⏳ next | site: store the row with a held mail so the digest obeys a row turned off; answer `/api/mail/choices` rows for `no_address` (ok: true, choice ''). Then flip `MAIL_SWITCHES_SHOWN` |
+| 8a | ▶️ open (pane) | web#459 the site's data promise as three levels with chips: your computer, your own Notion ("your personal cloud"), our servers; `privacy.html` and `terms.html` stay for row 8's legal read |
+| 6, 7, 8 | ⏳ | new mails; Tips and Come back (+ news consent after the first sent application, Backlog); privacy page and terms with a legal read |
+
