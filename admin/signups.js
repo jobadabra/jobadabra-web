@@ -18,7 +18,7 @@ export async function collect(env, now = new Date()) {
     one(env, "SELECT COUNT(*) AS n FROM pro_accounts WHERE plan = 'pro' AND trial_started_at IS NOT NULL"),
     many(env, "SELECT template, COUNT(*) AS n FROM mail_log WHERE status = 'sent' AND at >= ? GROUP BY template ORDER BY n DESC", since),
     many(env, "SELECT status, COUNT(*) AS n FROM mail_log WHERE status NOT IN ('sent', 'claimed') AND at >= ? GROUP BY status ORDER BY n DESC", since),
-    many(env, 'SELECT reason, COUNT(*) AS n FROM mail_off GROUP BY reason ORDER BY n DESC'),
+    many(env, "SELECT reason, COUNT(*) AS n FROM mail_off WHERE list NOT LIKE 'app-%' GROUP BY reason ORDER BY n DESC"),
   ]);
   return {trial: trial.n, confirmed: confirmed.n, unconfirmed: trial.n - confirmed.n, optIn: optIn.n, paused: paused.n, converted: converted.n, sent, refused, off};
 }

@@ -10,8 +10,8 @@ const UNCONFIRMED_PER_DAY = 1;   // an unconfirmed address gets one mail a UTC d
 const UNCONFIRMED_DAYS = 14;     // after the first mail, an address still unconfirmed gets no more (owner, 26 Oct 2026: "Stop after 14 days"); confirming lifts it (api/account-email.js)
 export const CADENCES = ['daily', 'weekly'];
 
-// One mail to the account's address, with the confirm link while the address is unconfirmed. -> {ok} or {ok: false, reason}.
-export async function deliver(env, account, {subject, html, text, buttons = []}, now = new Date()) {
+// One mail to the account's address, with the confirm link while the address is unconfirmed. `row`: which app mail it is (shared/mail-registry.js APP_ROWS). -> {ok} or {ok: false, reason}.
+export async function deliver(env, account, {subject, html, text, buttons = []}, now = new Date(), {row = ''} = {}) {
   let confirmUrl = null;
   if (!account.email_confirmed_at) {
     const addr = await addrOf(account.email);
@@ -25,7 +25,7 @@ export async function deliver(env, account, {subject, html, text, buttons = []},
     if (n >= UNCONFIRMED_PER_DAY) return {ok: false, reason: 'unconfirmed'};
     confirmUrl = await confirmLink(env, account.email);
   }
-  return send(env, 'message', account.email, {subject: String(subject || '').slice(0, 150), html, text, buttons, confirmUrl}, {now});
+  return send(env, 'message', account.email, {subject: String(subject || '').slice(0, 150), html, text, buttons, confirmUrl}, {now, row});
 }
 
 /**

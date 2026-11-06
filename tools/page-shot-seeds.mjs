@@ -234,8 +234,8 @@ export const seeds = {...notifySeeds,
       await env.STATS.prepare('INSERT INTO mail_log (at, addr, list, template, status, message_id) VALUES (?, ?, ?, ?, ?, ?)')
         .bind(at, (0x1000000 + i * 7919 + day * 104729 + 0xa3f9c1d200).toString(16).padStart(16, '0'), 'service', template, refused ? why[(i + day) % why.length] : 'sent', refused ? null : `demo-${day}-${i}`).run();
     }
-    await env.STATS.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES ('demo000000000001', 'all', 'bounce', ?), ('demo000000000002', 'service', 'unsubscribe', ?), ('demo000000000003', 'service', 'unconfirmed', ?)")
-      .bind(new Date(today - 86400000).toISOString(), new Date(today - 2 * 86400000).toISOString(), new Date(today - 3 * 86400000).toISOString()).run();
+    await env.STATS.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES ('demo000000000001', 'all', 'bounce', ?), ('demo000000000002', 'service', 'unsubscribe', ?), ('demo000000000003', 'service', 'unconfirmed', ?), ('demo000000000004', 'app-matches', 'app', ?), ('demo000000000005', 'app-matches', 'mail-settings', ?), ('demo000000000006', 'app-weekly', 'app', ?)")   // + 3 people's choices on app mails (PR 3)
+      .bind(...[1, 2, 3, 1, 2, 4].map(days => new Date(today - days * 86400000).toISOString())).run();
     for (let i = 0; i < 9; i++) await env.STATS.prepare("INSERT INTO pro_accounts (id, email_hash, email, created_at, plan, email_confirmed_at, marketing_opt_in) VALUES (?, ?, ?, ?, 'trial', ?, ?)")   // 9 made-up trial accounts: 6 confirmed, 3 with product news on (5 Nov 2026, admin charts)
       .bind(`acc_demo_${i}`, `demohash${i}`, `demo${i}@example.invalid`, new Date(today - i * 86400000).toISOString(), i < 6 ? new Date(today - i * 86400000).toISOString() : null, i % 3 === 0 ? 1 : 0).run();
     await env.STATS.prepare("INSERT INTO mail_on (addr, list, via, at) SELECT email_hash, 'tips', 'card', created_at FROM pro_accounts WHERE marketing_opt_in = 1").run().catch(() => {});   // 3 Tips and tricks ticks (5 Nov 2026, the three mail types); the old tree has no mail_on table

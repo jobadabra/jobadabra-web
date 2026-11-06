@@ -1,4 +1,4 @@
-// Which install a key names, for the two routes an Always-on repo on GitHub may call: GET /api/trial/status and POST /api/notify/email.
+// Which install a key names, for the routes an Always-on repo on GitHub may call: GET /api/trial/status, POST /api/notify/email and GET /api/mail/choices (its POST takes the app's JPF1 key only).
 // Why (3 Nov 2026, owner: "Free AI key, I think it's a security and cost risk to let it be copied and mass distribute outside the Jobadabra app"): a repo on GitHub must not hold a key that spends Free AI.
 // The app's AI key (JPF1.<install>.<token>, purpose 'ai') spends the install's Free AI budget. The repo key (JPT1.<handle>.<mac>) carries NO install id: <handle> is a random value the site maps to the install in KV,
 // so a copy of it names nothing the app's own keys can be derived from (JOB-270, found by the code review of the first version, 3 Nov 2026).

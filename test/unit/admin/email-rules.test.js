@@ -7,7 +7,7 @@ import {test} from 'node:test';
 import {collect} from '../../../admin/email-data.js';
 import {page} from '../../../admin/email.js';
 import {rulePress} from '../../../admin/email-rules.js';
-import {MAILS, resetRuleCache} from '../../../shared/mail-registry.js';
+import {MAILS, resetRuleCache, stoppable} from '../../../shared/mail-registry.js';
 import {resetSwitchCache} from '../../../shared/mail-switches.js';
 
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
@@ -28,8 +28,9 @@ const card = html => html.slice(html.indexOf('id="mails"'), html.indexOf('</sect
 test('the card lists every mail under its owner, a switch for each unlocked one and a lock for the rest', async () => {
   const html = card(await settings(setup()));
   for (const name of ['Account', 'Yours', "Jobadabra&#39;s"]) assert.ok(html.includes(`<b>${name}</b>`), name);
-  assert.equal((html.match(/role="switch"/g) || []).length, MAILS.filter(mail => !mail.locked).length);
+  assert.equal((html.match(/role="switch"/g) || []).length, MAILS.filter(stoppable).length);
   assert.equal((html.match(/Locked: always sent/g) || []).length, MAILS.filter(mail => mail.locked).length);
+  assert.equal((html.match(/aria-label="The person decides"/g) || []).length, MAILS.filter(mail => mail.owner === 'yours').length, 'owner, 6 Nov 2026: "Only the person" decides a Yours mail');
   assert.ok(html.includes('action="/admin/growth/email/rule"'));
 });
 
@@ -53,7 +54,7 @@ test('only the owner, from this site, can press; a locked or unknown mail is ref
   assert.equal(env.STATS.db.prepare('SELECT COUNT(*) AS n FROM mail_rule').get().n, 0);
 });
 
-test('turning one of Jobadabra\'s mails back on asks once; a person\'s own mail goes back on in one press', async () => {
+test('turning one of Jobadabra\'s mails back on asks once; an account mail goes back on in one press; a Yours mail cannot be pressed', async () => {
   const env = setup();
   await press(env, {id: 'release', state: 'off'});
   const asked = await press(env, {id: 'release', state: 'on'});
@@ -63,7 +64,19 @@ test('turning one of Jobadabra\'s mails back on asks once; a person\'s own mail 
   assert.ok(html.includes('Turn <b>What&#39;s new</b> back on?') && html.includes('name="confirmed" value="1"'));
   await press(env, {id: 'release', state: 'on', confirmed: '1'});
   assert.equal(env.STATS.db.prepare("SELECT enabled FROM mail_rule WHERE id = 'release'").get().enabled, 1);
-  await press(env, {id: 'digest', state: 'off'});
-  assert.equal((await press(env, {id: 'digest', state: 'on'})).headers.get('Location'), '/admin/growth/email?tab=settings#mails');
-  assert.equal(env.STATS.db.prepare("SELECT enabled FROM mail_rule WHERE id = 'digest'").get().enabled, 1);
+  await press(env, {id: 'feedback-update', state: 'off'});
+  assert.equal((await press(env, {id: 'feedback-update', state: 'on'})).headers.get('Location'), '/admin/growth/email?tab=settings#mails');
+  assert.equal(env.STATS.db.prepare("SELECT enabled FROM mail_rule WHERE id = 'feedback-update'").get().enabled, 1);
+  for (const id of ['digest', 'message', 'app-matches']) assert.equal((await press(env, {id, state: 'off'})).status, 400, id);
+  assert.equal(env.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_rule WHERE id IN ('digest', 'message', 'app-matches')").get().n, 0);
+});
+
+test('an app mail shows the spec\'s suggested defaults and how many people turned it off, never a sent count it cannot have', async () => {
+  const env = setup();
+  env.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES ('a1', 'app-matches', 'app', 'x'), ('a2', 'app-matches', 'mail-settings', 'x'), ('a3', 'service', 'settings', 'x')").run();
+  const data = await collect(env, {days: 7});
+  assert.deepEqual(data.offReasons.map(row => row.list), ['service'], 'a person\'s choice per app mail is not a stopped address (review of hr-31)');
+  const html = card(await settings(env));
+  assert.match(html, /New matches<span class="sw-says">a search finds new jobs · suggested: Mac: no e-mail; Always on: in the digest · 2 turned it off<\/span>/);
+  assert.match(html, /An application needs you<span class="sw-says">[^<]*suggested: Mac: e-mail; Always on: e-mail · nobody turned it off<\/span>/);
 });

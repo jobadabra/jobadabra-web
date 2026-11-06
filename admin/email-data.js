@@ -4,6 +4,7 @@ const DAY = 24 * 60 * 60 * 1000;
 export const WINDOWS = [7, 30, 90];
 import {switchRows} from '../shared/mail-switches.js';
 import {ruleRows} from '../shared/mail-registry.js';
+import {offCounts} from '../shared/mail-choices.js';
 export {SWITCHES} from '../shared/mail-switches.js';   // the flags shared/mail.js and admin/mail-lifecycle.js read (their state: shared/mail-switches.js); "on" or anything else (= off)
 
 const one = async (env, sql, ...args) => (await env.STATS.prepare(sql).bind(...args).first().catch(() => null)) || {n: 0};
@@ -22,7 +23,7 @@ export async function collect(env, {days = 7, now = new Date()} = {}) {
     many(env, "SELECT template, SUM(status = 'sent') AS sent, SUM(status NOT IN ('sent', 'claimed')) AS refused, MAX(CASE WHEN status = 'sent' THEN at END) AS last FROM mail_log WHERE at >= ? GROUP BY template ORDER BY sent DESC", since),
     many(env, "SELECT status AS reason, COUNT(*) AS n FROM mail_log WHERE status NOT IN ('sent', 'claimed') AND at >= ? GROUP BY status ORDER BY n DESC", since),
     many(env, "SELECT at, addr, template, status FROM mail_log WHERE status NOT IN ('sent', 'claimed') ORDER BY at DESC LIMIT 10"),
-    many(env, 'SELECT reason, list, COUNT(*) AS n FROM mail_off GROUP BY reason, list ORDER BY n DESC'),
+    many(env, "SELECT reason, list, COUNT(*) AS n FROM mail_off WHERE list NOT LIKE 'app-%' GROUP BY reason, list ORDER BY n DESC"),
     one(env, 'SELECT COUNT(*) AS n FROM pro_accounts WHERE email_confirmed_at IS NOT NULL'),
     one(env, 'SELECT COUNT(*) AS n FROM pro_accounts WHERE email_confirmed_at IS NULL'),
     one(env, `SELECT COUNT(*) AS n FROM pro_accounts a WHERE a.service_mail_off_at IS NULL AND ${NOT_STOPPED('service')}`),
@@ -39,5 +40,5 @@ export async function collect(env, {days = 7, now = new Date()} = {}) {
   const stopped = offReasons.filter(row => row.reason === 'bounce' || row.reason === 'complaint').reduce((total, row) => total + row.n, 0);
   return {days, testMail, sent, notSent, failed, stopped, perDay, byTemplate, refused, recent: recent.map(row => ({...row, addr: hashOf(row.addr)})), offReasons,
     confirmed: confirmed.n, unconfirmed: unconfirmed.n, types: {service: service.n, releases: releases.n, tips: tips.n, jobdigest: digest.n}, held: {items: held.n, accounts: held.accounts || 0, oldest: heldOldest.at || null}, today: today.n,
-    switches: await switchRows(env), rules: await ruleRows(env), dayMax: Number(env.MAIL_DAY_MAX || 3000)};
+    switches: await switchRows(env), rules: await ruleRows(env), offs: await offCounts(env), dayMax: Number(env.MAIL_DAY_MAX || 3000)};
 }

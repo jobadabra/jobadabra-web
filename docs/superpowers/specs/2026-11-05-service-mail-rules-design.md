@@ -23,7 +23,7 @@ Owner, in their words: "each users sets his own emails. We can jsut suggest a se
 | Owner | Mails | Who decides | In Admin |
 |---|---|---|---|
 | **Account** | sign-in code 🔒, confirm 🔒, about your feedback, Always on test | nobody: they go when the person asks | on the list, no switch on the locked ones |
-| **Yours** | a row per automation (new matches, applied for you, an application needs you, interview reminder), Always on stopped working, nothing found for days, Job digest, Weekly summary | the person; we suggest | counts, the suggested default (read only), an emergency stop for a broken mail |
+| **Yours** | a row per automation (new matches, applied for you, an application needs you, interview reminder), Always on stopped working, nothing found for days, Job digest, Weekly summary | the person; we suggest | counts and the suggested default, read only: no stop (owner, 6 Nov 2026: "Only the person") |
 | **Jobadabra's** | What's new, Tips and tricks (general), Pro is out and offers, come back (planned), trial reminders (off) | the owner on content and rhythm, the person on the tick | on/off and rhythm |
 
 Job digest and Weekly summary were never promotional: they are the person's own reports.
@@ -114,7 +114,7 @@ Every mail from the engine is `message`, so a row per mail has nothing to key on
 
 The one owner of what a mail is: id, owner (`account`, `yours`, `jobadabra`), locked or not, its suggested default per mode. `TEMPLATES` keeps subject/html/text. App mail gets virtual ids so `message` can be told apart: `app-matches`, `app-weekly`, `app-stopped`, `app-nothing`, `app-applied`, `app-needs-you`; `app-reminder` is reserved.
 
-Stored: one D1 table `mail_rule (id TEXT PRIMARY KEY, enabled INTEGER, rhythm TEXT, at TEXT)`, one row per mail the owner changed. For a Jobadabra mail it holds on/off and rhythm; for a Yours mail `enabled = 0` is the emergency stop and nothing else. Suggested defaults per mode live in `mail-registry.js`, changed by a PR, not in this table. Locked mails cannot be written.
+Stored: one D1 table `mail_rule (id TEXT PRIMARY KEY, enabled INTEGER, rhythm TEXT, at TEXT)`, one row per mail the owner changed. For a Jobadabra mail it holds on/off and rhythm; a Yours or locked mail is never written, and a stored row for one is ignored (owner, 6 Nov 2026: "\"Yours\" is not something that Jobadabra can control. It's in the users' hand", then "Only the person"). Suggested defaults per mode live in `mail-registry.js`, changed by a PR, not in this table. Locked mails cannot be written.
 `send()` asks `ruleOf(id)` before the claim: off → `{ok:false, reason:'rule_off'}`, logged like any refusal and shown in "Why mail was not sent".
 
 **A failed read never sends more than the owner chose** (the lesson of #442): a missing table leaves the defaults; any other read error keeps this Worker copy's last good answer, and with none holds every unlocked mail. Locked mails never wait for a rule.
@@ -125,7 +125,7 @@ One stored value per person and row, reused from `mail_on` / `mail_off`, with `p
 
 ### 3. Admin → E-mail → Settings
 
-One list in three groups, by owner: name and "goes out when", last sent, sent in 7 days, preview. Jobadabra's rows have a real toggle (same press route and confirm as the switches) and a rhythm. Yours rows have the suggested default and an emergency stop. Trial rows read "Off (TRIAL_REMINDERS switch)" and link to the Switches card. People's choices show only as counts.
+One list in three groups, by owner: name and "goes out when", last sent, sent in 7 days, preview. Jobadabra's rows have a real toggle (same press route and confirm as the switches) and a rhythm. Yours rows show 👤 Theirs, the suggested default and how many people turned each off, with no switch: only the person decides. Trial rows read "Off (TRIAL_REMINDERS switch)" and link to the Switches card. People's choices show only as counts.
 
 ### 4. Two screens, one stored value
 
@@ -137,6 +137,8 @@ One list in three groups, by owner: name and "goes out when", last sent, sent in
 - Rows that cannot exist in a mode are not shown. Telegram is not touched by this spec. Turning a mail off is a plain choice: one line says what they will no longer hear about, with no confirm step (v3's "We strongly advise against this" goes: "it's they deciding for them").
 
 ### 5. Mac mail is not stored
+
+One sender: the site (`shared/mail.js` `send()`). The Mac never sends a mail itself; it posts the text to `POST /api/notify/email` with its install key, to the person's own address only, and the site sends it (owner, 6 Nov 2026: "desktop app can just send an API request to our API and we send the mail, to avoid duplicate the email sending logic in 2 places"). Sending from the Mac alone would need Gmail's `gmail.send` scope (a new Google verification) or a mail key inside the app (anyone could copy it): not done.
 
 Mail written on the Mac goes at once, or the Mac holds it for its digest and sends one mail. `mail_held` stops taking it, so the footer is true. Own accounts keep `mail_held` while the repo has nowhere to hold; their footer makes no such claim.
 
@@ -177,7 +179,7 @@ The owner is still deciding replies while the Mac is off. The interview reminder
 
 | # | Repo | What | Who gets what |
 |---|---|---|---|
-| 1 | site | registry with three owners, `mail_rule`, `ruleOf` in `send()`, fail-closed read | the owner: one stop for any mail |
+| 1 | site | registry with three owners, `mail_rule`, `ruleOf` in `send()`, fail-closed read | the owner: one stop for each Account and Jobadabra mail (Yours: the person's, see Decisions) |
 | 2 | site | Admin → Settings: the list by owner | the owner: sees who decides what |
 | 3 | site | stored choices per row, `notify/email` accepts `kind`, the mail settings page rows | a person: the footer link changes the same rows |
 | 4 | public | the switches in Automation and Notifications with suggested defaults, the Mac or Always on line, the Always on pitch; the engine sends kinds and honours rows | a person chooses each mail and knows when it can arrive |
@@ -186,13 +188,13 @@ The owner is still deciding replies while the Mac is off. The interview reminder
 | 7 | site | Tips and tricks from a general library; the Come back mail | people who ticked them |
 | 8 | site | the privacy line on the website, after 4 and 5, with one legal read | people deciding whether to trust us |
 
-PRs 1 to 3 ship with every new row **off**; existing mails keep today's behaviour. PR 3 can merge before PR 4 (an old engine sends no kind: it keeps today's path).
+PRs 1 to 3 ship with every new row **off**; existing mails keep today's behaviour. PR 3 can merge before PR 4 (an old engine sends no kind: it keeps today's path). **PR 5's "Mac mail is not stored" reaches people before PR 4's switches** (review of hr-31): a mail held on our server for the digest carries no row, so one held before a person turns its row off would still go in the digest; once the Mac holds its own mail, nothing is held here to re-check.
 
 ## Decisions (the owner's, 5 Nov 2026)
 
 | Decision | Answer |
 |---|---|
-| Mail types | "Three owners", with an emergency stop on Yours |
+| Mail types | "Three owners"; 6 Nov 2026, the owner replaced the emergency stop on Yours: "If enable or disable from here, and they do the same from their desktop app, what happens? Who has higher precedence?" → "Only the person" |
 | Mac only mail | "Their choice" |
 | Where to manage it | "from both Automations and Notifications": a switch beside each automation, the same switches in Notifications |
 | Footer of Yours mail | "App line + small web link" |

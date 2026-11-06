@@ -3,7 +3,8 @@
 // POST /api/account/email/resend sends the confirm link again; /confirm confirms the address. An address another account already holds is refused here (joining it takes a code sent to that address, the device sign-in). Guard: test/unit/api/account-email.test.js.
 import {authorize, digestOf, equal, tokenFor} from '../shared/guard.js';
 import {installOfTrialKey} from '../shared/trial-key.js';
-import {addrOf, confirmLink, send, validAddress, clean} from '../shared/mail.js';
+import {addrOf, confirmLink, heldRefusal, send, validAddress, clean} from '../shared/mail.js';
+import {APP_ROWS} from '../shared/mail-registry.js';
 import {newsAnswer, newsFacts, recordNews} from '../shared/mail-lists.js';
 import {fromTelegram} from './mail-html.js';
 import {CADENCES, deliver, hold, testAlert} from './mail-held.js';
@@ -113,7 +114,8 @@ export async function resend(request, env, now = new Date()) {
   return json(200, {ok: false, error: sent.reason === 'off' ? 'off' : sent.reason === 'rate' ? 'wait' : 'not_sent'});
 }
 
-// POST /api/notify/email {subject, html, buttons?: [{text, url}], kind?: 'activity' | 'test'}: 'activity' is held for the digest; 'test' (the GitHub way's Test) sends the
+// POST /api/notify/email {subject, html, buttons?: [{text, url}], kind?: 'activity' | 'test', mail?: 'app-matches' | ... (shared/mail-registry.js APP_ROWS)}: `mail` says which of the app's
+// own mails this is, so the owner's stop on it and the person's choice for it are obeyed (spec #447 PR 3); an older app names none, or one this site does not know, and keeps today's path. 'activity' is held for the digest; 'test' (the GitHub way's Test) sends the
 // alert test mail instead of the body, once a day, outside the per-address cap (api/mail-held.js testAlert: a stolen repo key gets one mail a day); anything else goes at once; `html` is the Telegram HTML the engine built (tgcard.py); only a safe subset reaches the mail (mail-html.js).
 export async function notify(request, env, now = new Date()) {
   const install = (await installOfTrialKey(request.headers.get('x-api-key'), env))?.install;   // also the JPT1 key an Always-on repo holds: it reaches only this route and the trial status
@@ -127,9 +129,11 @@ export async function notify(request, env, now = new Date()) {
   if (!text) return json(400, {ok: false, reason: 'empty'});
   const buttons = (Array.isArray(body.buttons) ? body.buttons : []).slice(0, 6).filter(b => b && /^https:\/\//.test(b.url) && b.text).map(b => ({text: String(b.text).slice(0, 80), url: String(b.url).slice(0, 500)}));
   const item = {subject: String(body.subject || '').slice(0, 150), html, text, buttons};
-  if (body.kind === 'activity') return json(200, await hold(env, account, item, now));   // not new matches, not urgent: waits for the daily or weekly digest (api/mail-held.js)
-  const result = await deliver(env, account, item, now);
-  if (result.reason === 'unconfirmed') return json(200, await hold(env, account, item, now));   // today's one mail to an unconfirmed address went: this one waits for the digest, never dropped
+  const row = APP_ROWS.includes(body.mail) ? body.mail : '';
+  const toHold = async () => { const refused = await heldRefusal(env, account.email, row, now); return refused ? {ok: false, reason: refused} : hold(env, account, item, now); };
+  if (body.kind === 'activity') return json(200, await toHold());   // not new matches, not urgent: waits for the daily or weekly digest (api/mail-held.js)
+  const result = await deliver(env, account, item, now, {row});
+  if (result.reason === 'unconfirmed') return json(200, await toHold());   // today's one mail to an unconfirmed address went: this one waits for the digest, never dropped
   return json(200, result.ok ? {ok: true} : {ok: false, reason: result.reason});
 }
 

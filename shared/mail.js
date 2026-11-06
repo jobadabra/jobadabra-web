@@ -5,6 +5,7 @@ import {appVersionOf} from './app-needs.js';
 import {digestOf, tokenFor} from './guard.js';
 import {frameHtml, frameText, REPLY_TO, SITE} from './mail-frame.js';
 import {NEWS, OPT_IN, newsFacts, newsRefusal} from './mail-lists.js';
+import {choiceRefusal} from './mail-choices.js';
 import {ruleRefusal} from './mail-registry.js';
 import {TEMPLATES} from './mail-templates.js';
 
@@ -75,14 +76,25 @@ export function compose(template, data = {}, links = null) {
 }
 
 /**
+ * The person's choice for an app mail (`row`) that is held for the digest instead of sent (api/mail-held.js hold): only the person decides a Yours mail (owner, 6 Nov 2026); logged like a refused send so "Why mail was not sent" counts it. '' to hold it.
+ */
+export async function heldRefusal(env, to, row, now = new Date()) {
+  if (!row) return '';
+  const addr = await addrOf(to), reason = await choiceRefusal(env, addr, row);
+  if (reason) await record(env, now, addr, TEMPLATES.message.list, 'message', reason);
+  return reason;
+}
+
+/**
  * Mails `template` to `to` through every rule above; never throws. {ok, id} or {ok: false, reason}.
  * `test`: a test send (a Test press, the admin page's test buttons). Why (owner, 5 Nov 2026: "test emmail are aside of this cap"): it is logged as `test:<template>`,
  * never refused by DAILY_MAX and never takes its room; GLOBAL_DAY_MAX still counts it. A mark in the template name, not a new column: a failed migration only warns
  * (site.yml), and a missing column would stop every mail.
  * `ownerTest`: the owner's own test from Admin (test inbox, a release test). It skips the owner's stop on that mail, so a stopped mail can be checked before it is turned back on
  * (review of hr-29). A person's Test press is `test` only and stays stoppable.
+ * `row`: which of the app's own mails this `message` is (POST /api/notify/email `mail`); the person's choice for it holds it. An older app names none.
  */
-export async function send(env, template, to, data = {}, {now = new Date(), test = false, ownerTest = false} = {}) {
+export async function send(env, template, to, data = {}, {now = new Date(), test = false, ownerTest = false, row = ''} = {}) {
   const spec = TEMPLATES[template];
   const logged = test ? `test:${template}` : template;
   if (!spec) return {ok: false, reason: 'bad_template'};
@@ -94,6 +106,8 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
     if (!verdict.ok) { if (verdict.reason !== 'bad_address' && verdict.reason !== 'marketing_off') await record(env, now, addr, spec.list, logged, verdict.reason); return verdict; }
     const ruled = ownerTest ? '' : await ruleRefusal(env, template);   // the owner's stop on this one mail, or 'rule_held' when the stops cannot be read (spec 2026-11-05-service-mail-rules-design.md)
     if (ruled) { await record(env, now, addr, spec.list, logged, ruled); return {ok: false, reason: ruled}; }
+    const unwanted = row && !test ? await choiceRefusal(env, addr, row) : '';   // one of the app's own mails (`row`, e.g. 'app-matches'): the person's choice for it
+    if (unwanted) { await record(env, now, addr, spec.list, logged, unwanted); return {ok: false, reason: unwanted}; }
     // Why (jobadabra-web#431; 20 of 20 parallel sends went out in the review of #430): the room under both caps is CLAIMED in one statement before the provider is asked (D1 runs a statement alone,
     // as in sendTestMail), so calls that arrive together cannot all read the same count. A live claim counts like a sent mail; one older than CLAIM_MS is a Worker that died and counts for nothing.
     const since = new Date(now.getTime() - DAY).toISOString(), fresh = new Date(now.getTime() - CLAIM_MS).toISOString();
