@@ -84,7 +84,9 @@ test('the tab: each persona shows its counters beside "N of X on EURES"; a dropp
   assert.match(cell, /EU read[^<]*0/, 'our EU read listed 0');
   assert.match(cell, /usual \d+/, 'the dropped counter names its usual');
   assert.match(html.match(/<p class="vb-chips">.*?<\/p>/s)[0], /EU jobs: p2 \d+ → 0/);
-  assert.doesNotMatch(html.match(/<b>p1 Role, City<\/b>.*?<\/tr>/s)[0], /usual \d+<\/span>[^<]*↓/, 'no mark on a flat persona');
+  const line = persona => html.match(new RegExp(`<b>p${persona} Role, City</b>.*?(<div class="why">(?:<[^>]*>)?EU read.*?</div>)`, 's'))[1];   // the persona's own counter line (the cell also holds the local jobs' usual)
+  assert.doesNotMatch(line(1), /usual|chip/, 'no mark on a flat persona');
+  assert.match(line(2), /usual \d+/, 'the control: the dropped persona\'s line does carry its usual, so the check above can fail');
   const old = nightSection(judgeAll([{...night(0), rows: night(0).rows.map(row => ({...row, counters: undefined}))}]), {});
   assert.doesNotMatch(old, /EU read|NaN|undefined/);
 });
