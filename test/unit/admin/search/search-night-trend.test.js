@@ -72,3 +72,9 @@ test('a count that comes back after another is not drawn as a missing night, and
   const small = groupHtml(groups(judgeAll([night('2026-11-02', 6, 1, 0, 1), night('2026-11-01', 6, 1, 0, 1)]))[0]);
   assert.doesNotMatch(small, />0\.5</);
 });
+
+test('a day with no night says so in the legend, never "not reported yet"', () => {
+  const html = trendSection(judged);
+  assert.match(html, /no night with this number of candidates/);
+  assert.doesNotMatch(html, /not reported yet/);
+});

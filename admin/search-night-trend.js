@@ -36,7 +36,7 @@ export function groupHtml(group) {
   const {total, days: span} = group, columnsOf = span.map(({day, night, elsewhere}) => ({day, values: night ? [night.measured, total - night.out] : [null, null], tip: tipOf(day, night, total, elsewhere)}));
   const local = span.map(({day, night, elsewhere}) => ({day, value: night && isNum(night.local) ? night.local : null, tip: tipOf(day, night, total, elsewhere)}));
   const dropped = span.filter(item => item.night?.dropped);
-  const found = columns(columnsOf, [{name: `Candidates found (of ${total})`, tone: 's1'}, {name: `Employer sites in time (of ${total})`, tone: 's3'}], {whole: true, labelEvery: Math.max(1, Math.ceil(span.length / 7))});
+  const found = columns(columnsOf, [{name: `Candidates found (of ${total})`, tone: 's1'}, {name: `Employer sites in time (of ${total})`, tone: 's3'}], {whole: true, gapLabel: 'no night with this number of candidates', labelEvery: Math.max(1, Math.ceil(span.length / 7))});
   const jobs = line(local, {tone: 's2', percent: false, whole: true, name: 'Relevant local jobs', labelEvery: Math.max(1, Math.ceil(span.length / 7))});
   return `<h3 style="margin:14px 0 2px;font-size:14px">${total} candidates ${group.current ? chip('current set', 'good') : chip('an earlier set: not compared with the current one', 'off')}</h3>
 <p class="muted small" style="margin:0">Candidates found a right job for, and employer sites that finished in time</p>${figure({chart: found})}

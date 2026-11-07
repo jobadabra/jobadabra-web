@@ -24,10 +24,10 @@ const W = 720, H = 220, M = {l: 44, r: 6, t: 10, b: 24};
 /**
  * Grouped columns over days, a Y axis from 0 with grid lines, a date every few days; the page's one tooltip gives each day's exact numbers.
  * days: [{day: 'YYYY-MM-DD', values: [number | null…], tip}] oldest first; `series`: [{name, tone}] (tone s1…s6), one column per value.
- * A null value is drawn as a dashed hollow column (a number that does not exist yet, never a zero). `unit` prefixes the axis numbers ('$'); `whole`: a count axis with whole-number ticks only. '' for no days.
+ * A null value is drawn as a dashed hollow column (a number that does not exist yet, never a zero). `unit` prefixes the axis numbers ('$'); `whole`: a count axis with whole-number ticks only; `gapLabel`: what the legend says a hollow column means (a day that will never have a value is not "not reported yet", Gitar on #488). '' for no days.
  * Why (owner, 1 Nov 2026, on the Website per-day chart: "doesn't show an Y axis, doesn't show tooltips"): the same three things here: a scale, the numbers, the tooltip.
  */
-export function columns(days, series, {unit = '', labelEvery = 5, whole = false} = {}) {
+export function columns(days, series, {unit = '', labelEvery = 5, whole = false, gapLabel = 'not reported yet'} = {}) {
   if (!days.length) return '';
   const top = Math.max(...days.flatMap(day => day.values.map(value => value || 0)), 0), ticks = whole ? countTicks(top) : moneyTicks(top), max = ticks[ticks.length - 1] || 1;
   const pw = W - M.l - M.r, ph = H - M.t - M.b, y = value => M.t + ph - (ph * value) / max, slot = pw / days.length, each = Math.max(3, (slot * 0.7) / series.length);
@@ -44,7 +44,7 @@ export function columns(days, series, {unit = '', labelEvery = 5, whole = false}
   }).join('');
   const hollow = days.some(day => day.values.includes(null));
   return `<svg class="vz-cols" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map(s => s.name).join(' and '))} per day">${grid}${groups}</svg>`
-    + `<div class="vz-legend">${series.map(s => `<span><i style="background:var(--${s.tone})"></i>${esc(s.name)}</span>`).join('')}${hollow ? '<span><i class="dash"></i>not reported yet</span>' : ''}</div>`;
+    + `<div class="vz-legend">${series.map(s => `<span><i style="background:var(--${s.tone})"></i>${esc(s.name)}</span>`).join('')}${hollow ? `<span><i class="dash"></i>${esc(gapLabel)}</span>` : ''}</div>`;
 }
 
 /**
