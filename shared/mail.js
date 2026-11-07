@@ -72,6 +72,7 @@ async function record(env, now, addr, list, template, status, id = null) {
 }
 
 const WHY = {service: 'You set up Jobadabra with this address.', jobdigest: 'You ticked the job digest.', releases: 'You get new-release emails at this address.', tips: 'You ticked Tips and tricks or joined the Pro list.'};
+const WHY_KEY = {service: 'footerService', jobdigest: 'footerJobDigest', releases: 'footerReleases', tips: 'footerTips'};
 
 // The subject, text, html and headers of a mail: the template's content inside the frame. `given` = {stop, settings} links (none for an essential mail); the footer keeps those its owner allows. Also what /admin/growth/email shows (admin/email-preview.js).
 // `data.appVersion` (set by send(): the app version the address's installs last reported, or absent) lets a template swap an "Open in Jobadabra" button for "Update Jobadabra" (shared/app-needs.js).
@@ -79,7 +80,7 @@ export function compose(template, data = {}, given = null, locale = 'en') {
   data = {...data, locale: notificationLocale(locale)};
   const spec = TEMPLATES[template];
   // Why each mail came and which links it carries: by who owns it (shared/mail-footer.js, spec PR 5). An Account mail has no stop link and no List-Unsubscribe header.
-  const foot = footerOf(template, WHY[spec.list], data.locale);
+  const foot = footerOf(template, WHY[spec.list], data.locale, WHY_KEY[spec.list]);
   const links = given && foot.stop ? {stop: given.stop, settings: foot.settings ? given.settings : null} : null;
   const frame = {title: spec.title(data), why: foot.why, button: fromMail(spec.button?.(data), template, data.locale) || null, links, trust: foot.trust, download: foot.download, locale: data.locale};
   const headers = links ? {'List-Unsubscribe': `<${links.stop}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'} : undefined;
