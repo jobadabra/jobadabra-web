@@ -2,6 +2,7 @@
 // a 0.9.6 app, which had no jobadabra:// scheme; the e-mail went live at merge, the app only with a release). A mail or page that needs a newer app lists the feature here and asks appCan() / appButton().
 // The version of an install comes from its daily health report (telemetry.version, kind 'health': the partial index telemetry_health_latest serves it, migration 0065); an unknown version is never guessed (null): the offer stays and the page it leads to copes (website/public/open.js).
 // Guard: test/unit/shared/mail/mail-app-version.test.js, test/unit/website/open-app.test.js.
+import {mailText} from './mail-copy.js';
 import {SITE} from './mail-frame.js';
 
 /** feature -> the first app version that has it. `open`: the jobadabra:// scheme (jobadabra #3230, first in desktop-v0.9.12). */
@@ -26,9 +27,9 @@ export function appCan(feature, version) {
 const isOpenLink = url => String(url || '').startsWith(`${SITE}/open`);
 
 /** A button {label, url} or a link {text, url}: an /open link for an app known to be too old becomes "Update Jobadabra" -> the download page. Anything else stays. */
-export function appButton(button, version) {
+export function appButton(button, version, locale = 'en') {
   if (!button || !isOpenLink(button.url) || appCan('open', version) !== false) return button;
-  return {...button, ...('text' in button ? {text: 'Update Jobadabra'} : {label: 'Update Jobadabra'}), url: `${SITE}/download`};
+  return {...button, ...('text' in button ? {text: mailText(locale, 'updateJobadabra')} : {label: mailText(locale, 'updateJobadabra')}), url: `${SITE}/download`};
 }
 
 /**

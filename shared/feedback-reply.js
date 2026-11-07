@@ -1,7 +1,9 @@
 // Telling the person who sent a feedback (spec docs/superpowers/specs/2026-11-03-feedback-actions-design.md, PR 3/7): the owner's words, what he linked, the in-app reply the app reads,
 // and the one e-mail through the sender we already have (shared/mail.js, template `feedback-update`, service list). Nothing is sent that the owner did not write or accept.
 // Guarded by test/unit/shared/feedback/feedback-reply.test.js.
-import {send, validAddress} from './mail.js';
+import {addrOf, send, validAddress} from './mail.js';
+import {mailText} from './mail-copy.js';
+import {recipientNotificationLanguage} from './notification-preference.js';
 import {PUBLIC_REPO, githubUrl} from './repos.js';
 
 export const DEFAULT_DEFER = 'Thank you: we saw this and parked it for later. If we pick it up we will tell you.';
@@ -36,10 +38,10 @@ const RECEIPT_PREFIX = 'r:';   // the receipt's ref in the replies list; closing
 // Why (code review of 1b, 5 Nov 2026): a card set aside shows a reply only when it was told in the step that set it aside (told_at not before state_at), never an older telling from before it was reopened and dismissed.
 const VISIBLE = "state IN ('fixed', 'released', 'deferred', 'dismissed', 'false_positive') AND told LIKE 'app%' AND seen_at = '' AND ref != '' AND (state NOT IN ('dismissed', 'false_positive') OR told_at >= state_at)";
 
-/** What the reporter reads: the owner's own words, else the default sentence for the state. */
-export const replyText = row => {
-  if (CLOSED_STATES.includes(row.state)) return clip(row.tell_message, 300) || DEFAULT_CLOSE;
-  return (clip(row.tell_message, 300) || (FIXED_STATES.includes(row.state) ? defaultFixed(row.fixed_in) : DEFAULT_DEFER)) + (FIXED_STATES.includes(row.state) && row.thanks_apps > 0 ? ` ${THANKS_LINE}` : '');
+/** What the reporter reads: owner's words stay raw; only bundled fallback/thanks copy follows an explicit email locale, defaulting to canonical English. */
+export const replyText = (row, locale = 'en') => {
+  if (CLOSED_STATES.includes(row.state)) return clip(row.tell_message, 300) || mailText(locale, 'feedbackClose');
+  return (clip(row.tell_message, 300) || (FIXED_STATES.includes(row.state) ? mailText(locale, row.fixed_in ? 'feedbackFixedVersion' : 'feedbackFixedNext', {version: row.fixed_in}) : mailText(locale, 'feedbackDefer'))) + (FIXED_STATES.includes(row.state) && row.thanks_apps > 0 ? ` ${mailText(locale, 'feedbackThanks', {count: THANKS_APPS})}` : '');
 };
 /** The reporter's own words, cut for the reply ("You wrote on 28 Oct: …"): never more than 80 characters. */
 export const excerptOf = text => { const one = clip(text, 400); return one.length > 80 ? `${one.slice(0, 79).trimEnd()}…` : one; };
@@ -100,7 +102,8 @@ export async function tellReporter(env, ref, now = new Date(), who = 'owner (tol
   if (!row || ![...FIXED_STATES, ...CLOSED_STATES, 'deferred'].includes(row.state)) return '';
   let told = 'app';
   if (row.tell_mail && validAddress(row.contact)) {
-    const sent = await send(env, 'feedback-update', row.contact, {kind: FIXED_STATES.includes(row.state) ? 'fixed' : 'deferred', on: String(row.at).slice(0, 10), excerpt: excerptOf(row.text), message: replyText(row)}, {now});
+    const locale = await recipientNotificationLanguage(env, await addrOf(row.contact));
+    const sent = await send(env, 'feedback-update', row.contact, {kind: FIXED_STATES.includes(row.state) ? 'fixed' : 'deferred', on: String(row.at).slice(0, 10), excerpt: excerptOf(row.text), message: replyText(row, locale)}, {now, locale});
     told = sent.ok ? 'app+mail' : `app, mail refused: ${sent.reason}`;
   } else if (row.tell_mail) told = 'app, mail refused: not an address';
   await env.STATS.batch([

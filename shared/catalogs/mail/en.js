@@ -1,0 +1,110 @@
+// Bundled end-user mail copy; explicit locale selection precedes interpolation and raw recipient data stays unchanged.
+export const messages = {
+  "feedbackDefer": "Thank you: we saw this and parked it for later. If we pick it up we will tell you.",
+  "feedbackClose": "Thanks, we looked into this and it isn't something we'll change.",
+  "feedbackFixedVersion": "Thank you: this is fixed in {version}.",
+  "feedbackFixedNext": "Thank you: this is fixed and will arrive in the next update.",
+  "feedbackThanks": {
+    "one": "We also added {count} more free application to say thank you.",
+    "other": "We also added {count} more free applications to say thank you."
+  },
+  "heldDigestSubject": {
+    "one": "Your Jobadabra update: {count} item",
+    "other": "Your Jobadabra update: {count} items"
+  },
+  "confirmReminderHtml": "{confirm} to get every mail at once (until then, one a day).",
+  "confirmReminderText": "\nConfirm your email to get every mail at once (until then, one a day): {url}",
+  "confirmAction": "Confirm your email",
+  "welcomeSubject": "Confirm your email for Jobadabra",
+  "welcomeTitle": "Your job matches will come here",
+  "welcomeBody": "New job matches, reminders and answers from Jobadabra will come to this address. Confirm it to get every mail at once; until then we send at most one a day.",
+  "welcomeIgnore": "Didn't ask for this? Ignore this email.",
+  "resendBody": "You asked for the confirm link again. Press it and your Jobadabra mails reach you.",
+  "resendIgnore": "Didn't ask for this? Ignore this email; nothing changes.",
+  "feedbackSubject": "About your feedback",
+  "feedbackFixedTitle": "Your feedback is fixed",
+  "feedbackThanksTitle": "Thanks for your feedback",
+  "feedbackQuoted": "You wrote on {on}: \"{excerpt}\"",
+  "codeSubject": "Your Jobadabra code",
+  "codeTitle": "Your sign-in code",
+  "codeLine": "Your Jobadabra code is {code}.",
+  "codeInstructions": "Type it in the app within 10 minutes. If you did not ask for it, ignore this email; nothing changes.",
+  "codeInstructionsHtml": "Type it in the app within 10 minutes. If you didn't ask for it, ignore this email; nothing changes.",
+  "digestSubject": {
+    "one": "{count} new job match",
+    "other": "{count} new job matches"
+  },
+  "digestTitle": {
+    "one": "{count} new match",
+    "other": "{count} new matches"
+  },
+  "openInApp": "Open in Jobadabra",
+  "topMatches": "The top {shown} of {total}.",
+  "digestFit": "fit",
+  "trialLeft": {
+    "one": "{count} free application left",
+    "other": "{count} free applications left"
+  },
+  "trialOpening": {
+    "one": "You have {number} application left in your free Jobadabra trial (20 applications or 60 days, whichever lasts longer).",
+    "other": "You have {number} applications left in your free Jobadabra trial (20 applications or 60 days, whichever lasts longer)."
+  },
+  "trialClosing": "Searches, tracking and your data keep working as they are.",
+  "trialEndingSubject": {
+    "one": "Your free trial ends in {count} day",
+    "other": "Your free trial ends in {count} days"
+  },
+  "trialEndingBody": {
+    "one": "Your free Jobadabra trial ends in {number} day. After that new searches and drafts pause; your data stays yours.",
+    "other": "Your free Jobadabra trial ends in {number} days. After that new searches and drafts pause; your data stays yours."
+  },
+  "seeDetails": "See the details",
+  "pausedSubjectInactive": "Always on paused: open the app to resume",
+  "pausedSubjectExpired": "Always on paused: your free trial has ended",
+  "pausedTitleInactive": "Always on is paused",
+  "pausedTitleExpired": "Always on is paused: your free trial has ended",
+  "pausedBodyInactive": "You haven't opened Jobadabra for 14 days, so the daily searches stopped. Open the app to resume.",
+  "pausedBodyExpired": "Your free trial has ended, so the daily searches stopped.",
+  "keepRunning": "Get Pro to keep it running",
+  "testSubject": "Always on test: your alerts reach you",
+  "testTitle": "Your alerts reach you",
+  "testBody": "You pressed Test on Always on. This e-mail is how we tell you about new jobs when a search finds some.",
+  "proSubject": "Jobadabra Pro is out",
+  "proBody": "One payment, no subscription: Pro €{pro}, or Pro + AI €{proAi} with {credit} VAT included.",
+  "seePro": "See Pro",
+  "releaseSubject": "{test}Jobadabra {version} · What's new",
+  "releaseTitle": "What's new in version {version}",
+  "releaseTest": "Test email · Release {version} · Sent only to your test address",
+  "changesSince": "Changes since version {version}",
+  "releaseNew": "New",
+  "releaseImproved": "Improved",
+  "releaseFixed": "Fixed",
+  "releaseUpdate": "Open Jobadabra and choose {update} to get this release.",
+  "releaseVersion": "What's new in Jobadabra · Version {version}",
+  "openJobadabra": "Open Jobadabra App",
+  "update": "Update",
+  "updateJobadabra": "Update Jobadabra",
+  "footerYours": "You chose these in the app: Settings → Notifications.",
+  "footerSecurity": "A security e-mail, sent even if you stopped others.",
+  "footerWelcome": "This address was entered in Jobadabra.",
+  "footerResend": "A new link was asked for in Jobadabra.",
+  "footerFeedback": "About a report you sent.",
+  "footerTest": "You pressed Test in the app.",
+  "footerNews": "Same news for everyone. You asked for it.",
+  "footerService": "You set up Jobadabra with this address.",
+  "footerJobDigest": "You ticked the job digest.",
+  "footerReleases": "You get new-release emails at this address.",
+  "footerTips": "You ticked Tips and tricks or joined the Pro list.",
+  "frameReply": "Questions? Just reply to this email. It comes straight to me.",
+  "frameSigned": "Igor, builder of Jobadabra · Geneva",
+  "stopEmails": "Stop these emails",
+  "emailSettings": "Email settings",
+  "trust": "How we keep your data",
+  "downloadQuestion": "Don't have the app?",
+  "downloadAction": "Download Jobadabra",
+  "creditDescription": "€{amount} of AI credit{suffix}. An application means a letter, CV tailoring and form answers. Actual usage varies. Pro uses smarter in-house AI while you have credit.",
+  "creditApprox": {
+    "one": " (about {count} application)",
+    "other": " (about {count} applications)"
+  }
+};

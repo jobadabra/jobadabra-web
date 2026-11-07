@@ -1,12 +1,13 @@
 // The one frame every e-mail goes through (owner, 17 Oct 2026): a branded card with the logo, a title, the content, at most one yellow button and a footer saying why the person gets it,
 // in at most two short lines (why, then the links its owner allows: shared/mail-footer.js). Email-safe: a table layout, inline styles, a hosted https logo, light colours inline with a dark-mode override in <style>.
 // shared/mail.js applies it in send(), so no template can skip it; each template supplies only its content. A plain-text twin comes from frameText(). Guard: test/unit/shared/mail/mail-frame.test.js.
+import {mailText} from './mail-copy.js';
+import {notificationLocale} from './notification-language.js';
 import {DARK, LIGHT as C} from './mail-palette.js';
 export const SITE = 'https://www.jobadabra.top';
 const LOGO = `${SITE}/images/logo-mark.png`;
 /** Where replies go and who answers (owner, 5 Nov 2026: "Questions? Just reply to this email. It comes straight to me."; support@ is forwarded to his inbox by Cloudflare Email Routing). shared/mail.js sends REPLY_TO as Reply-To. */
 export const REPLY_TO = 'support@jobadabra.top';
-const ASK = 'Questions? Just reply to this email. It comes straight to me.', SIGNED = 'Igor, builder of Jobadabra · Geneva';
 const PHOTO = `${SITE}/images/igor-footer.png`;   // 96 px round PNG, shown at 48 px (sharp on a phone)
 export const esc = text => String(text ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 export const link = (url, label) => `<a href="${esc(url)}" class="jp-link" style="color:${C.signal}">${esc(label)}</a>`;
@@ -34,36 +35,35 @@ export function jobRows(rows = []) {
       + `${job.fit != null ? `<td align="right" valign="middle" style="padding:12px 0 12px 12px"><span class="jp-fit" style="font:600 12px ui-monospace,Menlo,monospace;background:${C.goodSoft};color:${C.good};border-radius:999px;padding:3px 9px">${esc(job.fit)}</span></td>` : ''}</tr></table>`;
   }).join('');
 }
-export const jobText = (rows = []) => rows.map(job => `- ${job.title}${[job.company, job.place, job.mode].filter(Boolean).length ? ` (${[job.company, job.place, job.mode].filter(Boolean).join(' · ')})` : ''}${job.fit != null ? ` fit ${job.fit}` : ''}${job.url ? `\n  ${job.url}` : ''}`).join('\n');
+export const jobText = (rows = [], locale = 'en') => rows.map(job => `- ${job.title}${[job.company, job.place, job.mode].filter(Boolean).length ? ` (${[job.company, job.place, job.mode].filter(Boolean).join(' · ')})` : ''}${job.fit != null ? ` ${mailText(locale, 'digestFit')} ${job.fit}` : ''}${job.url ? `\n  ${job.url}` : ''}`).join('\n');
 
 export const codeBox = code => `<p class="jp-box jp-ink" style="font:700 30px ui-monospace,Menlo,monospace;letter-spacing:.3em;background:${C.quiet};border-radius:10px;padding:14px;text-align:center;margin:8px 0 14px">${esc(code)}</p>`;
 
 // The owner's personal footer: a round photo and a line, under the card of every mail (a table, no CSS a mail client may drop). Its text twin is frameText's "--" block.
-// Why (owner, 6 Nov 2026: "I don't like this center vs left alignemtn", then "Let's have a separator line"): the signature starts where the card's text starts, on phones too (.jp-foot follows .jp-pad);
-// a line under it closes that column, so the two centred small lines read as their own block.
-const personalHtml = () => `<table role="presentation" cellpadding="0" cellspacing="0"><tr>`
+// Why (7 Nov 2026, preserving the 6 Nov owner layout): keep the left-aligned signature and its separator unchanged; select bundled signature copy by explicit recipient locale.
+const personalHtml = locale => `<table role="presentation" cellpadding="0" cellspacing="0"><tr>`
   + `<td width="48" valign="middle" style="width:48px;padding:0 12px 0 0"><img src="${PHOTO}" width="48" height="48" alt="" style="display:block;width:48px;height:48px;border:0;border-radius:50%"></td>`
-  + `<td valign="middle" style="text-align:left"><p class="jp-ink" style="margin:0;color:${C.ink};font:14px/1.45 ${FONT}">${ASK}</p>`
-  + `<p class="jp-muted" style="margin:1px 0 0;color:${C.muted};font:13px/1.4 ${FONT}">${SIGNED}</p></td></tr></table>`;
+  + `<td valign="middle" style="text-align:left"><p class="jp-ink" style="margin:0;color:${C.ink};font:14px/1.45 ${FONT}">${mailText(locale, 'frameReply')}</p>`
+  + `<p class="jp-muted" style="margin:1px 0 0;color:${C.muted};font:13px/1.4 ${FONT}">${mailText(locale, 'frameSigned')}</p></td></tr></table>`;
 
 // html: {title, body (html), button: {label, url} | null, why, links: {stop, settings} | null, trust, download}. links null = nothing to stop (an Account mail).
 // The footer is two short lines (owner, 6 Nov 2026: "Loks like essays/novels"): `why`, then the links joined by " · "; `download` adds "Don't have the app?" (news only:
 // owner, 6 Nov 2026: "we shouldn't show Downlaod on user app email notifications. Of course they have the app"). `trust` links what hosted Always on stores.
-const footLinks = (links, trust) => [links && ['Stop these emails', links.stop], links?.settings && ['Email settings', links.settings], trust && ['How we keep your data', `${SITE}/trust`], ['jobadabra.top', SITE]].filter(Boolean);
-export function frameHtml({title, body, button: action, why, links, trust = false, download = false}) {
-  const foot = footLinks(links, trust).map(([label, url]) => link(url, label)).join(' · ');
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>${esc(title)}</title>${STYLE}</head>`
+const footLinks = (links, trust, locale) => [links && [mailText(locale, 'stopEmails'), links.stop], links?.settings && [mailText(locale, 'emailSettings'), links.settings], trust && [mailText(locale, 'trust'), `${SITE}/trust`], ['jobadabra.top', SITE]].filter(Boolean);
+export function frameHtml({title, body, button: action, why, links, trust = false, download = false, locale = 'en'}) {
+  const foot = footLinks(links, trust, locale).map(([label, url]) => link(url, label)).join(' · ');
+  return `<!doctype html><html lang="${notificationLocale(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>${esc(title)}</title>${STYLE}</head>`
     + `<body class="jp-bg" style="margin:0;background:${C.bg}"><table role="presentation" data-jp-frame="1" width="100%" cellpadding="0" cellspacing="0" class="jp-bg" style="background:${C.bg}"><tr><td align="center" style="padding:22px 14px">`
     + `<table role="presentation" width="560" cellpadding="0" cellspacing="0" class="jp-card" style="width:100%;max-width:560px;background:${C.card};border:1px solid ${C.line};border-radius:12px;font:15px/1.55 ${FONT};color:${C.ink}">`
     + `<tr><td class="jp-line" style="padding:16px 22px;border-bottom:1px solid ${C.line}"><img src="${LOGO}" width="32" height="28" alt="" style="vertical-align:middle;border:0"> <b class="jp-ink" style="vertical-align:middle;margin-left:8px;font-size:15px">Jobadabra</b></td></tr>`
     + `<tr><td class="jp-pad jp-ink" style="padding:22px"><h1 class="jp-ink" style="margin:0 0 10px;font-size:20px;line-height:1.3">${esc(title)}</h1>${body}${action ? button(action) : ''}</td></tr></table>`
-    + `<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;margin:18px auto 0"><tr><td class="jp-foot" align="left" style="padding:0 22px">${personalHtml()}`
-    + `<p class="jp-muted jp-line" style="margin:14px 0 0;padding-top:12px;border-top:1px solid ${C.line};color:${C.muted};font:12px/1.5 ${FONT};text-align:center">${why ? `${esc(why)}<br>` : ''}${foot}${download ? `<br>Don't have the app? ${link(`${SITE}/download`, 'Download Jobadabra')}` : ''}</p></td></tr></table>`
+    + `<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;margin:18px auto 0"><tr><td class="jp-foot" align="left" style="padding:0 22px">${personalHtml(locale)}`
+    + `<p class="jp-muted jp-line" style="margin:14px 0 0;padding-top:12px;border-top:1px solid ${C.line};color:${C.muted};font:12px/1.5 ${FONT};text-align:center">${why ? `${esc(why)}<br>` : ''}${foot}${download ? `<br>${mailText(locale, 'downloadQuestion')} ${link(`${SITE}/download`, mailText(locale, 'downloadAction'))}` : ''}</p></td></tr></table>`
     + `</td></tr></table></body></html>`;
 }
 
-export function frameText({title, body, button: action, why, links, trust = false, download = false}) {
-  return [title, '', body, action ? `\n${action.label}: ${action.url}` : '', '', '--', ASK, SIGNED, '', why || null,
-    ...footLinks(links, trust).map(([label, url]) => url === SITE ? SITE : `${label}: ${url}`), download ? `Don't have the app? Download Jobadabra: ${SITE}/download` : null]
+export function frameText({title, body, button: action, why, links, trust = false, download = false, locale = 'en'}) {
+  return [title, '', body, action ? `\n${action.label}: ${action.url}` : '', '', '--', mailText(locale, 'frameReply'), mailText(locale, 'frameSigned'), '', why || null,
+    ...footLinks(links, trust, locale).map(([label, url]) => url === SITE ? SITE : `${label}: ${url}`), download ? `${mailText(locale, 'downloadQuestion')} ${mailText(locale, 'downloadAction')}: ${SITE}/download` : null]
     .filter(part => part !== null && part !== undefined && part !== false).join('\n').replace(/\n{3,}/g, '\n\n');
 }
