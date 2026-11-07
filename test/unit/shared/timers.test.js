@@ -53,12 +53,13 @@ test('it is dormant: without TIMERS=on nothing is dispatched and nothing is aske
   }
 });
 
+// Why (jobadabra#3513, 7 Nov 2026): the Worker tick also starts pr-labels.yml after pr-verdict.yml (app-core/src/scheduler.js), so every expectation of a tick's starts lists it.
 test('on, each start goes to the public repo with the timers token, never the site token; the nightly only at 04:00 Zurich', async () => {
   const {calls} = await started({cron: TICK, scheduledTime: at(3, 0).getTime()}, {...ON, GITHUB_TOKEN: 'site-token', GITHUB_REPO: 'GarryOne/jobadabra-web'});
-  assert.deepEqual(calls.map(call => [call.workflow, call.inputs?.nightly, call.repo, call.token]), [['desktop.yml', 'true', 'GarryOne/jobadabra', 'timers-token'], ['pr-verdict.yml', undefined, 'GarryOne/jobadabra', 'timers-token']]);
-  assert.deepEqual((await started({cron: TICK, scheduledTime: at(2, 0).getTime()})).calls.map(call => call.workflow), ['pr-verdict.yml'], '03:00 Zurich: no nightly');
-  assert.deepEqual((await started({cron: TICK, scheduledTime: at(21, 0).getTime()})).calls.map(call => [call.workflow, call.inputs?.night_pass]), [['pr-verdict.yml', undefined], ['e2e.yml', '1/5']], 'the first night pass');
-  assert.deepEqual((await started({cron: TICK, scheduledTime: at(21, 40).getTime()})).calls.map(call => [call.workflow, call.inputs?.scheduled]), [['pr-verdict.yml', undefined], ['self-heal-stats.yml', 'true']], 'the stats every third hour at :40');
+  assert.deepEqual(calls.map(call => [call.workflow, call.inputs?.nightly, call.repo, call.token]), [['desktop.yml', 'true', 'GarryOne/jobadabra', 'timers-token'], ['pr-verdict.yml', undefined, 'GarryOne/jobadabra', 'timers-token'], ['pr-labels.yml', undefined, 'GarryOne/jobadabra', 'timers-token']]);
+  assert.deepEqual((await started({cron: TICK, scheduledTime: at(2, 0).getTime()})).calls.map(call => call.workflow), ['pr-verdict.yml', 'pr-labels.yml'], '03:00 Zurich: no nightly');
+  assert.deepEqual((await started({cron: TICK, scheduledTime: at(21, 0).getTime()})).calls.map(call => [call.workflow, call.inputs?.night_pass]), [['pr-verdict.yml', undefined], ['pr-labels.yml', undefined], ['e2e.yml', '1/5']], 'the first night pass');
+  assert.deepEqual((await started({cron: TICK, scheduledTime: at(21, 40).getTime()})).calls.map(call => [call.workflow, call.inputs?.scheduled]), [['pr-verdict.yml', undefined], ['pr-labels.yml', undefined], ['self-heal-stats.yml', 'true']], 'the stats every third hour at :40');
   assert.deepEqual((await started({cron: OWN_CRON, scheduledTime: at(23, 47).getTime()})).calls.map(call => [call.workflow, call.inputs?.scheduled]), [['e2e.yml', 'true']], 'the three-a-day e2e');
 });
 
