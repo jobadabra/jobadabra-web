@@ -32,3 +32,14 @@ test('open code is "public for now", never an open-source promise', () => {
   for (const name of ['trust', 'faq', 'pricing', 'compare']) assert.match(page(name), /public for now/, name);
   for (const name of ['trust', 'faq', 'pricing', 'compare', 'features']) assert.doesNotMatch(page(name), /open[- ]source|source available/i, name);
 });
+
+// Guard: every language the app ships is named on the site (owner, 7 Nov 2026: "add what languages we support"): Home, Features and FAQ name each one in desktop/i18n's list, so a new language fails here until the pages list it.
+test('Home, Features and FAQ name every language the app comes in', async () => {
+  const {SUPPORTED_LOCALES, LANGUAGE_NAMES} = await import('../../../desktop/i18n/index.js');
+  const names = SUPPORTED_LOCALES.map(code => LANGUAGE_NAMES[code]);
+  for (const name of ['index', 'features', 'faq']) {
+    const html = page(name);
+    for (const each of names) assert.ok(html.includes(each), `${name}: does not name ${each}`);
+    if (name !== 'features') assert.match(html, new RegExp(`\\b${names.length} languages\\b`), `${name}: the count ${names.length} is not the list's length`);   // Features lists the names without a count
+  }
+});
