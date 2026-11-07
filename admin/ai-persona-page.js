@@ -4,7 +4,7 @@
 // Guard: test/unit/admin/ai/ai-persona.test.js.
 import {esc} from '../shared/html.js';
 import {PUBLIC_REPO} from '../shared/repos.js';
-import {KEEP_DAYS} from '../shared/agent-runs.js';
+import {goalVerdictOf, KEEP_DAYS} from '../shared/agent-runs.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {BAND_STYLE, verdictBand} from './verdict-band.js';
 
@@ -83,7 +83,7 @@ export function tidy(record, hasVideo = false) {
     return {...note, shot: Number.isInteger(shot) && shot >= 1 && shot <= 99 ? shot : 0, playable: secs > 0 && Number.isFinite(sec) && sec >= 0 && sec <= secs, videoSec: sec};
   });
   return {secs, notes, trace: list(record.trace), goals: list(record.goals).map(goal => ({...goal,
-    verdict: goal.verdict === 'could-not-finish' && (goal.steps === 0 || goal.steps === '0') && goal.summary === 'the session ended before this goal' ? 'not-started' : (own(VERDICT, goal.verdict) ? goal.verdict : 'unknown')}))};
+    verdict: own(VERDICT, goalVerdictOf(goal)) ? goalVerdictOf(goal) : 'unknown'}))};
 }
 
 /** The pressed control as a box over its screenshot, in percent of the window the agent had (so it fits at any width); '' when the note has none. */
