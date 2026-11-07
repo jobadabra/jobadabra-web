@@ -1,5 +1,10 @@
 // Bundled end-user mail copy; explicit locale selection precedes interpolation and raw recipient data stays unchanged.
 export const messages = {
+  "heldDigestSubject": {
+    "one": "Noutăți Jobadabra pentru tine: {count} element",
+    "few": "Noutăți Jobadabra pentru tine: {count} elemente",
+    "other": "Noutăți Jobadabra pentru tine: {count} de elemente"
+  },
   "confirmReminderHtml": "{confirm} ca să primești fiecare email imediat (până atunci, unul pe zi).",
   "confirmReminderText": "\nConfirmă adresa de email ca să primești fiecare email imediat (până atunci, unul pe zi): {url}",
   "confirmAction": "Confirmă adresa de email",

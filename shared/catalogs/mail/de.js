@@ -1,5 +1,9 @@
 // Bundled end-user mail copy; explicit locale selection precedes interpolation and raw recipient data stays unchanged.
 export const messages = {
+  "heldDigestSubject": {
+    "one": "Dein Jobadabra-Update: {count} Eintrag",
+    "other": "Dein Jobadabra-Update: {count} Einträge"
+  },
   "confirmReminderHtml": "{confirm}, um jede E-Mail sofort zu erhalten (bis dahin eine pro Tag).",
   "confirmReminderText": "\nBestätige deine E-Mail-Adresse, um jede E-Mail sofort zu erhalten (bis dahin eine pro Tag): {url}",
   "confirmAction": "Bestätige deine E-Mail-Adresse",

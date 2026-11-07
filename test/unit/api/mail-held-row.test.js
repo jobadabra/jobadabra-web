@@ -6,6 +6,8 @@ import {test} from 'node:test';
 import {address, notify} from '../../../api/account-email.js';
 import {choices} from '../../../api/mail-choices.js';
 import {sendDigests} from '../../../api/mail-held.js';
+import {mailText} from '../../../shared/mail-copy.js';
+import {NOTIFICATION_LANGUAGES} from '../../../shared/notification-language.js';
 import {tokenFor} from '../../../shared/guard.js';
 import {APP_ROWS, resetRuleCache} from '../../../shared/mail-registry.js';
 
@@ -122,4 +124,36 @@ test('an account that cannot be read answers 503, never "nothing chosen": the ap
   }
   e.STATS.prepare = real;
   assert.equal((await (await call(choices, e, 'GET')).json()).rows.find(row => row.id === 'app-matches').choice, 'off');
+});
+
+
+test('held digest resolves one recipient language for its deduplicated subject and frame; single supplied subject stays raw', async t => {
+  const trips = [];
+  t.mock.method(globalThis, 'fetch', (...args) => { trips.push(args); throw new Error('No external transport allowed'); });
+  t.after(() => assert.deepEqual(trips, [], 'caught delivery failures never hide network access'));
+  const subjects = {en: 'Your Jobadabra update: 2 items', de: 'Dein Jobadabra-Update: 2 Einträge', fr: 'Votre résumé Jobadabra : 2 éléments', it: 'Il tuo aggiornamento Jobadabra: 2 elementi', es: 'Tu actualización de Jobadabra: 2 elementos', ro: 'Noutăți Jobadabra pentru tine: 2 elemente', ru: 'Ваши новости Jobadabra: 2 пункта'};
+  for (const locale of [...NOTIFICATION_LANGUAGES, 'missing-cache']) {
+    const {e, sent} = await person([...BASE, '0139_mail_held_row.sql', ...(locale === 'missing-cache' ? [] : ['0141_notification_language.sql'])]);
+    t.after(() => e.STATS.db.close());
+    if (locale !== 'missing-cache') e.STATS.db.prepare('UPDATE pro_accounts SET notification_language = ?').run(locale);
+    const raw = '工程師 Müller {count} <>&"', other = 'Second raw item {count}';
+    await wait(e, raw); await wait(e, raw); await wait(e, other);
+    const prepare = e.STATS.prepare; let reads = 0;
+    e.STATS.prepare = sql => { if (sql.startsWith('SELECT notification_language ')) reads++; return prepare(sql); };
+    assert.deepEqual(await sendDigests(e, morning), {sent: 1, kept: 0});
+    const language = locale === 'missing-cache' ? 'en' : locale;
+    assert.equal(sent[0].subject, subjects[language]);
+    assert.ok(sent[0].html.includes('lang="' + language + '"'));
+    assert.ok(sent[0].text.includes(mailText(language, 'frameReply')));
+    assert.ok(sent[0].text.indexOf(raw) < sent[0].text.indexOf(other));
+    assert.equal(sent[0].text.split(raw).length - 1, 1, 'duplicate raw body appears once');
+    assert.equal(reads, 1, 'one locale lookup for the actual digest delivery');
+    assert.equal(held(e), 0);
+    sent.length = 0; reads = 0;
+    await wait(e, raw); await wait(e, raw);
+    assert.deepEqual(await sendDigests(e, morning), {sent: 1, kept: 0});
+    assert.equal(sent[0].subject, raw);
+    assert.ok(sent[0].html.includes('lang="' + language + '"'));
+    assert.equal(reads, 1); assert.equal(held(e), 0);
+  }
 });

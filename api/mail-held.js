@@ -1,6 +1,7 @@
 // The e-mail digest of everything that is not a new-matches mail (owner, 17 Oct 2026): mail-check results, insights, finished jobs wait here, and the daily cron sends each account
 // ONE mail (weekly on Mondays for an account that chose weekly). New matches and interview notices never wait: api/account-email.js sends them at once. Guard: test/unit/api/account-email.test.js.
 import {addrOf, confirmLink, heldRefusal, send, sendTestMail} from '../shared/mail.js';
+import {mailText} from '../shared/mail-copy.js';
 import {notificationLocale} from '../shared/notification-language.js';
 import {recipientNotificationLanguage} from '../shared/notification-preference.js';
 import {choiceRefusal} from '../shared/mail-choices.js';
@@ -66,10 +67,10 @@ async function verdicts(env, account, rows, now) {
 }
 
 /** The digest of `rows`, oldest first. A mail held twice with the same words is printed once, and counts once. */
-function digestOf(rows) {
+function digestOf(rows, locale = 'en') {
   // Why (6 Nov 2026, the owner's inbox): the Focus reminders of 11:00, 15:00 and 19:00 said the same, and the mail printed the block three times under "3 items". Here, not in hold(): installed apps keep sending them.
   const once = [...new Map(rows.map(row => [JSON.stringify([row.subject, row.text]), row])).values()];
-  const subject = once.length === 1 ? once[0].subject : `Your Jobadabra update: ${once.length} items`;
+  const subject = once.length === 1 ? once[0].subject : mailText(locale, 'heldDigestSubject', {count: once.length});
   const buttons = once.flatMap(row => JSON.parse(row.buttons || '[]')).slice(0, 6);
   return {subject, html: once.map(row => row.html).join('<hr>'), text: once.map(row => row.text).join('\n\n---\n\n'), buttons};
 }
@@ -88,7 +89,8 @@ export async function sendDigests(env, now = new Date()) {
     for (const [id, reason] of refused) if (reason) await env.STATS.prepare('DELETE FROM mail_held WHERE account = ? AND mail_row = ?').bind(account.id, id).run();
     const rows = held.filter(row => !refused.get(row.mail_row));
     if (!rows.length) continue;
-    const result = await deliver(env, account, digestOf(rows), now);
+    const locale = await recipientNotificationLanguage(env, await addrOf(account.email));
+    const result = await deliver(env, account, digestOf(rows, locale), now, {locale});
     if (result.ok || ['unsubscribed', 'suppressed', 'unconfirmed_stopped'].includes(result.reason)) {   // sent, or the person does not want it: either way it is not held again
       await env.STATS.prepare(`DELETE FROM mail_held WHERE account = ? AND id <= ?`).bind(account.id, rows[rows.length - 1].id).run();
       if (result.ok) done.sent++;
