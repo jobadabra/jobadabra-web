@@ -6,10 +6,10 @@ import {BAND_STYLE, verdictBand} from './verdict-band.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {COUNTERS} from './search-night-counters.js';
 import {EMPLOYER_SITES, HISTORY, SPREADS, reasonWords} from './search-night-judge.js';
-import {trendSection} from './search-night-trend.js';
+import {TREND_STYLE, trendSection} from './search-night-trend.js';
 import {VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 
-export const NIGHT_CSS = `${CHIP_STYLE}${BAND_STYLE}${VIZ_STYLE}
+export const NIGHT_CSS = `${CHIP_STYLE}${BAND_STYLE}${VIZ_STYLE}${TREND_STYLE}
 .nstrip{display:flex;align-items:flex-end;gap:3px;height:56px}.nstrip i{display:block;flex:1;background:#5fb3ff;opacity:.75;border-radius:2px 2px 0 0}.nstrip i.weak{background:#ff8a80;opacity:1}
 .nwrap{display:flex;flex-direction:column;gap:6px}.nsteps{display:flex;gap:4px;flex-wrap:wrap}`;
 

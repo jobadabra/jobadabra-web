@@ -4,13 +4,16 @@
 // Why (6 Nov 2026, as admin/product-quality-search.js): nights with a different number of candidates are different series, never one line: 6 candidates found 4 vs 18 found 4 is not the same night, and the judge
 // compares a night only with nights of its own count. One chart pair per count, the newest count first. Pure. Guard: test/unit/admin/search/search-night-trend.test.js.
 import {esc} from '../shared/html.js';
-import {chip} from './chip.js';
+import {CHIP_STYLE, chip} from './chip.js';
 import {VIZ_TOOLTIP, columns, figure, line} from './viz.js';
 import {reasonWords} from './search-night-judge.js';
 
 const DAY = 86400000;
 const isNum = value => typeof value === 'number' && Number.isFinite(value);
 const days = (from, to) => { const out = []; for (let at = Date.parse(`${from}T00:00:00Z`); at <= Date.parse(`${to}T00:00:00Z`); at += DAY) out.push(new Date(at).toISOString().slice(0, 10)); return out; };
+
+/** The card's own style: the chips it draws (the page keeps its own CHIP_STYLE; this guard, test/unit/shared/admin-chips.test.js, wants the style named in the file that draws chips). */
+export const TREND_STYLE = `${CHIP_STYLE}`;
 
 /**
  * The nights grouped by candidate count, newest count first: [{total, current, days: [{day, night | null}]}], each group's days continuous from its first to its last night (a day with no stored night is a gap, never a 0).
