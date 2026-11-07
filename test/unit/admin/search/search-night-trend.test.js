@@ -56,3 +56,19 @@ test('a night with no right-jobs count leaves a gap in the jobs line, never a ze
   const html = groupHtml(groups(judgeAll([missing, night('2026-11-06', 6, 5, 0)]))[0]);
   assert.match(html, /right local jobs not counted/);
 });
+
+test('the tooltip script is on the tab once, so a point shows its numbers', () => {
+  const html = nightSection(judged);
+  assert.equal((html.match(/data-tip="2026-11-07 · found 8 of 18/g) || []).length, 2);   // the columns and the line carry the same words
+  assert.match(html, /<script>[^<]*data-tip/);
+  assert.equal((trendSection(judged).match(/<script>/g) || []).length, 1);
+});
+
+test('a count that comes back after another is not drawn as a missing night, and a small jobs axis has whole numbers only', () => {
+  const back = judgeAll([night('2026-11-05', 18, 15, 0), night('2026-11-04', 6, 1, 0, 1), night('2026-11-03', 18, 15, 0)]);
+  const html = trendSection(back);
+  assert.match(html, /2026-11-04 · no night with 18 candidates/);
+  assert.doesNotMatch(html, /2026-11-04 · no night stored/);
+  const small = groupHtml(groups(judgeAll([night('2026-11-02', 6, 1, 0, 1), night('2026-11-01', 6, 1, 0, 1)]))[0]);
+  assert.doesNotMatch(small, />0\.5</);
+});

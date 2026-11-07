@@ -233,7 +233,9 @@ test('the tab: the newest night per persona as chips, the head, what ran out of 
   assert.match(empty, /No night uploaded yet/);
   assert.doesNotMatch(empty, /0 of 6|NaN|undefined/);
   const hostile = {...six, head: '<script>1</script>', rows: six.rows.map(item => ({...item, label: '<img src=x onerror=1>', why: '<b>why</b>', ranOut: ['<i>step</i>']}))};
-  assert.doesNotMatch(nightSection(judgeAll([hostile])), /<script>|<img |<b>why|<i>step/);
+  const hostileHtml = nightSection(judgeAll([hostile]));
+  assert.doesNotMatch(hostileHtml, /<script>1<|<img |<b>why|<i>step/);
+  assert.equal((hostileHtml.match(/<script>/g) || []).length <= 1, true, 'the only script is the chart tooltip');
 });
 
 test('the Job search page has the tab: linked in the tab row and drawn when chosen', () => {

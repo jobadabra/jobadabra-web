@@ -49,12 +49,12 @@ export function columns(days, series, {unit = '', labelEvery = 5, whole = false}
 
 /**
  * One series as a line with a dot per day; the page's one tooltip gives each day's numbers. points: [{day: 'YYYY-MM-DD', value: number | null, tip}] oldest first.
- * `percent`: the axis is fixed 0-100% (a share of something); else it is a money/count axis from 0. A null value breaks the line: a day where nothing ran is a gap, never 0%.
+ * `percent`: the axis is fixed 0-100% (a share of something); else it is a money/count axis from 0; `whole`: whole-number ticks only (jobs, bugs: never half a job, as `columns`). A null value breaks the line: a day where nothing ran is a gap, never 0%.
  * Why (owner, 5 Nov 2026, sketch: "line: green % per kind"; no second axis): a share and a minutes count are two charts, so this draws one series on its own axis.
  */
-export function line(points, {tone = 's1', percent = true, name = '', labelEvery = 5} = {}) {
+export function line(points, {tone = 's1', percent = true, name = '', labelEvery = 5, whole = false} = {}) {
   if (!points.some(point => point.value != null)) return '';
-  const ticks = percent ? [0, 25, 50, 75, 100] : moneyTicks(Math.max(...points.map(point => point.value || 0))), max = ticks[ticks.length - 1] || 1, suffix = percent ? '%' : '';
+  const ticks = percent ? [0, 25, 50, 75, 100] : (whole ? countTicks : moneyTicks)(Math.max(...points.map(point => point.value || 0))), max = ticks[ticks.length - 1] || 1, suffix = percent ? '%' : '';
   const pw = W - M.l - M.r, ph = H - M.t - M.b, y = value => M.t + ph - (ph * value) / max, slot = pw / points.length, x = index => M.l + slot * index + slot / 2;
   const grid = ticks.map(tick => `<line x1="${M.l}" x2="${W - M.r}" y1="${y(tick).toFixed(1)}" y2="${y(tick).toFixed(1)}" class="vz-grid"/><text x="${M.l - 6}" y="${(y(tick) + 4).toFixed(1)}" text-anchor="end" class="vz-axis">${+tick.toFixed(2)}${suffix}</text>`).join('');
   const runs = [];   // consecutive days with a value; a gap starts a new run
