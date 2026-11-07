@@ -64,9 +64,16 @@ test('the two choices say what each gives, and the Store is the first one', () =
   const site = read('site.js');
   const choices = site.slice(site.indexOf('const CHOICES'), site.indexOf('const splits'));
   assert.ok(choices.indexOf('Microsoft Store') < choices.indexOf('Direct download (.exe)'), 'the main click (the Store) is listed first');
-  assert.match(choices, /no warning/);
-  assert.match(choices, /1–3 days/);
-  assert.match(choices, /newest version now/);
-  assert.match(choices, /Windows asks once/);
-  assert.match(choices, /updates itself in the app/);
+  assert.match(choices, /No warning/);
+  assert.match(choices, /about once a week, after Microsoft’s review/, 'the Store is weekly (owner, 7 Nov 2026), with no promise of a weekday');
+  assert.match(choices, /Every update the day it ships/, 'the .exe is where a person goes for daily updates');
+  assert.match(choices, /Windows asks once to confirm/);
+  assert.doesNotMatch(choices, /1–3 days/, 'the Store no longer promises a 1–3 day review: it gets one version a week');
+  assert.match(read('download.html'), /updates about once a week[^<]*Want every update the day it ships\? Use the \.exe/, 'the download page says the same');
+});
+
+test('a menu that an ancestor would clip opens in the flow (owner, 7 Nov 2026: the pricing ticket cut it to one line); the browser check is test/integration/windows-menu-open.test.js', () => {
+  assert.match(read('site.js'), /clippedByAncestor\(menu\)\) wrap\.classList\.add\('flow'\)/);
+  assert.match(read('site.js'), /wrap\.classList\.remove\('flow'\)/, 'cleared before measuring, like .right');
+  assert.match(read('home.css'), /\.dl-split\.flow \.dl-menu\.right \{[^}]*position: static/);
 });

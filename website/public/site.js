@@ -23,11 +23,11 @@
 
   // Windows download choice (owner, 31 Oct 2026: "offer on the website, a dropdown, to download the Windows version as a binary, or from the Windows Store"). Every Windows button is the Store
   // link (as it was) followed by its own `a.dl-exe` link with the same ?from=; here the pair becomes one split button: the main button stays the Store, the caret opens both choices. Both
-  // links are counted by their own route (/download/windows, /download/windows-exe). Without this script both links stay on the page. The words live only here.
+  // links are counted by their own route (/download/windows, /download/windows-exe). Without this script both links stay on the page. The words live only here (Store updates weekly, the .exe daily: owner, 7 Nov 2026, "to release less often on Microsoft store, and guide our users if they want more frequent updates, to download the exe").
   // Guarded by test/unit/website/windows-choice.test.js.
   const CHOICES = [
-    {title: 'Microsoft Store', note: 'Installs and updates with no warning. New versions arrive after Microsoft’s review (1–3 days).'},
-    {title: 'Direct download (.exe)', note: 'The newest version now. Windows asks once (More info → Run anyway). It updates itself in the app.'}];
+    {title: 'Microsoft Store', note: 'No warning. Updates about once a week, after Microsoft’s review.'},
+    {title: 'Direct download (.exe)', note: 'Every update the day it ships. Windows asks once to confirm.'}];
   const splits = [];
   for (const store of document.querySelectorAll('a[href^="/download/windows?"]')) {
     const exe = store.nextElementSibling;
@@ -50,7 +50,18 @@
     exe.remove();
     splits.push({wrap, caret, menu});
   }
-  const closeChoice = ({caret, menu}) => { menu.hidden = true; caret.setAttribute('aria-expanded', 'false'); };
+  const clippedByAncestor = menu => {
+    const box = menu.getBoundingClientRect();
+    for (let el = menu.parentElement; el && el !== document.documentElement; el = el.parentElement) {
+      const style = getComputedStyle(el);
+      if (style.overflowX === 'visible' && style.overflowY === 'visible') continue;
+      const edge = el.getBoundingClientRect();
+      if (box.bottom > edge.bottom + 0.5 || box.top < edge.top - 0.5 || box.right > edge.right + 0.5 || box.left < edge.left - 0.5) return true;
+    }
+    return false;
+  };
+  const closeChoice = ({wrap, caret, menu}) => { wrap.classList.remove('flow'); menu.hidden = true;   // Why (7 Nov 2026, review): a closed menu must not leave the wrapper a grid, or the button jumps after its first use
+    caret.setAttribute('aria-expanded', 'false'); };
   for (const split of splits) {
     const {wrap, caret, menu} = split;
     caret.addEventListener('click', () => {
@@ -59,8 +70,12 @@
       if (!open) return;
       menu.hidden = false;
       caret.setAttribute('aria-expanded', 'true');
-      menu.classList.remove('right');   // Why (#243, Gitar): measure from the default position, else the last open's .right makes the check alternate
+      wrap.classList.remove('flow');   // Why (#243, Gitar): measure from the default position, else the last open's .right/.flow makes the check alternate
+      menu.classList.remove('right');
       menu.classList.toggle('right', menu.getBoundingClientRect().right > innerWidth - 12);   // never past the screen's edge
+      // Why (7 Nov 2026, owner: "this dropdown is buggy on the pricing page"): a card with `overflow: hidden` (the pricing ticket, the closing panel) cut the floating menu to its first line.
+      // Wherever any ancestor would clip it, the menu opens in the flow under the button instead (CSS .dl-split.flow, as on a phone): no page lists the cards that clip.
+      if (clippedByAncestor(menu)) wrap.classList.add('flow');
     });
     wrap.addEventListener('keydown', event => { if (event.key === 'Escape' && !menu.hidden) { closeChoice(split); caret.focus(); } });
     wrap.addEventListener('focusout', event => { if (!menu.hidden && !wrap.contains(event.relatedTarget)) closeChoice(split); });
