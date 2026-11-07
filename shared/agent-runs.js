@@ -32,9 +32,16 @@ async function prune(bucket, now) {
 // What the run list shows, kept beside the record as small metadata (an R2 object's metadata is capped at 2 KB): never a note's words.
 const summaryOf = record => {
   const goals = Array.isArray(record.goals) ? record.goals : [], count = verdict => String(goals.filter(goal => goal?.verdict === verdict).length);
+  const known = new Set(['worked', 'bug', 'doubts', 'could-not-finish', 'not-started']);
+  const optionalCost = key => {
+    const value = record.cost?.[key];
+    return value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 ? String(Number(value)) : undefined;
+  };
+  const countedTokens = optionalCost('countedTokens'), capTokens = optionalCost('capTokens');
   return {at: String(record.at || '').slice(0, 30), kind: String(record.kind || '').slice(0, 12), commit: String(record.commit || '').slice(0, 12), plan: String(record.plan || '').slice(0, 40),
-    worked: count('worked'), bug: count('bug'), doubts: count('doubts'), stuck: count('could-not-finish'), notes: String(Array.isArray(record.notes) ? record.notes.length : 0),
-    calls: String(Number(record.cost?.calls) || 0), tokens: String(Number(record.cost?.tokens) || 0), minutes: String(Number(record.cost?.minutes) || 0)};
+    total: String(goals.length), stopped: String(record.stopped || '').slice(0, 200), worked: count('worked'), bug: count('bug'), doubts: count('doubts'), stuck: count('could-not-finish'), notStarted: count('not-started'),
+    unknown: String(goals.filter(goal => !known.has(goal?.verdict)).length), notes: String(Array.isArray(record.notes) ? record.notes.length : 0),
+    calls: String(Number(record.cost?.calls) || 0), tokens: String(Number(record.cost?.tokens) || 0), ...(countedTokens === undefined ? {} : {countedTokens}), ...(capTokens === undefined ? {} : {capTokens}), minutes: String(Number(record.cost?.minutes) || 0)};
 };
 
 // PUT /agent/run?run=<github run id>&file=<run.json|video.webm|shot-N.png>: the raw file as the body. A wrong or missing key is a 404, as the other publish keys.
