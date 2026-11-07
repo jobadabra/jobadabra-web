@@ -72,6 +72,22 @@ test('unconfirmed user test mail renders with recipient language and explicit me
   assert.equal(e.STATS.db.prepare('SELECT notification_language AS value FROM pro_accounts').get().value, 'ru');
 });
 
+test('a missing language migration never interrupts address registration, first welcome or cadence', async t => {
+  const {e, sent} = setup();
+  e.STATS.db.exec('ALTER TABLE pro_accounts DROP COLUMN notification_language');
+  const warnings = [];
+  t.mock.method(console, 'warn', (...args) => warnings.push(args));
+  t.mock.method(TEMPLATES.welcome, 'subject', data => `welcome:${data.locale}`);
+  assert.equal((await call(address, e, 'install-rollout', 'PUT', {email: 'rollout@example.com', language: 'de', cadence: 'weekly'})).ok, true);
+  assert.equal(sent[0].subject, 'welcome:de', 'current message context does not require a successful cache write');
+  const saved = await call(address, e, 'install-rollout', 'GET');
+  assert.equal(saved.email, 'rollout@example.com');
+  assert.equal(saved.cadence, 'weekly');
+  assert.deepEqual(warnings, [['notification language cache not refreshed']]);
+  assert.deepEqual(await call(language, e, 'install-rollout', 'PUT', {language: 'de'}), {status: 503, ok: false, error: 'language_not_saved'});
+  assert.equal(sent.length, 1, 'a failed dedicated refresh sends nothing');
+});
+
 test('fromTelegram keeps bold, italics and https links; shows every other tag as text; closes what is left open', () => {
   const {html, text} = fromTelegram('<b>Hi <script>alert(1)</script></b> <a href="javascript:x">bad</a> <a href="https://a.co/?x=1&amp;y=2">ok</a> <i>open');
   assert.ok(html.includes('&lt;script&gt;') && !html.includes('<script') && !html.includes('javascript:'));
