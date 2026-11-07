@@ -6,7 +6,7 @@
 // All three agree on 7 days, so the table is 7 days and the daily trend is the same 7-day count at each of the last 14 snapshot days (admin/report-only-finders.js realByDay).
 // Pure: rows in, rows or HTML out. Guard: test/unit/admin/testing-methods-cost.test.js.
 import {esc} from '../shared/html.js';
-import {chip} from './chip.js';
+import {CHIP_STYLE, chip} from './chip.js';
 import {columns, figure} from './viz.js';
 import {realByDay} from './report-only-finders.js';
 import {workflowRows} from './ai-workflow-tokens.js';
@@ -72,9 +72,13 @@ export function costRows({healing, tally, repo = '', minutesOf = () => null, now
 
 /** The trend: `days` (oldest first) -> [{day, values: [real bugs in the 7 days up to that day, per method | null], tip}] for the methods' columns; null = no snapshot that day. */
 export function trendDays(snapshots, days, methods = METHOD_COST) {
-  const series = methods.map(method => realByDay(snapshots, days, method.detector).series);
-  return days.map((day, i) => ({day, values: series.map(one => one[i].value),
-    tip: `${day} · real bugs in the 7 days up to it: ${methods.map((method, at) => `${method.title} ${series[at][i].value ?? 'no snapshot'}`).join(' · ')}`}));
+  // Why (Gitar on #487): a method with `also` sources (People) is summed over all of them, as costRows does, so the chart and the table's Real column agree; a day with no snapshot stays null.
+  const series = methods.map(method => {
+    const all = [method.detector, ...(method.also || [])].map(name => realByDay(snapshots, days, name).series);
+    return days.map((_, i) => (all[0][i].value == null ? null : sum(all, one => one[i].value)));
+  });
+  return days.map((day, i) => ({day, values: series.map(one => one[i]),
+    tip: `${day} · real bugs in the 7 days up to it: ${methods.map((method, at) => `${method.title} ${series[at][i] ?? 'no snapshot'}`).join(' · ')}`}));
 }
 
 const tokensWord = value => (value >= 1e6 ? `${(value / 1e6).toFixed(1)}M` : value >= 1e3 ? `${Math.round(value / 1e3)}k` : String(Math.round(value)));
@@ -88,7 +92,7 @@ const precisionCell = row => (row.precision == null ? '<td class="n muted">—</
 const rowHtml = row => `<tr><td style="white-space:nowrap">${row.icon} ${esc(row.title)}${row.warn ? ` ${chip('▲ no real bug', 'warn')}` : ''}${row.rides ? ` <span class="muted small" title="no run of its own">rides ${esc(row.rides)}</span>` : ''}</td>
 <td class="n"><b>${row.real}</b></td><td class="n">${row.falsePositive}</td>${precisionCell(row)}${cell(row.tokens, tokensWord)}${cell(row.minutes, minutesWord)}${perBugCell(row.tokensPerBug, tokensWord)}${perBugCell(row.minutesPerBug, minutesWord)}</tr>`;
 
-export const COST_STYLE = `.mcost{background:#14181d;border:1px solid #262c33;border-radius:14px;padding:12px 16px;margin:12px 0}.mcost h2{margin:0 0 2px;font-size:17px}.mcost table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+export const COST_STYLE = `${CHIP_STYLE}.mcost{background:#14181d;border:1px solid #262c33;border-radius:14px;padding:12px 16px;margin:12px 0}.mcost h2{margin:0 0 2px;font-size:17px}.mcost table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
 .mcost th{text-align:right;font-weight:600;color:#8d949c;font-size:12px;padding:4px 8px}.mcost th:first-child,.mcost td:first-child{text-align:left}.mcost td{padding:6px 8px;border-top:1px solid #262c33}.mcost td.n{text-align:right;white-space:nowrap}
 .mc-bar{display:inline-block;width:46px;height:8px;border-radius:4px;background:#262c33;vertical-align:middle;overflow:hidden}.mc-bar i{display:block;height:8px;background:#199e70}.mcost .small{font-size:12px}`;
 

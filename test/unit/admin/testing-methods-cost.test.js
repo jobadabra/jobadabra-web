@@ -130,3 +130,9 @@ test('a tally with no day in the week is unknown tokens, never 0; a workflow abs
   assert.equal(quiet.persona.tokens, 0);
   assert.equal(quiet['code-review'].tokens, 10);
 });
+
+test('the People trend adds the same sources as the People row, so the chart and the table agree', () => {
+  const days = ['2026-11-07'], at = METHOD_COST.findIndex(method => method.id === 'people');
+  assert.equal(trendDays([{day: '2026-11-07', ...healing}], days)[0].values[at], rows().people.real);   // 4 unlabelled + 1 desktop-tester
+  assert.equal(trendDays([], days)[0].values[at], null);
+});
