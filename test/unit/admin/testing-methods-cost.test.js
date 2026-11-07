@@ -5,12 +5,12 @@ import {test} from 'node:test';
 import {DETECTORS} from '../../../desktop/e2e/lib/selfheal-stats.mjs';
 import {METHODS} from '../../../admin/testing-overview-methods.js';
 import {resolve} from '../../../admin/testing-overview-data.js';
-import {costCard, costRows, lastDays, METHOD_COST, trendDays} from '../../../admin/testing-methods-cost.js';
+import {costCard, costRows, lastDays, METHOD_COST, RAW_SOURCES, staleDay, trendDays} from '../../../admin/testing-methods-cost.js';
 
 const now = new Date('2026-11-07T12:00:00Z'), repo = 'GarryOne/jobadabra';
 const detector = (name, fixed, queued, falsePositive, harness = 0, filed = fixed + queued + falsePositive + harness) => ({detector: name, filed, fixed, queued, falsePositive, harness});
 const healing = {periods: {last7: {byDetector: [detector('AI user agent', 3, 2, 5), detector('AI code review', 8, 0, 5), detector('AI screenshot review', 2, 0, 8, 2), detector('Layout and DOM checks', 0, 0, 0, 0, 2),
-  detector('Failed test steps', 0, 0, 0, 0, 3), detector('other', 4, 0, 1)]}}};
+  detector('Failed test steps', 0, 0, 0, 0, 3), detector('other', 4, 0, 1), detector('desktop-tester', 1, 0, 0), detector('session', 9, 0, 0)]}}};
 const entry = tokens => ({calls: 1, ok: 1, tokens, ms: 1, engines: {codex: 1}});
 const tally = {days: {'2026-11-07': {'jobadabra/ai-user-agents.yml': entry(500000), 'jobadabra/code-review.yml': entry(80000), 'jobadabra/ui-findings.yml': entry(60000), 'jobadabra-web/code-review.yml': entry(9e9)},
   '2026-11-01': {'jobadabra/ai-user-agents.yml': entry(500000)}, '2026-10-30': {'jobadabra/ai-user-agents.yml': entry(7e9)}}};
@@ -56,7 +56,7 @@ test('layout checks and failed steps ride another workflow (no cost of their own
   const by = rows();
   for (const id of ['layout', 'steps']) { assert.equal(by[id].tokens, null); assert.equal(by[id].minutes, null); assert.equal(by[id].tokensPerBug, null); assert.equal(by[id].warn, true); assert.ok(by[id].rides); }
   assert.equal(by.layout.filed, 2);
-  assert.equal(by.people.real, 4);
+  assert.equal(by.people.real, 5);   // no source label + desktop-tester; a session's own issues are not people
   assert.equal(by.people.free, true);
   assert.equal(by.people.warn, false);
   assert.equal(by.people.tokens, null);
@@ -98,8 +98,9 @@ test('the card is a table row per method with the numbers in it', () => {
 });
 
 test('the catalogue names real detectors and real workflows', () => {
-  const labels = new Set([...Object.values(DETECTORS), 'other']);
-  for (const method of METHOD_COST) assert.ok(labels.has(method.detector), `${method.id}: "${method.detector}" is not a label of selfheal-stats DETECTORS`);
+  const labels = new Set([...Object.values(DETECTORS), ...RAW_SOURCES]);
+  for (const method of METHOD_COST) for (const name of [method.detector, ...(method.also || [])]) assert.ok(labels.has(name), `${method.id}: "${name}" is not a label of selfheal-stats DETECTORS`);
+  for (const method of []) assert.ok(labels.has(method.detector), `${method.id}: "${method.detector}" is not a label of selfheal-stats DETECTORS`);
   for (const method of METHODS.filter(item => item.bugs?.detector)) assert.ok(labels.has(method.bugs.detector), `${method.id}: "${method.bugs.detector}" is not a label of selfheal-stats DETECTORS`);
   if (existsSync('.github/workflows')) for (const file of METHOD_COST.flatMap(method => [...method.wf, method.rides].filter(Boolean))) assert.ok(existsSync(`.github/workflows/${file}`), `${file} is a public workflow`);
   assert.equal(new Set(METHOD_COST.map(method => method.id)).size, METHOD_COST.length);
@@ -111,4 +112,21 @@ test('the overview model carries the card rows from its stored data', () => {
   assert.equal(by['code-review'].minutes, 40);
   assert.equal(by.persona.minutes, null);   // the schedules snapshot does not list ai-user-agents.yml here
   assert.equal(model.cost.trend.length, 14);
+});
+
+test('a stale newest snapshot gives no rows and the card says so (its counts would be a week that is over)', () => {
+  const old = {day: '2026-11-03', ...healing};
+  assert.equal(staleDay(old, now), '2026-11-03');
+  assert.equal(staleDay({day: '2026-11-06', ...healing}, now), '');
+  assert.deepEqual(costRows({healing: old, tally, repo, now}), []);
+  assert.match(costCard([], [], '2026-11-03'), /snapshot is from 2026-11-03/);
+});
+
+test('a tally with no day in the week is unknown tokens, never 0; a workflow absent from a readable week counted nothing', () => {
+  const empty = rows({tally: {days: {}}});
+  assert.equal(empty.persona.tokens, null);
+  assert.equal(empty.persona.tokensPerBug, null);
+  const quiet = rows({tally: {days: {'2026-11-07': {'jobadabra/code-review.yml': entry(10)}}}});
+  assert.equal(quiet.persona.tokens, 0);
+  assert.equal(quiet['code-review'].tokens, 10);
 });

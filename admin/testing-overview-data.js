@@ -15,7 +15,7 @@ import {daysTo, historyOf, MAP_DAYS} from './testing-overview-history.js';
 import {readCard as readProbes, readDays as readProbeDays} from '../shared/synthetic.js';
 import {PUBLIC_REPO} from '../shared/repos.js';
 import {readBroker} from './jobcost.js';
-import {costRows, trendDays} from './testing-methods-cost.js';
+import {costRows, staleDay, trendDays} from './testing-methods-cost.js';
 
 const DAY = 86400000, DEFAULT_REPO = PUBLIC_REPO;
 const REPORT_PAGE = '/admin/testing/report-only';   // the Report only tab (owner, 2 Nov 2026): the proof cards keep a one-line link to it, not the nightly charts
@@ -143,6 +143,6 @@ export function resolve(data, {pages = []} = {}) {
   });
   const rings = RINGS.map(ring => ({...ring, cards: [...live.filter(card => card.ring === ring.id), ...PLANNED.filter(card => card.ring === ring.id).map(card => ({...card, kind: 'planned'}))]}));
   const counted = live.filter(card => card.state !== 'link'), count = state => counted.filter(card => card.state === state).length;   // a link-only card (GTM readiness) has its own page and no verdict here
-  const cost = {rows: costRows({healing: data.healing, tally: data.tally, repo: data.repo, now: data.now || new Date(), minutesOf: file => jobOf(data, file)?.weeklyMin ?? null}), trend: trendDays(data.snapshots || [], daysTo(data.now || new Date()))};
+  const cost = {stale: staleDay(data.healing, data.now || new Date()), rows: costRows({healing: data.healing, tally: data.tally, repo: data.repo, now: data.now || new Date(), minutesOf: file => jobOf(data, file)?.weeklyMin ?? null}), trend: trendDays(data.snapshots || [], daysTo(data.now || new Date()))};
   return {rings, cost, scheduled: pages.includes(SCHEDULED_PAGE) ? SCHEDULED_PAGE : '', reportOnly: pages.includes(REPORT_PAGE) ? REPORT_PAGE : '', red: counted.filter(card => card.state === 'red').map(card => card.title), redCards: counted.filter(card => card.state === 'red').map(card => ({id: card.id, icon: card.icon, title: card.title})), counts: {green: count('green'), red: count('red'), none: count('none'), live: counted.length, planned: PLANNED.length}};
 }

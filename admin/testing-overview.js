@@ -73,7 +73,7 @@ ${MAP_STYLE}${NIGHTLY_STYLE}${COST_STYLE}${VIZ_STYLE}</style></head><body><main>
 ${band}
 ${summaryBar(counts)}
 ${healthMap(model, daysTo(now))}
-${costCard(model.cost.rows, model.cost.trend)}
+${costCard(model.cost.rows, model.cost.trend, model.cost.stale)}
 <h2 class="details">Each method in detail</h2>
 ${model.rings.map(ring => `<div class="ring">${ring.icon} ${esc(ring.title)} <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· ${esc(ring.note)}</span></div>
 <div class="grid">${ring.cards.map(card => cardHtml(card, now, model.scheduled, model.reportOnly)).join('')}</div>`).join('\n')}
