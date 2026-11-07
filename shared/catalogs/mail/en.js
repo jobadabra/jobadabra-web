@@ -1,5 +1,13 @@
 // Bundled end-user mail copy; explicit locale selection precedes interpolation and raw recipient data stays unchanged.
 export const messages = {
+  "feedbackDefer": "Thank you: we saw this and parked it for later. If we pick it up we will tell you.",
+  "feedbackClose": "Thanks, we looked into this and it isn't something we'll change.",
+  "feedbackFixedVersion": "Thank you: this is fixed in {version}.",
+  "feedbackFixedNext": "Thank you: this is fixed and will arrive in the next update.",
+  "feedbackThanks": {
+    "one": "We also added {count} more free application to say thank you.",
+    "other": "We also added {count} more free applications to say thank you."
+  },
   "heldDigestSubject": {
     "one": "Your Jobadabra update: {count} item",
     "other": "Your Jobadabra update: {count} items"

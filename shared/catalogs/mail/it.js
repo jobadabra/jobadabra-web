@@ -1,5 +1,14 @@
 // Bundled end-user mail copy; explicit locale selection precedes interpolation and raw recipient data stays unchanged.
 export const messages = {
+  "feedbackDefer": "Grazie: abbiamo letto la tua segnalazione e la teniamo da parte per il futuro. Se ce ne occuperemo, te lo faremo sapere.",
+  "feedbackClose": "Grazie, abbiamo esaminato la segnalazione e non prevediamo di modificare questo aspetto.",
+  "feedbackFixedVersion": "Grazie: il problema è risolto nella versione {version}.",
+  "feedbackFixedNext": "Grazie: il problema è risolto e la correzione arriverà con il prossimo aggiornamento.",
+  "feedbackThanks": {
+    "one": "Per ringraziarti, abbiamo aggiunto anche {count} candidatura gratuita in più.",
+    "many": "Per ringraziarti, abbiamo aggiunto anche {count} candidature gratuite in più.",
+    "other": "Per ringraziarti, abbiamo aggiunto anche {count} candidature gratuite in più."
+  },
   "heldDigestSubject": {
     "one": "Il tuo aggiornamento Jobadabra: {count} elemento",
     "many": "Il tuo aggiornamento Jobadabra: {count} elementi",

@@ -7,8 +7,11 @@ import {test} from 'node:test';
 import {actRoute} from '../../../../admin/feedback.js';
 import {replies} from '../../../../api/feedback-replies.js';
 import {act} from '../../../../shared/feedback-actions.js';
+import {mailText} from '../../../../shared/mail-copy.js';
+import {NOTIFICATION_LANGUAGES} from '../../../../shared/notification-language.js';
+import {createAccount} from '../../../../shared/pro.js';
 import {tokenFor} from '../../../../shared/guard.js';
-import {DEFAULT_DEFER, defaultFixed, excerptOf, markSeen, repliesFor, replyText} from '../../../../shared/feedback-reply.js';
+import {DEFAULT_CLOSE, DEFAULT_DEFER, THANKS_APPS, THANKS_LINE, defaultFixed, excerptOf, markSeen, repliesFor, replyText, tellReporter} from '../../../../shared/feedback-reply.js';
 
 const sql = name => readFileSync(new URL(`../../../../db/migrations/${name}`, import.meta.url), 'utf8');
 function d1() {
@@ -171,4 +174,50 @@ test('a version or link longer than its limit is refused, never silently cut to 
   assert.equal((await run(e, {ref, action: 'fixed', fixed_in: '1'.repeat(60)})).status, 400);
   assert.equal((await run(e, {ref, action: 'fixed', pr_url: `https://github.com/a/b/pull/${'1'.repeat(200)}`})).status, 400);
   assert.equal(rowOf(e, ref).state, 'new');
+});
+
+
+test('actual feedback emails localize only code fallback and thank-you copy, retaining owner prose and canonical app/admin replies', async t => {
+  const trips = [];
+  t.mock.method(globalThis, 'fetch', (...args) => { trips.push(args); throw new Error('No external transport allowed'); });
+  t.after(() => assert.deepEqual(trips, [], 'caught failures cannot conceal external transport'));
+  for (const locale of NOTIFICATION_LANGUAGES) {
+    const {e, mails} = setup(); t.after(() => e.STATS.db.close());
+    e.STATS.db.exec(sql('0141_notification_language.sql'));
+    await createAccount(e, 'ana@example.com');
+    e.STATS.db.prepare('UPDATE pro_accounts SET notification_language = ?').run(locale);
+    const cases = [
+      {state: 'fixed', version: '0.9.12', key: 'feedbackFixedVersion', gift: true},
+      {state: 'fixed', key: 'feedbackFixedNext'},
+      {state: 'released', version: '0.9.12', key: 'feedbackFixedVersion'},
+      {state: 'deferred', key: 'feedbackDefer'},
+      {state: 'dismissed', key: 'feedbackClose'},
+      {state: 'false_positive', key: 'feedbackClose'},
+      {state: 'fixed', version: '0.9.12', message: defaultFixed('0.9.12'), gift: true},
+      {state: 'deferred', message: DEFAULT_DEFER},
+      {state: 'dismissed', message: DEFAULT_CLOSE},
+      {state: 'fixed', message: '  工程師 Müller {count} <>&"\nOwner words  ', gift: true},
+    ];
+    const real = e.STATS.prepare; let reads = 0;
+    e.STATS.prepare = text => { if (text.startsWith('SELECT notification_language ')) reads++; return real(text); };
+    for (const item of cases) {
+      const install = 'install-case-' + counter, ref = add(e, {install}), row = {state: item.state, fixed_in: item.version || '', tell_message: item.message || '', thanks_apps: item.gift ? THANKS_APPS : 0};
+      e.STATS.db.prepare('UPDATE feedback SET state = ?, fixed_in = ?, tell_message = ?, tell_mail = 1, thanks_apps = ? WHERE ref = ?').run(row.state, row.fixed_in, row.tell_message, row.thanks_apps, ref);
+      const canonical = replyText(row), before = reads;
+      assert.equal(await tellReporter(e, ref, now), 'app+mail');
+      const message = item.message ? item.message.replace(/\s+/g, ' ').trim().slice(0, 300) : mailText(locale, item.key, {version: row.fixed_in});
+      const expected = message + (item.gift ? ' ' + mailText(locale, 'feedbackThanks', {count: THANKS_APPS}) : '');
+      assert.ok(mails.at(-1).text.includes(expected), locale + ' ' + row.state + ' ' + item.key);
+      assert.equal(mails.at(-1).to, 'ana@example.com'); assert.ok(mails.at(-1).html.includes('lang="' + locale + '"'));
+      assert.equal(reads - before, 1, 'one language lookup for subject/body/frame');
+      assert.equal(replyText(row), canonical, 'default replyText remains canonical English');
+      const defaultReply = item.message ? item.message.replace(/\s+/g, ' ').trim().slice(0, 300) : ['dismissed', 'false_positive'].includes(row.state) ? DEFAULT_CLOSE : ['fixed', 'released'].includes(row.state) ? defaultFixed(row.fixed_in) : DEFAULT_DEFER;
+      assert.equal(canonical, defaultReply + (item.gift ? ' ' + THANKS_LINE : ''), 'original English exports remain byte-compatible');
+      assert.equal(rowOf(e, ref).tell_message, row.tell_message, 'stored owner prose unchanged');
+      assert.equal((await repliesFor(e.STATS, install))[0].message, canonical, 'in-app path remains English/raw');
+      assert.equal(e.STATS.db.prepare('SELECT apps FROM trial_bonus WHERE ref = ?').get(ref)?.apps || 0, item.gift ? THANKS_APPS : 0);
+      if (item.gift) assert.ok(canonical.endsWith(THANKS_LINE));
+    }
+    assert.equal(mails.length, cases.length);
+  }
 });

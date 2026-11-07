@@ -50,7 +50,7 @@ test('catalogs have complete key/placeholder/plural parity and no global active 
   const params=value=>[...new Set((typeof value==='string'?[value]:Object.values(value)).flatMap(text=>[...text.matchAll(/\{(\w+)\}/g)].map(match=>match[1])))].sort();
   for(const locale of NOTIFICATION_LANGUAGES){assert.deepEqual(Object.keys(catalogs[locale]).sort(),Object.keys(catalogs.en).sort(),locale);
     for(const [key,value] of Object.entries(catalogs[locale])){assert.deepEqual(params(value),params(catalogs.en[key]),locale+'.'+key);if(typeof value==='object')for(const form of new Intl.PluralRules(locale).resolvedOptions().pluralCategories)assert.ok(value[form],locale+'.'+key+'.'+form);}
-    for(const count of [0,1,2,5,20,1000000])for(const key of ['heldDigestSubject','digestSubject','digestTitle','trialLeft','trialOpening','trialEndingSubject','trialEndingBody','creditApprox']){
+    for(const count of [0,1,2,5,20,1000000])for(const key of ['feedbackThanks','heldDigestSubject','digestSubject','digestTitle','trialLeft','trialOpening','trialEndingSubject','trialEndingBody','creditApprox']){
       const values=catalogs[locale][key],form=new Intl.PluralRules(locale).select(count);assert.equal(mailText(locale,key,{count,number:count}),values[form].replaceAll('{count}',String(count)).replaceAll('{number}',String(count)));
     }
   }
