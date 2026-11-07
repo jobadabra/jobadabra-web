@@ -65,6 +65,24 @@ test('a run\'s record, video and screenshots are kept under agent/<run>/ and the
     {worked: '1', stuck: '1', notes: '1', calls: '58', tokens: '1836000', minutes: '13', commit: 'b4d64112', kind: 'replay', video: true, videoBytes: 1000, shots: 2});
 });
 
+test('the run index keeps total goals, stop reason, optional token fields and the not-started verdict', async () => {
+  const e = env(), run = record('41857218091', {stopped: 'budget', goals: [{verdict: 'worked'}, {verdict: 'not-started'}], cost: {tokens: 373705, countedTokens: 159561, capTokens: 250000}});
+  assert.equal((await put(e, {body: new TextEncoder().encode(JSON.stringify(run))})).status, 200);
+  const [row] = (await (await data(e, '?index')).json()).runs;
+  assert.deepEqual({total: row.total, stopped: row.stopped, worked: row.worked, stuck: row.stuck, notStarted: row.notStarted, tokens: row.tokens, countedTokens: row.countedTokens, capTokens: row.capTokens},
+    {total: '2', stopped: 'budget', worked: '1', stuck: '0', notStarted: '1', tokens: '373705', countedTokens: '159561', capTokens: '250000'});
+});
+
+test('legacy unstarted uploads use the same goal counts as their detail projection', async () => {
+  const e = env(), run = record('41857218091', {goals: [
+    {verdict: 'could-not-finish', steps: 0, summary: 'the session ended before this goal'},
+    {verdict: 'could-not-finish', steps: 1, summary: 'the session ended before this goal'},
+  ]});
+  await put(e, {body: new TextEncoder().encode(JSON.stringify(run))});
+  const [row] = (await (await data(e, '?index')).json()).runs;
+  assert.deepEqual({stuck: row.stuck, notStarted: row.notStarted}, {stuck: '1', notStarted: '1'});
+});
+
 test('a file older than 14 days leaves with the next upload; the Lab\'s own fill videos are never touched', async () => {
   const e = env();
   e.LAB_FILLS.kept.set('agent/100000/run.json', {bytes: new Uint8Array(3), uploaded: new Date('2026-10-01T00:00:00Z'), customMetadata: {at: '2026-10-01T00:00:00Z'}});

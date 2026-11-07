@@ -4,6 +4,17 @@ export const aiPersona = async ({env}) => {   // /admin/testing/ai-persona (4 No
   const shot = fs.readFileSync('desktop/docs/ui/actions.jpg'), video = process.env.PAGE_SHOT_VIDEO && fs.existsSync(process.env.PAGE_SHOT_VIDEO) ? fs.readFileSync(process.env.PAGE_SHOT_VIDEO) : null;
   const trace = (goal, steps) => steps.map((did, i) => ({goal, n: i + 1, action: 'click', did, view: 'settings', failed: false}));
   const runs = [
+    {run: '42327000001', at: '2026-11-07T02:12:00Z', kind: 'night', commit: 'd322977', plan: '', secs: 0, stopped: 'budget',
+      cost: {calls: 24, tokens: 373705, countedTokens: 159561, capTokens: 250000, minutes: 9.2},
+      goals: [
+        {n: 1, group: 'Focus', label: 'Up next', verdict: 'worked', summary: 'The empty state was confirmed.', steps: 3},
+        {n: 2, group: 'Settings', label: 'Your data', verdict: 'could-not-finish', summary: 'The available controls did not reach the page.', steps: 3},
+        {n: 3, group: 'Actions', label: 'More actions', verdict: 'worked', summary: 'The menu opened and showed its actions.', steps: 2},
+        {n: 4, group: 'Strategy', label: 'Job preferences', verdict: 'could-not-finish', summary: 'The goal ran out of room before a final check.', steps: 5},
+        ...['Your background', 'Jobs filter', 'Profile CV', 'Build a CV'].map((label, i) => ({n: i + 5, group: 'Later', label, verdict: 'not-started', summary: 'The session ended before this goal.', steps: 0})),
+      ],
+      trace: trace(1, ['Open Focus', 'Check the empty state']).concat(trace(2, ['Open Settings', 'Try available controls']), trace(3, ['Open Actions', 'Open More actions']), trace(4, ['Open Strategy', 'Edit job preferences', 'Run out of verification time'])),
+      notes: [{goal: 1, title: 'The empty state is missing context', type: 'ux', kind: 'empty-state', severity: 'medium', view: 'focus', expected: 'An explanation appears with the empty state.', observed: 'The state has no next action or explanation.', why: 'A person cannot tell what to do next.', judge: 'agrees', judgeReason: '', filed: false, shot: 0, videoSec: null, control: null, trail: []}]},
     {run: '41867308961', at: '2026-11-04T16:26:00Z', kind: 'replay', commit: 'df66db1', plan: 'learned-questions', secs: video ? 240 : 0,
       goals: [{n: 1, group: 'settings', label: 'Open What we learned and go through the questions one by one', verdict: 'bug', summary: 'the list is empty under "1 of 1 open"', steps: 7}],
       trace: trace(1, ['Open profile', 'Press "What we learned"', 'Press "New 1"', 'Press "Open"', 'Press "Open"', 'Press "Expand all"', 'Press "Expand all"']),
@@ -16,9 +27,10 @@ export const aiPersona = async ({env}) => {   // /admin/testing/ai-persona (4 No
       trace: trace(1, ['Open jobs', 'Press "Open"']).concat(trace(2, ['Open settings', 'Press "Language"'])), notes: []},
   ];
   for (const run of runs) {
-    const record = {...run, persona: 'Ana', seed: 20261103, stopped: 'goals', cost: {calls: 14, tokens: 552000, minutes: 2}, video: run.secs ? {secs: run.secs, bytes: video?.length || 0} : null};
+    const cost = {...{calls: 14, tokens: 552000, minutes: 2}, ...run.cost};
+    const record = {...run, persona: 'Ana', seed: 20261103, stopped: run.stopped || 'goals', cost, video: run.secs ? {secs: run.secs, bytes: video?.length || 0} : null};
     const count = verdict => String(run.goals.filter(goal => goal.verdict === verdict).length);
-    put(`agent/${run.run}/run.json`, new TextEncoder().encode(JSON.stringify(record)), 'application/json', {at: run.at, kind: run.kind, commit: run.commit, plan: run.plan, worked: count('worked'), bug: count('bug'), doubts: count('doubts'), stuck: count('could-not-finish'), notes: String(run.notes.length), calls: '14', tokens: '552000', minutes: '2', bytes: '1000'});
+    put(`agent/${run.run}/run.json`, new TextEncoder().encode(JSON.stringify(record)), 'application/json', {at: run.at, kind: run.kind, commit: run.commit, plan: run.plan, total: String(run.goals.length), stopped: record.stopped, worked: count('worked'), bug: count('bug'), doubts: count('doubts'), stuck: count('could-not-finish'), notStarted: count('not-started'), unknown: '0', notes: String(run.notes.length), calls: String(cost.calls), tokens: String(cost.tokens), ...(cost.countedTokens === undefined ? {} : {countedTokens: String(cost.countedTokens)}), ...(cost.capTokens === undefined ? {} : {capTokens: String(cost.capTokens)}), minutes: String(cost.minutes), bytes: '1000'});
     if (run.notes.length) put(`agent/${run.run}/shot-1.png`, shot, 'image/jpeg');
     if (run.secs && video) put(`agent/${run.run}/video.webm`, video, 'video/webm', {bytes: String(video.length)});
   }

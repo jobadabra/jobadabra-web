@@ -16,14 +16,17 @@ const record = (extra = {}) => ({run: '41857218091', at: '2026-11-04T15:00:00Z',
   cost: {calls: 14, tokens: 5000, minutes: 2}, video: {secs: 600, bytes: 5000000}, ...extra});
 const row = (extra = {}) => ({run: '41857218091', at: '2026-11-04T15:00:00Z', kind: 'replay', commit: 'df66db1', plan: 'learned-questions', worked: '0', bug: '1', doubts: '0', stuck: '1', notes: '2', calls: '14', tokens: '5000', minutes: '2', video: true, videoBytes: 5242880, shots: 1, ...extra});
 
-test('the list labels a replay, counts goals that reached an answer and says when no run is kept', () => {
+test('the list labels a replay, counts goals with final verdicts and says when no run is kept', () => {
   const html = listHtml([row(), row({run: '41860000001', kind: 'night', plan: '', stuck: '0', worked: '2', bug: '0', video: false})]);
-  assert.match(html, /2 runs kept, 3 of 4 goals reached an answer/);
+  assert.match(html, /2 runs kept, 2 of 4 goals worked/);
   assert.match(html, /<a href="\?run=41857218091">/);
   assert.match(html, /chip warn">replay</);
   assert.match(html, /chip good">night</);
   assert.match(html, /▶ 5\.0 MB/);
   assert.match(html, /chip off">none</);
+  const partial = listHtml([row({total: '8', stopped: 'budget', worked: '2', stuck: '2', notStarted: '4', unknown: '0', countedTokens: '159561', capTokens: '250000'})]);
+  assert.match(partial, /Stopped: remaining token budget could not fund another goal/);
+  assert.match(partial, /Counted: 159,561 of 250,000 tokens/);
   assert.match(listHtml([]), /No run is kept yet/);
 });
 
@@ -41,6 +44,50 @@ test('a run shows its path with repeats counted, the failed step, a marker per n
   assert.equal(boxOf({x: 1, y: 1, w: 0, h: 5, window: {w: 10, h: 10}}), '');
   assert.equal(mmss(61), '1:01');
   assert.equal(mmss(NaN), '');
+});
+
+test('a partial budget run counts every goal and separates completed, unfinished and not-started work', () => {
+  const goals = [
+    {n: 1, group: 'Focus', label: 'Up next', verdict: 'worked', summary: 'The empty state is confirmed.', steps: 3},
+    {n: 2, group: 'Settings', label: 'Your data', verdict: 'could-not-finish', summary: 'The controls did not reach the page.', steps: 3},
+    {n: 3, group: 'Actions', label: 'More actions', verdict: 'worked', summary: 'The menu opened.', steps: 2},
+    {n: 4, group: 'Strategy', label: 'Job preferences', verdict: 'could-not-finish', summary: 'The goal ran out of room.', steps: 5},
+    ...['Your background', 'Jobs filter', 'Profile CV', 'Build a CV'].map((label, i) => ({n: i + 5, group: 'Later', label, verdict: 'not-started', summary: 'The session ended before this goal.', steps: 0})),
+  ];
+  const html = runHtml(record({stopped: 'budget', goals, cost: {calls: 24, tokens: 373705, countedTokens: 159561, capTokens: 250000, minutes: 9.2}}));
+  assert.match(html, /2 of 8 goals worked/);
+  assert.match(html, /2 worked/);
+  assert.match(html, /2 attempted but unfinished/);
+  assert.match(html, /4 not started/);
+  assert.match(html, /remaining token budget could not fund another goal/i);
+  assert.match(html, /Gross: 373,705 tokens/);
+  assert.match(html, /Counted: 159,561 of 250,000 tokens/);
+  assert.equal(tidy(record({goals: [
+    {n: 1, verdict: 'could-not-finish', summary: 'the session ended before this goal', steps: 0},
+    {n: 2, verdict: 'could-not-finish', summary: 'The session ended before this goal', steps: 0},
+    {n: 3, verdict: 'mystery', summary: '', steps: 0},
+  ]})).goals.map(goal => goal.verdict).join(','), 'not-started,could-not-finish,unknown', 'only the exact legacy marker is projected as not started; unrecognized statuses stay unknown');
+});
+
+test('legacy partial records do not turn the old goals stop label into a completion reason or invent metered tokens', () => {
+  const html = runHtml(record({stopped: 'goals', goals: [
+    {n: 1, group: 'a', label: 'Worked', verdict: 'worked', summary: 'Done', steps: 1},
+    {n: 2, group: 'b', label: 'Pending', verdict: 'could-not-finish', summary: 'the session ended before this goal', steps: 0},
+  ], cost: {calls: 3, tokens: 373705, minutes: 2}}));
+  assert.match(html, /Partial run; recorded stop: goals/);
+  assert.match(html, /1 of 2 goals worked/);
+  assert.match(html, /Gross: 373,705 tokens/);
+  assert.doesNotMatch(html, /Counted:|of 250,000 tokens/);
+});
+
+test('stop labels keep recorded broker, cap, step, call and time reasons visible', () => {
+  for (const [stopped, phrase] of [
+    ['calls 120', 'recorded: calls 120'], ['minutes 20', 'recorded: minutes 20'], ['steps', 'recorded: steps'],
+    ['stopped at the 250k token cap', 'recorded: stopped at the 250k token cap'], ['api: 502 broker down', 'recorded: api: 502 broker down'],
+  ]) assert.ok(runHtml(record({stopped})).toLowerCase().includes(phrase.toLowerCase()), `${stopped} remains visible`);
+  assert.match(runHtml(record({stopped: 'goals', goals: [
+    {n: 1, verdict: 'worked', steps: 1}, {n: 2, verdict: 'could-not-finish', steps: 2},
+  ]})), /All planned goal attempts ended \(recorded: goals\)/);
 });
 
 test('without a video or a screenshot there is no player, no marker and no picture, and the page says so', () => {
@@ -98,7 +145,8 @@ test('a jump button and a dot exist only for a note whose second lies inside a v
   assert.doesNotMatch(runHtml(rec, {video: false}), /class="dot"|class="jump"/, 'the record names a video that was not kept: no button that does nothing');
 });
 
-test('a goal with a verdict we do not know is on neither page\'s count, so the list and the run agree', () => {
+test('an unknown verdict stays in the denominator but never counts as a final verdict', () => {
   const html = runHtml(record({goals: [{n: 1, group: 'g', label: 'a', verdict: 'worked', steps: 1}, {n: 2, group: 'g', label: 'b', verdict: 'skipped', steps: 1}]}), {});
-  assert.match(html, /1 of 1 goal reached an answer/);
+  assert.match(html, /1 of 2 goals worked/);
+  assert.match(html, /1 unknown/);
 });

@@ -4,11 +4,11 @@
 // Guard: test/unit/admin/ai/ai-persona.test.js.
 import {esc} from '../shared/html.js';
 import {PUBLIC_REPO} from '../shared/repos.js';
-import {KEEP_DAYS} from '../shared/agent-runs.js';
+import {goalVerdictOf, KEEP_DAYS} from '../shared/agent-runs.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {BAND_STYLE, verdictBand} from './verdict-band.js';
 
-const VERDICT = {worked: ['✓ worked', 'good'], doubts: ['? doubts', 'warn'], 'could-not-finish': ['⛔ could not finish', 'bad'], bug: ['🐞 bug', 'bad']};
+const VERDICT = {worked: ['✓ worked', 'good'], doubts: ['? doubts', 'warn'], 'could-not-finish': ['⛔ attempted but unfinished', 'bad'], 'not-started': ['○ not started', 'muted'], bug: ['🐞 bug', 'bad']};
 const JUDGE = {agrees: ['second opinion agrees', 'good'], disagrees: ['second opinion disagrees', 'muted'], unknown: ['second opinion unsure', 'warn'], unavailable: ['no second opinion', 'muted']};
 const SEVERITY = {high: 'bad', medium: 'warn', low: 'muted'};
 
@@ -32,7 +32,45 @@ export function pathOf(trace, goal) {
 }
 
 const num = value => (Number.isFinite(Number(value)) ? Number(value) : 0);
+const tokenNumber = value => value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+const tokenText = value => new Intl.NumberFormat('en-US').format(value);
+const tokenLabels = cost => {
+  const gross = tokenNumber(cost?.tokens), counted = tokenNumber(cost?.countedTokens), cap = tokenNumber(cost?.capTokens);
+  return [...(gross === null ? [] : [`Gross: ${tokenText(gross)} tokens`]), ...(counted === null ? [] : [`Counted: ${tokenText(counted)}${cap === null ? '' : ` of ${tokenText(cap)}`} tokens`])];
+};
 const list = value => (Array.isArray(value) ? value.filter(item => item && typeof item === 'object' && !Array.isArray(item)) : []);
+
+const countsOf = goals => ({
+  total: goals.length,
+  attempted: goals.filter(goal => goal.verdict !== 'unknown' && goal.verdict !== 'not-started').length,
+  worked: goals.filter(goal => goal.verdict === 'worked').length,
+  doubts: goals.filter(goal => goal.verdict === 'doubts').length,
+  bug: goals.filter(goal => goal.verdict === 'bug').length,
+  unfinished: goals.filter(goal => goal.verdict === 'could-not-finish').length,
+  notStarted: goals.filter(goal => goal.verdict === 'not-started').length,
+  unknown: goals.filter(goal => goal.verdict === 'unknown').length,
+});
+const listCounts = run => {
+  const total = tokenNumber(run.total) ?? num(run.worked) + num(run.doubts) + num(run.stuck) + num(run.bug) + num(run.notStarted) + num(run.unknown);
+  return {total, attempted: total - num(run.notStarted) - num(run.unknown), notStarted: num(run.notStarted), unknown: num(run.unknown)};
+};
+
+const stopText = (stopped, counts) => {
+  if (stopped === 'budget') return 'Stopped: remaining token budget could not fund another goal (recorded: budget)';
+  const calls = /^calls(?:\s+(.+))?$/.exec(String(stopped || ''));
+  if (calls) return `Stopped at the call limit (recorded: ${stopped})`;
+  const minutes = /^minutes(?:\s+(.+))?$/.exec(String(stopped || ''));
+  if (minutes) return `Stopped at the time limit (recorded: ${stopped})`;
+  if (/^stopped at the \d+k token cap$/i.test(String(stopped || ''))) return `Stopped at the token cap (recorded: ${stopped})`;
+  if (stopped === 'cap') return 'Stopped at the token cap (recorded: cap)';
+  if (stopped === 'steps') return 'Stopped at a goal step limit (recorded: steps)';
+  if (stopped === 'goals' || stopped === 'done') return counts.attempted === counts.total
+    ? `All planned goal attempts ended (recorded: ${stopped})`
+    : `Partial run; recorded stop: ${stopped}; some goals were not attempted or have an unknown verdict`;
+  if (/^(api:|broker\b)/i.test(String(stopped || ''))) return `Stopped after a broker failure (recorded: ${stopped})`;
+  if (stopped) return `Stopped; recorded reason: ${stopped}`;
+  return counts.attempted < counts.total ? 'Partial run; no stop reason was recorded' : 'Stop reason not recorded';
+};
 
 /**
  * A stored record made safe to draw (it is written by another repo's job and only its size and its run id are checked on upload): arrays are arrays of objects, a verdict or a second opinion is one of ours or
@@ -44,7 +82,8 @@ export function tidy(record, hasVideo = false) {
     const sec = Number(note.videoSec), shot = Number(note.shot);
     return {...note, shot: Number.isInteger(shot) && shot >= 1 && shot <= 99 ? shot : 0, playable: secs > 0 && Number.isFinite(sec) && sec >= 0 && sec <= secs, videoSec: sec};
   });
-  return {secs, notes, trace: list(record.trace), goals: list(record.goals).map(goal => ({...goal, verdict: own(VERDICT, goal.verdict) ? goal.verdict : 'unknown'}))};
+  return {secs, notes, trace: list(record.trace), goals: list(record.goals).map(goal => ({...goal,
+    verdict: own(VERDICT, goalVerdictOf(goal)) ? goalVerdictOf(goal) : 'unknown'}))};
 }
 
 /** The pressed control as a box over its screenshot, in percent of the window the agent had (so it fits at any width); '' when the note has none. */
@@ -56,15 +95,17 @@ export function boxOf(control) {
 
 /** The list: a band, then one row per kept run, newest first. `runs`: listRuns() rows. */
 export function listHtml(runs) {
-  const goals = runs.reduce((sum, run) => sum + num(run.worked) + num(run.doubts) + num(run.stuck) + num(run.bug), 0);
+  const goals = runs.reduce((sum, run) => sum + (tokenNumber(run.total) ?? num(run.worked) + num(run.doubts) + num(run.stuck) + num(run.bug) + num(run.notStarted) + num(run.unknown)), 0);
+  const worked = runs.reduce((sum, run) => sum + num(run.worked), 0);
   const stuck = runs.reduce((sum, run) => sum + num(run.stuck), 0), bugs = runs.reduce((sum, run) => sum + num(run.bug), 0);
-  const band = verdictBand({icon: '🤖', headline: runs.length ? `${plural(runs.length, 'run')} kept, ${goals - stuck} of ${plural(goals, 'goal')} reached an answer` : 'No run is kept yet',
-    chips: [...(stuck ? [{label: `${stuck} could not finish`, tone: 'bad'}] : []), ...(bugs ? [{label: `${bugs} with a bug`, tone: 'warn'}] : [])],
+  const notStarted = runs.reduce((sum, run) => sum + num(run.notStarted), 0), unknown = runs.reduce((sum, run) => sum + num(run.unknown), 0);
+  const band = verdictBand({icon: '🤖', headline: runs.length ? `${plural(runs.length, 'run')} kept, ${worked} of ${plural(goals, 'goal')} worked` : 'No run is kept yet',
+    chips: [...(stuck ? [{label: `${stuck} attempted but unfinished`, tone: 'bad'}] : []), ...(notStarted ? [{label: `${notStarted} not started`, tone: 'muted'}] : []), ...(unknown ? [{label: `${unknown} unknown`, tone: 'muted'}] : []), ...(bugs ? [{label: `${bugs} with a bug`, tone: 'warn'}] : [])],
     note: `The nightly run and the replays, kept ${KEEP_DAYS} days with their video.`});
   const rows = runs.map(run => `<tr><td><a href="?run=${esc(run.run)}"><b>${esc(run.run)}</b></a><div class="muted small">${esc(String(run.at || '').slice(0, 16).replace('T', ' '))}</div></td>
 <td>${kindChip(run.kind)}</td><td class="small">${esc(run.commit || '')}${run.plan ? `<div class="muted">${esc(run.plan)}</div>` : ''}</td>
-<td>${Number(run.worked) ? chip(`✓ ${esc(run.worked)}`, 'good') : ''} ${Number(run.doubts) ? chip(`? ${esc(run.doubts)}`, 'warn') : ''} ${Number(run.stuck) ? chip(`⛔ ${esc(run.stuck)}`, 'bad') : ''} ${Number(run.bug) ? chip(`🐞 ${esc(run.bug)}`, 'bad') : ''}</td>
-<td>${esc(run.notes)}</td><td class="small">${esc(run.minutes)} min · ${esc(run.calls)} calls</td>
+<td>${Number(run.worked) ? chip(`✓ ${esc(run.worked)} worked`, 'good') : ''} ${Number(run.doubts) ? chip(`? ${esc(run.doubts)} doubts`, 'warn') : ''} ${Number(run.stuck) ? chip(`⛔ ${esc(run.stuck)} attempted but unfinished`, 'bad') : ''} ${Number(run.notStarted) ? chip(`○ ${esc(run.notStarted)} not started`, 'muted') : ''} ${Number(run.unknown) ? chip(`? ${esc(run.unknown)} unknown`, 'muted') : ''} ${Number(run.bug) ? chip(`🐞 ${esc(run.bug)} bug`, 'bad') : ''}</td>
+<td>${esc(run.notes)}</td><td class="small">${esc(run.minutes)} min · ${esc(run.calls)} calls${tokenLabels({tokens: run.tokens, countedTokens: run.countedTokens, capTokens: run.capTokens}).map(label => `<div>${esc(label)}</div>`).join('')}${run.total !== undefined && run.stopped ? `<div class="muted">${esc(stopText(run.stopped, listCounts(run)))}</div>` : ''}</td>
 <td>${run.video ? chip(`▶ ${(Number(run.videoBytes) / 1048576).toFixed(1)} MB`, 'good') : chip('none', 'muted')}</td></tr>`).join('');
   return `${band}<section class="card"><table class="runs"><thead><tr><th>Run</th><th>Kind</th><th>App</th><th>Goals</th><th>Notes</th><th>Cost</th><th>Video</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="muted">Nothing yet: the next night or replay fills it.</td></tr>'}</tbody></table></section>`;
 }
@@ -79,15 +120,25 @@ ${note.shot ? `<div class="shot"><img src="/admin/ai-persona/file?run=${esc(run)
 
 /** One run: a band, the video with a marker per note, the path per goal, the notes. `record`: the stored run.json; `has`: {video: bool}. */
 export function runHtml(record, has = {}) {
-  const clean = tidy(record, has.video), run = String(record.run), secs = clean.secs, notes = clean.notes, known = clean.goals.filter(goal => goal.verdict !== 'unknown');
-  const reached = known.filter(goal => goal.verdict !== 'could-not-finish').length;
-  const band = verdictBand({icon: '🤖', headline: `Run ${run}: ${reached} of ${plural(known.length, 'goal')} reached an answer`,
-    chips: [{label: record.kind === 'replay' ? `replay${record.plan ? ` · ${record.plan}` : ''}` : 'night', tone: record.kind === 'replay' ? 'warn' : 'good'}, {label: plural(notes.length, 'note'), tone: notes.length ? 'warn' : 'muted'}, {label: `${record.cost?.calls ?? 0} calls · ${record.cost?.minutes ?? 0} min`, tone: 'muted'}],
-    note: `App ${record.commit || '?'} · ${String(record.at || '').slice(0, 16).replace('T', ' ')} · stopped: ${record.stopped || '?'}`});
+  const clean = tidy(record, has.video), run = String(record.run), secs = clean.secs, notes = clean.notes, counts = countsOf(clean.goals);
+  const chips = [
+    {label: `${counts.worked} worked`, tone: counts.worked ? 'good' : 'muted'},
+    ...(counts.doubts ? [{label: `${counts.doubts} with doubts`, tone: 'warn'}] : []),
+    ...(counts.bug ? [{label: `${counts.bug} with a bug`, tone: 'bad'}] : []),
+    ...(counts.unfinished ? [{label: `${counts.unfinished} attempted but unfinished`, tone: 'bad'}] : []),
+    ...(counts.notStarted ? [{label: `${counts.notStarted} not started`, tone: 'muted'}] : []),
+    ...(counts.unknown ? [{label: `${counts.unknown} unknown`, tone: 'muted'}] : []),
+    {label: record.kind === 'replay' ? `replay${record.plan ? ` · ${record.plan}` : ''}` : 'night', tone: record.kind === 'replay' ? 'warn' : 'good'},
+    {label: plural(notes.length, 'note'), tone: notes.length ? 'warn' : 'muted'},
+    {label: `${record.cost?.calls ?? 0} calls · ${record.cost?.minutes ?? 0} min`, tone: 'muted'},
+    ...tokenLabels(record.cost).map(label => ({label, tone: 'muted'})),
+  ];
+  const band = verdictBand({icon: '🤖', headline: `Run ${run}: ${counts.worked} of ${plural(counts.total, 'goal')} worked`, chips,
+    note: `App ${record.commit || '?'} · ${String(record.at || '').slice(0, 16).replace('T', ' ')} · ${stopText(record.stopped, counts)}`});
   const dots = notes.filter(note => note.playable).map(note => `<button type="button" class="dot" data-t="${Math.floor(note.videoSec)}" style="left:${pct(note.videoSec / secs)}" title="${esc(note.title)} · ${mmss(note.videoSec)}"></button>`).join('');
   const video = has.video ? `<section class="card"><h2>Video</h2><video id="run-video" controls preload="metadata" src="/admin/ai-persona/file?run=${esc(run)}&amp;name=video.webm"></video>
 <div class="line" aria-label="notes on the timeline">${dots}</div><p class="muted small">${secs ? `${mmss(secs)} long; a dot is a note, click it to jump.` : ''}</p></section>` : '<section class="card"><h2>Video</h2><p class="muted">No video was kept for this run.</p></section>';
-  const goals = clean.goals.map(goal => `<details class="goal" ${goal.verdict === 'worked' ? '' : 'open'}><summary>${verdictChip(goal.verdict)} <b>${esc(goal.label)}</b> <span class="muted small">${esc(goal.group)} · ${esc(goal.steps)} steps</span></summary>
+  const goals = clean.goals.map(goal => `<details class="goal" ${goal.verdict === 'worked' ? '' : 'open'}><summary>${verdictChip(goal.verdict)} <b>${esc(goal.label)}</b> <span class="muted small">${esc(goal.group)} · ${esc(goal.steps)} actions performed</span></summary>
 <p class="muted small">${esc(goal.summary)}</p><ol class="steps">${pathOf(clean.trace, goal.n).map(step => `<li${step.failed ? ' class="failed"' : ''}>${esc(step.did)}${step.times > 1 ? ` <span class="muted">×${step.times}</span>` : ''}</li>`).join('')}</ol></details>`).join('');
   return `<p><a href="?">← All runs</a> · <a href="https://github.com/${PUBLIC_REPO}/actions/runs/${esc(run)}">the GitHub run</a></p>${band}${video}<section class="card"><h2>Path</h2>${goals}</section>
 <section class="card"><h2>Notes (what it argued was a bug)</h2>${notes.map(note => noteHtml(note, run)).join('') || '<p class="muted">It noted nothing.</p>'}</section>`;
