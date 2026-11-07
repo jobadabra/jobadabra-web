@@ -46,6 +46,7 @@ export const PAGES = [
   {path: '/admin/testing/overview', group: 'Testing', question: 'Which ways do we look for bugs, and did each one run green last time?', name: 'Overview', icon: '🧭'},   // its own page (admin/testing-overview.js), not section-overview's tiles: no `overview` flag, so Testing's pages need no headline loaders
   {path: '/admin/testing/synthetic-monitoring', group: 'Testing', question: 'Is the live app and everything it depends on still working right now, even when nobody changes any code?', name: 'Synthetics', slug: 'synthetic-monitoring', icon: '📡'},
   {path: '/admin/testing/ai-persona', group: 'Testing', question: 'What did the AI persona do in each run, which bugs did it argue, and can I watch it?', name: 'AI persona', slug: 'ai-persona', icon: '🤖'},
+  {path: '/admin/testing/bug-bundles', group: 'Testing', question: 'Which bugs did the AI testers report, with their pictures and logs?', name: 'Bug bundles', slug: 'bug-bundles', icon: '🐞'},
   {path: '/admin/testing/e2e', group: 'Testing', question: 'Where does our e2e fixing time go: which suites go red, and why?', old: ['/admin/operations/e2e'], name: 'E2E', icon: '🧪'},
   {path: '/admin/testing/gtm-readiness', group: 'Testing', question: 'How ready is the app for go-to-market: how stable is each critical journey?', old: [], name: 'GTM', slug: 'gtm-readiness', icon: '🚦'},
   {path: '/admin/testing/report-only', group: 'Testing', question: 'How are we doing: form filling, AI quality, speed, reliability, bugs?', name: 'Report only', icon: '📊'},

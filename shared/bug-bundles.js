@@ -1,7 +1,7 @@
 // The evidence bundle of a bug an AI tester (the nightly persona, Claude Desktop in the twin) reported through the app's Send feedback in tester mode (jobadabra spec 2026-11-07-ai-tester-bug-reports-design.md).
 // POST /agent/bundle stores one object per bug under bundle/<id>/ in the Lab's private bucket (LAB_FILLS, no new bucket or secret) and answers its id; GET /admin/bug-bundle/<id> and /admin/bug-bundle/<id>/<file> read it.
-// Why (7 Nov 2026, owner: GitHub issues are the only bug tracker, "to avoid polluting Admin... to avoid making it a bug/issue tracker"): NO D1 row, no list, no status, no count, and nothing here touches the `feedback`
-// table or Telegram; a bundle is opened only from the link in its GitHub issue. A twin's bundle can hold the owner's real session records and job rows: private bucket, Admin login only, 90 days, never in issue text.
+// Why (7 Nov 2026, owner: GitHub issues are the only bug tracker, "to avoid polluting Admin... to avoid making it a bug/issue tracker"): NO D1 row, no status, no owner, no count of open bugs, and nothing here touches the `feedback`
+// table or Telegram. Changed 7 Nov 2026 (owner: "let's add a dedicated page", Admin → Testing → Bug bundles): the evidence has a list page, read from the store itself (`listBundles`), that links each bug to its GitHub issue; the bug's state stays on GitHub. A twin's bundle can hold the owner's real session records and job rows: private bucket, Admin login only, 90 days, never in issue text.
 // Guard: test/unit/shared/bug-bundles.test.js (privacy: who writes, who reads, a file name is never a path, nothing reaches the feedback table).
 import {equal} from './guard.js';
 import {isOwner, viewer} from './auth.js';
@@ -100,4 +100,28 @@ export async function bundleFile(request, env, id, name) {
   const key = idOf(id) && Object.hasOwn(FILE_TYPES, name) ? `bundle/${id}/${name}` : null, object = key ? await env.LAB_FILLS.get(key) : null;
   if (!object) return new Response('Not found', {status: 404});
   return new Response(object.body, {headers: {'Content-Type': FILE_TYPES[name], 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex', 'X-Content-Type-Options': 'nosniff'}});
+}
+
+/**
+ * The kept bundles, newest first, for the Admin list: [{id, uploaded, report}]. Read from the store itself (the report objects, written last), no index and no D1 row; at most `limit` reports are read.
+ * A report that cannot be read is left out.
+ */
+export async function listBundles(bucket, limit = 100) {
+  const found = [];
+  let cursor;
+  do {
+    const page = await bucket.list({prefix: 'bundle/', cursor});
+    for (const object of page.objects) {
+      const [, id, name] = object.key.split('/');
+      if (name === 'report.json' && idOf(id)) found.push({id, uploaded: new Date(object.uploaded).getTime() || 0});
+    }
+    cursor = page.truncated ? page.cursor : null;
+  } while (cursor);
+  found.sort((a, b) => b.uploaded - a.uploaded);
+  const kept = [];
+  for (let i = 0; i < found.length && kept.length < limit; i += limit) {   // an unreadable report is skipped without costing a place in the list
+    const batch = await Promise.all(found.slice(i, i + limit).map(async entry => ({...entry, report: await readReport(bucket, entry.id)})));
+    kept.push(...batch.filter(entry => entry.report && typeof entry.report === 'object' && !Array.isArray(entry.report)));
+  }
+  return kept.slice(0, limit);
 }

@@ -1,5 +1,5 @@
-// /admin/bug-bundle/<id> (any signed-in admin, as the other admin pages): the evidence of ONE bug an AI tester reported, opened from the link in its GitHub issue (shared/bug-bundles.js). It is not in the Admin menu and has no list, status or count.
-// Why (7 Nov 2026, owner: "to avoid polluting Admin... to avoid making it a bug/issue tracker"): GitHub holds the bug; this page only hosts the private pictures, logs and state that must not sit in an issue. Pure drawing: data in, HTML out.
+// /admin/bug-bundle/<id> (any signed-in admin, as the other admin pages): the evidence of ONE bug an AI tester reported, opened from the link in its GitHub issue or from the list at /admin/testing/bug-bundles (admin/bug-bundles.js). It has no menu entry of its own (shared/bug-bundles.js).
+// Why (7 Nov 2026, owner: "to avoid polluting Admin... to avoid making it a bug/issue tracker", then "let's add a dedicated page" for the list): GitHub holds the bug and its status; this page only hosts the private pictures, logs and state that must not sit in an issue. Pure drawing: data in, HTML out.
 // Guard: test/unit/admin/bug-bundle.test.js.
 import {viewer} from '../shared/auth.js';
 import {adminPage} from './admin.js';
@@ -32,6 +32,7 @@ ${steps ? `<h3>Steps</h3><ol class="steps">${steps}</ol>` : ''}</section>
 const page = body => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Bug bundle</title>
 <link rel="icon" href="/favicon-32.png"><style>${CHIP_STYLE}${STYLE}.facts{display:grid;grid-template-columns:110px 1fr;gap:4px 12px}.facts dt{color:#8d949c}.facts dd{margin:0}.shots{display:flex;flex-wrap:wrap;gap:12px}.shots img{max-width:520px;width:100%;border:1px solid #2a2f37;border-radius:6px}pre{background:#1a1e24;padding:10px;border-radius:6px;overflow:auto}</style></head><body><main>
 <header><h1>🐞 Bug bundle</h1></header>
+<p><a href="/admin/testing/bug-bundles">← All bug bundles</a></p>
 ${body}
 </main></body></html>`;
 
@@ -52,7 +53,7 @@ export async function view(request, env) {
  * The route: `view` inside the Admin shell (stylesheet, top bar, as every Admin page; it is in no menu group, so none is open). A file answer (a picture, logs) passes untouched.
  * Why (7 Nov 2026, page-shot UNSTYLED): the route called `view` bare, so the page had no site CSS and no bar.
  */
-export async function shell(request, env, pathname) {
+export async function shell(request, env) {
   const response = await view(request, env);
-  return /text\/html/.test(response.headers.get('Content-Type') || '') ? adminPage(response, pathname, await viewer(request, env) || undefined) : response;
+  return /text\/html/.test(response.headers.get('Content-Type') || '') ? adminPage(response, '/admin/testing/bug-bundles', await viewer(request, env) || undefined) : response;
 }
