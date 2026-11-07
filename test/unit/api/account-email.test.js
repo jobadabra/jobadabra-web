@@ -8,6 +8,7 @@ import {address, confirm, notify, resend, language} from '../../../api/account-e
 import {sendDigests} from '../../../api/mail-held.js';
 import {fromTelegram} from '../../../api/mail-html.js';
 import {addrOf, confirmLink, compose, send} from '../../../shared/mail.js';
+import {NOTIFICATION_LANGUAGES} from '../../../shared/notification-language.js';
 import {TEMPLATES} from '../../../shared/mail-templates.js';
 import {switchOff} from '../../../api/mail-unsub.js';
 import {tokenFor} from '../../../shared/guard.js';
@@ -396,4 +397,35 @@ test('Resend never mails an address whose owner stopped our mail; only the 14-da
   const press = async () => (await resend(new Request('https://x/api/account/email/resend', {method: 'POST', headers: {'x-api-key': await keyOf('install-aaaa')}}), e, new Date('2026-10-16T12:00:00Z'))).json();
   assert.deepEqual(await press(), {ok: false, error: 'stopped'});
   assert.equal(sent.length, before, 'nothing is mailed to a person who said stop');
+});
+
+
+test('resend uses explicit request language without changing the cache; absent request language retains cached/default English delivery', async t => {
+  const trips = [];
+  t.mock.method(globalThis, 'fetch', (...args) => { trips.push(args); throw new Error('No external transport'); });
+  t.after(() => assert.deepEqual(trips, []));
+  t.mock.method(TEMPLATES['confirm-resend'], 'subject', data => 'confirm:' + data.locale);
+  // This service-foundation test observes actual template context; frame localization is independently covered by the template PR.
+  const html = TEMPLATES['confirm-resend'].html;
+  t.mock.method(TEMPLATES['confirm-resend'], 'html', data => html(data) + '<span data-delivery-language="' + data.locale + '"></span>');
+  for (const language of [...NOTIFICATION_LANGUAGES, undefined]) {
+    const {e, sent} = setup(); t.after(() => e.STATS.db.close());
+    await call(address, e, 'install-lang', 'PUT', {email: 'lang@example.com', language: 'de'}); sent.length = 0;
+    assert.deepEqual(await call(resend, e, 'install-lang', 'POST', language ? {language} : undefined), {status: 200, ok: true});
+    assert.equal(sent[0].subject, 'confirm:' + (language || 'de'));
+    assert.ok(sent[0].html.includes('data-delivery-language="' + (language || 'de') + '"'));
+    assert.equal(sent[0].to, 'lang@example.com'); assert.ok(!sent[0].headers);
+    assert.equal(e.STATS.db.prepare('SELECT notification_language AS value FROM pro_accounts').get().value, 'de');
+  }
+  const {e, sent} = setup(); t.after(() => e.STATS.db.close());
+  await call(address, e, 'install-en', 'PUT', {email: 'old@example.com'}); sent.length = 0;
+  assert.equal((await call(resend, e, 'install-en', 'POST')).ok, true); assert.equal(sent[0].subject, 'confirm:en');
+});
+
+test('invalid resend language does not send or modify account preference and still requires authenticated install', async t => {
+  const {e, sent} = setup(); t.after(() => e.STATS.db.close());
+  await call(address, e, 'install-lang', 'PUT', {email: 'lang@example.com', language: 'de'}); sent.length = 0;
+  for (const language of ['system', 'de-DE', 'unknown', '', null, {}, 7]) assert.deepEqual(await call(resend, e, 'install-lang', 'POST', {language}), {status: 400, ok: false, error: 'unsupported_language'});
+  assert.equal(sent.length, 0); assert.equal(e.STATS.db.prepare('SELECT notification_language AS value FROM pro_accounts').get().value, 'de');
+  assert.equal((await resend(new Request('https://x/api', {method: 'POST', body: '{"language":"de"}'}), e)).status, 401);
 });

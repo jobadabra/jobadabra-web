@@ -1,6 +1,7 @@
 // "I have Pro" on another computer (Pro spec PR 5, owner 16 Oct 2026): the person gives the e-mail of their Pro account, we mail a 6-digit code (10 minutes, 5 tries, bound to the asking install,
 // rate-limited per address by shared/mail.js), and the code adds that install to pro_devices (max 3; a 4th asks which device to remove). It moves Pro only, never data (export/import does that).
 // The answer to "start" is the same whether or not the address has Pro, so it cannot be used to look addresses up. Hidden (404) while PRO_PLAN is off. Guard: test/unit/api/pro-signin.test.js.
+import {NOTIFICATION_LANGUAGES} from '../shared/notification-language.js';
 import {authorize, digestOf, equal} from '../shared/guard.js';
 import {addrOf, clean, send} from '../shared/mail.js';
 import {DEVICES_PER_ACCOUNT, accountOf, link, planOn} from '../shared/pro.js';
@@ -26,12 +27,14 @@ export async function start(request, env, now = new Date()) {
   if (request.method !== 'POST') return json(405, {ok: false});
   const asked = await who(request, env);
   if (asked.response) return asked.response;
+  // Why (7 Nov 2026, approved notification-language contract): use only validated delivery context; requesting a code never changes the target account's preference.
+  if (asked.body.language !== undefined && !NOTIFICATION_LANGUAGES.includes(asked.body.language)) return json(400, {ok: false, error: 'unsupported_language'});
   const email = clean(asked.body.email);
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(400, {ok: false, error: 'Enter the email address you bought Pro with.'});
   const hash = await addrOf(email), account = await proAccount(env, hash);
   if (account) {
     const code = newCode();
-    const sent = await send(env, 'account-code', email, {code}, {now});
+    const sent = await send(env, 'account-code', email, {code}, {now, locale: asked.body.language});
     if (sent.ok) {
       await env.STATS.prepare('INSERT OR REPLACE INTO pro_codes (email_hash, code_hash, install, expires_at, tries, created_at) VALUES (?, ?, ?, ?, 0, ?)')
         .bind(hash, await codeHash(env, hash, code), asked.install, new Date(now.getTime() + CODE_MINUTES * 60000).toISOString(), now.toISOString()).run();

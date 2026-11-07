@@ -117,6 +117,9 @@ export async function resend(request, env, now = new Date()) {
   const install = await who(request, env);
   if (!install || !env.STATS) return json(401, {ok: false, error: 'unauthorized'});
   if (request.method !== 'POST') return json(405, {ok: false});
+  const body = await request.json().catch(() => ({}));
+  // Why (7 Nov 2026, approved notification-language contract): resend can use the current desktop choice without waiting for or writing the derived account cache.
+  if (body.language !== undefined && !NOTIFICATION_LANGUAGES.includes(body.language)) return json(400, {ok: false, error: 'unsupported_language'});
   const account = await accountOf(env, install);
   if (!account?.email) return json(200, {ok: false, error: 'no_address'});
   if (account.email_confirmed_at) return json(200, {ok: false, error: 'confirmed'});
@@ -128,7 +131,7 @@ export async function resend(request, env, now = new Date()) {
   const since = ms => new Date(now.getTime() - ms).toISOString();
   const made = async ms => (await env.STATS.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE addr = ? AND template = 'confirm-resend' AND status = 'sent' AND at >= ?").bind(addr, since(ms)).first()).n;
   if (await made(3600 * 1000) >= RESEND_PER_HOUR || await made(24 * 3600 * 1000) >= RESEND_PER_DAY) return json(200, {ok: false, error: 'wait'});
-  const sent = await send(env, 'confirm-resend', account.email, {confirmUrl: await confirmLink(env, account.email)}, {now});
+  const sent = await send(env, 'confirm-resend', account.email, {confirmUrl: await confirmLink(env, account.email)}, {now, locale: body.language});
   if (sent.ok) return json(200, {ok: true});
   return json(200, {ok: false, error: sent.reason === 'off' ? 'off' : sent.reason === 'rate' ? 'wait' : 'not_sent'});
 }

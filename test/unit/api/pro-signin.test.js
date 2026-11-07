@@ -6,6 +6,8 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {CODE_MINUTES, MAX_TRIES, start, verify} from '../../../api/pro-signin.js';
 import {digestOf, tokenFor} from '../../../shared/guard.js';
+import {NOTIFICATION_LANGUAGES} from '../../../shared/notification-language.js';
+import {TEMPLATES} from '../../../shared/mail-templates.js';
 import {DAILY_MAX} from '../../../shared/mail.js';
 import {createAccount, link} from '../../../shared/pro.js';
 
@@ -118,4 +120,42 @@ test('hidden while PRO_PLAN is off, and closed to a caller without an install ke
   const {e} = setup();
   assert.equal((await start(new Request('https://x/api', {method: 'POST', body: '{}'}), e, now)).status, 401);
   assert.equal((await post(start, e, 'install-work', {email: 'nope'})).status, 400);
+});
+
+
+test('first Pro code uses validated request language without updating the unverified account cache; old callers retain cache/default', async t => {
+  const trips = [];
+  t.mock.method(globalThis, 'fetch', (...args) => { trips.push(args); throw new Error('No external transport'); });
+  t.after(() => assert.deepEqual(trips, []));
+  t.mock.method(TEMPLATES['account-code'], 'subject', data => 'code:' + data.locale);
+  // This service-foundation test observes actual template context; frame localization is independently covered by the template PR.
+  const html = TEMPLATES['account-code'].html;
+  t.mock.method(TEMPLATES['account-code'], 'html', data => html(data) + '<span data-delivery-language="' + data.locale + '"></span>');
+  for (const language of [...NOTIFICATION_LANGUAGES, undefined]) {
+    const {e, sent} = setup(); t.after(() => e.STATS.db.close());
+    e.STATS.db.exec(sql('0141_notification_language.sql'));
+    await proAccount(e);
+    e.STATS.db.prepare("UPDATE pro_accounts SET notification_language = 'de'").run();
+    assert.deepEqual(await post(start, e, 'install-work', {email: 'pro@example.com', ...(language && {language})}), {status: 200, ok: true, minutes: CODE_MINUTES});
+    assert.equal(sent[0].subject, 'code:' + (language || 'de'));
+    assert.ok(sent[0].html.includes('data-delivery-language="' + (language || 'de') + '"'));
+    assert.equal(sent[0].to, 'pro@example.com'); assert.ok(!sent[0].headers);
+    assert.equal(e.STATS.db.prepare('SELECT notification_language AS value FROM pro_accounts').get().value, 'de');
+    assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM pro_devices WHERE install = 'install-work'").get().n, 0);
+    assert.deepEqual(await post(verify, e, 'install-work', {email: 'pro@example.com', code: codeIn(sent), language}), {status: 200, ok: true});
+    assert.equal(e.STATS.db.prepare('SELECT notification_language AS value FROM pro_accounts').get().value, 'de', 'post-link cache refresh belongs to the authenticated desktop event');
+  }
+  const {e, sent} = setup(); t.after(() => e.STATS.db.close()); await proAccount(e);
+  await post(start, e, 'install-work', {email: 'pro@example.com'});
+  assert.equal(sent[0].subject, 'code:en', 'old caller without preference/schema defaults English');
+});
+
+test('invalid Pro code language is rejected without mail, codes or preference changes, after ordinary authentication', async t => {
+  const {e, sent} = setup(); t.after(() => e.STATS.db.close()); await proAccount(e);
+  for (const language of ['system', 'de-DE', 'unknown', '', null, {}, 7]) {
+    assert.deepEqual(await post(start, e, 'install-work', {email: 'pro@example.com', language}), {status: 400, ok: false, error: 'unsupported_language'});
+  }
+  assert.equal(sent.length, 0); assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM pro_codes').get().n, 0);
+  const response = await start(new Request('https://x/api', {method: 'POST', body: '{"email":"pro@example.com","language":"de"}'}), e, now);
+  assert.equal(response.status, 401);
 });
