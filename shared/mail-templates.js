@@ -1,5 +1,6 @@
 // The mails we send, by name. shared/mail.js puts each through the frame (shared/mail-frame.js: logo, title, button, footer with the unsubscribe and settings links) and adds the headers. A template says its list
 // ('service', 'releases' or 'tips': shared/mail-lists.js), whether it is `essential` (a sign-in code: not stopped by an unsubscribe), and builds subject, title, content (text and html) and an optional one `button` from plain data. Guard: test/unit/shared/mail/mail.test.js.
+import {mailText} from './mail-copy.js';
 import {appButton} from './app-needs.js';
 import {purchaseCreditWords} from './credit-purchase-words.js';
 import {codeBox, esc, jobRows, jobText, link} from './mail-frame.js';
@@ -8,94 +9,77 @@ import {releaseHtml, releaseSubject, releaseText, releaseTitle} from './mail-rel
 
 // A message the app or an Always on run would send on Telegram, in the same layout: data {subject, html, text, buttons: [{text, url}], confirmUrl} (html/text from api/mail-html.js).
 // The first button is the frame's one orange button; the others are links under the text.
-const moreHtml = (buttons = [], app) => buttons.slice(1).map(b => appButton(b, app)).map(b => `<p>${link(b.url, b.text)}</p>`).join('');
-const moreText = (buttons = [], app) => buttons.slice(1).map(b => appButton(b, app)).map(b => `${b.text}: ${b.url}`).join('\n');
-const confirmHtml = url => (url ? `<p>${link(url, 'Confirm your email')} to get every mail at once (until then, one a day).</p>` : '');
-const confirmText = url => (url ? `\nConfirm your email to get every mail at once (until then, one a day): ${url}` : '');
-const first = (buttons = [], app) => (buttons[0] ? appButton({label: buttons[0].text, url: buttons[0].url}, app) : null);
+const moreHtml = (buttons = [], app, locale) => buttons.slice(1).map(b => appButton(b, app, locale)).map(b => `<p>${link(b.url, b.text)}</p>`).join('');
+const moreText = (buttons = [], app, locale) => buttons.slice(1).map(b => appButton(b, app, locale)).map(b => `${b.text}: ${b.url}`).join('\n');
+const confirmHtml = (url, locale) => (url ? `<p>${mailText(locale, 'confirmReminderHtml', {confirm: link(url, mailText(locale, 'confirmAction'))})}</p>` : '');
+const confirmText = (url, locale) => (url ? mailText(locale, 'confirmReminderText', {url}) : '');
+const first = (buttons = [], app, locale) => (buttons[0] ? appButton({label: buttons[0].text, url: buttons[0].url}, app, locale) : null);
 
 const SITE = 'https://www.jobadabra.top';
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const muted = text => `<p class="jp-muted" style="margin:0 0 14px;color:${C.muted};font-size:13.5px">${esc(text)}</p>`;
 
 export const TEMPLATES = {
-  'message': {list: 'service',
-    subject: ({subject}) => String(subject || 'Jobadabra').slice(0, 150),
-    title: ({subject}) => String(subject || 'Jobadabra').slice(0, 150),
-    button: ({buttons, appVersion}) => first(buttons, appVersion),
-    text: ({text, buttons, confirmUrl, appVersion}) => [text, moreText(buttons, appVersion)].filter(Boolean).join('\n\n') + confirmText(confirmUrl),
-    html: ({html, buttons, confirmUrl, appVersion}) => `${html}${moreHtml(buttons, appVersion)}${confirmHtml(confirmUrl)}`},
-  // The first mail to a new or changed address (api/account-email.js, once per address ever; owner, 26 Oct 2026: "Can we send an welcome email?"). Data: {confirmUrl}.
-  'welcome': {list: 'service',
-    subject: () => 'Confirm your email for Jobadabra',
-    title: () => 'Your job matches will come here',
-    button: ({confirmUrl}) => (confirmUrl ? {label: 'Confirm your email', url: confirmUrl} : null),
-    text: () => "New job matches, reminders and answers from Jobadabra will come to this address. Confirm it to get every mail at once; until then we send at most one a day.\n\nDidn't ask for this? Ignore this email.",
-    html: () => `<p>New job matches, reminders and answers from Jobadabra will come to this address. Confirm it to get every mail at once; until then we send at most one a day.</p>${muted("Didn't ask for this? Ignore this email.")}`},
-  // The confirm link again, when the person presses Resend in the app (api/account-email.js resend; owner, 2 Nov 2026: "Keep it, make it painless"). Essential: it must reach an address whose mail
-  // the 14-day stop holds back (that stop is lifted by this very confirmation). Data: {confirmUrl}.
+  message: {list: 'service',
+    subject: ({subject} = {}) => String(subject || 'Jobadabra').slice(0, 150),
+    title: ({subject} = {}) => String(subject || 'Jobadabra').slice(0, 150),
+    button: ({buttons, appVersion, locale} = {}) => first(buttons, appVersion, locale),
+    text: ({text, buttons, confirmUrl, appVersion, locale} = {}) => [text, moreText(buttons, appVersion, locale)].filter(Boolean).join('\n\n') + confirmText(confirmUrl, locale),
+    html: ({html, buttons, confirmUrl, appVersion, locale} = {}) => `${html}${moreHtml(buttons, appVersion, locale)}${confirmHtml(confirmUrl, locale)}`},
+  welcome: {list: 'service',
+    subject: ({locale} = {}) => mailText(locale, 'welcomeSubject'),
+    title: ({locale} = {}) => mailText(locale, 'welcomeTitle'),
+    button: ({confirmUrl, locale} = {}) => (confirmUrl ? {label: mailText(locale, 'confirmAction'), url: confirmUrl} : null),
+    text: ({locale} = {}) => `${mailText(locale, 'welcomeBody')}\n\n${mailText(locale, 'welcomeIgnore')}`,
+    html: ({locale} = {}) => `<p>${mailText(locale, 'welcomeBody')}</p>${muted(mailText(locale, 'welcomeIgnore'))}`},
   'confirm-resend': {list: 'service', essential: true,
-    subject: () => 'Confirm your email for Jobadabra',
-    title: () => 'Confirm your email',
-    button: ({confirmUrl}) => (confirmUrl ? {label: 'Confirm your email', url: confirmUrl} : null),
-    text: () => "You asked for the confirm link again. Press it and your Jobadabra mails reach you.\n\nDidn't ask for this? Ignore this email; nothing changes.",
-    html: () => `<p>You asked for the confirm link again. Press it and your Jobadabra mails reach you.</p>${muted("Didn't ask for this? Ignore this email; nothing changes.")}`},
-  // The owner's answer to a feedback the person sent from the app (shared/feedback-reply.js, owner 3 Nov 2026): "fixed" or "we saw it and parked it". Only when the person gave this address and the owner ticked it.
-  // A service mail (never a promotion). Data: {kind: 'fixed' | 'deferred', on: 'YYYY-MM-DD', excerpt, message}.
-  'feedback-update': {list: 'service', heldByStops: true,   // a person who stopped our mail reads the reply in the app (test/unit/shared/feedback/feedback-reply.test.js)
-    subject: () => 'About your feedback',
-    title: ({kind}) => (kind === 'fixed' ? 'Your feedback is fixed' : 'Thanks for your feedback'),
-    text: ({on, excerpt, message}) => `You wrote on ${on}: "${excerpt}"\n\n${message}`,
-    html: ({on, excerpt, message}) => `${muted(`You wrote on ${on}: "${excerpt}"`)}<p>${esc(message)}</p>`},
-  // Account mail: the code that proves an address (Pro device codes, sign-in). Data: {code}.
+    subject: ({locale} = {}) => mailText(locale, 'welcomeSubject'),
+    title: ({locale} = {}) => mailText(locale, 'confirmAction'),
+    button: ({confirmUrl, locale} = {}) => (confirmUrl ? {label: mailText(locale, 'confirmAction'), url: confirmUrl} : null),
+    text: ({locale} = {}) => `${mailText(locale, 'resendBody')}\n\n${mailText(locale, 'resendIgnore')}`,
+    html: ({locale} = {}) => `<p>${mailText(locale, 'resendBody')}</p>${muted(mailText(locale, 'resendIgnore'))}`},
+  'feedback-update': {list: 'service', heldByStops: true,
+    subject: ({locale} = {}) => mailText(locale, 'feedbackSubject'),
+    title: ({kind, locale} = {}) => mailText(locale, kind === 'fixed' ? 'feedbackFixedTitle' : 'feedbackThanksTitle'),
+    text: ({on, excerpt, message, locale} = {}) => `${mailText(locale, 'feedbackQuoted', {on, excerpt})}\n\n${message}`,
+    html: ({on, excerpt, message, locale} = {}) => `${muted(mailText(locale, 'feedbackQuoted', {on, excerpt}))}<p>${esc(message)}</p>`},
   'account-code': {list: 'service', essential: true,
-    subject: () => 'Your Jobadabra code',
-    title: () => 'Your sign-in code',
-    text: ({code}) => `Your Jobadabra code is ${code}.\n\nType it in the app within 10 minutes. If you did not ask for it, ignore this email; nothing changes.`,
-    html: ({code}) => `${codeBox(code)}${muted("Type it in the app within 10 minutes. If you didn't ask for it, ignore this email; nothing changes.")}`},
-  // The new-matches mail, one per run. Data: {matches: [{title, company, place, mode, fit, url}], total, openUrl?}. A service mail: never a promotion.
-  'digest': {list: 'service',
-    subject: ({total, matches = []}) => `${total ?? matches.length} new job match${(total ?? matches.length) === 1 ? '' : 'es'}`,
-    title: ({total, matches = []}) => ((total ?? matches.length) === 1 ? '1 new match' : `${total ?? matches.length} new matches`),
-    button: ({openUrl, appVersion}) => appButton({label: 'Open in Jobadabra', url: openUrl || `${SITE}/open?view=jobs`}, appVersion),
-    text: ({matches = []}) => jobText(matches),
-    html: ({matches = [], total}) => `${(total ?? matches.length) > matches.length ? muted(`The top ${matches.length} of ${total}.`) : ''}${jobRows(matches)}`},
-  // Trial reminders (admin/mail-lifecycle.js): service mails, facts only, no promotion. Data: {left} / {days}. Off unless env.TRIAL_REMINDERS = "on".
+    subject: ({locale} = {}) => mailText(locale, 'codeSubject'),
+    title: ({locale} = {}) => mailText(locale, 'codeTitle'),
+    text: ({code, locale} = {}) => `${mailText(locale, 'codeLine', {code})}\n\n${mailText(locale, 'codeInstructions')}`,
+    html: ({code, locale} = {}) => `${codeBox(code)}${muted(mailText(locale, 'codeInstructionsHtml'))}`},
+  digest: {list: 'service',
+    subject: ({total, matches = [], locale} = {}) => mailText(locale, 'digestSubject', {count: total ?? matches.length}),
+    title: ({total, matches = [], locale} = {}) => mailText(locale, 'digestTitle', {count: total ?? matches.length}),
+    button: ({openUrl, appVersion, locale} = {}) => appButton({label: mailText(locale, 'openInApp'), url: openUrl || `${SITE}/open?view=jobs`}, appVersion, locale),
+    text: ({matches = [], locale} = {}) => jobText(matches, locale),
+    html: ({matches = [], total, locale} = {}) => `${(total ?? matches.length) > matches.length ? muted(mailText(locale, 'topMatches', {shown: matches.length, total})) : ''}${jobRows(matches, locale)}`},
   'trial-left': {list: 'service',
-    subject: ({left}) => `${plural(left, 'free application')} left`,
-    title: ({left}) => `${plural(left, 'free application')} left`,
-    text: ({left}) => `You have ${plural(left, 'application')} left in your free Jobadabra trial (20 applications or 60 days, whichever lasts longer).\nSearches, tracking and your data keep working as they are.`,
-    html: ({left}) => `<p>You have <b>${esc(left)}</b> ${left === 1 ? 'application' : 'applications'} left in your free Jobadabra trial (20 applications or 60 days, whichever lasts longer).</p><p>Searches, tracking and your data keep working as they are.</p>`},
+    subject: ({left, locale} = {}) => mailText(locale, 'trialLeft', {count: left}),
+    title: ({left, locale} = {}) => mailText(locale, 'trialLeft', {count: left}),
+    text: ({left, locale} = {}) => `${mailText(locale, 'trialOpening', {count: left, number: left})}\n${mailText(locale, 'trialClosing')}`,
+    html: ({left, locale} = {}) => `<p>${mailText(locale, 'trialOpening', {count: left, number: `<b>${esc(left)}</b>`})}</p><p>${mailText(locale, 'trialClosing')}</p>`},
   'trial-ending': {list: 'service',
-    subject: ({days}) => `Your free trial ends in ${plural(days, 'day')}`,
-    title: ({days}) => `Your free trial ends in ${plural(days, 'day')}`,
-    button: ({pricingUrl}) => ({label: 'See the details', url: pricingUrl}),
-    text: ({days}) => `Your free Jobadabra trial ends in ${plural(days, 'day')}. After that new searches and drafts pause; your data stays yours.`,
-    html: ({days}) => `<p>Your free Jobadabra trial ends in <b>${esc(days)}</b> ${days === 1 ? 'day' : 'days'}. After that new searches and drafts pause; your data stays yours.</p>`},
-  // Always on paused (hosted spec §4b). Data: {reason: 'trial-over' | 'inactive', pricingUrl, pro}. Purely functional; the Pro button shows only when `pro` (the owner's marketing flag) is on.
+    subject: ({days, locale} = {}) => mailText(locale, 'trialEndingSubject', {count: days}),
+    title: ({days, locale} = {}) => mailText(locale, 'trialEndingSubject', {count: days}),
+    button: ({pricingUrl, locale} = {}) => ({label: mailText(locale, 'seeDetails'), url: pricingUrl}),
+    text: ({days, locale} = {}) => mailText(locale, 'trialEndingBody', {count: days, number: days}),
+    html: ({days, locale} = {}) => `<p>${mailText(locale, 'trialEndingBody', {count: days, number: `<b>${esc(days)}</b>`})}</p>`},
   'always-on-paused': {list: 'service',
-    subject: ({reason}) => (reason === 'inactive' ? 'Always on paused: open the app to resume' : 'Always on paused: your free trial has ended'),
-    title: ({reason}) => (reason === 'inactive' ? 'Always on is paused' : 'Always on is paused: your free trial has ended'),
-    button: ({reason, pricingUrl, pro}) => (reason !== 'inactive' && pro ? {label: 'Get Pro to keep it running', url: pricingUrl} : null),
-    text: ({reason}) => (reason === 'inactive' ? "You haven't opened Jobadabra for 14 days, so the daily searches stopped. Open the app to resume." : 'Your free trial has ended, so the daily searches stopped.'),
-    html: ({reason}) => (reason === 'inactive' ? "<p>You haven't opened Jobadabra for 14 days, so the daily searches stopped. Open the app to resume.</p>" : '<p>Your free trial has ended, so the daily searches stopped.</p>')},
-  // Always on's Test (api/hosted-test.js; owner, 5 Nov 2026: "The test should include also a notification test"): proves the alert channel reaches the person. No data.
+    subject: ({reason, locale} = {}) => mailText(locale, reason === 'inactive' ? 'pausedSubjectInactive' : 'pausedSubjectExpired'),
+    title: ({reason, locale} = {}) => mailText(locale, reason === 'inactive' ? 'pausedTitleInactive' : 'pausedTitleExpired'),
+    button: ({reason, pricingUrl, pro, locale} = {}) => (reason !== 'inactive' && pro ? {label: mailText(locale, 'keepRunning'), url: pricingUrl} : null),
+    text: ({reason, locale} = {}) => mailText(locale, reason === 'inactive' ? 'pausedBodyInactive' : 'pausedBodyExpired'),
+    html: ({reason, locale} = {}) => `<p>${mailText(locale, reason === 'inactive' ? 'pausedBodyInactive' : 'pausedBodyExpired')}</p>`},
   'always-on-test': {list: 'service', heldByStops: true,   // Why (review of hr-32): it measures whether alerts reach the person, so every stop alerts obey holds it too
-    subject: () => 'Always on test: your alerts reach you',
-    title: () => 'Your alerts reach you',
-    text: () => 'You pressed Test on Always on. This e-mail is how we tell you about new jobs when a search finds some.',
-    html: () => '<p>You pressed Test on Always on. This e-mail is how we tell you about new jobs when a search finds some.</p>'},
-  // Tips and tricks (owner, 5 Nov 2026), and every waitlist signup asked for this one mail: sent by hand (admin/mail-lifecycle.js launch), only with env.MARKETING_MAIL = "on". Data: {pro, proAi, pricingUrl} (euro prices from shared/pro-packages.js).
+    subject: ({locale} = {}) => mailText(locale, 'testSubject'),
+    title: ({locale} = {}) => mailText(locale, 'testTitle'),
+    text: ({locale} = {}) => mailText(locale, 'testBody'),
+    html: ({locale} = {}) => `<p>${mailText(locale, 'testBody')}</p>`},
   'pro-launch': {list: 'tips', waitlistToo: true,
-    subject: () => 'Jobadabra Pro is out',
-    title: () => 'Jobadabra Pro is out',
-    button: ({pricingUrl}) => ({label: 'See Pro', url: pricingUrl}),
-    text: ({pro, proAi}) => `One payment, no subscription: Pro €${pro}, or Pro + AI €${proAi} with ${purchaseCreditWords('pro-ai')} VAT included.`,
-    html: ({pro, proAi}) => `<p>One payment, no subscription: Pro €${esc(pro)}, or Pro + AI €${esc(proAi)} with ${purchaseCreditWords('pro-ai')} VAT included.</p>`},
-  // The "What's new" mail at a stable release (shared/mail-release.js), held as a draft on /admin/growth/email until the owner clicks "Send to everyone". Data: see mail-release.js.
-  'release': {list: 'releases',
-    subject: releaseSubject,
-    title: releaseTitle,
-    text: releaseText,
-    html: releaseHtml},
+    subject: ({locale} = {}) => mailText(locale, 'proSubject'),
+    title: ({locale} = {}) => mailText(locale, 'proSubject'),
+    button: ({pricingUrl, locale} = {}) => ({label: mailText(locale, 'seePro'), url: pricingUrl}),
+    text: ({pro, proAi, locale} = {}) => mailText(locale, 'proBody', {pro, proAi, credit: purchaseCreditWords('pro-ai', locale)}),
+    html: ({pro, proAi, locale} = {}) => `<p>${mailText(locale, 'proBody', {pro: esc(pro), proAi: esc(proAi), credit: purchaseCreditWords('pro-ai', locale)})}</p>`},
+  release: {list: 'releases', subject: releaseSubject, title: releaseTitle, text: releaseText, html: releaseHtml},
 };
