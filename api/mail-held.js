@@ -1,6 +1,8 @@
 // The e-mail digest of everything that is not a new-matches mail (owner, 17 Oct 2026): mail-check results, insights, finished jobs wait here, and the daily cron sends each account
 // ONE mail (weekly on Mondays for an account that chose weekly). New matches and interview notices never wait: api/account-email.js sends them at once. Guard: test/unit/api/account-email.test.js.
 import {addrOf, confirmLink, heldRefusal, send, sendTestMail} from '../shared/mail.js';
+import {notificationLocale} from '../shared/notification-language.js';
+import {recipientNotificationLanguage} from '../shared/notification-preference.js';
 import {choiceRefusal} from '../shared/mail-choices.js';
 import {TEMPLATES} from '../shared/mail-templates.js';
 import {ruleRefusal} from '../shared/mail-registry.js';
@@ -12,7 +14,7 @@ const UNCONFIRMED_DAYS = 14;     // after the first mail, an address still uncon
 export const CADENCES = ['daily', 'weekly'];
 
 // One mail to the account's address, with the confirm link while the address is unconfirmed. `row`: which app mail it is (shared/mail-registry.js APP_ROWS). -> {ok} or {ok: false, reason}.
-export async function deliver(env, account, {subject, html, text, buttons = []}, now = new Date(), {row = ''} = {}) {
+export async function deliver(env, account, {subject, html, text, buttons = []}, now = new Date(), {row = '', locale} = {}) {
   let confirmUrl = null;
   if (!account.email_confirmed_at) {
     const addr = await addrOf(account.email);
@@ -26,19 +28,20 @@ export async function deliver(env, account, {subject, html, text, buttons = []},
     if (n >= UNCONFIRMED_PER_DAY) return {ok: false, reason: 'unconfirmed'};
     confirmUrl = await confirmLink(env, account.email);
   }
-  return send(env, 'message', account.email, {subject: String(subject || '').slice(0, 150), html, text, buttons, confirmUrl}, {now, row});
+  return send(env, 'message', account.email, {subject: String(subject || '').slice(0, 150), html, text, buttons, confirmUrl}, {now, row, locale});
 }
 
 /**
  * The Test's alert mail for `account` ({email, email_confirmed_at}): {ok: true, at, earlier?} or a refusal. Once a day (shared/mail.js sendTestMail).
  * Why (review of hr-23, 5 Nov 2026): an address nobody confirmed may be a stranger's, so it gets the test through deliver(): the confirm link, one mail a day, the 14-day stop.
  */
-export async function testAlert(env, account, now = new Date()) {
+export async function testAlert(env, account, now = new Date(), {locale} = {}) {
   const ruled = await ruleRefusal(env, 'always-on-test');   // Why (review of hr-29): an unconfirmed address gets the test as a 'message' mail below, so the owner's stop on the test is asked here, for both paths
   if (ruled) return {ok: false, reason: ruled};
-  if (account.email_confirmed_at) return sendTestMail(env, account.email, now);
+  if (account.email_confirmed_at) return sendTestMail(env, account.email, now, () => send(env, 'always-on-test', account.email, {}, {now, test: true, locale}));
   const spec = TEMPLATES['always-on-test'];
-  const sent = await sendTestMail(env, account.email, now, () => deliver(env, account, {subject: spec.subject(), html: spec.html(), text: spec.text()}, now));
+  const data = {locale: locale === undefined ? await recipientNotificationLanguage(env, await addrOf(account.email)) : notificationLocale(locale)};
+  const sent = await sendTestMail(env, account.email, now, () => deliver(env, account, {subject: spec.subject(data), html: spec.html(data), text: spec.text(data)}, now, {locale: data.locale}));
   return sent.reason === 'unconfirmed' ? {ok: true, at: now.toISOString(), earlier: true} : sent;   // today's one mail with the confirm link already went
 }
 
