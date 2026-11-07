@@ -8,6 +8,8 @@ import {BAND_STYLE, verdictBand} from './verdict-band.js';
 import {load, resolve} from './testing-overview-data.js';
 import {daysTo} from './testing-overview-history.js';
 import {healthMap, MAP_STYLE, summaryBar} from './testing-overview-map.js';
+import {VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
+import {costCard, COST_STYLE} from './testing-methods-cost.js';
 import {NIGHTLY_STYLE, reportLine} from './nightly-summary-html.js';
 
 const HOUR = 3600000, DAY = 86400000;
@@ -66,15 +68,16 @@ export function page(model, {now = new Date()} = {}) {
     note: [counts.none ? `${counts.none} with no stored run` : '', `${counts.planned} planned`].filter(Boolean).join(' · ')});
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Overview · Testing · Admin</title>
 <link rel="icon" href="/favicon-32.png"><style>${STYLE}
-${MAP_STYLE}${NIGHTLY_STYLE}</style></head><body><main>
+${MAP_STYLE}${NIGHTLY_STYLE}${COST_STYLE}${VIZ_STYLE}</style></head><body><main>
 <header><h1>🧪 Testing overview</h1><span class="muted">${model.rings.length} rings · ${counts.live} methods running · ${counts.planned} planned · unit tests are not listed: they are for agent development</span></header>
 ${band}
 ${summaryBar(counts)}
 ${healthMap(model, daysTo(now))}
+${costCard(model.cost.rows, model.cost.trend)}
 <h2 class="details">Each method in detail</h2>
 ${model.rings.map(ring => `<div class="ring">${ring.icon} ${esc(ring.title)} <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· ${esc(ring.note)}</span></div>
 <div class="grid">${ring.cards.map(card => cardHtml(card, now, model.scheduled, model.reportOnly)).join('')}</div>`).join('\n')}
-</main></body></html>`;
+</main>${VIZ_TOOLTIP}</body></html>`;
 }
 
 export async function view(request, env, now = new Date()) {

@@ -8,11 +8,12 @@ import {empty, newestWithValue, dayWords} from './nightly-summary.js';
 export const FINDERS = [['finder-layout', 'Layout checks', 'Layout and DOM checks'], ['finder-review', 'AI screenshot review', 'AI screenshot review'], ['finder-interactions', 'Interaction probe', 'Interaction probe']];
 const byDay = snapshots => new Map((snapshots || []).filter(item => item?.day).map(item => [item.day, item]));
 
-// Real bugs (fixed or queued) the finder filed in the 7 days up to each day: one point per stored snapshot.
+// Real bugs (fixed or queued) a detector filed in the 7 days up to each day: one point per stored snapshot. Shared with Testing → Overview's "Bugs found vs what they cost" card (one way of counting real bugs, owner, 7 Nov 2026).
 // Why (5 Nov 2026, owner: layout 1 Nov, probe 24 Oct): the writer lists only detectors that filed in the window (selfheal-stats.mjs `by`), so a stored snapshot with no row for a finder means
 // it filed nothing = 0. Read as "no data" the point went grey and the row printed the last day the finder had filed, not the day of the numbers.
-function finder(snapshots, days, [id, title, detector]) {
-  const stored = byDay(snapshots), files = ['self-heal-stats.yml'], filedOn = new Set();
+/** -> {series: [{day, value, ok}], filedOn: Set<day>} for `days` (oldest first); a day with no snapshot, or a snapshot that did not measure, has value null. */
+export function realByDay(snapshots, days, detector) {
+  const stored = byDay(snapshots), filedOn = new Set();
   const series = days.map(day => {
     const last7 = stored.get(day)?.periods?.last7;
     if (!last7) return {day, value: null, ok: null};
@@ -22,6 +23,10 @@ function finder(snapshots, days, [id, title, detector]) {
     if (value > 0) filedOn.add(day);
     return {day, value, ok: null};
   });
+  return {series, filedOn};
+}
+function finder(snapshots, days, [id, title, detector]) {
+  const files = ['self-heal-stats.yml'], {series, filedOn} = realByDay(snapshots, days, detector);
   const last = newestWithValue(series);
   if (!last) return empty(id, title, files, 'no self-healing snapshot in the last 14 days');
   const lastFiled = days.filter(day => filedOn.has(day)).at(-1);

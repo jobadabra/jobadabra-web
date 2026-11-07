@@ -11,9 +11,11 @@ import {issues} from './sentry.js';
 import {missed, words} from '../shared/schedules-model.js';
 import {METHODS, PLANNED, RINGS} from './testing-overview-methods.js';
 import {nightlySummary, summaryForCard} from './nightly-summary.js';
-import {historyOf, MAP_DAYS} from './testing-overview-history.js';
+import {daysTo, historyOf, MAP_DAYS} from './testing-overview-history.js';
 import {readCard as readProbes, readDays as readProbeDays} from '../shared/synthetic.js';
 import {PUBLIC_REPO} from '../shared/repos.js';
+import {readBroker} from './jobcost.js';
+import {costRows, trendDays} from './testing-methods-cost.js';
 
 const DAY = 86400000, DEFAULT_REPO = PUBLIC_REPO;
 const REPORT_PAGE = '/admin/testing/report-only';   // the Report only tab (owner, 2 Nov 2026): the proof cards keep a one-line link to it, not the nightly charts
@@ -22,9 +24,9 @@ const DONE = {success: 'green', failure: 'red', timed_out: 'red'};
 
 /** Every stored row the cards read; a reader that fails gives null, and the cards that need it say so. */
 export async function load(env, now = new Date(), {sentry = issues} = {}) {
-  const [schedules, e2e, integration, healing, card, sentryList, synthetic, syntheticDays] = await Promise.all([readSchedules(env), readE2e(env.STATS), readIntegration(env.STATS), snapshots(env).catch(() => []),
-    latestCard(env.STATS), env.SENTRY_AUTH_TOKEN ? sentry(env, 'users').catch(() => null) : null, readProbes(env, now), readProbeDays(env, MAP_DAYS, now)]);   // the two readers of shared/synthetic.js: no query of our own (1 Nov 2026, to)
-  return {repo: env.GITHUB_REPO || DEFAULT_REPO, schedules, e2e, integration, healing: healing?.[0] || null, card, sentry: sentryList, synthetic, syntheticDays, now};
+  const [schedules, e2e, integration, healing, card, sentryList, synthetic, syntheticDays, broker] = await Promise.all([readSchedules(env), readE2e(env.STATS), readIntegration(env.STATS), snapshots(env).catch(() => []),
+    latestCard(env.STATS), env.SENTRY_AUTH_TOKEN ? sentry(env, 'users').catch(() => null) : null, readProbes(env, now), readProbeDays(env, MAP_DAYS, now), readBroker(env).catch(() => null)]);   // the two readers of shared/synthetic.js: no query of our own (1 Nov 2026, to)
+  return {repo: env.GITHUB_REPO || DEFAULT_REPO, schedules, e2e, integration, healing: healing?.[0] || null, snapshots: healing || [], tally: broker?.tally || null, card, sentry: sentryList, synthetic, syntheticDays, now};
 }
 
 const runUrl = (repo, id) => `https://github.com/${repo}/actions/runs/${Number(id)}`;
@@ -141,5 +143,6 @@ export function resolve(data, {pages = []} = {}) {
   });
   const rings = RINGS.map(ring => ({...ring, cards: [...live.filter(card => card.ring === ring.id), ...PLANNED.filter(card => card.ring === ring.id).map(card => ({...card, kind: 'planned'}))]}));
   const counted = live.filter(card => card.state !== 'link'), count = state => counted.filter(card => card.state === state).length;   // a link-only card (GTM readiness) has its own page and no verdict here
-  return {rings, scheduled: pages.includes(SCHEDULED_PAGE) ? SCHEDULED_PAGE : '', reportOnly: pages.includes(REPORT_PAGE) ? REPORT_PAGE : '', red: counted.filter(card => card.state === 'red').map(card => card.title), redCards: counted.filter(card => card.state === 'red').map(card => ({id: card.id, icon: card.icon, title: card.title})), counts: {green: count('green'), red: count('red'), none: count('none'), live: counted.length, planned: PLANNED.length}};
+  const cost = {rows: costRows({healing: data.healing, tally: data.tally, repo: data.repo, now: data.now || new Date(), minutesOf: file => jobOf(data, file)?.weeklyMin ?? null}), trend: trendDays(data.snapshots || [], daysTo(data.now || new Date()))};
+  return {rings, cost, scheduled: pages.includes(SCHEDULED_PAGE) ? SCHEDULED_PAGE : '', reportOnly: pages.includes(REPORT_PAGE) ? REPORT_PAGE : '', red: counted.filter(card => card.state === 'red').map(card => card.title), redCards: counted.filter(card => card.state === 'red').map(card => ({id: card.id, icon: card.icon, title: card.title})), counts: {green: count('green'), red: count('red'), none: count('none'), live: counted.length, planned: PLANNED.length}};
 }
