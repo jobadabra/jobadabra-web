@@ -5,6 +5,8 @@
 import {mediaRange} from './range.js';
 import {videoIngest, videoView} from '../../admin/lab-video.js';
 import {runData, runFile, runIngest} from '../../shared/agent-runs.js';
+import {bundleIngest, prune as pruneBundles} from '../../shared/bug-bundles.js';
+import {shell as bugBundlePage} from '../../admin/bug-bundle.js';
 import * as sentryAlert from '../../admin/sentry-alert.js';
 import * as synthetic from '../../shared/synthetic.js';
 import {recordStarts, startIntelCollectors} from '../../shared/intel-start.js';
@@ -255,6 +257,8 @@ async function route(request, env, ctx) {
   if (pathname === '/applying/video' && request.method === 'PUT') return videoIngest(request, env);   // CI's pool run: one fill video per row (Bearer REPLAYS_PUBLISH_KEY, admin/lab-video.js)
   if (pathname === '/admin/form-filling/lab/video' && request.method === 'GET') return videoView(request, env);   // the owner streams it (admin/lab-video.js)
   if (pathname === '/agent/run' && request.method === 'PUT') return runIngest(request, env);   // CI's AI persona job: a run's record, video and screenshots (Bearer REPLAYS_PUBLISH_KEY, shared/agent-runs.js)
+  if (pathname === '/agent/bundle' && request.method === 'POST') return bundleIngest(request, env);   // an AI tester's bug evidence from the app's tester Send feedback (Bearer REPLAYS_PUBLISH_KEY or the owner's key; shared/bug-bundles.js)
+  if (pathname.startsWith('/admin/bug-bundle/') && request.method === 'GET') return bugBundlePage(request, env, pathname);   // opened from the GitHub issue's link only: no list, no menu entry (admin/bug-bundle.js)
   if (pathname === '/admin/ai-persona/data' && request.method === 'GET') return runData(request, env);   // the owner reads the run list and a run's record (shared/agent-runs.js)
   if (pathname === '/admin/ai-persona/file' && request.method === 'GET') return runFile(request, env);   // the owner streams a run's video or screenshot (shared/agent-runs.js)
   if (pathname === '/applying/replays' && request.method === 'PUT') return replaysIngest(request, env);   // CI on main's recorded replays (Bearer REPLAYS_PUBLISH_KEY, admin/applying-replays.js)
@@ -372,6 +376,7 @@ export default {
     }
     ctx.waitUntil(sentryAlert.purge(env).catch(error => console.error(`sentry alert purge: ${error.message}`)));
     ctx.waitUntil(retryImpact(env).catch(error => { console.error(`feedback impact retry: ${error.message}`); throw error; }));   // feedback the AI could not rate yet (shared/feedback-impact.js); rethrown so an outage makes this invocation fail, not only a log line (Gitar on #339)
+    if (env.LAB_FILLS) ctx.waitUntil(pruneBundles(env.LAB_FILLS).catch(error => console.error(`bug bundles purge: ${error.message}`)));   // bundles older than 90 days (shared/bug-bundles.js)
     ctx.waitUntil(purgeFeedbackFiles(env).catch(error => console.error(`feedback files purge: ${error.message}`)));   // screenshots and logs older than 90 days (shared/feedback.js)
     ctx.waitUntil(synthetic.purge(env).catch(error => console.error(`synthetic purge: ${error.message}`)));
     // The day's totals first (kept for good), then the 90-day purge of raw rows.

@@ -3,6 +3,7 @@ import {ACTIONS} from '../shared/aicost.js';
 import {feedbackSeed, feedbackRunSeed} from './page-shot-seed-feedback.mjs';
 import {LAB_REPO, PUBLIC_REPO, WEB_REPO, githubUrl} from '../shared/repos.js';
 import {aiPersona} from './page-shot-seed-ai-persona.mjs';
+import {bugBundle} from './page-shot-seed-bug-bundle.mjs';
 import {aiCostFull} from './page-shot-seed-ai-cost.mjs';
 import {healFull, testingFull} from './page-shot-seed-testing.mjs';
 import {qualityBoard} from './page-shot-seed-quality.mjs'; import {searchNight, searchNight18} from './page-shot-seed-night.mjs'; import {finderSilence} from './page-shot-seed-finders.mjs';
@@ -498,6 +499,7 @@ export const seeds = {...notifySeeds,
     }
   },
   'ai-persona': aiPersona,
+  'bug-bundle': bugBundle,
   'ai-cost-full': context => aiCostFull(context, seeds),   // /admin/ai/costs with every section filled (5 Nov 2026, admin charts)
   'testing-full': context => testingFull(context),   // the three Testing pages with every section filled (5 Nov 2026, admin charts)
   'finder-silence': context => finderSilence(context, seeds), 'product-quality': context => qualityBoard(context, seeds), 'search-night': context => searchNight(context, seeds), 'search-night-18': context => searchNight18(context, seeds),   // Report only's product-quality board: 30 made-up days of fills, searches, probes and quality nights ([ri], 5 Nov 2026)
