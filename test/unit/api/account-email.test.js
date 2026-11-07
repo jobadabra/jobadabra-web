@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
-import {address, confirm, notify, resend} from '../../../api/account-email.js';
+import {address, confirm, notify, resend, language} from '../../../api/account-email.js';
 import {sendDigests} from '../../../api/mail-held.js';
 import {fromTelegram} from '../../../api/mail-html.js';
-import {addrOf, confirmLink} from '../../../shared/mail.js';
+import {addrOf, confirmLink, compose, send} from '../../../shared/mail.js';
+import {TEMPLATES} from '../../../shared/mail-templates.js';
 import {switchOff} from '../../../api/mail-unsub.js';
 import {tokenFor} from '../../../shared/guard.js';
 import {createAccount} from '../../../shared/pro.js';
@@ -15,7 +16,7 @@ import {createAccount} from '../../../shared/pro.js';
 const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql', '0135_mail_on.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0085_mail_held.sql', '0135_mail_on.sql', '0141_notification_language.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE revoked (who TEXT PRIMARY KEY, reason TEXT, created_at TEXT)');
   const statement = (text, args = []) => ({bind: (...values) => statement(text, values), run: async () => db.prepare(text).run(...args),
@@ -26,6 +27,66 @@ const setup = () => { const sent = [], e = {MAIL: 'on', STATS: d1(), STATS_SALT:
 const keyOf = async install => `JPF1.${install}.${await tokenFor(install, {STATS_SALT: 'salt'}, 'ai')}`;
 const call = async (fn, e, install, method, body) => { const r = await fn(new Request('https://x/api', {method, headers: {'x-api-key': await keyOf(install)}, ...(body && {body: JSON.stringify(body)})}), e, new Date('2026-10-16T10:00:00Z')); return {status: r.status, ...(await r.json())}; };
 const card = '<b>3 new matches</b>\nTop: <a href="https://x.example/1">Data Engineer</a> &amp; more';
+
+test('language cache is authenticated and refreshed before the first welcome without changing consent', async t => {
+  const {e, sent} = setup();
+  t.mock.method(TEMPLATES.welcome, 'subject', data => `welcome:${data.locale}`);
+  assert.equal((await call(address, e, 'install-lang', 'PUT', {email: 'lang@example.com', language: 'ru'})).ok, true);
+  assert.equal(sent[0].subject, 'welcome:ru');
+  for (const value of ['en', 'de', 'fr', 'it', 'es', 'ro', 'ru']) {
+    assert.deepEqual(await call(language, e, 'install-lang', 'PUT', {language: value}), {status: 200, ok: true, language: value});
+    assert.equal(e.STATS.db.prepare('SELECT notification_language AS value FROM pro_accounts').get().value, value);
+  }
+  assert.equal((await call(language, e, 'install-lang', 'PUT', {language: 'system'})).status, 400);
+  assert.equal((await call(language, e, 'install-other', 'PUT', {language: 'de'})).status, 409);
+  assert.equal((await language(new Request('https://x/api', {method: 'PUT', body: '{"language":"de"}'}), e)).status, 401);
+  assert.equal(e.STATS.db.prepare('SELECT notification_language AS value FROM pro_accounts').get().value, 'ru');
+  const account = e.STATS.db.prepare('SELECT email, email_confirmed_at, service_mail_off_at FROM pro_accounts').get();
+  assert.deepEqual({...account}, {email: 'lang@example.com', email_confirmed_at: null, service_mail_off_at: null});
+  assert.equal(sent.length, 1, 'language updates send no mail');
+});
+
+test('compose defaults English and owner tests force English while end-user test mail follows recipient cache', async t => {
+  const {e, sent} = setup();
+  await call(address, e, 'install-lang', 'PUT', {email: 'lang@example.com', language: 'ru'});
+  t.mock.method(TEMPLATES['always-on-test'], 'subject', data => `test:${data.locale}`);
+  assert.equal(compose('always-on-test', {locale: 'ru'}).subject, 'test:en', 'payload locale cannot override the default audience');
+  assert.equal(compose('always-on-test', {}, null, 'de').subject, 'test:de');
+  assert.equal((await send(e, 'always-on-test', 'lang@example.com', {}, {test: true})).ok, true);
+  assert.equal(sent.at(-1).subject, 'test:ru', 'user Test button is still end-user copy');
+  assert.equal((await send(e, 'always-on-test', 'lang@example.com', {locale: 'ru'}, {test: true, ownerTest: true, locale: 'de'})).ok, true);
+  assert.equal(sent.at(-1).subject, 'test:en', 'owner test cannot inherit a user locale');
+  assert.ok(sent.every(mail => mail.to === 'lang@example.com'));
+});
+
+test('unconfirmed user test mail renders with recipient language and explicit message context does not overwrite the cache', async t => {
+  const {e, sent} = setup();
+  await call(address, e, 'install-lang', 'PUT', {email: 'lang@example.com', language: 'ru'});
+  t.mock.method(TEMPLATES['always-on-test'], 'subject', data => `test:${data?.locale || 'en'}`);
+  assert.equal((await call(notify, e, 'install-lang', 'POST', {kind: 'test'})).ok, true);
+  assert.equal(sent.at(-1).subject, 'test:ru');
+  e.STATS.db.prepare('UPDATE pro_accounts SET email_confirmed_at = ?').run('2026-10-15');
+  t.mock.method(TEMPLATES.message, 'subject', data => `${data.locale}:${data.subject}`);
+  assert.equal((await call(notify, e, 'install-lang', 'POST', {subject: 'Fictional payload', html: card, language: 'de'})).ok, true);
+  assert.equal(sent.at(-1).subject, 'de:Fictional payload');
+  assert.equal(e.STATS.db.prepare('SELECT notification_language AS value FROM pro_accounts').get().value, 'ru');
+});
+
+test('a missing language migration never interrupts address registration, first welcome or cadence', async t => {
+  const {e, sent} = setup();
+  e.STATS.db.exec('ALTER TABLE pro_accounts DROP COLUMN notification_language');
+  const warnings = [];
+  t.mock.method(console, 'warn', (...args) => warnings.push(args));
+  t.mock.method(TEMPLATES.welcome, 'subject', data => `welcome:${data.locale}`);
+  assert.equal((await call(address, e, 'install-rollout', 'PUT', {email: 'rollout@example.com', language: 'de', cadence: 'weekly'})).ok, true);
+  assert.equal(sent[0].subject, 'welcome:de', 'current message context does not require a successful cache write');
+  const saved = await call(address, e, 'install-rollout', 'GET');
+  assert.equal(saved.email, 'rollout@example.com');
+  assert.equal(saved.cadence, 'weekly');
+  assert.deepEqual(warnings, [['notification language cache not refreshed']]);
+  assert.deepEqual(await call(language, e, 'install-rollout', 'PUT', {language: 'de'}), {status: 503, ok: false, error: 'language_not_saved'});
+  assert.equal(sent.length, 1, 'a failed dedicated refresh sends nothing');
+});
 
 test('fromTelegram keeps bold, italics and https links; shows every other tag as text; closes what is left open', () => {
   const {html, text} = fromTelegram('<b>Hi <script>alert(1)</script></b> <a href="javascript:x">bad</a> <a href="https://a.co/?x=1&amp;y=2">ok</a> <i>open');

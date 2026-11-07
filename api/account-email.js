@@ -3,6 +3,8 @@
 // POST /api/account/email/resend sends the confirm link again; /confirm confirms the address. An address another account already holds is refused here (joining it takes a code sent to that address, the device sign-in). Guard: test/unit/api/account-email.test.js.
 import {authorize, digestOf, equal, tokenFor} from '../shared/guard.js';
 import {installOfTrialKey} from '../shared/trial-key.js';
+import {NOTIFICATION_LANGUAGES} from '../shared/notification-language.js';
+import {cacheNotificationLanguage} from '../shared/notification-preference.js';
 import {addrOf, confirmLink, heldRefusal, send, validAddress, clean} from '../shared/mail.js';
 import {APP_ROWS} from '../shared/mail-registry.js';
 import {newsAnswer, newsFacts, recordNews} from '../shared/mail-lists.js';
@@ -52,6 +54,7 @@ export async function address(request, env, now = new Date(), fetcher = fetch, c
   }
   if (request.method !== 'PUT') return json(405, {ok: false});
   const body = await request.json().catch(() => ({})), email = clean(body.email);
+  if (body.language !== undefined && !NOTIFICATION_LANGUAGES.includes(body.language)) return json(400, {ok: false, error: 'unsupported_language'});
   if (!validAddress(email)) return json(400, {ok: false, error: 'Enter an email address like you@example.com.'});
   const hash = await digestOf(email);
   if (account && account.plan === 'pro' && account.email_hash !== hash) return json(409, {ok: false, error: 'pro'});   // a Pro account's address changes only through its own sign-in
@@ -73,22 +76,38 @@ export async function address(request, env, now = new Date(), fetcher = fetch, c
     account = {id};
     fresh = true;
   }
+  // Why (7 Nov 2026, review of #482): a missing additive cache migration must not interrupt the already-saved address, consent choices or first welcome.
+  if (body.language !== undefined) await cacheNotificationLanguage(env, account.id, body.language).catch(() => console.warn('notification language cache not refreshed'));
   if (fresh) {
     const ping = tellOwner(env, fetcher, {email, install, changed});   // the Worker passes ctx: the answer does not wait for Telegram; tests wait
     if (ctx?.waitUntil) ctx.waitUntil(ping); else await ping;
-    await welcome(env, email, now);
+    await welcome(env, email, now, body.language);
   }
   await recordNews(env, account.id, body, now);
   if (CADENCES.includes(body.cadence)) await env.STATS.prepare('UPDATE pro_accounts SET digest_cadence = ? WHERE id = ?').bind(body.cadence, account.id).run();   // how often the digest comes: daily or weekly
   return json(200, {ok: true});
 }
 
+/** Refresh the authenticated install account's derived notification language without changing address, consent or sending mail. */
+export async function language(request, env) {
+  const install = await who(request, env);
+  if (!install || !env.STATS) return json(401, {ok: false, error: 'unauthorized'});
+  if (request.method !== 'PUT') return json(405, {ok: false});
+  const body = await request.json().catch(() => ({}));
+  if (!NOTIFICATION_LANGUAGES.includes(body.language)) return json(400, {ok: false, error: 'unsupported_language'});
+  const account = await accountOf(env, install);
+  if (!account) return json(409, {ok: false, error: 'no_account'});
+  try { await cacheNotificationLanguage(env, account.id, body.language); }
+  catch { return json(503, {ok: false, error: 'language_not_saved'}); }
+  return json(200, {ok: true, language: body.language});
+}
+
 // The welcome mail with the confirm button, once per address ever (an address switched back and forth is not mailed again). It never fails the save: send() refuses
 // quietly (mail off, the daily limit) and the confirm link still rides on the first real mail (api/mail-held.js deliver).
-async function welcome(env, email, now) {
+async function welcome(env, email, now, locale) {
   if (!env.STATS) return;
   const before = await env.STATS.prepare("SELECT 1 AS y FROM mail_log WHERE addr = ? AND template = 'welcome' AND status = 'sent'").bind(await addrOf(email)).first();
-  if (!before) await send(env, 'welcome', email, {confirmUrl: await confirmLink(env, email)}, {now});
+  if (!before) await send(env, 'welcome', email, {confirmUrl: await confirmLink(env, email)}, {now, locale});
 }
 
 // POST /api/account/email/resend: the confirm link again, to the address this account holds and has not confirmed (the welcome mail goes once per address ever, so a lost mail had no way back).
@@ -124,7 +143,8 @@ export async function notify(request, env, now = new Date()) {
   const account = await accountOf(env, install);
   if (!account?.email) return json(200, {ok: false, reason: 'no_address'});
   const body = await request.json().catch(() => ({}));
-  if (body.kind === 'test') { const sent = await testAlert(env, account, now); return json(200, sent.ok ? {ok: true, earlier: !!sent.earlier} : {ok: false, reason: sent.reason}); }
+  const locale = NOTIFICATION_LANGUAGES.includes(body.language) ? body.language : undefined;
+  if (body.kind === 'test') { const sent = await testAlert(env, account, now, {locale}); return json(200, sent.ok ? {ok: true, earlier: !!sent.earlier} : {ok: false, reason: sent.reason}); }
   const {html, text} = fromTelegram(body.html);
   if (!text) return json(400, {ok: false, reason: 'empty'});
   const buttons = (Array.isArray(body.buttons) ? body.buttons : []).slice(0, 6).filter(b => b && /^https:\/\//.test(b.url) && b.text).map(b => ({text: String(b.text).slice(0, 80), url: String(b.url).slice(0, 500)}));
@@ -132,7 +152,7 @@ export async function notify(request, env, now = new Date()) {
   const row = APP_ROWS.includes(body.mail) ? body.mail : '';
   const toHold = async () => { const refused = await heldRefusal(env, account.email, row, now); return refused ? {ok: false, reason: refused} : hold(env, account, {...item, row}, now); };
   if (body.kind === 'activity') return json(200, await toHold());   // not new matches, not urgent: waits for the daily or weekly digest (api/mail-held.js)
-  const result = await deliver(env, account, item, now, {row});
+  const result = await deliver(env, account, item, now, {row, locale});
   if (result.reason === 'unconfirmed') return json(200, await toHold());   // today's one mail to an unconfirmed address went: this one waits for the digest, never dropped
   return json(200, result.ok ? {ok: true} : {ok: false, reason: result.reason});
 }

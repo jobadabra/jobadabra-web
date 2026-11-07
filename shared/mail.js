@@ -9,6 +9,8 @@ import {choiceRefusal} from './mail-choices.js';
 import {ruleRefusal} from './mail-registry.js';
 import {TEMPLATES} from './mail-templates.js';
 import {footerOf} from './mail-footer.js';
+import {notificationLocale} from './notification-language.js';
+import {recipientNotificationLanguage} from './notification-preference.js';
 
 // Per address, per rolling 24 h, every template together: a safety net so a bug of ours (a loop, a schedule firing too often) cannot flood one person into
 // pressing "Report spam", which sends everyone's mail to spam. Why (owner, 5 Nov 2026, "10 a day"; was 6 since 16 Oct): the digest alone sends up to 6
@@ -70,15 +72,17 @@ async function record(env, now, addr, list, template, status, id = null) {
 }
 
 const WHY = {service: 'You set up Jobadabra with this address.', jobdigest: 'You ticked the job digest.', releases: 'You get new-release emails at this address.', tips: 'You ticked Tips and tricks or joined the Pro list.'};
+const WHY_KEY = {service: 'footerService', jobdigest: 'footerJobDigest', releases: 'footerReleases', tips: 'footerTips'};
 
 // The subject, text, html and headers of a mail: the template's content inside the frame. `given` = {stop, settings} links (none for an essential mail); the footer keeps those its owner allows. Also what /admin/growth/email shows (admin/email-preview.js).
 // `data.appVersion` (set by send(): the app version the address's installs last reported, or absent) lets a template swap an "Open in Jobadabra" button for "Update Jobadabra" (shared/app-needs.js).
-export function compose(template, data = {}, given = null) {
+export function compose(template, data = {}, given = null, locale = 'en') {
+  data = {...data, locale: notificationLocale(locale)};
   const spec = TEMPLATES[template];
   // Why each mail came and which links it carries: by who owns it (shared/mail-footer.js, spec PR 5). An Account mail has no stop link and no List-Unsubscribe header.
-  const foot = footerOf(template, WHY[spec.list]);
+  const foot = footerOf(template, WHY[spec.list], data.locale, WHY_KEY[spec.list]);
   const links = given && foot.stop ? {stop: given.stop, settings: foot.settings ? given.settings : null} : null;
-  const frame = {title: spec.title(data), why: foot.why, button: fromMail(spec.button?.(data), template) || null, links, trust: foot.trust, download: foot.download};
+  const frame = {title: spec.title(data), why: foot.why, button: fromMail(spec.button?.(data), template, data.locale) || null, links, trust: foot.trust, download: foot.download, locale: data.locale};
   const headers = links ? {'List-Unsubscribe': `<${links.stop}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'} : undefined;
   return {subject: spec.subject(data), text: frameText({...frame, body: spec.text(data)}), html: frameHtml({...frame, body: spec.html(data)}), headers};
 }
@@ -102,7 +106,7 @@ export async function heldRefusal(env, to, row, now = new Date()) {
  * (review of hr-29). A person's Test press is `test` only and stays stoppable.
  * `row`: which of the app's own mails this `message` is (POST /api/notify/email `mail`); the person's choice for it holds it. An older app names none.
  */
-export async function send(env, template, to, data = {}, {now = new Date(), test = false, ownerTest = false, row = ''} = {}) {
+export async function send(env, template, to, data = {}, {now = new Date(), test = false, ownerTest = false, row = '', locale} = {}) {
   const spec = TEMPLATES[template];
   const logged = test ? `test:${template}` : template;
   if (!spec) return {ok: false, reason: 'bad_template'};
@@ -133,7 +137,9 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
     claimed = marker;
     const appVersion = await appVersionOf(env, addr);
     const stop = !spec.essential && footerOf(template).stop ? await stopLink(env, to, spec.list) : null;
-    const {subject, text, html, headers} = compose(template, {...data, appVersion}, stop && {stop, settings: await settingsLink(env, to)});
+    // Why (7 Nov 2026): test=true also means the end-user's Test button; only ownerTest identifies operational English rendering.
+    const language = ownerTest ? 'en' : locale === undefined ? await recipientNotificationLanguage(env, addr) : notificationLocale(locale);
+    const {subject, text, html, headers} = compose(template, {...data, appVersion}, stop && {stop, settings: await settingsLink(env, to)}, language);
     const result = await env.EMAIL.send({from: FROM[spec.list], replyTo: REPLY_TO, to: clean(to), subject, text, html, ...(headers && {headers})});
     const id = result?.messageId || null, mine = claimed;
     claimed = null;   // the mail is gone: whatever happens next, its room is not given back
