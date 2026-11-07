@@ -19,8 +19,9 @@ test('the workflow reads the scripts from jobadabra/jobadabra main, as a file pa
 });
 
 // Web #299: the Gitar label run was cancelled by a newer Gitar comment and the PR list drew a failed check. jobadabra removed the group for the same reason (#2400).
-test('only a push to main can cancel a run: every PR run is its own group', () => {
-  assert.ok(labels.includes("group: pr-labels-${{ github.event_name == 'push' && 'main' || github.run_id }}"), 'a cancelled run is drawn as a red ✗ in the PR list');
+// Why-changed (7 Nov 2026, jobadabra#3513): the sweep (workflow_dispatch) has its own group 'tick', so it never cancels a push's run and a push never cancels it.
+test('only a push to main or a sweep can cancel a run: every PR run is its own group', () => {
+  assert.ok(labels.includes("group: pr-labels-${{ github.event_name == 'push' && 'main' || github.event_name == 'workflow_dispatch' && 'tick' || github.run_id }}"), 'a cancelled run is drawn as a red ✗ in the PR list');
 });
 
 test('the Gitar label runs on a push, on Gitar\'s review and on a NEW Gitar comment (an edit starts nothing)', () => {
