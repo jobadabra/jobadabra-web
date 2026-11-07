@@ -24,10 +24,10 @@ const W = 720, H = 220, M = {l: 44, r: 6, t: 10, b: 24};
 /**
  * Grouped columns over days, a Y axis from 0 with grid lines, a date every few days; the page's one tooltip gives each day's exact numbers.
  * days: [{day: 'YYYY-MM-DD', values: [number | null…], tip}] oldest first; `series`: [{name, tone}] (tone s1…s6), one column per value.
- * A null value is drawn as a dashed hollow column (a number that does not exist yet, never a zero). `unit` prefixes the axis numbers ('$'); `whole`: a count axis with whole-number ticks only. '' for no days.
+ * A null value is drawn as a dashed hollow column (a number that does not exist yet, never a zero). `unit` prefixes the axis numbers ('$'); `whole`: a count axis with whole-number ticks only; `gapLabel`: what the legend says a hollow column means (a day that will never have a value is not "not reported yet", Gitar on #488). '' for no days.
  * Why (owner, 1 Nov 2026, on the Website per-day chart: "doesn't show an Y axis, doesn't show tooltips"): the same three things here: a scale, the numbers, the tooltip.
  */
-export function columns(days, series, {unit = '', labelEvery = 5, whole = false} = {}) {
+export function columns(days, series, {unit = '', labelEvery = 5, whole = false, gapLabel = 'not reported yet'} = {}) {
   if (!days.length) return '';
   const top = Math.max(...days.flatMap(day => day.values.map(value => value || 0)), 0), ticks = whole ? countTicks(top) : moneyTicks(top), max = ticks[ticks.length - 1] || 1;
   const pw = W - M.l - M.r, ph = H - M.t - M.b, y = value => M.t + ph - (ph * value) / max, slot = pw / days.length, each = Math.max(3, (slot * 0.7) / series.length);
@@ -44,17 +44,17 @@ export function columns(days, series, {unit = '', labelEvery = 5, whole = false}
   }).join('');
   const hollow = days.some(day => day.values.includes(null));
   return `<svg class="vz-cols" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map(s => s.name).join(' and '))} per day">${grid}${groups}</svg>`
-    + `<div class="vz-legend">${series.map(s => `<span><i style="background:var(--${s.tone})"></i>${esc(s.name)}</span>`).join('')}${hollow ? '<span><i class="dash"></i>not reported yet</span>' : ''}</div>`;
+    + `<div class="vz-legend">${series.map(s => `<span><i style="background:var(--${s.tone})"></i>${esc(s.name)}</span>`).join('')}${hollow ? `<span><i class="dash"></i>${esc(gapLabel)}</span>` : ''}</div>`;
 }
 
 /**
  * One series as a line with a dot per day; the page's one tooltip gives each day's numbers. points: [{day: 'YYYY-MM-DD', value: number | null, tip}] oldest first.
- * `percent`: the axis is fixed 0-100% (a share of something); else it is a money/count axis from 0. A null value breaks the line: a day where nothing ran is a gap, never 0%.
+ * `percent`: the axis is fixed 0-100% (a share of something); else it is a money/count axis from 0; `whole`: whole-number ticks only (jobs, bugs: never half a job, as `columns`). A null value breaks the line: a day where nothing ran is a gap, never 0%.
  * Why (owner, 5 Nov 2026, sketch: "line: green % per kind"; no second axis): a share and a minutes count are two charts, so this draws one series on its own axis.
  */
-export function line(points, {tone = 's1', percent = true, name = '', labelEvery = 5} = {}) {
+export function line(points, {tone = 's1', percent = true, name = '', labelEvery = 5, whole = false} = {}) {
   if (!points.some(point => point.value != null)) return '';
-  const ticks = percent ? [0, 25, 50, 75, 100] : moneyTicks(Math.max(...points.map(point => point.value || 0))), max = ticks[ticks.length - 1] || 1, suffix = percent ? '%' : '';
+  const ticks = percent ? [0, 25, 50, 75, 100] : (whole ? countTicks : moneyTicks)(Math.max(...points.map(point => point.value || 0))), max = ticks[ticks.length - 1] || 1, suffix = percent ? '%' : '';
   const pw = W - M.l - M.r, ph = H - M.t - M.b, y = value => M.t + ph - (ph * value) / max, slot = pw / points.length, x = index => M.l + slot * index + slot / 2;
   const grid = ticks.map(tick => `<line x1="${M.l}" x2="${W - M.r}" y1="${y(tick).toFixed(1)}" y2="${y(tick).toFixed(1)}" class="vz-grid"/><text x="${M.l - 6}" y="${(y(tick) + 4).toFixed(1)}" text-anchor="end" class="vz-axis">${+tick.toFixed(2)}${suffix}</text>`).join('');
   const runs = [];   // consecutive days with a value; a gap starts a new run

@@ -41,3 +41,16 @@ export async function searchNight18({env}, seeds) {
   await writeState(env, STATE_KEY, {nights: kept.reverse().map(item => ({...item, at: `${item.night}T04:00:00.000Z`}))}, now);
   await writeState(env, 'search-reference', {week: night(2), personas: {1: {total: 14, reachable: 14, eures: 14}, 2: {total: 0, reachable: 0, eures: 0}, 3: {total: 22, reachable: 22, eures: 22}, 5: {total: 10, reachable: 10, eures: 10}}}, now);
 }
+
+// The Night search tab's day-by-day chart (7 Nov 2026, [at]): MADE-UP nights, 7 of 6 candidates (an earlier set), then 12 of 18 (the current set) with one day missing and two dropped nights (back 6: employer sites out of
+// time in 13; back 0: 8 of 18 measured). Nothing here is a real person or a real count.
+/** @param {{env: object}} context the seed context; `seeds` the seed table */
+export async function searchTrend({env}, seeds) {
+  await withQuality(env, seeds);
+  const now = new Date(), night = back => new Date(now.getTime() - back * DAY).toISOString().slice(0, 10), labels = real('2026-11-06').rows.map(row => row.label).concat(LABELS), kept = [];
+  const build = (back, total, measured, out) => clean({state: 'success', head: `measured ${measured} of ${total} · every press ≤ 180 s`, rows: labels.slice(0, total).map((label, i) => ({persona: i + 1, label, kind: i < measured ? 'measured' : 'unmeasured', why: i < measured ? '' : 'time ran out',
+    local: i < measured ? 2 + ((back + i) % 4) : 0, found: 8 + (i % 5), seconds: 80 + 5 * ((back + i) % 6), funnel_note: `places worked out at 17 s; time ran out for: ${i < out ? 'employer sites, ' : ''}job boards`}))}, {night: night(back), run: String(41000000000 + back)});
+  for (let back = 19; back >= 13; back--) kept.push(build(back, 6, 5 - (back % 2), 0));
+  for (let back = 12; back >= 0; back--) if (back !== 9) kept.push(build(back, 18, back === 0 ? 8 : 15 + (back % 3), back === 6 ? 13 : back % 4 === 1 ? 2 : 0));
+  await writeState(env, STATE_KEY, {nights: kept.reverse().map(item => ({...item, at: `${item.night}T04:00:00.000Z`}))}, now);
+}
