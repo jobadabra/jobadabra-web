@@ -94,7 +94,16 @@ export class CodexBroker extends Container {
     return json(200, {ok: true});
   }
 
+  // The last whole-week Codex reading, kept in storage: an eviction must not switch the whole-week brake off (Gitar #221). One reader for calls and /health.
+  // Why (8 Nov 2026, gi): /health returned the in-memory field, which only a call loaded, so after the restart of a deploy it said `limits: null` (the Codex week unknown) until the next call, and gi's room check refused every recording.
+  async weekReading() {
+    this.limits ||= (await this.ctx.storage.get('limits')) || null;
+    if (this.limits?.resetsAt && this.limits.resetsAt <= Date.now() / 1000) this.limits = null;
+    return this.limits;
+  }
+
   async health() {
+    await this.weekReading();
     const meter = (await this.ctx.storage.get('meter')) || newMeter(0);
     // Daily counts describe today, even before the first call after UTC midnight.
     // `ready` = a login is stored AND the container has answered since its last start (a sleeping container keeps its last proof; its next wake starts over); `starting` = login stored, nothing answered yet (readers: the release gate accepts it, nobody else reads this field). `startError` = the last Codex failure passed on while starting.
@@ -150,8 +159,7 @@ export class CodexBroker extends Container {
     const env = this.brokerEnv, {chain} = chainOf(env, body.engine, body.engine === undefined ? await demotedNow(this.ctx.storage, env) : [], body.only === true);   // an engine doing worse is moved back (lib/adapt.mjs) unless this call names its own   // body.engine = this one call's own first choice (e.g. one workflow trying claude); admission and caps stay the same
     // Why (1 Nov 2026): with Codex first a refused login never counts toward the daily cap (as before the chain); with another engine first Codex's step checks it when reached.
     if (chain[0] === 'codex') { const refusal = await this.loginRefusal(); if (refusal) return refusal; }
-    this.limits ||= (await this.ctx.storage.get('limits')) || null;   // kept in storage: an eviction must not switch the whole-week brake off (Gitar #221)
-    if (this.limits?.resetsAt && this.limits.resetsAt <= Date.now() / 1000) this.limits = null;
+    await this.weekReading();
     // Why (8 Nov 2026, owner: "Actually, codex up to 100%, Claude up to 90%"; replaces the 5 Nov line that kept held lanes and by-hand checks off Claude): every lane passes on to Claude when Codex refuses, until Claude's own seven-day window reads 90% used. Past that no lane starts a Claude call, a call that names Claude included: Free AI answers, or the call gets `budget:claude-week`. The reading is the CLI's, stored with each Claude call (`claude:state`); an unknown or reset window is not a reason to stop.
     const claudeCheck = await this.claudeLine();
     const claudeShut = !claudeCheck.ok && chain.includes('claude') && configured('claude', env);

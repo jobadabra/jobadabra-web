@@ -299,3 +299,9 @@ test('a rate_limit_event with no seven-day window keeps the known reading until 
   assert.equal((await json(await broker.call('pr', body))).engine, 'claude');
   assert.equal((await storage.get('claude:state')).limits.sevenDay, null);
 });
+
+test('/health reads the stored Codex week after a restart, before any call (gi: it said limits null until the next call)', async t => {
+  const {broker} = await setup(t, {week: 73, hold: false});   // the harness stores the reading and starts the broker with none in memory
+  assert.equal(broker.limits, null);
+  assert.equal((await json(await broker.health())).limits.usedPercent, 73);
+});
