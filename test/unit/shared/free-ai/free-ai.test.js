@@ -7,6 +7,7 @@ import {tokenFor} from '../../../../shared/guard.js';
 import {OSS, SMALL, STRONG, STEP_MODELS, costUsd, modelFor} from '../../../../shared/free-ai-models.js';
 import * as models from '../../../../shared/free-ai-models.js';
 import {asStream, fromWorkersAi, REASONING_ROOM, toWorkersAi, Unsupported} from '../../../../shared/free-ai-translate.js';
+const THINKER = '@cf/qwen/qwen3-30b-a3b-fp8';   // a model that thinks before it answers: the table's old SMALL, still a valid model for the translator
 
 const kv = () => { const m = new Map(); return {m, get: async k => m.get(k) ?? null, put: async (k, v) => { m.set(k, v); }}; };
 const answer = (text = 'hi', usage = {prompt_tokens: 1000, completion_tokens: 1000}) => ({choices: [{message: {content: text}, finish_reason: 'stop'}], usage});
@@ -169,7 +170,7 @@ test('a founder key from an older app still works', async () => {
 
 test('translation: system + messages + schema in, a PDF read as text, an image refused in words', async () => {
   const sent = await toWorkersAi({max_tokens: 9, system: [{type: 'text', text: 'Be brief.'}], output_config: {format: {type: 'json_schema', schema: {type: 'object'}}},
-    messages: [{role: 'user', content: [{type: 'document', source: {type: 'base64', data: 'AAAA'}}, {type: 'text', text: 'Read it.'}]}]}, async () => 'CV TEXT');
+    messages: [{role: 'user', content: [{type: 'document', source: {type: 'base64', data: 'AAAA'}}, {type: 'text', text: 'Read it.'}]}]}, async () => 'CV TEXT', '', THINKER);   // Why (8 Nov 2026, fr): the model is named, so this test keeps proving the forced-schema path of a thinking model after the table moved to Gemma 4 (whose schema goes in the prompt: desktop/test/unit/main/free-ai-gemma.test.js)
   assert.deepEqual(sent.messages, [{role: 'system', content: 'Be brief.'}, {role: 'user', content: 'CV TEXT\n\nRead it.'}]);
   assert.equal(sent.response_format.json_schema.schema.type, 'object');
   await assert.rejects(toWorkersAi({messages: [{role: 'user', content: [{type: 'image', source: {}}]}]}), Unsupported);
@@ -189,9 +190,9 @@ test('steps that write documents use the stronger model only when it is switched
 });
 
 test('the model gets room to think on top of the caller\'s max_tokens (a live call with 200 came back empty)', async () => {
-  const sent = await toWorkersAi({max_tokens: 200, messages: [{role: 'user', content: 'x'}]});
+  const sent = await toWorkersAi({max_tokens: 200, messages: [{role: 'user', content: 'x'}]}, undefined, '', THINKER);
   assert.equal(sent.max_tokens, 200 + REASONING_ROOM);
-  assert.equal((await toWorkersAi({messages: [{role: 'user', content: 'x'}]})).max_tokens, 1024 + REASONING_ROOM);
+  assert.equal((await toWorkersAi({messages: [{role: 'user', content: 'x'}]}, undefined, '', THINKER)).max_tokens, 1024 + REASONING_ROOM);
 });
 
 // Live (16 Oct 2026, 1 of 30 scoring asks): Qwen looped on whitespace until the token limit, so the caller got text that is not JSON.

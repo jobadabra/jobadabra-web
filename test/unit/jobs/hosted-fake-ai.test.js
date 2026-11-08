@@ -16,6 +16,15 @@ const DECIDE = {type: 'object', required: ['results'], properties: {results: {ty
 const ask = async (schema, text) => JSON.parse((await fakeAi().run('@cf/x', {messages: [{role: 'system', content: 'You place strings.'},
   {role: 'user', content: text}], response_format: {type: 'json_schema', json_schema: {schema}}})).response);
 
+test('Gemma 4\'s shape (8 Nov 2026): the schema at the end of the user message, no response_format, answered in a fence, gets the same answers', async () => {
+  const gemma = async (schema, text) => JSON.parse((await fakeAi().run('@cf/google/gemma-4-26b-a4b-it', {messages: [{role: 'system', content: 'You place strings.'},
+    {role: 'user', content: `${text}\n\nReply with ONE JSON object only, no other text, matching this JSON schema exactly: ${JSON.stringify(schema)}`}]})).response.replace(/^```json\n|\n```$/g, ''));
+  const text = 'Strings:\n1. zurich\n2. 8005 Zürich, CH\n3. Switzerland\n4. Remote - EMEA\n5. Lyon';
+  assert.deepEqual(await gemma(GEO, text), await ask(GEO, text));
+  const sent = fakeAi(); await sent.run('@cf/x', {messages: [{role: 'user', content: 'hello'}]});
+  assert.deepEqual(sent.calls.map(call => call.structured), [false], 'an ask with no schema is still answered {"ok":true}');
+});
+
 test('a list question gets one answer per numbered item', async () => {
   const {places} = await ask(GEO, 'Strings:\n1. zurich\n2. 8005 Zürich, CH\n3. Switzerland\n4. Remote - EMEA\n5. Lyon');
   assert.deepEqual(places.map(p => [p.n, p.kind, p.cc]), [[1, 'city', 'CH'], [2, 'city', 'CH'], [3, 'country', 'CH'], [4, 'remote', ''], [5, 'unknown', '']]);

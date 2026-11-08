@@ -53,15 +53,30 @@ export function fromSchema(schema, items = [], asked = '') {
 
 const textOf = content => typeof content === 'string' ? content : Array.isArray(content) ? content.map(part => part?.text || '').join('\n') : '';
 
+// Why (8 Nov 2026, fr; code review of the Gemma 4 move): Gemma 4 gets its schema written at the end of the user message, not as `response_format` (desktop/lib/free-ai-translate.js SCHEMA_ASK), and answers in a markdown fence.
+// Without this the fake saw no schema and answered {"ok":true} to every ask: no job placed, the 26 Oct incident (test/unit/jobs/hosted-fake-ai.test.js). Both shapes work, so the order of the two repos' merges does not matter.
+const SCHEMA_MARK = 'matching this JSON schema exactly: ';
+function schemaOf(input) {
+  const forced = input.response_format?.json_schema?.schema;
+  if (forced) return {schema: forced, asked: null};
+  for (const message of [...(input.messages || [])].reverse()) {
+    const text = textOf(message.content), at = text.lastIndexOf(SCHEMA_MARK);
+    if (message.role !== 'user' || at < 0) continue;
+    try { return {schema: JSON.parse(text.slice(at + SCHEMA_MARK.length)), asked: text.slice(0, at)}; } catch { /* not ours: no schema */ }
+  }
+  return {schema: null, asked: null};
+}
+
 export function fakeAi() {
   const calls = [];
   return {
     calls,
     async run(model, input) {
-      const schema = input.response_format?.json_schema?.schema;
+      const {schema, asked: beforeSchema} = schemaOf(input);
       calls.push({model, structured: !!schema});
-      const asked = (input.messages || []).filter(message => message.role === 'user').map(message => textOf(message.content)).join('\n');
-      return {response: JSON.stringify(schema ? fromSchema(schema, listed(asked), asked) : {ok: true}), usage: {prompt_tokens: 1200, completion_tokens: 80}};
+      const asked = (input.messages || []).filter(message => message.role === 'user').map(message => textOf(message.content)).join('\n').replace(/\n*Reply with ONE JSON object only, no other text, matching this JSON schema exactly: [\s\S]*$/, '');
+      const json = JSON.stringify(schema ? fromSchema(schema, listed(asked), asked) : {ok: true});
+      return {response: beforeSchema != null ? '```json\n' + json + '\n```' : json, usage: {prompt_tokens: 1200, completion_tokens: 80}};   // fenced only when the schema came in the prompt, as Gemma 4 answers
     },
     async toMarkdown() { return [{data: ''}]; },
   };
