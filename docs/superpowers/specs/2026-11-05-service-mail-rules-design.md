@@ -49,9 +49,10 @@ A mail about work done on the Mac can only go while the app is open, and its row
 | Row | Mac only | Always on |
 |---|---|---|
 | Find jobs: new matches | in the digest | in the digest |
-| Applying: applied for you | no e-mail | e-mail |
-| Applying: an application needs you | no e-mail | e-mail |
-| Gmail: interview reminder | no e-mail | e-mail |
+| Applying: applied for you | e-mail (8 Nov) | e-mail |
+| Applying: an application needs you | e-mail (8 Nov) | e-mail |
+| Gmail: interview reminder | e-mail (8 Nov) | e-mail |
+| Ready to send: forms ready to check | e-mail (8 Nov) | e-mail |
 | Always on stopped working | not shown | e-mail |
 | Nothing found for days | not shown | after 3 days |
 | Job digest | daily | daily |
@@ -129,7 +130,7 @@ Every mail from the engine is `message`, so a row per mail has nothing to key on
 
 ### 1. One registry (`shared/mail-registry.js`, new)
 
-The one owner of what a mail is: id, owner (`account`, `yours`, `jobadabra`), locked or not, its suggested default per mode. `TEMPLATES` keeps subject/html/text. App mail gets virtual ids so `message` can be told apart: `app-matches`, `app-weekly`, `app-stopped`, `app-nothing`, `app-applied`, `app-needs-you`; `app-reminder` is reserved.
+The one owner of what a mail is: id, owner (`account`, `yours`, `jobadabra`), locked or not, its suggested default per mode. `TEMPLATES` keeps subject/html/text. App mail gets virtual ids so `message` can be told apart: `app-matches`, `app-weekly`, `app-stopped`, `app-nothing`, `app-applied`, `app-needs-you`; `app-reminder` (Interview reminder) and `app-ready` (Forms ready to check) joined on 8 Nov 2026.
 
 Stored: one D1 table `mail_rule (id TEXT PRIMARY KEY, enabled INTEGER, rhythm TEXT, at TEXT)`, one row per mail the owner changed. For a Jobadabra mail it holds on/off and rhythm; a Yours or locked mail is never written, and a stored row for one is ignored (owner, 6 Nov 2026: "\"Yours\" is not something that Jobadabra can control. It's in the users' hand", then "Only the person"). Suggested defaults per mode live in `mail-registry.js`, changed by a PR, not in this table. Locked mails cannot be written.
 `send()` asks `ruleOf(id)` before the claim: off → `{ok:false, reason:'rule_off'}`, logged like any refusal and shown in "Why mail was not sent".
@@ -190,7 +191,7 @@ Owner, via the coordinator: "Yes, say where (Recommended)", "Yes, one place sear
 
 ### 11. Room left, not designed
 
-The owner is still deciding replies while the Mac is off. The interview reminder is a Yours row, and needs a small fact left on the site, so it stays off unless the person turns it on; the shape comes from the coordinator after the owner's yes. Inbound mail is a second entry type (`direction: 'in'`); the Worker already has an `email` handler (`admin/test-mail.js`).
+The owner is still deciding replies while the Mac is off. The interview reminder is a Yours row (built 8 Nov 2026: the engine's existing prep message, the evening before or the morning of, now under its row; nothing about the interview is left on the site). Inbound mail is a second entry type (`direction: 'in'`); the Worker already has an `email` handler (`admin/test-mail.js`).
 
 ## Pull requests (the site lands first; the public repo then uses it)
 
@@ -230,6 +231,10 @@ PRs 1 to 3 ship with every new row **off**; existing mails keep today's behaviou
 
 - How many people have Always on (hosted or GitHub): the audience for the Always on defaults. Read from `hosted_schedules` and the engine's notify calls once PR 3 logs the kind.
 - How many people change a suggested default, by row, once PR 4 ships: a default nobody keeps is the wrong default.
+
+## 8 Nov 2026: a mail for every automation (replaces the Mac only defaults above)
+
+Owner: "We're missing the email notifications switch for each automation" · "Let's wire all the unwired and siwthem them on on every row". The four automation rows (needs you, applied, interview reminder, forms ready) start ON in both modes once e-mail is on; a choice a person made is never reset. Interview reminder = the Mac's Gmail & Calendar check; Forms ready = our site at the end of a Ready to send night, counts only; Applied for you = the Mac. Parked: Replies found, Nothing found for days. Plan: jobadabra `docs/superpowers/plans/2026-11-08-mw-automation-mails.md`.
 
 ## Progress (6 Nov 2026)
 
