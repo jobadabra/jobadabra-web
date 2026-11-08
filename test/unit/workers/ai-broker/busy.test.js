@@ -272,17 +272,20 @@ test('/health says each lane\'s lines: the Codex week per lane, the day caps and
   assert.deepEqual(lines.week, {pr: 100, byhand: 100, scheduled: 100, bench: 100, drift: 100}); assert.deepEqual(lines.daily, {drift: 24, byhand: 800}); assert.equal(lines.claude, 90);
 });
 
-test('a call waiting for a Claude slot is held to the line again when it gets the slot: a Claude call that finished meanwhile moved the week to 90% (code-review)', async t => {
-  const {broker, storage, calls, fill, releaseOne, drain} = await setup(t, {week: 100, claude: 89});
-  const running = await fill();   // three pinned searches hold Claude's three slots
-  const waiter = broker.call('pr', {...body, search: true});   // admitted at 89%, waits for a slot with no deadline
-  await until(() => broker.claudeGate.stats().waiting.pr === 1);
-  await storage.put('claude:state', {limits: {status: 'allowed', sevenDay: {utilization: 0.91, resetsAt: day / 1000 + 3600, status: 'allowed'}}});   // a finished call wrote 91%
-  releaseOne();
-  const refused = await waiter;
-  assert.equal(refused.status, 429); assert.equal((await json(refused)).why, 'budget:claude-week 91% of 90%');
-  assert.equal(calls.claudeCli, 3, 'the waiter never started a Claude call');
-  await drain(Promise.all(running));
+test('a call waiting for a Claude slot is held to the line again when it gets the slot: a Claude call that finished meanwhile moved the week to 90% (code-review, Gitar on #492)', async t => {
+  const cases = {search: {search: true}, image: {images: [{name: 'a.png', base64: 'AAAA'}]}, 'strict Claude call': {engine: 'claude', only: true}};
+  for (const [name, asked] of Object.entries(cases)) await t.test(name, async t => {
+    const {broker, storage, calls, fill, releaseOne, drain} = await setup(t, {week: 100, claude: 89});
+    const running = await fill();   // three pinned searches hold Claude's three slots
+    const waiter = broker.call('pr', {...body, ...asked});   // admitted at 89%, waits for a slot with no deadline
+    await until(() => broker.claudeGate.stats().waiting.pr === 1);
+    await storage.put('claude:state', {limits: {status: 'allowed', sevenDay: {utilization: 0.91, resetsAt: day / 1000 + 3600, status: 'allowed'}}});   // a finished call wrote 91%
+    releaseOne();
+    const refused = await waiter;
+    assert.equal(refused.status, 429); assert.equal((await json(refused)).why, 'budget:claude-week 91% of 90%');
+    assert.equal(calls.claudeCli, 3, 'the waiter never started a Claude call'); assert.equal(calls.free, 0);
+    await drain(Promise.all(running));
+  });
 });
 
 test('a rate_limit_event with no seven-day window keeps the known reading until its own reset', async t => {

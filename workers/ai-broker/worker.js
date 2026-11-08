@@ -178,6 +178,7 @@ export class CodexBroker extends Container {
     const later = walk.slice(walk.indexOf('codex') + 1).filter(engine => configured(engine, env));   // the part of this call's walk after Codex
     const note = newNote(), ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note}, day = new Date(Date.now()).toISOString().slice(0, 10), skipped = [];
     let busyPassed = false, held = null, codexRefusal = null;   // busyPassed: Claude's slots were full for too long and the call went on; held: the last refusal of an engine it went on to; codexRefusal: Codex's own 502 when it passed on for capacity
+    const lateShut = () => skipped.find(entry => entry.engine === 'claude' && entry.why === 'budget');   // the line closed while this call waited for a Claude slot (claudeStep)
     const skip = async (engine, why, counted = true, detail = '') => { skipped.push({engine, why, ...(detail ? {detail} : {})}); if (why === 'busy') busyPassed = true; if (why === 'failed' || why === 'overloaded') await recordPerf(this.ctx.storage, env, engine, false); return counted ? recordOutcome(this.ctx.storage, day, engine, {'ran-out': 'ranOut', busy: 'busy'}[why] ?? 'failed') : null; };
     const send = async (engine, reply, started) => {
       await recordOutcome(this.ctx.storage, day, engine, reply.ok ? 'ok' : 'failed', Date.now() - started);
@@ -193,6 +194,7 @@ export class CodexBroker extends Container {
       if (engine === 'codex') { reply = await this.codexStep(lane, body, model, verdict, later.length > 0, chain[0] === 'codex', session); if (!reply || reply.passOn) { codexRefusal = reply?.refusal ?? null; await skip(engine, reply?.passOn ?? 'ran-out', true, reply?.detail); reply = null; } }
       else if (engine === 'claude') reply = await this.claudeStep(lane, body, skip, waitMs);
       else if (engine === 'free-ai') {
+        if (freeAiCannot && lateShut()) continue;   // Why (8 Nov 2026, Gitar on #492): Claude's line closed while this call waited for a slot; Free AI takes neither a search nor an image, so the call reaches the budget refusal below, not a red `fallback:unsupported`
         reply = (!body.search && apiPrecheck(body)) || await freeAiStep(ctx);
         if (!reply && !body.search && configured(engine, env)) await skip(engine, 'unavailable');
       }
@@ -208,14 +210,13 @@ export class CodexBroker extends Container {
       if (held) return held;
     }
     if (body.only === true) {
-      if (claudeShut && chain[0] === 'claude') return json(429, {why: claudeCheck.why});
+      if ((claudeShut || lateShut()) && chain[0] === 'claude') return json(429, {why: claudeShut ? claudeCheck.why : lateShut().detail});
       if (chain[0] === 'free-ai') return apiFinish(env, note);   // Why (Gitar on #296): their own reasons stay: fallback:search-unsupported, fallback:unavailable, the 429 day cap
       return json(503, {why: `only-${chain[0]}: ${skipped.find(entry => entry.engine === chain[0])?.why ?? (configured(chain[0], env) ? 'unavailable' : 'not-configured')}`, engine: chain[0], tried: skipped});   // strict call: nobody else answers, and the reason is named
     }
     // Why (5 Nov 2026, review of the capacity pass-on): Codex at capacity and nobody after it answering is Codex's failure, never Free AI's "budget" (which CI reads as a grey skip) or "search-unsupported".
     if (codexRefusal) return codexRefusal;
-    const late = skipped.find(entry => entry.engine === 'claude' && entry.why === 'budget');   // the line closed while this call waited for a Claude slot
-    if ((claudeShut || late) && freeAiCannot) return json(429, {why: claudeShut ? claudeCheck.why : late.detail});   // Codex did not answer, Claude is shut and Free AI takes neither a search nor an image
+    if ((claudeShut || lateShut()) && freeAiCannot) return json(429, {why: claudeShut ? claudeCheck.why : lateShut().detail});   // Codex did not answer, Claude is shut and Free AI takes neither a search nor an image
     return apiFinish(env, note);
   }
 
