@@ -7,4 +7,5 @@ COPY lib/args.mjs /app/lib/
 USER codex
 ENV CODEX_HOME=/home/codex/.codex
 EXPOSE 8080
+# Why (8 Nov 2026, bd): exec form, so node stays PID 1 and receives the platform's SIGTERM itself; a shell form or a wrapper (npm start) would take the signal and the container would be killed under its calls again. test/unit/workers/ai-broker/drain.test.js reads this line.
 CMD ["node", "/app/container/server.mjs"]

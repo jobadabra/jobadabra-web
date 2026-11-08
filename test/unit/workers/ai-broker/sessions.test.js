@@ -128,11 +128,11 @@ async function serverWithCodex(t) {
   vm.runInNewContext(fs.readFileSync(new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, ''), {
     http: {createServer(fn) { handler = fn; return {listen() {}}; }},
     fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, turnUsage, Buffer, setTimeout, clearTimeout, setInterval,
-    process: {env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: ''}},
+    process: {on() {}, env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: ''}},
   });
   const post = payload => new Promise(resolve => {
     const request = new EventEmitter(); request.url = '/call'; request.method = 'POST';
-    handler(request, {setHeader() {}, end(text) { resolve({status: this.statusCode, body: JSON.parse(text)}); }});
+    handler(request, {setHeader() {}, once() {}, end(text) { resolve({status: this.statusCode, body: JSON.parse(text)}); }});
     request.emit('data', Buffer.from(JSON.stringify(payload))); request.emit('end');
   });
   return {dir, seen, state, post};

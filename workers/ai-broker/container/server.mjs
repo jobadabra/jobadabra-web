@@ -177,11 +177,21 @@ async function callClaude({prompt, schema, images = [], model, search = false}) 
   } finally { fs.rmSync(dir, {recursive: true, force: true}); }
 }
 
+// Why (8 Nov 2026, bd; web#493, #494, #498 each lost the calls they met): a deploy replaces this container. Cloudflare sends SIGTERM to this process and waits up to 15 minutes before SIGKILL (docs: Containers > Rollouts), but a Node process that is PID 1 and has no SIGTERM handler ignores it (the lesson of ops/hosted/ready-fill/stop.mjs), so the old container kept taking calls until it was torn down under them.
+// Intended: serving -> (SIGTERM) draining: a new /call or /claude is refused at once with `x-broker-draining` (nothing of it started, so the Worker may send it again to the next container); every request already open (a call, a body still arriving, /health, /auth) is finished; the moment the last one has closed, exit 0. A call is only ever cut by the 15-minute SIGKILL (calls are guarded at 100 s and 150 s).
+// Open = from the request's arrival to its response's `close`, which also fires when the client went away: a dropped call must not hold the exit until the SIGKILL.
+let draining = false, open = 0;
+const exitWhenIdle = () => { if (draining && open === 0) process.exit(0); };
+process.on('SIGTERM', () => { draining = true; exitWhenIdle(); });
+const isCall = url => url === '/call' || url === '/claude';
+
 http.createServer((req, res) => {
+  open++; res.once('close', () => { open--; exitWhenIdle(); });
   const chunks = []; let size = 0;
   req.on('data', c => { size += c.length; if (size > 30e6) req.destroy(); else chunks.push(c); });
   req.on('end', async () => {
     const reply = (status, body) => { res.statusCode = status; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(body)); };
+    if (draining && isCall(req.url)) { res.setHeader('x-broker-draining', '1'); return reply(503, {error: 'draining'}); }
     try {
       if (req.url === '/auth' && req.method === 'POST') { fs.mkdirSync(HOME, {recursive: true}); fs.writeFileSync(AUTH, Buffer.concat(chunks), {mode: 0o600}); return reply(200, {ok: true}); }
       if (req.url === '/call' && req.method === 'POST') {
@@ -197,4 +207,4 @@ http.createServer((req, res) => {
       return reply(404, {error: 'not found'});
     } catch (e) { return reply(500, {error: String(e.message || e).slice(0, 1000), authFile: readAuth(), ...(e.trace ? {trace: e.trace} : {})}); }
   });
-}).listen(8080);
+}).listen(Number(process.env.BROKER_TEST_PORT) || 8080);   // the env var is only for the real-process drain test (test/unit/workers/ai-broker/drain.test.js); the Worker's defaultPort is 8080, and a platform variable called PORT must not move it
