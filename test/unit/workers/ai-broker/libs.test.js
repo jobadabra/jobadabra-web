@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {verifyRunToken} from '../../../../workers/ai-broker/lib/oidc.mjs';
 import {laneOf, LANES, queueOf} from '../../../../workers/ai-broker/lib/lanes.mjs';
-import {allow, offClaude, DAILY, newMeter, record, recordCall, callsToday, ownSharePct, TOKENS_PER_PERCENT} from '../../../../workers/ai-broker/lib/budget.mjs';
+import {allow, claudeAllow, claudeWeekPercent, linesOf, CLAUDE_LIMIT_PCT, DAILY, newMeter, record, recordCall, callsToday, ownSharePct, TOKENS_PER_PERCENT} from '../../../../workers/ai-broker/lib/budget.mjs';
 import {weeklyWindow} from '../../../../workers/ai-broker/container/weekly.mjs';
 import {refuseReply} from '../../../../workers/ai-broker/lib/guard.mjs';
 import {modelOf, tierOfClaude} from '../../../../workers/ai-broker/lib/tiers.mjs';
@@ -70,21 +70,42 @@ test('a by-hand Search check (its by-hand environment) gets the by-hand lane; th
   assert.ok(LANES.includes('byhand'));
 });
 
-// Owner, 8 Nov 2026 ("Fix Free AI + PR lane now (Recommended)": "by-hand Search checks may use the 30% PR reserve (about 1 run a day)"): the reserve, and nothing else PR checks have.
-test('a by-hand Search check may use the PR reserve to 100%, waits behind PR checks, never passes to Claude, and stops at its day cap', () => {
-  assert.equal(allow('byhand', newMeter(2000000000), 71).ok, true, 'past the 70% line it still runs');
+// Owner, 8 Nov 2026 ("by-hand Search checks may use the 30% PR reserve (about 1 run a day)", then "codex up to 100%, Claude up to 90%"): a by-hand check waits behind PR checks and stops at its day cap; the reserve and the Claude exception are gone.
+test('a by-hand Search check runs to 100% of the Codex week, waits behind PR checks, and stops at its day cap', () => {
+  assert.equal(allow('byhand', newMeter(2000000000), 99).ok, true);
   assert.deepEqual(allow('byhand', newMeter(2000000000), 100), {ok: false, why: 'budget:week 100% of 100% (byhand)'});
   assert.equal(queueOf('byhand'), 'scheduled');
   assert.equal(queueOf('drift'), 'scheduled');
   assert.equal(queueOf('pr'), 'pr');
-  assert.equal(offClaude('byhand'), true);
-  assert.equal(offClaude('scheduled'), true);
-  assert.equal(offClaude('pr'), false);
   const day = 1999990000;
   let m = newMeter(2000000000);
   for (let i = 0; i < DAILY.byhand; i++) m = recordCall(m, 'byhand', day);
   assert.deepEqual(allow('byhand', m, null, TOKENS_PER_PERCENT, day), {ok: false, why: `budget:daily ${DAILY.byhand} of ${DAILY.byhand} calls (byhand)`});
   assert.equal(allow('byhand', m, null, TOKENS_PER_PERCENT, day + 86400).ok, true, 'a new UTC day starts at zero');
+});
+
+// Owner, 8 Nov 2026 ("Actually, codex up to 100%, Claude up to 90%"): Claude's seven-day window is read as the CLI gives it (a fraction 0..1, measured), 90% and over is closed for every lane.
+test('Claude is open under 90% of its week and closed from 90%; an unknown reading is open', () => {
+  const week = (utilization, resetsAt = 2000000100) => ({sevenDay: {utilization, resetsAt}});
+  assert.equal(claudeWeekPercent(week(0.04), 2000000000), 4);
+  assert.equal(claudeWeekPercent(week(0.899), 2000000000), 89.9);
+  assert.deepEqual([0.5, 0.899].map(u => claudeAllow(claudeWeekPercent(week(u), 2000000000))), [{ok: true}, {ok: true}]);
+  assert.deepEqual(claudeAllow(claudeWeekPercent(week(0.9), 2000000000)), {ok: false, why: 'budget:claude-week 90% of 90%'});
+  assert.deepEqual(claudeAllow(claudeWeekPercent(week(1), 2000000000)), {ok: false, why: 'budget:claude-week 100% of 90%'});
+  for (const unknown of [null, {}, {sevenDay: null}, week(0.99, 1999999999), week(99), week(-0.1), week(NaN), {sevenDay: {resetsAt: 2000000100}}]) {
+    assert.equal(claudeWeekPercent(unknown, 2000000000), null, JSON.stringify(unknown));
+    assert.deepEqual(claudeAllow(claudeWeekPercent(unknown, 2000000000)), {ok: true});
+  }
+  assert.equal(CLAUDE_LIMIT_PCT, 90);
+});
+
+test('the lines /health shows are the ones allow() uses', () => {
+  const lines = linesOf(LANES);
+  for (const lane of LANES) {
+    assert.equal(lines.week[lane], 100);
+    assert.equal(allow(lane, newMeter(2000000000), lines.week[lane] - 0.1).ok, true); assert.equal(allow(lane, newMeter(2000000000), lines.week[lane]).ok, false);
+  }
+  assert.equal(lines.daily, DAILY); assert.equal(lines.claude, 90);
 });
 
 test('only the exact nightly workflow gets drift; PR priority and verified workflow precedence remain', () => {
@@ -134,11 +155,11 @@ test('weekly resets preserve daily reservations; token completions never count c
   assert.equal(callsToday(m, 'drift', driftDay), 1);
 });
 
-// Owner, 3 Nov 2026 ("Busy = next engine + PR reserve"): scheduled, bench and drift stop at 70% of the Codex week so PR checks keep 30%; PR checks go to 100% as before.
-const CAP = {pr: 100, scheduled: 70, bench: 70, drift: 70};
+// Owner, 8 Nov 2026 ("codex up to 100%"; the 3 Nov "PR reserve" that held scheduled, bench and drift at 70% is gone): every lane stops at 100% of the Codex week.
+const CAP = {pr: 100, byhand: 100, scheduled: 100, bench: 100, drift: 100};
 
-test('PR checks may use the week up to 100%; scheduled, bench and drift stop at 70% (the 30% PR reserve): refused at the cap, allowed just below', () => {
-  for (const lane of ['pr', 'scheduled', 'bench', 'drift']) {
+test('every lane may use the week up to 100%: refused at the cap, allowed just below', () => {
+  for (const lane of LANES) {
     const cap = CAP[lane], fresh = newMeter(2000000000);
     const below = record(newMeter(2000000000), lane, (cap - 0.1) * TOKENS_PER_PERCENT, 1);
     const full = record(newMeter(2000000000), lane, cap * TOKENS_PER_PERCENT, 1);
@@ -149,13 +170,12 @@ test('PR checks may use the week up to 100%; scheduled, bench and drift stop at 
     assert.deepEqual(allow(lane, below, cap - 0.1), {ok: true}, `${lane}: both below cap`);
     assert.deepEqual(allow(lane, fresh, null), {ok: true}, `${lane}: no week reading yet`);
   }
-  assert.equal(allow('pr', newMeter(2000000000), 71).ok, true, 'a PR check at 71% of the week still runs');
-  assert.deepEqual(allow('scheduled', newMeter(2000000000), 71), {ok: false, why: 'budget:week 71% of 70% (scheduled)'}, 'scheduled work at 71% is passed on');
+  for (const lane of LANES) assert.equal(allow(lane, newMeter(2000000000), 71).ok, true, `${lane} at 71% of the week still runs (no reserve since 8 Nov 2026)`);
 });
 
 // Owner's goal, 30 Oct 2026 (a hand beta, green): /health read whole week 32%, broker tokens 43,241,035; the seed ratio called that 60.06% and refused every scheduled call.
 test('own share never exceeds the whole-week reading: a seed estimate over the cap is allowed while the whole week is below the cap, and refused once the week reaches it', () => {
-  for (const lane of ['pr', 'scheduled', 'bench', 'drift']) {
+  for (const lane of LANES) {
     const cap = CAP[lane], m = record(newMeter(2000000000), lane, (cap + 0.1) * TOKENS_PER_PERCENT, 1);
     assert.equal(ownSharePct(m), cap + 0.1, 'by the seed alone the broker reads over the cap');
     assert.deepEqual(allow(lane, m, cap - 0.1), {ok: true}, lane);

@@ -1,9 +1,9 @@
 // "Where each subscription stands" on the AI cost page (owner, 4 Nov 2026: "80% used on Claude, (resets at x time)... 50% used on Codex (reset at x)"): one ring per window the providers report, from the broker's /health.
-// Words, chips and a ring; times in Zurich. The 70% tick on Codex is where the broker stops scheduled work (workers/ai-broker/lib/budget.mjs). Guard: test/admin/ai-limits-card.test.js.
+// Words, chips and a ring; times in Zurich. The 90% tick on the Claude week is where the broker stops starting Claude calls (workers/ai-broker/lib/budget.mjs); Codex runs to 100%. Guard: test/admin/ai-limits-card.test.js.
 import {esc} from '../shared/html.js';
 
 const C = 2 * Math.PI * 60;   // ring circumference at r=60
-const WARN = 70, BAD = 90;   // Why (4 Nov 2026, owner-approved sketch): amber from 70% (where scheduled jobs stop), red from 90%
+const WARN = 70, BAD = 90;   // Why (4 Nov 2026, owner-approved sketch): amber from 70%, red from 90%; 8 Nov 2026: red is also where the broker stops using Claude (owner: "Claude up to 90%"), 70% stopped being a stop line
 const WHERE = 'Europe/Zurich';
 
 /** Page CSS for the card; the page's own dark tokens stay, the rest are local. */
@@ -55,16 +55,16 @@ export function windows(limits, fallback, nowMs = Date.now()) {
   const clamp = n => Math.min(100, Math.max(0, Math.round(n)));   // rounded once: the chip, the number and the verdict all read this value
   // The provider's own word beats our percent (a review finding, 5 Nov 2026): 'allowed_warning' is amber, anything else but 'allowed' is a limit hit, whatever the number says.
   const provider = status => (!status || status === 'allowed' ? null : status === 'allowed_warning' ? {tone: 'warn', word: 'Provider warns'} : {tone: 'bad', word: 'Limit reached'});
-  const claudeWin = (w, who, sub, note) => {
+  const claudeWin = (w, who, sub, note, tick) => {
     const ok = w && live(w.resetsAt), state = w?.status ? provider(w.status) : provider(limits?.claude?.status);   // the window's own word wins, 'allowed' included (Gitar on #376)
-    return {key: 'claude', who, label: who, sub, pct: ok ? clamp(w.utilization * 100) : null, resets: ok ? w.resetsAt * 1000 : 0, note: ok ? note : 'Read again at the next Claude call', state: ok ? state : null};
+    return {key: 'claude', who, label: who, sub, pct: ok ? clamp(w.utilization * 100) : null, resets: ok ? w.resetsAt * 1000 : 0, note: ok ? note : 'Read again at the next Claude call', state: ok ? state : null, ...(tick ? {tick} : {})};
   };
   const codex = limits?.codex, codexOk = codex && live(codex.resetsAt);
   const free = fallback && Number.isFinite(fallback.freeAi) && Number.isFinite(fallback.freeAiCap) ? fallback : null, freeOn = free && free.freeAiCap > 0;
   const nextUtc = Date.UTC(new Date(nowMs).getUTCFullYear(), new Date(nowMs).getUTCMonth(), new Date(nowMs).getUTCDate() + 1);
   return [
-    {key: 'codex', who: 'Codex', label: 'Codex week', sub: 'of the week', pct: codexOk ? clamp(codex.usedPercent) : null, resets: codexOk ? codex.resetsAt * 1000 : 0, tick: 70, note: codexOk ? 'Tick at 70%: scheduled jobs stop there' : 'Read at the next Codex call'},
-    claudeWin(limits?.claude?.sevenDay, 'Claude, week', '7-day window', 'The provider\u2019s own 7-day window'),
+    {key: 'codex', who: 'Codex', label: 'Codex week', sub: 'of the week', pct: codexOk ? clamp(codex.usedPercent) : null, resets: codexOk ? codex.resetsAt * 1000 : 0, note: codexOk ? 'Every job may use it to 100%' : 'Read at the next Codex call'},
+    claudeWin(limits?.claude?.sevenDay, 'Claude, week', '7-day window', 'Tick at 90%: no job starts a Claude call past it', 90),
     claudeWin(limits?.claude?.fiveHour, 'Claude, 5 hours', '5-hour window', 'The provider\u2019s own 5-hour window'),
     {key: 'free', who: 'Free AI, today', label: 'Free AI today', sub: free ? `$${free.freeAi.toFixed(2)} of $${free.freeAiCap.toFixed(2)}` : 'no reading', pct: freeOn ? clamp(free.freeAi / free.freeAiCap * 100) : null, resets: freeOn ? nextUtc : 0, note: freeOn ? 'The last stop: a daily dollar cap' : free ? 'Off: its daily cap is 0' : 'Not read', word: free && !freeOn ? 'Off' : ''},
   ];
@@ -82,6 +82,6 @@ export function limitsCard(limits, fallback, nowMs = Date.now()) {
   const worst = known.slice().sort((x, y) => rank(y) - rank(x))[0];
   const verdict = !worst ? ['off', 'No limit read yet'] : worst.tone === 'good' ? ['good', 'Nothing near a limit'] : [worst.tone, worst.state ? `${worst.who}: ${worst.state.word.toLowerCase()}` : `${worst.who} at ${worst.pct}%`];
   return `<section class="card" id="ai-limits"><h2>🎯 Where each subscription stands</h2><small class="muted">The broker tries Codex first, then Claude, then Free AI. Each ring is one window the provider itself reports. Times are Zurich.</small>
-<p style="margin:10px 0 0"><span class="chip ${verdict[0]}">${esc(verdict[1])}</span> <small class="muted">${top ? `Highest: ${esc(top.who)} at ${top.pct}%. ` : ''}Scheduled jobs stop at 70% of the Codex week.</small></p>
+<p style="margin:10px 0 0"><span class="chip ${verdict[0]}">${esc(verdict[1])}</span> <small class="muted">${top ? `Highest: ${esc(top.who)} at ${top.pct}%. ` : ''}Codex runs to 100% of its week, Claude to 90% of its week.</small></p>
 <div class="rings">${rings.map(w => ring({...w, now: nowMs})).join('\n')}</div></section>`;
 }

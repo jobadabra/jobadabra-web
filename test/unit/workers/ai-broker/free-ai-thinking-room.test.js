@@ -1,5 +1,5 @@
 // Free AI's model (Qwen3) thinks before it answers and the thinking counts against max_tokens: the broker's output ceiling must leave room for it, inside the model's context window.
-// Why (8 Nov 2026, fr; owner: "why not falling back to Claude or Free AI?"): with Codex past its 70% line every scheduled call lands on Free AI, and calls that thought past the fixed 6096-token ceiling
+// Why (8 Nov 2026, fr; owner: "why not falling back to Claude or Free AI?"): with Codex past its (then) 70% line every scheduled call landed on Free AI (since 8 Nov 2026 only a call past Claude's 90% does), and calls that thought past the fixed 6096-token ceiling
 // came back `finish_reason: length` and were thrown away as `fallback:reply-refused` (replayed on the 7 Nov digest prompt: 2 of 5; Search check: 33 of ~500 calls). Offline: Workers AI is a fake model.
 import test from 'node:test';
 import assert from 'node:assert/strict';

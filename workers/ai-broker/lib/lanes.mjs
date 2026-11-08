@@ -7,7 +7,7 @@ export function laneOf(claims) {
   const workflow = String(claims.job_workflow_ref || claims.workflow_ref || '');
   // Why (8 Nov 2026, owner: "Fix Free AI + PR lane now (Recommended)": "by-hand Search checks may use the 30% PR reserve (about 1 run a day), so ps and gi can measure now"): the nightly and a by-hand run are both
   // workflow_dispatch by the same account, so the token tells them apart only by the job's environment, which only search-personas.yml (only when not started by the Worker) and press-tapes.yml set. The nightly stays scheduled.
-  // Its own lane, not 'pr': it may use the PR reserve, but never goes before a PR check, never passes to Claude and has a day cap (lib/budget.mjs), none of which the owner gave it.
+  // Its own lane, not 'pr': it never goes before a PR check and has a day cap (lib/budget.mjs). Since 8 Nov 2026 (owner: "codex up to 100%, Claude up to 90%") the PR reserve and the rule keeping it off Claude are gone: it uses Codex and Claude like every lane.
   // Why (8 Nov 2026, owner: "Yes, tapes use it too (Recommended)"): press-tapes.yml records the same personas by hand for The press's yardstick, under the same day cap.
   if (claims.environment === 'search-check-by-hand' && /(^|\/)\.github\/workflows\/(search-personas|press-tapes)\.yml$/.test(workflow.split('@')[0])) return 'byhand';
   if (/(^|\/)\.github\/workflows\/ai-answer-drift\.yml$/.test(workflow.split('@')[0])) return 'drift';

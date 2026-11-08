@@ -1,11 +1,11 @@
 // The AI broker (specs docs/superpowers/specs/2026-11-01-ai-broker-design.md here and 2026-10-28-ci-on-codex-subscription-design.md in the public repo): every CI, scheduled and benchmark AI call runs here, today on the owner's one ChatGPT/Codex login.
 // Why (1 Nov 2026, owner): renamed from codex-broker. The Durable Object class is still `CodexBroker`: the namespace transfer from the old Worker needs the same class name on both sides (proven on a throwaway pair); the class is renamed in the cleanup PR.
 // A job proves itself with GitHub's per-run OIDC token (lib/oidc.mjs); the login lives only in this Durable Object's storage and is written through after every call, before the reply is sent.
-// One `ENGINE` var names the engine that answers first (codex by default); the others follow in a fixed order and answer only when the one before ran out or is not configured (lib/engines.mjs); a lane the reserve holds back skips Claude past its line (lib/budget.mjs). Other refusals retain their existing controls.
+// One `ENGINE` var names the engine that answers first (codex by default); the others follow in a fixed order and answer only when the one before ran out or is not configured (lib/engines.mjs); Claude answers only while its seven-day window reads under 90% (lib/budget.mjs). Other refusals retain their existing controls.
 import {Container, getContainer} from '@cloudflare/containers';
 import {verifyRunToken, githubJwks} from './lib/oidc.mjs';
-import {laneOf, queueOf} from './lib/lanes.mjs';
-import {allow, heldByReserve, offClaude, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
+import {laneOf, queueOf, LANES} from './lib/lanes.mjs';
+import {allow, linesOf, claudeAllow, claudeWeekPercent, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
 import {refuseReply} from './lib/guard.mjs';
 import {slots} from './lib/queue.mjs';
 import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
@@ -100,7 +100,7 @@ export class CodexBroker extends Container {
     // `ready` = a login is stored AND the container has answered since its last start (a sleeping container keeps its last proof; its next wake starts over); `starting` = login stored, nothing answered yet (readers: the release gate accepts it, nobody else reads this field). `startError` = the last Codex failure passed on while starting.
     const state = !(await this.ctx.storage.get('login')) ? 'no-login' : (await this.ctx.storage.get('lost')) ? 'login-lost' : (await this.ctx.storage.get('answered')) ? 'ready' : 'starting';
     const startError = state === 'starting' ? await this.ctx.storage.get('startError') : null;
-    return json(200, {state, ...(startError ? {startError} : {}), limits: this.limits, own: meter.tokens, daily: {drift: callsToday(meter, 'drift'), byhand: callsToday(meter, 'byhand')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
+    return json(200, {state, ...(startError ? {startError} : {}), limits: this.limits, lines: linesOf(LANES), own: meter.tokens, daily: {drift: callsToday(meter, 'drift'), byhand: callsToday(meter, 'byhand')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
   }
 
   // The owner-visible refusals of the Codex login: they stand when Codex is reached, another engine does not hide them.
@@ -147,17 +147,18 @@ export class CodexBroker extends Container {
     if (body.only && !Object.hasOwn(body, 'engine')) return json(400, {why: 'only needs an engine: only this engine answers, or the call is refused'});
     const model = modelOf(body.tier);
     if (!model) return json(400, {why: `unknown tier "${String(body.tier).slice(0, 20)}" (small, mid or large)`});
-    const env = this.brokerEnv, {chain, first} = chainOf(env, body.engine, body.engine === undefined ? await demotedNow(this.ctx.storage, env) : [], body.only === true);   // an engine doing worse is moved back (lib/adapt.mjs) unless this call names its own   // body.engine = this one call's own first choice (e.g. one workflow trying claude); admission and caps stay the same
+    const env = this.brokerEnv, {chain} = chainOf(env, body.engine, body.engine === undefined ? await demotedNow(this.ctx.storage, env) : [], body.only === true);   // an engine doing worse is moved back (lib/adapt.mjs) unless this call names its own   // body.engine = this one call's own first choice (e.g. one workflow trying claude); admission and caps stay the same
     // Why (1 Nov 2026): with Codex first a refused login never counts toward the daily cap (as before the chain); with another engine first Codex's step checks it when reached.
     if (chain[0] === 'codex') { const refusal = await this.loginRefusal(); if (refusal) return refusal; }
     this.limits ||= (await this.ctx.storage.get('limits')) || null;   // kept in storage: an eviction must not switch the whole-week brake off (Gitar #221)
     if (this.limits?.resetsAt && this.limits.resetsAt <= Date.now() / 1000) this.limits = null;
-    // Why (5 Nov 2026, owner: "I first stop scheduled jobs spilling onto your Claude plan at the 70% Codex line"): Claude here is the owner's own subscription, and it has no lane limit, so scheduled calls past the line landed on it (the scout: 48 of 199 calls in 3 days, logged `codex ran-out`). A lane the reserve holds back may still use Free AI, under its day cap; Claude only when it is the chosen first engine (a call naming it, a pin, ENGINE). A demoted Codex is not a choice (`first` stays codex).
-    const noClaude = offClaude(lane) && first !== 'claude' && body.only !== true;
-    // Why (5 Nov 2026, owner's brief: "A job refused here gets the normal refusal, and its items wait for the next run"; review): past the line a search or an image has nobody left, Free AI takes neither, so it is the line's own `budget:` refusal (below), never `fallback:*`, which clients show red. A Free AI that really failed keeps its reason (owner, 4 Nov 2026: a fallback that cannot answer is a failure the job shows).
+    // Why (8 Nov 2026, owner: "Actually, codex up to 100%, Claude up to 90%"; replaces the 5 Nov line that kept held lanes and by-hand checks off Claude): every lane passes on to Claude when Codex refuses, until Claude's own seven-day window reads 90% used. Past that no lane starts a Claude call, a call that names Claude included: Free AI answers, or the call gets `budget:claude-week`. The reading is the CLI's, stored with each Claude call (`claude:state`); an unknown or reset window is not a reason to stop.
+    const claudeCheck = claudeAllow(claudeWeekPercent(((await this.ctx.storage.get('claude:state')) || {}).limits));
+    const claudeShut = !claudeCheck.ok && chain.includes('claude') && configured('claude', env);
+    // Why (5 Nov 2026, owner's brief: "A job refused here gets the normal refusal, and its items wait for the next run"; review; carried to the Claude line on 8 Nov 2026): with Claude shut a search or an image has nobody left, Free AI takes neither, so it is the line's own `budget:` refusal (below), never `fallback:*`, which clients show red. A Free AI that really failed keeps its reason (owner, 4 Nov 2026: a fallback that cannot answer is a failure the job shows).
     const freeAiCannot = body.search === true || body.images?.length > 0;
     // `others` can answer when Codex has run out.
-    const others = chain.filter(engine => engine !== 'codex' && configured(engine, env) && !(noClaude && (engine === 'claude' || (engine === 'free-ai' && freeAiCannot))));
+    const others = chain.filter(engine => engine !== 'codex' && configured(engine, env) && !(claudeShut && (engine === 'claude' || (engine === 'free-ai' && freeAiCannot))));
     // Check and persist admission together: concurrent calls and reruns share one UTC allowance, whichever engine answers.
     // No refund on a queue/transport/model failure; the reservation commits before an engine is called.
     const verdict = await this.ctx.storage.transaction(async storage => {
@@ -172,9 +173,8 @@ export class CodexBroker extends Container {
       if (check.ok) await storage.put('meter', recordCall(meter, lane, now));
       return check;
     });
-    if (!verdict.ok && !verdict.ranOut) return json(429, {why: verdict.why});   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
-    // Why (8 Nov 2026, Gitar on web#489): a by-hand Search check passes the broker's own check up to 100%, so Codex really running out or at capacity reached Claude through the walk; its lane is off Claude whatever the verdict.
-    const atLine = noClaude && (verdict.ranOut === true || !heldByReserve(lane)), walk = atLine ? chain.filter(engine => engine !== 'claude') : chain;
+    if (!verdict.ok && !verdict.ranOut) return json(429, {why: claudeShut && exhausted(verdict.why) ? claudeCheck.why : verdict.why});   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
+    const walk = claudeShut ? chain.filter(engine => engine !== 'claude') : chain;
     const later = walk.slice(walk.indexOf('codex') + 1).filter(engine => configured(engine, env));   // the part of this call's walk after Codex
     const note = newNote(), ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note}, day = new Date(Date.now()).toISOString().slice(0, 10), skipped = [];
     let busyPassed = false, held = null, codexRefusal = null;   // busyPassed: Claude's slots were full for too long and the call went on; held: the last refusal of an engine it went on to; codexRefusal: Codex's own 502 when it passed on for capacity
@@ -208,11 +208,13 @@ export class CodexBroker extends Container {
       if (held) return held;
     }
     if (body.only === true) {
+      if (claudeShut && chain[0] === 'claude') return json(429, {why: claudeCheck.why});
       if (chain[0] === 'free-ai') return apiFinish(env, note);   // Why (Gitar on #296): their own reasons stay: fallback:search-unsupported, fallback:unavailable, the 429 day cap
       return json(503, {why: `only-${chain[0]}: ${skipped.find(entry => entry.engine === chain[0])?.why ?? (configured(chain[0], env) ? 'unavailable' : 'not-configured')}`, engine: chain[0], tried: skipped});   // strict call: nobody else answers, and the reason is named
     }
     // Why (5 Nov 2026, review of the capacity pass-on): Codex at capacity and nobody after it answering is Codex's failure, never Free AI's "budget" (which CI reads as a grey skip) or "search-unsupported".
     if (codexRefusal) return codexRefusal;
+    if (claudeShut && freeAiCannot) return json(429, {why: claudeCheck.why});   // Codex did not answer, Claude is shut and Free AI takes neither a search nor an image
     return apiFinish(env, note);
   }
 
