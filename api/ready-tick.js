@@ -4,6 +4,7 @@
 import {closeNight} from './ready-morning.js';
 import {LIVE} from './ready-line.js';
 import {readyOn, reportNight, start} from './ready.js';
+import {mailNight} from './ready-mail.js';
 
 export const SITE = 'https://www.jobadabra.top', MAX_STARTS = 3;
 
@@ -17,6 +18,7 @@ export async function tick(env, now = new Date()) {
     await env.STATS.prepare(`UPDATE ready_jobs SET state = 'failed', wall = 'timeout', at = ?, step = NULL, step_n = NULL WHERE batch = ? AND state IN ${LIVE}`).bind(stamp, row.id).run();
     await env.STATS.prepare("UPDATE ready_batches SET state = 'finished', finished_at = ? WHERE id = ?").bind(stamp, row.id).run();
     if (row.state === 'running') await reportNight(env, row, now);   // a capped night was reported when it was capped
+    await mailNight(env, row, now);   // running or capped: the night's time is up, so every form that will report has (the claim keeps it to one mail)
     await closeNight(env, row.id);
     out.finished++;
   }

@@ -115,5 +115,17 @@ export const messages = {
     "one": " (circa {count} candidatura)",
     "other": " (circa {count} candidature)",
     "many": " (circa {count} candidature)"
-  }
+  },
+  "readySubject": {
+    "one": "{count} candidatura è pronta da controllare",
+    "other": "{count} candidature sono pronte da controllare",
+    "many": "{count} candidature sono pronte da controllare"
+  },
+  "readyIntro": "I tuoi moduli sono stati compilati durante la notte. Non è stato inviato nulla: controlli ogni modulo e premi tu Invia.",
+  "readyNeeds": {
+    "one": "Tra queste, {count} richiede una tua risposta.",
+    "other": "Tra queste, {count} richiedono una tua risposta.",
+    "many": "Tra queste, {count} richiedono una tua risposta."
+  },
+  "readyButton": "Controlla e invia"
 };

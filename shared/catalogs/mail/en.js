@@ -106,5 +106,15 @@ export const messages = {
   "creditApprox": {
     "one": " (about {count} application)",
     "other": " (about {count} applications)"
-  }
+  },
+  "readySubject": {
+    "one": "{count} application is ready to check",
+    "other": "{count} applications are ready to check"
+  },
+  "readyIntro": "Your forms were filled overnight. Nothing was sent: you check each form and press Submit.",
+  "readyNeeds": {
+    "one": "Of these, {count} needs an answer from you.",
+    "other": "Of these, {count} need an answer from you."
+  },
+  "readyButton": "Check and send"
 };

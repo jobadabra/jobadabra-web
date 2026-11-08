@@ -106,5 +106,15 @@ export const messages = {
   "creditApprox": {
     "one": " (etwa {count} Bewerbung)",
     "other": " (etwa {count} Bewerbungen)"
-  }
+  },
+  "readySubject": {
+    "one": "{count} Bewerbung ist bereit zur Prüfung",
+    "other": "{count} Bewerbungen sind bereit zur Prüfung"
+  },
+  "readyIntro": "Deine Formulare wurden über Nacht ausgefüllt. Es wurde nichts gesendet: Du prüfst jedes Formular und drückst selbst auf Absenden.",
+  "readyNeeds": {
+    "one": "Davon braucht {count} noch eine Antwort von dir.",
+    "other": "Davon brauchen {count} noch eine Antwort von dir."
+  },
+  "readyButton": "Prüfen und senden"
 };
