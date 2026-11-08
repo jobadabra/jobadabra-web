@@ -13,6 +13,7 @@ import {runNow} from './ready-tick.js';
 import {whyOf} from './ready-why.js';
 import {closeNight, morning, readyToken} from './ready-morning.js';
 import {dropKept, jobsWithKept, keptPut, videoGet} from './ready-kept.js';
+import {mailNight} from './ready-mail.js';
 export {readyToken};
 
 export const readyOn = env => env.READY_TO_SEND === 'on' && !!env.HOSTED_STATE && !!env.READY_OWNER;
@@ -132,7 +133,7 @@ async function result(request, env, now) {
   const waiting = (await env.STATS.prepare(`SELECT COUNT(*) AS n FROM ready_jobs WHERE batch = ? AND state IN ${LIVE}`).bind(row.id).first()).n;
   const next = capped ? 'capped' : waiting ? row.state : 'finished';
   await env.STATS.prepare('UPDATE ready_batches SET cost_micro = ?, state = ?, finished_at = ? WHERE id = ?').bind(total, next, next === row.state ? null : stamp(now), row.id).run();
-  if (next !== row.state) await reportNight(env, {...row, cost_micro: total}, now);
+  if (next !== row.state) { await reportNight(env, {...row, cost_micro: total}, now); await mailNight(env, row, now); }   // the night is over: its one morning mail (api/ready-mail.js)
   return json({ok: true, stop: next !== 'running'});
 }
 
@@ -147,7 +148,7 @@ async function aiCall(request, env, now) {
     const total = (await env.STATS.prepare('SELECT cost_micro FROM ready_batches WHERE id = ?').bind(row.id).first()).cost_micro + micro;
     const capped = total >= cap(env);
     await env.STATS.prepare('UPDATE ready_batches SET cost_micro = ?, state = ? WHERE id = ?').bind(total, capped ? 'capped' : row.state, row.id).run();
-    if (capped) await reportNight(env, {...row, cost_micro: total}, now);
+    if (capped) { await reportNight(env, {...row, cost_micro: total}, now); await mailNight(env, row, now); }
   }, {byok, stopped, now});
 }
 

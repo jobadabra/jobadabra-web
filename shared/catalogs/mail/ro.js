@@ -115,5 +115,17 @@ export const messages = {
     "one": " (aproximativ {count} candidatură)",
     "few": " (aproximativ {count} candidaturi)",
     "other": " (aproximativ {count} de candidaturi)"
-  }
+  },
+  "readySubject": {
+    "one": "{count} candidatură este gata de verificat",
+    "few": "{count} candidaturi sunt gata de verificat",
+    "other": "{count} de candidaturi sunt gata de verificat"
+  },
+  "readyIntro": "Formularele tale au fost completate în timpul nopții. Nu s-a trimis nimic: verifici fiecare formular și apeși tu pe Trimite.",
+  "readyNeeds": {
+    "one": "Dintre ele, {count} are nevoie de un răspuns de la tine.",
+    "few": "Dintre ele, {count} au nevoie de un răspuns de la tine.",
+    "other": "Dintre ele, {count} au nevoie de un răspuns de la tine."
+  },
+  "readyButton": "Verifică și trimite"
 };

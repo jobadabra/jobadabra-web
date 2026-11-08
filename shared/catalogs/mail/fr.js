@@ -115,5 +115,17 @@ export const messages = {
     "one": " (environ {count} candidature)",
     "other": " (environ {count} candidatures)",
     "many": " (environ {count} candidatures)"
-  }
+  },
+  "readySubject": {
+    "one": "{count} candidature est prête à être vérifiée",
+    "other": "{count} candidatures sont prêtes à être vérifiées",
+    "many": "{count} candidatures sont prêtes à être vérifiées"
+  },
+  "readyIntro": "Vos formulaires ont été remplis cette nuit. Rien n’a été envoyé : vous vérifiez chaque formulaire et appuyez vous-même sur Envoyer.",
+  "readyNeeds": {
+    "one": "Parmi elles, {count} attend une réponse de votre part.",
+    "other": "Parmi elles, {count} attendent une réponse de votre part.",
+    "many": "Parmi elles, {count} attendent une réponse de votre part."
+  },
+  "readyButton": "Vérifier et envoyer"
 };

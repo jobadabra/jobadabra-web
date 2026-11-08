@@ -115,5 +115,17 @@ export const messages = {
     "one": " (aproximadamente {count} candidatura)",
     "other": " (aproximadamente {count} candidaturas)",
     "many": " (aproximadamente {count} candidaturas)"
-  }
+  },
+  "readySubject": {
+    "one": "{count} solicitud está lista para revisar",
+    "other": "{count} solicitudes están listas para revisar",
+    "many": "{count} solicitudes están listas para revisar"
+  },
+  "readyIntro": "Tus formularios se rellenaron durante la noche. No se ha enviado nada: revisas cada formulario y pulsas Enviar tú.",
+  "readyNeeds": {
+    "one": "De ellas, {count} necesita una respuesta tuya.",
+    "other": "De ellas, {count} necesitan una respuesta tuya.",
+    "many": "De ellas, {count} necesitan una respuesta tuya."
+  },
+  "readyButton": "Revisar y enviar"
 };
