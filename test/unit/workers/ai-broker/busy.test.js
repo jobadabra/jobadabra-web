@@ -266,10 +266,12 @@ test('with no other engine to pass on to, Codex used up and Claude at 95% is ref
   assert.equal(refused.status, 429); assert.equal((await json(refused)).why, 'budget:claude-week 95% of 90%');
 });
 
-test('/health says each lane\'s lines: the Codex week per lane, the day caps and the Claude week', async t => {
-  const {broker} = await setup(t, {hold: false});
+test('/health says each lane\'s lines: the Codex week per lane, the day caps, the Claude week line and its state', async t => {
+  const {broker, storage} = await setup(t, {hold: false});
   const {lines} = await json(await broker.health());
-  assert.deepEqual(lines.week, {pr: 100, byhand: 100, scheduled: 100, bench: 100, drift: 100}); assert.deepEqual(lines.daily, {drift: 24, byhand: 800}); assert.equal(lines.claude, 90);
+  assert.deepEqual(lines.week, {pr: 100, byhand: 100, scheduled: 100, bench: 100, drift: 100}); assert.deepEqual(lines.daily, {drift: 24, byhand: 800}); assert.equal(lines.claude, 90); assert.deepEqual(lines.claudeWeek, {usedPercent: null, resetsAt: null});
+  await storage.put('claude:state', {limits: {status: 'allowed', sevenDay: {utilization: 0.62, resetsAt: day / 1000 + 3600}}});
+  assert.deepEqual((await json(await broker.health())).lines.claudeWeek, {usedPercent: 62, resetsAt: day / 1000 + 3600});
 });
 
 test('a call waiting for a Claude slot is held to the line again when it gets the slot: a Claude call that finished meanwhile moved the week to 90% (code-review, Gitar on #492)', async t => {
@@ -296,4 +298,10 @@ test('a rate_limit_event with no seven-day window keeps the known reading until 
   await storage.put('claude:state', {limits: {status: 'allowed', sevenDay: {utilization: 0.89, resetsAt: day / 1000 - 1}}});   // a window already reset is not kept
   assert.equal((await json(await broker.call('pr', body))).engine, 'claude');
   assert.equal((await storage.get('claude:state')).limits.sevenDay, null);
+});
+
+test('/health reads the stored Codex week after a restart, before any call (gi: it said limits null until the next call)', async t => {
+  const {broker} = await setup(t, {week: 73, hold: false});   // the harness stores the reading and starts the broker with none in memory
+  assert.equal(broker.limits, null);
+  assert.equal((await json(await broker.health())).limits.usedPercent, 73);
 });

@@ -4,8 +4,14 @@
 // Why (28 Oct 2026, owner: "burn these tokens"; Gitar on #2375; 31 Oct 2026, owner: "CI can use up to 100%"): own tokens and usedPercent meter CI and the whole week; both refusal brakes stay at exhaustion.
 export const CODEX_LIMIT_PCT = 100;
 export const CLAUDE_LIMIT_PCT = 90;
-/** The lines as /health says them (Why, 8 Nov 2026, gi: press-tapes.yml reads its lane's room from the broker instead of hard-coding 70%/800): Codex week per lane, the day caps, the Claude week. */
-export const linesOf = lanes => ({week: Object.fromEntries(lanes.map(lane => [lane, CODEX_LIMIT_PCT])), daily: DAILY, claude: CLAUDE_LIMIT_PCT});
+/**
+ * The lines as /health says them (Why, 8 Nov 2026, gi: press-tapes.yml reads its lane's room from the broker instead of hard-coding 70%/800; owner via the coordinator: the Find jobs recordings run on Codex, then Claude up to 90%):
+ * `week` = the Codex week line per lane, `daily` = the day caps, `claude` = the Claude week line, `claudeWeek` = Claude's seven-day state now ({usedPercent, resetsAt}, usedPercent null = unknown, as claudeAllow reads it). `now` is epoch seconds.
+ */
+export const linesOf = (lanes, claudeLimits = null, now = Date.now() / 1000) => ({
+  week: Object.fromEntries(lanes.map(lane => [lane, CODEX_LIMIT_PCT])), daily: DAILY, claude: CLAUDE_LIMIT_PCT,
+  claudeWeek: {usedPercent: claudeWeekPercent(claudeLimits, now), resetsAt: claudeWeekPercent(claudeLimits, now) == null ? null : claudeLimits.sevenDay.resetsAt},
+});
 export const DAILY = {drift: 24, byhand: 800};   // Why (30 Oct 2026, owner, JOB-45; kept on 8 Nov 2026 when the 70% reserve went: it no longer protects a PR reserve, it still stops reruns and failed calls from running away): 20 stored-answer prompts + up to 4 judges per UTC day; the broker must stop reruns and failed calls from exceeding 24. byhand: "about 1 run a day" (owner, 8 Nov 2026), one 18-persona press is ~400-500 calls, so a second full run the same day is cut; press tapes share it (8 Nov 2026: ~45+ calls a persona, so about 6 personas a day).
 // Seed for tokens per 1% of the week (PR 0, 28 Oct 2026: 1% >= ~40 calls of ~18k tokens); the broker replaces it with its measured ratio.
 export const TOKENS_PER_PERCENT = 720000;
