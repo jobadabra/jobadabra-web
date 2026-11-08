@@ -10,7 +10,7 @@ const unwired = () => Response.json({ok: false, error: 'not wired: the runner Wo
 
 // -> the batch (id) that holds this owner's job and whose container may still hold its tab.
 async function holder(env, install, job) {
-  return env.STATS.prepare(`SELECT b.id FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch WHERE b.install = ? AND j.job = ? AND j.cleared_at IS NULL AND b.state IN ('running', 'finished', 'capped')
+  return env.STATS.prepare(`SELECT b.id FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch WHERE b.install = ? AND b.task = 'fill' AND j.job = ? AND j.cleared_at IS NULL AND b.state IN ('running', 'finished', 'capped')
     ORDER BY b.created_at DESC LIMIT 1`).bind(install, job).first();
 }
 
@@ -22,7 +22,7 @@ export async function morning(request, env, install, sub) {
     const kept = await keptGet(env, install, 'handoff', job).catch(() => null);
     if (kept) return Response.json({ok: true, ...JSON.parse(new TextDecoder().decode(kept))}, {headers: {'cache-control': 'no-store'}});
   }
-  const found = sub === 'held' ? await env.STATS.prepare("SELECT id FROM ready_batches WHERE install = ? AND state IN ('running', 'finished', 'capped') ORDER BY created_at DESC LIMIT 1").bind(install).first() : await holder(env, install, job);
+  const found = sub === 'held' ? await env.STATS.prepare("SELECT id FROM ready_batches WHERE install = ? AND task = 'fill' AND state IN ('running', 'finished', 'capped') ORDER BY created_at DESC LIMIT 1").bind(install).first() : await holder(env, install, job);
   if (!found) return Response.json({ok: false, error: 'nothing held for this job'}, {status: 404});
   if (!env.READY_RUNNER) return unwired();
   const address = `https://runner/${PATHS[sub]}?batch=${found.id}&t=${encodeURIComponent(await readyToken(env, found.id))}&job=${encodeURIComponent(job)}`;

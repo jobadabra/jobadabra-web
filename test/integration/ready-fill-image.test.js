@@ -1,8 +1,10 @@
 // The containers' own shell (hosted/: the Always on image and the Ready to send image), moved here from the public repo on 1 Nov 2026 (owner: "jobadabra should have no web, no worker").
 // The Ready to send image copies the shared night files (public desktop/ready-fill/) and this repo's hosted/ready-fill/ into ONE flat folder, so every `./x.mjs` import must resolve in the union.
 import assert from 'node:assert/strict';
-import {existsSync, readFileSync, readdirSync} from 'node:fs';
+import {existsSync, readFileSync, readdirSync, statSync} from 'node:fs';
+import path from 'node:path';
 import {test} from 'node:test';
+import {fileURLToPath} from 'node:url';
 
 const root = new URL('../../', import.meta.url);
 const mjs = dir => (existsSync(new URL(dir, root)) ? readdirSync(new URL(dir, root)).filter(file => file.endsWith('.mjs')) : []);
@@ -13,19 +15,43 @@ test('the Ready to send image copies both folders into one place, the shared fil
   assert.ok(docker.indexOf('COPY desktop/ready-fill/*.mjs ./') > 0, 'the shared night files');
   assert.ok(docker.indexOf('COPY hosted/ready-fill/*.mjs ./') > docker.indexOf('COPY desktop/ready-fill/*.mjs ./'), 'then main.mjs and image-check.mjs');
   assert.match(docker, /COPY hosted\/ready-fill\/package\.json \.\//);
-  assert.match(docker, /COPY desktop\/lib\/form-address\.js \/desktop\/lib\/form-address\.js/, 'fill-job and stand-in import ../../desktop/lib/form-address.js');
+  assert.match(docker, /COPY desktop\/lib\/form-address\.js [^\n]*\/desktop\/lib\/$/m, 'fill-job and stand-in import ../../desktop/lib/form-address.js');
 });
 
-test('every relative import of a night file resolves to a file the image has beside it', () => {
-  assert.ok(shared.length >= 9 && own.includes('main.mjs'), `the shared files are in desktop/ready-fill/ (${shared.length}) and main.mjs here`);
-  const flat = new Set([...shared, ...own]);
-  const missing = [];
-  for (const [dir, files] of [['desktop/ready-fill/', shared], ['hosted/ready-fill/', own]]) {
-    for (const file of files) {
-      for (const [, spec] of readFileSync(new URL(dir + file, root), 'utf8').matchAll(/from\s+'(\.\/[^']+\.mjs)'/g)) if (!flat.has(spec.slice(2))) missing.push(`${dir}${file} imports ${spec}`);
+// The image's filesystem, as its COPY lines lay it out (WORKDIR /night): image path -> the repo file it comes from. A folder copied whole (extension, app-core/src) is listed by its files but not walked.
+function imageFiles(docker) {
+  const files = new Map(), walked = new Set();
+  for (const [, args] of docker.matchAll(/^COPY (.+)$/gm)) {
+    const parts = args.trim().split(/\s+/), dest = parts.pop(), asDir = dest.endsWith('/') || parts.length > 1 || parts.some(part => part.includes('*'));
+    const target = path.posix.normalize(dest.startsWith('/') ? dest : path.posix.join('/night', dest));
+    for (const source of parts) {
+      const full = new URL(source.replace(/\*.*$/, ''), root), glob = source.includes('*');
+      if (glob) { const folder = source.slice(0, source.lastIndexOf('/')); for (const file of readdirSync(new URL(`${folder}/`, root)).filter(name => new RegExp(`^${source.slice(folder.length + 1).replace('.', '\\.').replace('*', '.*')}$`).test(name))) { files.set(path.posix.join(target, file), `${folder}/${file}`); walked.add(path.posix.join(target, file)); } }
+      else if (existsSync(full) && statSync(full).isDirectory()) { for (const file of readdirSync(full, {recursive: true, withFileTypes: true}).filter(entry => entry.isFile())) files.set(path.posix.join(target, path.relative(fileURLToPath(full), path.join(file.parentPath ?? file.path, file.name))), `${source}/${path.relative(fileURLToPath(full), path.join(file.parentPath ?? file.path, file.name))}`); }
+      else { const image = asDir ? path.posix.join(target, path.posix.basename(source)) : target; files.set(image, source); walked.add(image); }
     }
   }
+  return {files, walked};
+}
+
+test('every relative import a night file makes, down to the files those import, is in the image', () => {
+  // Why (8 Nov 2026, cloud runner 2/4; code review of 1/4): this test followed only `./x.mjs` imports, so the read night's `../../desktop/lib/...` imports (and theirs) could be missing from the Dockerfile and nothing failed until a night did.
+  // It lays the image out from the COPY lines, then follows every static and dynamic relative import of each file it copied one by one, in the image's own paths.
+  assert.ok(shared.length >= 9 && own.includes('main.mjs'), `the shared files are in desktop/ready-fill/ (${shared.length}) and main.mjs here`);
+  const {files, walked} = imageFiles(readFileSync(new URL('hosted/ready-fill/Dockerfile', root), 'utf8'));
+  const missing = [], seen = new Set();
+  const visit = image => {
+    if (seen.has(image)) return; seen.add(image);
+    const repo = files.get(image);
+    if (!repo) return;
+    for (const [, spec] of readFileSync(new URL(repo, root), 'utf8').matchAll(/(?:from\s+|import\s*\(\s*)'(\.\.?\/[^']+)'/g)) {
+      const next = path.posix.join(path.posix.dirname(image), spec);
+      if (!files.has(next)) missing.push(`${repo} imports ${spec}: ${next} is not in the image`); else visit(next);
+    }
+  };
+  for (const image of walked) if (/\.m?js$/.test(image)) visit(image);
   assert.deepEqual(missing, []);
+  assert.ok([...seen].some(image => image.startsWith('/desktop/lib/')), 'the walk reached the desktop/lib files the image carries');
 });
 
 test('the Always on image copies only folders the public tree has', () => {

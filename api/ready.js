@@ -12,8 +12,9 @@ import {LIVE, progress, stop} from './ready-line.js';
 import {runNow} from './ready-tick.js';
 import {whyOf} from './ready-why.js';
 import {closeNight, morning, readyToken} from './ready-morning.js';
-import {dropKept, jobsWithKept, keptPut, videoGet} from './ready-kept.js';
+import {dropKept, jobsWithKept, keptPut, keptKey, videoGet} from './ready-kept.js';
 import {mailNight} from './ready-mail.js';
+import {checkRead, keepRead, takeReads, taskOf} from './ready-read.js';
 export {readyToken};
 
 export const readyOn = env => env.READY_TO_SEND === 'on' && !!env.HOSTED_STATE && !!env.READY_OWNER;
@@ -88,7 +89,7 @@ async function batch(request, env, now) {
     const data = await readBlob(env, row.install, row.id);
     // Only the rows still queued: the whole night at first, one form after a Fill again (api/ready-again.js), so the others keep their results.
     const queued = new Map((await env.STATS.prepare("SELECT job, turn FROM ready_jobs WHERE batch = ? AND state = 'queued' AND cleared_at IS NULL").bind(row.id).all()).results.map(each => [each.job, each.turn]));   // turn: which press (the container fills each once)
-    return json({ok: true, line: true, stop: row.state === 'capped' || !data, night: row.night, contact: data?.contact || {}, readyBy: data?.readyBy || '', facts: data?.facts || {}, jobs: (data?.jobs || []).filter(job => queued.has(job.id)).map(job => ({...job, turn: queued.get(job.id)}))});
+    return json({ok: true, line: true, task: row.task, stop: row.state === 'capped' || !data, night: row.night, contact: data?.contact || {}, readyBy: data?.readyBy || '', facts: data?.facts || {}, jobs: (data?.jobs || []).filter(job => queued.has(job.id)).map(job => ({...job, turn: queued.get(job.id)}))});
   }
   if (request.method !== 'POST') return json({ok: false, error: 'Use GET or POST'}, 405);
   const install = await ownerOf(request, env);
@@ -98,18 +99,21 @@ async function batch(request, env, now) {
   if (text.length > MAX_BYTES) return json({ok: false, error: 'too large'}, 413);
   let given;
   try { given = JSON.parse(text); } catch { return bad('Send JSON'); }
+  const task = taskOf(given?.task);   // fill (none named) or readiness (api/ready-read.js); anything else, `auto` included, is refused
+  if (!task) return bad('bad task');
   const jobs = Array.isArray(given?.jobs) ? given.jobs : [];
   const good = job => typeof job?.id === 'string' && /^[\w.:-]{1,64}$/.test(job.id) && /^https:\/\/[^\s/]+/.test(String(job.url)) && String(job.url).length <= 2000;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(given?.night)) || !jobs.length || jobs.length > MAX_JOBS || !jobs.every(good) || new Set(jobs.map(job => job.id)).size !== jobs.length) return bad('bad batch');
-  const old = await env.STATS.prepare('SELECT id FROM ready_batches WHERE install = ? AND night = ?').bind(install, given.night).first();
+  const old = await env.STATS.prepare('SELECT id FROM ready_batches WHERE install = ? AND night = ? AND task = ?').bind(install, given.night, task).first();
   if (old) { await clear(env, install, old.id, null, now); await env.STATS.batch([env.STATS.prepare('DELETE FROM ready_jobs WHERE batch = ?').bind(old.id), env.STATS.prepare('DELETE FROM ready_batches WHERE id = ?').bind(old.id)]); }
   const id = crypto.randomUUID();
-  const kept = jobs.map(job => ({id: job.id, url: job.url, title: String(job.title || '').slice(0, 200), company: String(job.company || '').slice(0, 200), fit: num(job.fit), kit: job.kit || {}, letter: String(job.letter || ''), cv: String(job.cv || ''), letterPdf: String(job.letterPdf || '')}));
-  const facts = Object.fromEntries(FACTS.map(name => [name, String(given.facts?.[name] || '').slice(0, 40000)]));   // what the AI may answer from (profile, standard answers, ...): sealed with the batch, deleted with it
+  const reading = task === 'readiness';   // a read needs the page only: no kit, letter, CV, contact or facts are sealed for it
+  const kept = jobs.map(job => ({id: job.id, url: job.url, title: String(job.title || '').slice(0, 200), company: String(job.company || '').slice(0, 200), fit: num(job.fit), kit: reading ? {} : job.kit || {}, letter: reading ? '' : String(job.letter || ''), cv: reading ? '' : String(job.cv || ''), letterPdf: reading ? '' : String(job.letterPdf || '')}));
+  const facts = Object.fromEntries(FACTS.map(name => [name, reading ? '' : String(given.facts?.[name] || '').slice(0, 40000)]));   // what the AI may answer from (profile, standard answers, ...): sealed with the batch, deleted with it
   const ai = /^sk-ant-[\w-]{20,300}$/.test(String(given.ai?.key || '')) ? {key: given.ai.key} : undefined;   // the user's own Claude key (BYOK): sealed with the batch, never sent back, deleted with it
-  await writeBlob(env, install, id, {ai, contact: given.contact || {}, readyBy: String(given.readyBy || '').slice(0, 5), facts, jobs: kept});
+  await writeBlob(env, install, id, {ai, contact: reading ? {} : given.contact || {}, readyBy: reading ? '' : String(given.readyBy || '').slice(0, 5), facts, jobs: kept});
   const fillAt = Number.isFinite(Date.parse(given.fillAt)) ? new Date(given.fillAt).toISOString() : null;   // when the night should start filling (the cron starts it then); none: at the next tick
-  await env.STATS.batch([env.STATS.prepare('INSERT INTO ready_batches (id, install, night, created_at, fill_at) VALUES (?, ?, ?, ?, ?)').bind(id, install, given.night, stamp(now), fillAt),
+  await env.STATS.batch([env.STATS.prepare('INSERT INTO ready_batches (id, install, night, created_at, fill_at, task) VALUES (?, ?, ?, ?, ?, ?)').bind(id, install, given.night, stamp(now), fillAt, task),
     ...kept.map(job => env.STATS.prepare('INSERT INTO ready_jobs (batch, job, host) VALUES (?, ?, ?)').bind(id, job.id, new URL(job.url).hostname))]);
   return json({ok: true, batch: id, queued: kept.length});
 }
@@ -120,12 +124,17 @@ async function result(request, env, now) {
   const row = await batchOf(env, request.headers.get('authorization'), now);
   if (!row) return deny();
   const given = await request.json().catch(() => null);
-  if (!given || !OUTCOMES.includes(given.state)) return bad('bad outcome');
-  const filled = num(given.filled), left = num(given.left), state = given.state === 'prepared' && !(filled > 0 && left === 0) ? 'partial' : given.state;
+  const reading = row.task === 'readiness', checked = reading ? checkRead(given) : null;   // the batch's task decides what it may report, whatever the body says (api/ready-read.js)
+  if (!given || (reading ? !checked : !OUTCOMES.includes(given.state))) return bad('bad outcome');
+  if (reading && checked.read && !env.READY_KEK) return notSetUp();
+  let kept = reading && checked.read ? checked : null;   // sealed BEFORE the row takes the outcome, so a take can never find a "read" row without its object (code review of 2/4)
+  if (kept) { try { await keepRead(env, row, String(given.job), kept.read, now); } catch { kept = null; checked.state = 'failed'; checked.why = 'store'; } }
+  const filled = reading ? null : num(given.filled), left = reading ? null : num(given.left), state = reading ? checked.state : given.state === 'prepared' && !(filled > 0 && left === 0) ? 'partial' : given.state;
   const micro = num(given.costMicro) || 0;
   const changed = await env.STATS.prepare(`UPDATE ready_jobs SET state = ?, filled = ?, left_empty = ?, human_check = ?, wall = ?, ms = ?, cost_micro = cost_micro + ?, at = ?, step = NULL, step_n = NULL, again_from = NULL
-    WHERE batch = ? AND job = ? AND cleared_at IS NULL AND state IN ${LIVE}`).bind(state, filled, left, given.humanCheck ? 1 : 0, String(given.wall || '').slice(0, 40), num(given.ms), micro, stamp(now), row.id, String(given.job)).run();
-  if (!changed.meta?.changes) {   // a form the owner stopped (api/ready-line.js) keeps what it was put back to; an unknown one is refused
+    WHERE batch = ? AND job = ? AND cleared_at IS NULL AND state IN ${LIVE}`).bind(state, filled, left, !reading && given.humanCheck ? 1 : 0, reading ? checked.why : String(given.wall || '').slice(0, 40), num(given.ms), micro, stamp(now), row.id, String(given.job)).run();
+  if (!changed.meta?.changes) {   // a form the owner stopped
+    if (kept) await env.HOSTED_STATE.delete(keptKey(row.install, 'read', row.id, String(given.job))).catch(() => {});   // its read is not kept (api/ready-line.js) keeps what it was put back to; an unknown one is refused
     const known = await env.STATS.prepare('SELECT 1 AS n FROM ready_jobs WHERE batch = ? AND job = ?').bind(row.id, String(given.job)).first();
     return known ? json({ok: true, dropped: true, stop: false}) : json({ok: false, error: 'unknown job'}, 404);
   }
@@ -134,7 +143,7 @@ async function result(request, env, now) {
   const next = capped ? 'capped' : waiting ? row.state : 'finished';
   await env.STATS.prepare('UPDATE ready_batches SET cost_micro = ?, state = ?, finished_at = ? WHERE id = ?').bind(total, next, next === row.state ? null : stamp(now), row.id).run();
   if (next !== row.state) await reportNight(env, {...row, cost_micro: total}, now);
-  if (next === 'finished') await mailNight(env, row, now);   // the night is over: its one morning mail (api/ready-mail.js); a capped night is mailed when its time ends (api/ready-tick.js), after the forms still filling have reported
+  if (next === 'finished') await (reading ? closeNight(env, row.id) : mailNight(env, row, now));   // the night is over: its one morning mail (api/ready-mail.js); a capped night is mailed when its time ends (api/ready-tick.js), after the forms still filling have reported. A read night holds nothing and mails nothing: its container goes at once, not after 3 h
   return json({ok: true, stop: next !== 'running'});
 }
 
@@ -158,7 +167,7 @@ async function mine(request, env, now, sub) {
   const linked = sub === 'submitted' && !(await installOf(request, env)) ? await viaLink(request, env, now) : null;   // the page's "I submitted it": the link, for its own job only
   const install = linked || await ownerOf(request, env);
   if (!install) return deny();
-  const latest = job => env.STATS.prepare(`SELECT b.id FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch WHERE b.install = ? AND j.job = ? ORDER BY b.created_at DESC LIMIT 1`).bind(install, job).first();
+  const latest = job => env.STATS.prepare(`SELECT b.id FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch WHERE b.install = ? AND b.task = 'fill' AND j.job = ? ORDER BY b.created_at DESC LIMIT 1`).bind(install, job).first();
   if (sub === 'data' && request.method === 'DELETE') {
     let objects = 0;
     for (const item of (await env.HOSTED_STATE.list({prefix: `ready/${install}/`})).objects || []) { await env.HOSTED_STATE.delete(item.key); objects++; }
@@ -176,11 +185,12 @@ async function mine(request, env, now, sub) {
     await env.STATS.prepare('UPDATE ready_jobs SET submitted_at = COALESCE(submitted_at, ?) WHERE batch = ? AND job = ?').bind(stamp(now), found.id, job).run();
     return json({ok: true});
   }
+  if (sub === 'reads') return request.method === 'POST' ? json(await takeReads(env, install, clear, now), 200) : json({ok: false, error: 'Use POST'}, 405);   // taking a read removes it from the site (api/ready-read.js): never a GET
   if (request.method !== 'GET') return json({ok: false, error: 'Use GET'}, 405);
   if (sub === 'state') {
     const night = new URL(request.url).searchParams.get('night');
-    const row = night ? await env.STATS.prepare('SELECT * FROM ready_batches WHERE install = ? AND night = ?').bind(install, night).first()
-      : await env.STATS.prepare('SELECT * FROM ready_batches WHERE install = ? ORDER BY night DESC LIMIT 1').bind(install).first();
+    const row = night ? await env.STATS.prepare("SELECT * FROM ready_batches WHERE install = ? AND night = ? AND task = 'fill'").bind(install, night).first()
+      : await env.STATS.prepare("SELECT * FROM ready_batches WHERE install = ? AND task = 'fill' ORDER BY night DESC LIMIT 1").bind(install).first();
     if (!row) return json({ok: true, batch: null, jobs: []});
     const {results} = await env.STATS.prepare('SELECT job, host, state, filled, left_empty, human_check, wall, ms, submitted_at, cleared_at, step, step_n, started_at FROM ready_jobs WHERE batch = ? ORDER BY job').bind(row.id).all();
     const videos = await jobsWithKept(env, install, 'video', row.id).catch(() => new Set());   // Watch the fill: which rows have the night's video
@@ -188,7 +198,7 @@ async function mine(request, env, now, sub) {
   }
   if (sub === 'report') {   // the morning line: prepared / reached a form / filled completely / he submitted, per night
     const {results} = await env.STATS.prepare(`SELECT b.night, b.cost_micro, COUNT(*) AS prepared_for, SUM(j.state IN ('prepared','partial')) AS reached, SUM(j.state = 'prepared') AS complete,
-      SUM(j.submitted_at IS NOT NULL) AS submitted FROM ready_batches b JOIN ready_jobs j ON j.batch = b.id WHERE b.install = ? GROUP BY b.id ORDER BY b.night DESC LIMIT 30`).bind(install).all();
+      SUM(j.submitted_at IS NOT NULL) AS submitted FROM ready_batches b JOIN ready_jobs j ON j.batch = b.id WHERE b.install = ? AND b.task = 'fill' GROUP BY b.id ORDER BY b.night DESC LIMIT 30`).bind(install).all();
     return json({ok: true, nights: results.map(r => ({night: r.night, costUsd: r.cost_micro / 1e6, queued: r.prepared_for, reached: r.reached || 0, complete: r.complete || 0, submitted: r.submitted || 0}))});
   }
   return notFound();
@@ -206,7 +216,7 @@ export async function sweep(env, now = new Date()) {
   return out;
 }
 
-// /api/ready/<batch|result|ai|video|live|handoff|held|link|again|progress|stop|run|done|submitted|state|report|data>
+// /api/ready/<batch|result|ai|video|live|handoff|held|link|again|progress|stop|run|done|submitted|state|report|reads|data>
 export async function ready(request, env, now = new Date()) {
   if (!readyOn(env)) return notFound();
   const sub = new URL(request.url).pathname.replace(/^\/api\/ready\/?/, '');
@@ -255,7 +265,9 @@ export async function ready(request, env, now = new Date()) {
     const install = await ownerOf(request, env);
     if (!install) return deny();
     if (request.method !== 'POST') return json({ok: false, error: 'Use POST'}, 405);
-    const done = await runNow(env, install, now);
+    const task = taskOf((await request.json().catch(() => null))?.task);   // none named: the fill night, as before
+    if (!task) return bad('bad task');
+    const done = await runNow(env, install, now, task);
     return json(done.body, done.status);
   }
   return mine(request, env, now, sub);

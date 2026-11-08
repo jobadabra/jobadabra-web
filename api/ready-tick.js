@@ -31,10 +31,10 @@ export async function tick(env, now = new Date()) {
   return out;
 }
 
-// The owner's "run it now" (a test, or a night he wants early): his latest queued night starts at once, as the cron would start it. -> {status, body}
-export async function runNow(env, install, now = new Date()) {
+// The owner's "run it now" (a test, or a night he wants early): his latest queued night of that task (`fill`, or `readiness`: api/ready-read.js) starts at once, as the cron would start it. -> {status, body}
+export async function runNow(env, install, now = new Date(), task = 'fill') {
   if (!env.READY_QUEUE) return {status: 503, body: {ok: false, error: 'not wired: the Queue is not set up'}};
-  const row = await env.STATS.prepare("SELECT id FROM ready_batches WHERE install = ? AND state = 'queued' ORDER BY created_at DESC LIMIT 1").bind(install).first();
+  const row = await env.STATS.prepare("SELECT id FROM ready_batches WHERE install = ? AND task = ? AND state = 'queued' ORDER BY created_at DESC LIMIT 1").bind(install, task).first();
   if (!row) return {status: 404, body: {ok: false, error: 'no queued night to run'}};
   return startBatch(env, row.id, now);
 }
@@ -52,7 +52,10 @@ export async function startBatch(env, id, now = new Date()) {
 async function dispatch(env, id, now) {
   const token = await start(env, id, now);
   if (!token) return 'taken';
-  try { await env.READY_QUEUE.send({batch: id, token, site: env.READY_SITE || SITE}); } catch {
+  try {
+    const task = (await env.STATS.prepare('SELECT task FROM ready_batches WHERE id = ?').bind(id).first())?.task || 'fill';
+    await env.READY_QUEUE.send({batch: id, token, site: env.READY_SITE || SITE, task});
+  } catch {
     await env.STATS.prepare("UPDATE ready_batches SET state = 'queued', expires_at = NULL WHERE id = ? AND state = 'running'").bind(id).run();
     return 'refused';
   }

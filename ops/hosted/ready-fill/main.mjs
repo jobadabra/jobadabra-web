@@ -1,11 +1,12 @@
-// The Ready to send container (private spec jobadabra-lab:docs/specs/2026-10-17-ready-to-send.md), the process the Worker starts: POST /run {site, token} fills the night in the background; the morning's calls then reach the held tabs:
+// The Ready to send container (private spec jobadabra-lab:docs/specs/2026-10-17-ready-to-send.md), the process the Worker starts: POST /run {site, token, task} runs the night in the background (task: fill, the default, or readiness: reads each form only and holds no tab); the morning's calls then reach the held tabs:
 //  GET /state?t=  per job: held or not (410 "gone" when this container holds no night: a fresh one woken after a deploy, or closed);  WS /ws?t=&job=  the live view;  GET /handoff?t=&job=  the hand-off;  POST /close?t=  closes every tab and the browser (the data goes with it: nothing was written to disk but the browser's temp profile).
 // Every call needs the night token (the Worker checks the owner first; this is a second lock). No secret is baked in; the token arrives in /run. Guard: desktop/test/ready-fill.test.js, hosted/ready-fill/proof.mjs.
 import http from 'node:http';
 import {chromium} from 'playwright';
 import {WebSocketServer} from 'ws';
 import {attach, handoff} from './live.mjs';
-import {gone, runNight, why} from './night.mjs';
+import {gone, runNight, TASKS, why} from './night.mjs';
+import {parseRun} from './run-request.mjs';
 import {onStop} from './stop.mjs';
 
 let night = null, token = '', status = {state: 'idle', jobs: 0, filled: 0};
@@ -19,9 +20,11 @@ const server = http.createServer(async (request, response) => {
     if (request.method === 'POST' && url.pathname === '/run') {
       const chunks = []; for await (const chunk of request) chunks.push(chunk);
       const given = JSON.parse(Buffer.concat(chunks).toString() || '{}');
+      const run = parseRun(given, TASKS);
+      if (run.error) return json(response, 400, {ok: false, error: run.error});
       if (night || status.state === 'running') return json(response, 409, {ok: false, error: 'already running'});
-      token = String(given.token || ''); status = {state: 'running', jobs: 0, filled: 0};
-      runNight({chromium, site: String(given.site || ''), token, log: (what, data) => { log(what, data); if (what === 'job') { status.jobs++; if (['prepared', 'partial'].includes(data.state)) status.filled++; } }})
+      token = run.token; status = {state: 'running', task: run.task, jobs: 0, filled: 0};
+      runNight({chromium, site: run.site, token, task: run.task, log: (what, data) => { log(what, data); if (what === 'job') { status.jobs++; if (['prepared', 'partial'].includes(data.state)) status.filled++; } }})
         .then(done => { night = done; status.state = 'held'; }, error => { status = {...status, state: 'failed', error: why(error)}; log('night failed', {error: status.error}); });
       return json(response, 202, {ok: true});
     }
