@@ -25,8 +25,12 @@ export const MAILS = [
   // `suggested`: the spec's defaults per mode (§ Suggested defaults: 'no' = no e-mail, 'digest' = in the digest, 'mail' = an e-mail, 'hidden' = not shown in that mode);
   // the app applies them (PR 4), the site stores only what a person changed (mail_off / mail_on, list = the row id).
   {id: 'app-matches', template: 'message', owner: 'yours', name: 'New matches', when: 'a search finds new jobs', suggested: {mac: 'digest', always: 'digest'}},
-  {id: 'app-needs-you', template: 'message', owner: 'yours', name: 'An application needs you', when: 'an application waits for the person', suggested: {mac: 'no', always: 'mail'}},
-  {id: 'app-applied', template: 'message', owner: 'yours', name: 'Applied for you', when: 'Full automation sent an application', suggested: {mac: 'no', always: 'mail'}},
+  // Why (owner, 8 Nov 2026: "wire all the unwired and switch them on on every row"): the four automation rows (needs you, applied, interview reminder, forms ready) start ON in both modes once e-mail is on,
+  // replacing 6 Nov's "Mac only starts off" for them. A choice a person made is never reset (the app only writes rows never chosen).
+  {id: 'app-needs-you', template: 'message', owner: 'yours', name: 'An application needs you', when: 'an application waits for the person', suggested: {mac: 'mail', always: 'mail'}},
+  {id: 'app-applied', template: 'message', owner: 'yours', name: 'Applied for you', when: 'Full automation sent an application', suggested: {mac: 'mail', always: 'mail'}},
+  {id: 'app-reminder', template: 'message', owner: 'yours', name: 'Interview reminder', when: 'an interview is tomorrow evening or today (from the Gmail & Calendar check on the Mac)', suggested: {mac: 'mail', always: 'mail'}},
+  {id: 'app-ready', template: 'message', owner: 'yours', name: 'Forms ready to check', when: 'a night of Ready to send ends with forms to check (sent by our site, even with the Mac off)', suggested: {mac: 'mail', always: 'mail'}},
   {id: 'app-weekly', template: 'message', owner: 'yours', name: 'Weekly summary', when: "the person's day, Mondays by default", suggested: {mac: 'mail', always: 'mail'}},
   {id: 'app-stopped', template: 'message', owner: 'yours', name: 'Always on stopped working', when: 'a run on GitHub fails', suggested: {mac: 'hidden', always: 'mail'}},
   {id: 'app-nothing', template: 'message', owner: 'yours', name: 'Nothing found for days', when: 'days of runs with no new match', suggested: {mac: 'hidden', always: 'mail'}},

@@ -78,5 +78,7 @@ test('an app mail shows the spec\'s suggested defaults and how many people turne
   assert.deepEqual(data.offReasons.map(row => row.list), ['service'], 'a person\'s choice per app mail is not a stopped address (review of hr-31)');
   const html = card(await settings(env));
   assert.match(html, /New matches<span class="sw-says">a search finds new jobs · suggested: Mac: in the digest; Always on: in the digest · 2 turned it off<\/span>/);
-  assert.match(html, /An application needs you<span class="sw-says">[^<]*suggested: Mac: no e-mail; Always on: e-mail · nobody turned it off<\/span>/);
+  assert.match(html, /An application needs you<span class="sw-says">[^<]*suggested: Mac: e-mail; Always on: e-mail · nobody turned it off<\/span>/);
+  assert.match(html, /Interview reminder<span class="sw-says">[^<]*suggested: Mac: e-mail; Always on: e-mail/);
+  assert.match(html, /Forms ready to check<span class="sw-says">[^<]*suggested: Mac: e-mail; Always on: e-mail/);
 });

@@ -103,11 +103,18 @@ test('a stopped Always on test holds the Test press for confirmed and unconfirme
   assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM mail_log WHERE status = 'claimed'").get().n, 0);
 });
 
-test('the app\'s own mails are the spec\'s six rows, each a Yours mail sent as `message`, with a suggested default for Mac and for Always on', () => {
-  assert.deepEqual(APP_ROWS, ['app-matches', 'app-needs-you', 'app-applied', 'app-weekly', 'app-stopped', 'app-nothing']);
+test('the app\'s own mails are the spec\'s eight rows, each a Yours mail sent as `message`, with a suggested default for Mac and for Always on', () => {
+  assert.deepEqual(APP_ROWS, ['app-matches', 'app-needs-you', 'app-applied', 'app-reminder', 'app-ready', 'app-weekly', 'app-stopped', 'app-nothing']);
   for (const id of APP_ROWS) {
     const mail = MAILS.find(each => each.id === id);
     assert.deepEqual([mail.owner, mail.template, !!mail.locked], ['yours', 'message', false], id);
     for (const mode of ['mac', 'always']) assert.ok(['no', 'digest', 'mail', 'hidden'].includes(mail.suggested[mode]), `${id} ${mode}`);
   }
+});
+
+test('every automation row of the Schedules card starts on in both modes (owner, 8 Nov 2026), and the Mac only defaults of the others are unchanged', () => {
+  const on = id => MAILS.find(each => each.id === id).suggested;
+  for (const id of ['app-needs-you', 'app-applied', 'app-reminder', 'app-ready']) assert.deepEqual(on(id), {mac: 'mail', always: 'mail'}, id);
+  assert.deepEqual(on('app-matches'), {mac: 'digest', always: 'digest'});
+  assert.deepEqual(on('app-stopped'), {mac: 'hidden', always: 'mail'});
 });
