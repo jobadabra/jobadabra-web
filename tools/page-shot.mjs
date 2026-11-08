@@ -38,6 +38,7 @@ try {
     if (reasons.length) { failed = true; console.error(`UNSTYLED ${pagePath} at ${width}px ${theme}: ${reasons.join('; ')}`); }
     else {
       if (args.scroll) { await page.locator(String(args.scroll)).first().scrollIntoViewIfNeeded(); await page.waitForTimeout(500); }   // --scroll '<selector>': shoot that part of the page (a full-page shot leaves iframes blank)
+      if (args.scrollx) { const moved = await page.locator(String(args.scrollx)).first().evaluate(el => { const box = el.closest('.card, .scroll, .table-scroll') || el; box.scrollLeft = box.scrollWidth; return [box.scrollLeft, box.scrollWidth, box.clientWidth]; }); console.error(`scrollx ${pagePath} at ${width}px: scrolled ${moved[0]} px (content ${moved[1]}, visible ${moved[2]})`); }   // --scrollx '<selector>': scroll its card or table box fully right, and say how far it went (a table that does not scroll says 0)
       if (args.click) { await page.locator(String(args.click)).first().click(); await page.waitForTimeout(300); }
       if (args.then) { await page.locator(String(args.then)).first().click(); await page.waitForTimeout(300); }   // --then '<selector>': a second press after --click (a menu item, then its form; 3 Nov 2026)   // --click '<selector>': press it before the shot (an open dropdown); after --scroll
       if (args.clip) {   // Why (5 Nov 2026, owner: "the screenshots on the PRs … has nothing to do with the changes"): the PR's shot is the changed section, readable in a table cell; a selector that matches nothing fails, never a full-page fallback
