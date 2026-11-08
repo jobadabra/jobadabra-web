@@ -4,15 +4,18 @@
 // Why (3 Nov 2026, owner, chose "Busy = next engine + PR reserve"): scheduled work (the search check, scouts, the digest) used 62% of the week and PR checks 37%, and by Tuesday the week read 100% so no PR check could use Codex. Scheduled, bench and drift now stop at 70%; PR keeps 30% to itself. A refusal by this reserve is not an error.
 // Why (5 Nov 2026, owner: "I first stop scheduled jobs spilling onto your Claude plan at the 70% Codex line"): the refusal used to pass to the next engine like "ran out", and that was Claude, the owner's own subscription. Past the line these lanes pass to Free AI only (worker.js `noClaude`); PR still goes on to Claude at 100%.
 export const RESERVE_PCT = 70;
-export const LIMITS = {own: {pr: 100, scheduled: RESERVE_PCT, bench: RESERVE_PCT, drift: RESERVE_PCT}, week: {pr: 100, scheduled: RESERVE_PCT, bench: RESERVE_PCT, drift: RESERVE_PCT}};
+// Why (8 Nov 2026, owner: "Fix Free AI + PR lane now (Recommended)": "by-hand Search checks may use the 30% PR reserve (about 1 run a day)"): a by-hand Search check may run into the PR reserve, to 100%.
+export const LIMITS = {own: {pr: 100, byhand: 100, scheduled: RESERVE_PCT, bench: RESERVE_PCT, drift: RESERVE_PCT}, week: {pr: 100, byhand: 100, scheduled: RESERVE_PCT, bench: RESERVE_PCT, drift: RESERVE_PCT}};
 /** Whether the reserve stops this lane before the whole week is used: scheduled, bench and drift. PR goes to 100%. */
 export const heldByReserve = lane => LIMITS.week[lane] < 100;
-export const DAILY = {drift: 24};   // Why (30 Oct 2026, owner, JOB-45): 20 stored-answer prompts + up to 4 judges per UTC day; the broker must stop reruns and failed calls from exceeding 24.
+/** Whether this lane's calls never pass on to Claude (the owner's own plan): the lanes the reserve holds, and by-hand Search checks (5 Nov 2026 rule kept for them on 8 Nov). */
+export const offClaude = lane => heldByReserve(lane) || lane === 'byhand';
+export const DAILY = {drift: 24, byhand: 800};   // Why (30 Oct 2026, owner, JOB-45): 20 stored-answer prompts + up to 4 judges per UTC day; the broker must stop reruns and failed calls from exceeding 24. byhand: "about 1 run a day" (owner, 8 Nov 2026), one 18-persona press is ~500 calls, so a second full run the same day is cut.
 // Seed for tokens per 1% of the week (PR 0, 28 Oct 2026: 1% >= ~40 calls of ~18k tokens); the broker replaces it with its measured ratio.
 export const TOKENS_PER_PERCENT = 720000;
 
 /** Fresh meter state for the week that resets at resetsAt (epoch seconds). */
-export const newMeter = resetsAt => ({resetsAt, tokens: {pr: 0, scheduled: 0, bench: 0, drift: 0}, daily: {day: null, calls: {drift: 0}}});
+export const newMeter = resetsAt => ({resetsAt, tokens: {pr: 0, byhand: 0, scheduled: 0, bench: 0, drift: 0}, daily: {day: null, calls: {drift: 0, byhand: 0}}});
 
 /** Accepted calls in this UTC day (epoch seconds); old meters without daily state read as zero. */
 export const callsToday = (meter, lane, now = Date.now() / 1000) => meter.daily?.day === Math.floor(now / 86400) ? (meter.daily.calls?.[lane] ?? 0) : 0;
@@ -21,7 +24,7 @@ export const callsToday = (meter, lane, now = Date.now() / 1000) => meter.daily?
 export function recordCall(meter, lane, now) {
   if (!Object.hasOwn(DAILY, lane)) return meter;
   const day = Math.floor(now / 86400);
-  if (meter.daily?.day !== day) meter.daily = {day, calls: {drift: 0}};
+  if (meter.daily?.day !== day) meter.daily = {day, calls: {drift: 0, byhand: 0}};
   meter.daily.calls[lane] = callsToday(meter, lane, now) + 1;
   return meter;
 }

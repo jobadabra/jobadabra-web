@@ -4,8 +4,8 @@
 // One `ENGINE` var names the engine that answers first (codex by default); the others follow in a fixed order and answer only when the one before ran out or is not configured (lib/engines.mjs); a lane the reserve holds back skips Claude past its line (lib/budget.mjs). Other refusals retain their existing controls.
 import {Container, getContainer} from '@cloudflare/containers';
 import {verifyRunToken, githubJwks} from './lib/oidc.mjs';
-import {laneOf} from './lib/lanes.mjs';
-import {allow, heldByReserve, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
+import {laneOf, queueOf} from './lib/lanes.mjs';
+import {allow, offClaude, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
 import {refuseReply} from './lib/guard.mjs';
 import {slots} from './lib/queue.mjs';
 import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
@@ -100,7 +100,7 @@ export class CodexBroker extends Container {
     // `ready` = a login is stored AND the container has answered since its last start (a sleeping container keeps its last proof; its next wake starts over); `starting` = login stored, nothing answered yet (readers: the release gate accepts it, nobody else reads this field). `startError` = the last Codex failure passed on while starting.
     const state = !(await this.ctx.storage.get('login')) ? 'no-login' : (await this.ctx.storage.get('lost')) ? 'login-lost' : (await this.ctx.storage.get('answered')) ? 'ready' : 'starting';
     const startError = state === 'starting' ? await this.ctx.storage.get('startError') : null;
-    return json(200, {state, ...(startError ? {startError} : {}), limits: this.limits, own: meter.tokens, daily: {drift: callsToday(meter, 'drift')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
+    return json(200, {state, ...(startError ? {startError} : {}), limits: this.limits, own: meter.tokens, daily: {drift: callsToday(meter, 'drift'), byhand: callsToday(meter, 'byhand')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
   }
 
   // The owner-visible refusals of the Codex login: they stand when Codex is reached, another engine does not hide them.
@@ -153,7 +153,7 @@ export class CodexBroker extends Container {
     this.limits ||= (await this.ctx.storage.get('limits')) || null;   // kept in storage: an eviction must not switch the whole-week brake off (Gitar #221)
     if (this.limits?.resetsAt && this.limits.resetsAt <= Date.now() / 1000) this.limits = null;
     // Why (5 Nov 2026, owner: "I first stop scheduled jobs spilling onto your Claude plan at the 70% Codex line"): Claude here is the owner's own subscription, and it has no lane limit, so scheduled calls past the line landed on it (the scout: 48 of 199 calls in 3 days, logged `codex ran-out`). A lane the reserve holds back may still use Free AI, under its day cap; Claude only when it is the chosen first engine (a call naming it, a pin, ENGINE). A demoted Codex is not a choice (`first` stays codex).
-    const noClaude = heldByReserve(lane) && first !== 'claude' && body.only !== true;
+    const noClaude = offClaude(lane) && first !== 'claude' && body.only !== true;
     // Why (5 Nov 2026, owner's brief: "A job refused here gets the normal refusal, and its items wait for the next run"; review): past the line a search or an image has nobody left, Free AI takes neither, so it is the line's own `budget:` refusal (below), never `fallback:*`, which clients show red. A Free AI that really failed keeps its reason (owner, 4 Nov 2026: a fallback that cannot answer is a failure the job shows).
     const freeAiCannot = body.search === true || body.images?.length > 0;
     // `others` can answer when Codex has run out.
@@ -222,7 +222,7 @@ export class CodexBroker extends Container {
     const entered = Date.now();
     const unlock = session ? await this.turns(session) : () => {};   // before the slot: a waiting turn of one conversation must not hold a slot others need
     try {
-      const release = await this.gate.acquire(lane === 'drift' ? 'scheduled' : lane);   // nightly drift shares scheduled queue priority
+      const release = await this.gate.acquire(queueOf(lane));   // nightly drift and by-hand Search checks share scheduled queue priority
       try {
         const delta = typeof body.delta === 'string' ? body.delta : '', now = Date.now();
         const plan = session ? planOf(((await this.ctx.storage.get('sessions')) || {})[session], {now, tier: body.tier ?? 'mid', delta}) : null;
@@ -285,7 +285,7 @@ export class CodexBroker extends Container {
     if ((state.invalidUntil || 0) > now) { skip('claude', 'token-invalid', false); return null; }
     if ((state.limitUntil || 0) > now) { skip('claude', 'ran-out', false); return null; }
     const model = CLAUDE_MODELS[body.tier ?? 'mid'];
-    const priority = lane === 'drift' ? 'scheduled' : lane, waitStarted = Date.now();
+    const priority = queueOf(lane), waitStarted = Date.now();
     const releaseClaude = await this.claudeGate.acquire(priority, waitMs);
     if (!releaseClaude) { await skip('claude', 'busy'); return null; }
     const release = await this.gate.acquire(priority, waitMs === undefined ? undefined : Math.max(0, waitMs - (Date.now() - waitStarted)));   // the 4 shared slots count against the same deadline
