@@ -2,14 +2,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {day, body, harness} from './harness.mjs';
+import {day, body, harness, containerError} from './harness.mjs';
 import {chainOf, ORDER} from '../../../../workers/ai-broker/lib/engines.mjs';
 
 const config = JSON.parse(readFileSync(new URL('../../../../workers/ai-broker/wrangler.jsonc', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
 const freeAnswer = () => ({response: 'free answer', usage: {prompt_tokens: 100, completion_tokens: 20}});
 const claudeAnswer = () => Response.json({type: 'message', content: [{type: 'text', text: 'claude answer'}], stop_reason: 'end_turn', usage: {input_tokens: 100, output_tokens: 20}});
 const claudeOk = () => new Response(JSON.stringify({reply: 'claude ok', tokens: {input: 5, output: 3}, ms: 7, limits: {status: 'allowed', fiveHour: {utilization: 0.2}, sevenDay: {utilization: 0.05}}}));
-const claudeFails = (error, extra = {}, status = 500) => () => new Response(JSON.stringify({error, ...extra}), {status});
+const claudeFails = (error, extra = {}, status = 500) => () => containerError(error, extra, status);
 // A fresh world per call: the env with a given ENGINE and fakes that count what each provider was asked.
 function world(t, engine, {free = freeAnswer, extra = {}, claude = claudeOk, token = false, codex = null} = {}) {
   t.mock.method(Date, 'now', () => day);
@@ -86,9 +86,9 @@ test('ENGINE=free-ai with a search request or without a Codex login: search goes
   assert.equal(await answered(await none.broker.call('pr', body)), 'free-ai');
 });
 
-test('only "ran out" moves on from Codex: with Free AI first and nothing left, a Codex failure is Codex\'s refusal, not another engine\'s answer', async t => {
+test('Free AI first and nothing left after Codex: a Codex failure is Codex\'s own 502 (no engine is left to walk to)', async t => {
   const {broker, calls} = world(t, 'free-ai', {free: () => { throw new Error('down'); }});
-  broker.containerFetch = async () => new Response(JSON.stringify({error: 'codex-failed:1 boom'}), {status: 500});
+  broker.containerFetch = async () => containerError('codex-failed:1 boom');
   const response = await broker.call('pr', body);
   assert.equal(response.status, 502); assert.match((await response.json()).why, /codex-failed:1 boom/);
   assert.equal(calls.paid, 0);   // nothing sits after Codex that could cover a plain failure
@@ -218,14 +218,14 @@ test('search: Codex first while it has allowance; when it is used up Claude sear
 });
 
 // JOB-202 (owner, 1 Nov 2026: "adapt or report if one is doing worse than the other"): an engine that fails half of its last calls goes behind the other subscription for 30 minutes.
-const codexBroken = () => new Response(JSON.stringify({error: 'codex-failed:1 boom'}), {status: 500});
+const codexBroken = () => containerError('codex-failed:1 boom');
 
 // The container's error for a Codex run the model's server turned away, as CI run 42040707448 printed it (5 Nov 2026, cut at "Selec" by the caller); the rest of the message is
 // the server's capacity wording, a hypothesis until the broker's own detail shows it. Codex names this class server_overloaded ("Server overloaded; retry later.").
 const capacity = message => `codex-failed:1 {"type":"thread.started","thread_id":"01a1ac05-5b58-7850-8433-3b742820d8cb"} {"type":"turn.started"} {"type":"error","message":"${message}"} {"type":"turn.failed","error":{"message":"${message}"}}`;
 test('Codex turned away for capacity (run 42040707448): the Claude subscription answers instead of a 502, and fellBack carries the server\'s own words without the JSON around them', async t => {
   for (const [message, said = message] of [['Selected model is at capacity. Please try a different model.'], ['Server overloaded; retry later.'], ['We\'re currently experiencing high demand, which may cause temporary errors.'], ['server_overloaded: \\"gpt-6-astra\\" is busy', 'server_overloaded: "gpt-6-astra" is busy']]) {
-    const {broker, calls} = world(t, 'codex', {...withToken, codex: () => new Response(JSON.stringify({error: capacity(message)}), {status: 500})});
+    const {broker, calls} = world(t, 'codex', {...withToken, codex: () => containerError(capacity(message))});
     const reply = await broker.call('pr', body);
     assert.equal(reply.status, 200, message);
     const answer = await reply.json();
@@ -236,33 +236,34 @@ test('Codex turned away for capacity (run 42040707448): the Claude subscription 
   }
   {   // nobody after Codex answers (Claude fails, Free AI is off): the caller gets Codex's own 502, not a budget or "unavailable" reason CI would read as a grey skip
     const error = capacity('Selected model is at capacity. Please try a different model.');
-    const {broker} = world(t, 'codex', {...withToken, claude: claudeFails('boom'), extra: {FALLBACK_FREE_AI_DAY_USD: '0'}, codex: () => new Response(JSON.stringify({error}), {status: 500})});
+    const {broker} = world(t, 'codex', {...withToken, claude: claudeFails('boom'), extra: {FALLBACK_FREE_AI_DAY_USD: '0'}, codex: () => containerError(error)});
     const reply = await broker.call('pr', body);
     assert.equal(reply.status, 502); assert.equal((await reply.json()).why, error);
     Date.now.mock.restore();
   }
   const escapedKey = capacity('Selected model is at capacity \\u0073k-' + 'a'.repeat(30));   // Gitar on #406: token-shaped only once its JSON escape is decoded
-  for (const error of ['codex-failed:1 boom', 'codex-failed:1 rate_limit_exceeded', capacity('Selected model is at capacity sk-' + 'a'.repeat(30)), escapedKey]) {   // anything else, or a token-shaped text, stays Codex's own refusal
-    const {broker, calls} = world(t, 'codex', {...withToken, codex: () => new Response(JSON.stringify({error}), {status: 500})});
-    const reply = await broker.call('pr', body);
-    assert.equal(reply.status, 502, error);
-    assert.equal(calls.claudeCli, 0);
-    if (error === escapedKey) assert.equal((await reply.json()).why, 'codex-failed (detail withheld: token-shaped)', 'the escaped key never leaves the broker');
+  for (const error of ['codex-failed:1 boom', 'codex-failed:1 rate_limit_exceeded', capacity('Selected model is at capacity sk-' + 'a'.repeat(30)), escapedKey]) {   // any other failure or a token-shaped text: Claude answers (8 Nov 2026: a failure goes on), and the key never leaves the broker
+    const {broker, calls} = world(t, 'codex', {...withToken, codex: () => containerError(error)});
+    const answer = await (await broker.call('pr', body)).json();
+    assert.equal(answer.engine, 'claude', error);
+    assert.equal(calls.claudeCli, 1);
+    assert.doesNotMatch(JSON.stringify(answer.fellBack), /sk-a{30}/, 'no key in fellBack');
+    if (error === escapedKey) assert.deepEqual(answer.fellBack.map(e => e.detail), ['codex-failed (detail withheld: token-shaped)']);
     Date.now.mock.restore();
   }
 });
 
 test('Codex failing half its last calls moves behind Claude for 30 minutes, the owner is told once, a call that names its engine is never moved, then Codex is first again', async t => {
   const {broker, calls} = world(t, 'codex', {...withToken, codex: codexBroken});
-  for (let i = 0; i < 6; i++) assert.equal((await broker.call('pr', body)).status, 502);   // Codex first, each of these callers saw the failure
+  for (let i = 0; i < 6; i++) { const answer = await (await broker.call('pr', body)).json(); assert.equal(answer.engine, 'claude'); assert.equal(answer.fellBack[0].engine, 'codex'); }   // Codex first, fails, Claude answers each (8 Nov 2026: a failure goes on); each still counts as a Codex failure
   assert.equal(calls.telegram, 1);
   const health = await (await broker.health()).json();
   assert.ok(health.chain.find(e => e.name === 'codex').demotedUntil);
   const next = await (await broker.call('pr', body)).json();
   assert.equal(next.engine, 'claude'); assert.equal(next.fellBack, undefined);   // Claude answers first now
-  assert.equal((await broker.call('pr', {...body, engine: 'codex'})).status, 502);   // an explicit choice is honoured
+  assert.equal((await (await broker.call('pr', {...body, engine: 'codex'})).json()).fellBack[0].engine, 'codex');   // an explicit choice is honoured: Codex is asked first
   Date.now.mock.mockImplementation(() => day + 31 * 60_000);
-  assert.equal((await broker.call('pr', body)).status, 502);   // Codex is first again, with a fresh window
+  assert.equal((await (await broker.call('pr', body)).json()).fellBack[0].engine, 'codex');   // Codex is first again, with a fresh window
   assert.equal(calls.telegram, 1);
 });
 
@@ -278,8 +279,8 @@ test('only real failures count: a few failures, a used-up week, or ENGINE_ADAPT=
   assert.equal((await (await used.broker.health()).json()).chain[0].demotedUntil, undefined);
   const off = world(t, 'codex', {...withToken, codex: codexBroken, extra: {ENGINE_ADAPT: 'off'}});
   for (let i = 0; i < 8; i++) await off.broker.call('pr', body);
-  assert.equal(await answered(await off.broker.call('pr', body)), undefined);   // still Codex, still failing, never moved
-  assert.equal(off.calls.claudeCli, 0);
+  assert.equal((await (await off.broker.call('pr', body)).json()).fellBack[0].engine, 'codex');   // still Codex first, still failing, never moved
+  assert.equal(off.calls.claudeCli, 9);   // each of the 9 calls asked Codex first, then Claude
   assert.equal(config.vars.ENGINE_ADAPT, 'on');
 });
 
@@ -289,7 +290,7 @@ test('Claude failing half its last calls moves behind Codex and is not called fo
   assert.equal(calls.claudeCli, 6);
   assert.equal(await answered(await broker.call('pr', body)), 'codex');
   assert.equal(calls.claudeCli, 6);   // demoted: Codex first, Claude not asked
-  const alone = world(t, 'codex', {codex: codexBroken});   // no Claude token
+  const alone = world(t, 'codex', {codex: codexBroken, extra: {FALLBACK_FREE_AI_DAY_USD: '0'}});   // no Claude token, Free AI off
   for (let i = 0; i < 7; i++) assert.equal((await alone.broker.call('pr', body)).status, 502);   // nowhere to move: still Codex
   assert.ok((await (await alone.broker.health()).json()).chain[0].demotedUntil);   // but the failure is reported
 });

@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {day, body, harness} from './harness.mjs';
+import {day, body, harness, containerError} from './harness.mjs';
 
 const brokerConfig = JSON.parse(readFileSync(new URL('../../../../workers/ai-broker/wrangler.jsonc', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
 const FREE = {response: 'free answer', usage: {prompt_tokens: 100, completion_tokens: 20}};
@@ -41,14 +41,22 @@ test('Codex out for the week: Free AI answers, keeps the schema, charges its own
   assert.deepEqual(health.chain.map(item => item.name), ['codex', 'claude', 'free-ai']);
 });
 
-test('Codex usage-limit error falls to Free AI; unrelated or credential-shaped failures do not', async t => {
+test('Codex usage-limit error and every other Codex failure fall to Free AI (the walk, 8 Nov 2026); a credential-shaped text never leaves the broker', async t => {
   noPaidProvider(t);
-  for (const [error, expected] of [["codex-failed:1 You've hit your usage limit", 200], ['codex failed', 502], ['codex-failed:1 rate_limit_exceeded', 502], ['usage limit sk-' + 'a'.repeat(30), 502]]) {
+  for (const error of ["codex-failed:1 You've hit your usage limit", 'codex failed', 'codex-failed:1 rate_limit_exceeded', 'usage limit sk-' + 'a'.repeat(30)]) {
     const {broker} = harness(undefined, fallbackEnv());
-    broker.containerFetch = async () => Response.json({error}, {status: 500});
+    broker.containerFetch = async () => containerError(error);
     const reply = await broker.call('pr', body);
-    assert.equal(reply.status, expected);
-    if (expected === 200) assert.equal((await reply.json()).engine, 'free-ai');
+    assert.equal(reply.status, 200, error);
+    const answer = await reply.json();
+    assert.equal(answer.engine, 'free-ai');
+    assert.doesNotMatch(JSON.stringify(answer), /sk-a{30}/);
+  }
+  {   // nothing after Codex can answer (Free AI cannot take a search): Codex's own 502 ends the call
+    const {broker} = harness(undefined, fallbackEnv());
+    broker.containerFetch = async () => containerError('codex failed');
+    const reply = await broker.call('pr', {...body, search: true});
+    assert.equal(reply.status, 502);
   }
 });
 

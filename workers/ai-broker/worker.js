@@ -10,7 +10,9 @@ import {refuseReply} from './lib/guard.mjs';
 import {slots} from './lib/queue.mjs';
 import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
 import {modelOf, validEffort, weightOf, EFFORTS} from './lib/tiers.mjs';
-import {exhausted, overloaded, codexMessage, tokenShaped, fallbackToday, newNote, apiPrecheck, freeAiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
+import {tokenShaped, fallbackToday, newNote, apiPrecheck, freeAiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
+import {codexMessage, kindOf} from './container/kinds.mjs';
+import {walk, answered, refused, unavailable, failed} from './lib/walk.mjs';
 import {chainOf, configured, recordOutcome, engineHealth, CHOICES} from './lib/engines.mjs';
 import {CLAUDE_MODELS} from './lib/tiers.mjs';
 import {demotedNow, recordPerf} from './lib/adapt.mjs';
@@ -53,25 +55,24 @@ export class CodexBroker extends Container {
   // Start (and every restart after a sleep): put the stored login back into CODEX_HOME.
   async onStart() {
     const login = await this.ctx.storage.get('login');
-    // Why (#285, 5 Nov 2026, owner: "Fix readiness"; reworked the same day, owner: "pass on while starting"): a new container has answered nothing yet, so /health says `starting` until a real Codex call is answered (markIfAnswered), and until then a failed Codex call goes to the next engine (whileStarting). No start-up call of our own: it added a Codex call per start and protected no user.
+    // Why (#285, 5 Nov 2026, owner: "Fix readiness"; reworked the same day, owner: "pass on while starting"): a new container has answered nothing yet, so /health says `starting` until a real Codex call is answered (markIfAnswered), and until then a failed call is also recorded as `startError`. Since 8 Nov 2026 (bd, the walk) every failed Codex call goes to the next engine, proven container or not; "starting" only decides what /health shows. No start-up call of our own: it added a Codex call per start and protected no user.
     await this.ctx.storage.put('answered', false);
     await this.ctx.storage.put('startError', null);   // the last container's failure is not this one's
     if (login) await this.containerFetch('http://c/auth', {method: 'POST', body: login});
   }
 
-  // A Codex call that failed in a container that has not answered yet (still starting, as on 1 Nov 2026: "Transport channel closed" for 4 of 4 calls) is passed to the next engine instead of failing; null = not that case (the failure stands).
-  // Once the container has answered, a failure is a real failure again. The reason is kept for /health `startError`, scrubbed like a Claude failure's. Never for login-lost (the owner must see it), and never when nobody comes after Codex (`hasLater`).
-  // `starting` is what the container had proven when THIS call was sent (codexStep reads it before the container leg): calls sent together in the first minute all pass on, even when one of them is answered while the others are failing (code-review, 5 Nov 2026).
-  async whileStarting(hasLater, why, starting, timeline) {
-    if (!hasLater || !starting) return null;
-    const clean = String(why || '').replace(/\s+/g, ' ').trim(), withheld = refuseReply(clean) || tokenShaped(clean), detail = (withheld ? '(detail withheld: token-shaped)' : clean).slice(0, 200);   // scrubbed whole, then cut: a key across the cut must not survive
-    await this.ctx.storage.put('startError', {at: Date.now(), error: detail}).catch(() => {});   // a diagnostic write never decides the pass-on (review, 5 Nov 2026)
-    return {passOn: 'failed', detail, refusal: json(502, {why: withheld ? detail : clean.slice(0, 300), ...(timeline ? {timeline} : {})})};   // the 502 the caller sees keeps a8's timeline (the Worker leg)
+  // A failed Codex turn as a verdict (lib/walk.mjs): the next engine answers, and if nobody does the call ends with this 502.
+  // `source` is the text the detail is made of, `bodyWhy` what the 502 says (default: the same, scrubbed). Scrubbed whole, then cut: a key across the cut must not survive. A container that has not answered yet keeps the reason for /health `startError` (#285); a diagnostic write never decides the verdict.
+  // Why (8 Nov 2026, bd): this replaces `whileStarting`, which passed a failure on only while the container was starting (#285, #435). Every failure goes on now, so "starting" only decides what /health shows.
+  async codexFailure(source, bodyWhy, timeline, starting, why = 'failed') {
+    const clean = String(source || '').replace(/\s+/g, ' ').trim(), withheld = refuseReply(clean) || tokenShaped(clean), detail = (withheld ? '(detail withheld: token-shaped)' : clean).slice(0, 200);
+    if (starting) await this.ctx.storage.put('startError', {at: Date.now(), error: detail}).catch(() => {});
+    return failed(why, detail, json(502, {why: bodyWhy ?? (withheld ? detail : clean.slice(0, 300)), ...(timeline ? {timeline} : {})}));
   }
 
   // "Answered" = Codex ran end to end in this container: a reply, or Codex's own "usage limit" / "at capacity" (it reached OpenAI and was told no). A start-up failure like "Transport channel closed" is not an answer.
   async markIfAnswered(reply, answer) {
-    if (!(reply.ok || exhausted(answer?.error) || overloaded(answer?.error))) return false;
+    if (!(reply.ok || ['out-of-quota', 'at-capacity'].includes(kindOfReply(answer)))) return false;
     if (await this.ctx.storage.get('answered')) return true;   // one write per container start, not one per call
     await this.ctx.storage.put('answered', true);
     await this.ctx.storage.put('startError', null);
@@ -152,26 +153,27 @@ export class CodexBroker extends Container {
       .catch(error => console.log(`jobs: ${String(error?.message || error).slice(0, 200)}`));
   }
 
-  // `session`: the conversation key the Worker built from the verified run token ('' = a plain call); only a call with one may use `delta` and `endSession`.
-  async answer(lane, body, session = '') {
-    if (Object.hasOwn(body, 'search') && typeof body.search !== 'boolean') return json(400, {why: 'search must be a boolean'});
-    if (Object.hasOwn(body, 'effort') && !validEffort(body.effort)) return json(400, {why: `effort must be ${EFFORTS.slice(0, -1).join(', ')} or ${EFFORTS.at(-1)}`});
-    if (Object.hasOwn(body, 'engine') && !CHOICES.includes(body.engine)) return json(400, {why: `engine must be ${CHOICES.slice(0, -1).join(', ')} or ${CHOICES.at(-1)}`});
-    if (Object.hasOwn(body, 'only') && typeof body.only !== 'boolean') return json(400, {why: 'only must be a boolean'});
-    if (body.only && !Object.hasOwn(body, 'engine')) return json(400, {why: 'only needs an engine: only this engine answers, or the call is refused'});
+  // The door: everything that can end a call before any engine is asked. Returns {refusal} (the call ends here) or what the walk needs.
+  async admit(lane, body) {
+    if (Object.hasOwn(body, 'search') && typeof body.search !== 'boolean') return {refusal: json(400, {why: 'search must be a boolean'})};
+    if (Object.hasOwn(body, 'effort') && !validEffort(body.effort)) return {refusal: json(400, {why: `effort must be ${EFFORTS.slice(0, -1).join(', ')} or ${EFFORTS.at(-1)}`})};
+    if (Object.hasOwn(body, 'engine') && !CHOICES.includes(body.engine)) return {refusal: json(400, {why: `engine must be ${CHOICES.slice(0, -1).join(', ')} or ${CHOICES.at(-1)}`})};
+    if (Object.hasOwn(body, 'only') && typeof body.only !== 'boolean') return {refusal: json(400, {why: 'only must be a boolean'})};
+    if (body.only && !Object.hasOwn(body, 'engine')) return {refusal: json(400, {why: 'only needs an engine: only this engine answers, or the call is refused'})};
     const model = modelOf(body.tier);
-    if (!model) return json(400, {why: `unknown tier "${String(body.tier).slice(0, 20)}" (small, mid or large)`});
-    const env = this.brokerEnv, {chain} = chainOf(env, body.engine, body.engine === undefined ? await demotedNow(this.ctx.storage, env) : [], body.only === true);   // an engine doing worse is moved back (lib/adapt.mjs) unless this call names its own   // body.engine = this one call's own first choice (e.g. one workflow trying claude); admission and caps stay the same
+    if (!model) return {refusal: json(400, {why: `unknown tier "${String(body.tier).slice(0, 20)}" (small, mid or large)`})};
+    const env = this.brokerEnv, {chain: asked} = chainOf(env, body.engine, body.engine === undefined ? await demotedNow(this.ctx.storage, env) : [], body.only === true);   // an engine doing worse is moved back (lib/adapt.mjs) unless this call names its own   // body.engine = this one call's own first choice (e.g. one workflow trying claude); admission and caps stay the same
     // Why (1 Nov 2026): with Codex first a refused login never counts toward the daily cap (as before the chain); with another engine first Codex's step checks it when reached.
-    if (chain[0] === 'codex') { const refusal = await this.loginRefusal(); if (refusal) return refusal; }
+    if (asked[0] === 'codex') { const refusal = await this.loginRefusal(); if (refusal) return {refusal}; }
     await this.weekReading();
     // Why (8 Nov 2026, owner: "Actually, codex up to 100%, Claude up to 90%"; replaces the 5 Nov line that kept held lanes and by-hand checks off Claude): every lane passes on to Claude when Codex refuses, until Claude's own seven-day window reads 90% used. Past that no lane starts a Claude call, a call that names Claude included: Free AI answers, or the call gets `budget:claude-week`. The reading is the CLI's, stored with each Claude call (`claude:state`); an unknown or reset window is not a reason to stop.
     const claudeCheck = await this.claudeLine();
-    const claudeShut = !claudeCheck.ok && chain.includes('claude') && configured('claude', env);
-    // Why (5 Nov 2026, owner's brief: "A job refused here gets the normal refusal, and its items wait for the next run"; review; carried to the Claude line on 8 Nov 2026): with Claude shut a search or an image has nobody left, Free AI takes neither, so it is the line's own `budget:` refusal (below), never `fallback:*`, which clients show red. A Free AI that really failed keeps its reason (owner, 4 Nov 2026: a fallback that cannot answer is a failure the job shows).
+    const claudeShut = !claudeCheck.ok && asked.includes('claude') && configured('claude', env);
+    // Why (5 Nov 2026, owner's brief: "A job refused here gets the normal refusal, and its items wait for the next run"; review; carried to the Claude line on 8 Nov 2026): with Claude shut a search or an image has nobody left, Free AI takes neither, so it is the line's own `budget:` refusal (ending), never `fallback:*`, which clients show red. A Free AI that really failed keeps its reason (owner, 4 Nov 2026: a fallback that cannot answer is a failure the job shows).
     const freeAiCannot = body.search === true || body.images?.length > 0;
-    // `others` can answer when Codex has run out.
-    const others = chain.filter(engine => engine !== 'codex' && configured(engine, env) && !(claudeShut && (engine === 'claude' || (engine === 'free-ai' && freeAiCannot))));
+    const chain = claudeShut ? asked.filter(engine => engine !== 'claude' && !(engine === 'free-ai' && freeAiCannot)) : asked;   // Why (8 Nov 2026, Gitar on #492): the engines left out are left out of the walk too, so Codex failing at runtime keeps its own 502 and Free AI never answers a search or an image with a red `fallback:unsupported`
+    const others = chain.filter(engine => engine !== 'codex' && configured(engine, env));   // can answer when Codex has run out
+    const hasLater = chain.slice(chain.indexOf('codex') + 1).some(engine => configured(engine, env));
     // Check and persist admission together: concurrent calls and reruns share one UTC allowance, whichever engine answers.
     // No refund on a queue/transport/model failure; the reservation commits before an engine is called.
     const verdict = await this.ctx.storage.transaction(async storage => {
@@ -179,64 +181,70 @@ export class CodexBroker extends Container {
       const now = Date.now() / 1000;
       if (meter.resetsAt && meter.resetsAt <= now) meter = {...newMeter(0), daily: meter.daily};
       const check = allow(lane, meter, this.limits?.usedPercent ?? null, undefined, now);
-      if (!check.ok && exhausted(check.why) && others.length) {
+      if (!check.ok && check.quota && others.length) {
         await storage.put('meter', recordCall(meter, lane, now));
         return {...check, ranOut: true};   // the Codex week is used up: Codex's step passes, the others may answer
       }
       if (check.ok) await storage.put('meter', recordCall(meter, lane, now));
       return check;
     });
-    if (!verdict.ok && !verdict.ranOut) return json(429, {why: claudeShut && exhausted(verdict.why) ? claudeCheck.why : verdict.why});   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
-    const walk = claudeShut ? chain.filter(engine => engine !== 'claude' && !(engine === 'free-ai' && freeAiCannot)) : chain;   // Why (8 Nov 2026, Gitar on #492): the engines left out of `others` are left out of the walk too, so Codex failing at runtime keeps its own 502 and Free AI never answers a search or an image with a red `fallback:unsupported`
-    const later = walk.slice(walk.indexOf('codex') + 1).filter(engine => configured(engine, env));   // the part of this call's walk after Codex
-    const note = newNote(), ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note}, day = new Date(Date.now()).toISOString().slice(0, 10), skipped = [];
-    let busyPassed = false, held = null, codexRefusal = null;   // busyPassed: Claude's slots were full for too long and the call went on; held: the last refusal of an engine it went on to; codexRefusal: Codex's own 502 when it passed on for capacity
-    const lateShut = () => skipped.find(entry => entry.engine === 'claude' && entry.why === 'budget');   // the line closed while this call waited for a Claude slot (claudeStep)
-    const skip = async (engine, why, counted = true, detail = '') => { skipped.push({engine, why, ...(detail ? {detail} : {})}); if (why === 'busy') busyPassed = true; if (why === 'failed' || why === 'overloaded') await recordPerf(this.ctx.storage, env, engine, false); return counted ? recordOutcome(this.ctx.storage, day, engine, {'ran-out': 'ranOut', busy: 'busy'}[why] ?? 'failed') : null; };
-    const send = async (engine, reply, started) => {
-      await recordOutcome(this.ctx.storage, day, engine, reply.ok ? 'ok' : 'failed', Date.now() - started);
-      if (reply.ok || reply.status === 502) await recordPerf(this.ctx.storage, env, engine, reply.ok);   // a real answer or a broken run; a refusal, a lost login or a 4xx says nothing about the engine
-      // Why (1 Nov 2026, owner: CI jobs "need to be aware" which model answers, models behave differently): a reply names its engine and model, and `fellBack` lists the engines that were tried first and did not answer, with the reason.
-      const fell = skipped.filter(entry => !(entry.engine === engine && entry.why === 'busy'));   // Claude answering after its busy turn did answer: fellBack lists only engines that did not
-      return reply.ok && fell.length ? json(200, {...(await reply.json()), fellBack: fell}) : reply;
-    };
-    const waitMs = walk.includes('claude') && configured('claude', env) && await mayPassOn({chain: walk, body, env, storage: this.ctx.storage, verdict}) ? this.busyMs : undefined;   // undefined = wait for a Claude slot as long as it takes
-    for (const engine of walk) {
-      const started = Date.now();
-      let reply = null;
-      if (engine === 'codex') { reply = await this.codexStep(lane, body, model, verdict, later.length > 0, chain[0] === 'codex', session); if (!reply || reply.passOn) { codexRefusal = reply?.refusal ?? null; await skip(engine, reply?.passOn ?? 'ran-out', true, reply?.detail); reply = null; } }
-      else if (engine === 'claude') reply = await this.claudeStep(lane, body, skip, waitMs);
-      else if (engine === 'free-ai') {
-        if (freeAiCannot && lateShut()) continue;   // Why (8 Nov 2026, Gitar on #492): Claude's line closed while this call waited for a slot; Free AI takes neither a search nor an image, so the call reaches the budget refusal below, not a red `fallback:unsupported`
-        reply = (!body.search && apiPrecheck(body)) || await freeAiStep(ctx);
-        if (!reply && !body.search && configured(engine, env)) await skip(engine, 'unavailable');
-      }
-      if (!reply) continue;
-      // Why (1 Nov 2026, Gitar on #289): an engine that sits BEFORE Codex and answers badly (refused, truncated, invalid JSON) must not end the chain while Codex has not run; after Codex a refusal stays the last-resort answer it always was. A 400 (empty prompt) is nobody's answer to retry.
-      // Why (3 Nov 2026): the same once Claude was busy and the call went on: Free AI's refusal (an image it cannot take, invalid JSON) is not the end while Claude, which would have answered, has not run; it is kept (held) and returned only if Claude cannot answer either.
-      if (!reply.ok && reply.status !== 400 && (chain.indexOf(engine) < chain.indexOf('codex') || busyPassed)) { if (busyPassed) held = reply; await skip(engine, 'bad-answer'); continue; }
-      return send(engine, reply, started);
-    }
-    if (busyPassed) {   // Claude's turn again, now at the back of the line and with no deadline: no engine behind it answered, and waiting for it beats an error
-      const started = Date.now(), reply = await this.claudeStep(lane, body, skip);
-      if (reply) return send('claude', reply, started);
-      if (held) return held;
-    }
-    if (body.only === true) {
-      if ((claudeShut || lateShut()) && chain[0] === 'claude') return json(429, {why: claudeShut ? claudeCheck.why : lateShut().detail});
-      if (chain[0] === 'free-ai') return apiFinish(env, note);   // Why (Gitar on #296): their own reasons stay: fallback:search-unsupported, fallback:unavailable, the 429 day cap
-      return json(503, {why: `only-${chain[0]}: ${skipped.find(entry => entry.engine === chain[0])?.why ?? (configured(chain[0], env) ? 'unavailable' : 'not-configured')}`, engine: chain[0], tried: skipped});   // strict call: nobody else answers, and the reason is named
-    }
-    // Why (5 Nov 2026, review of the capacity pass-on): Codex at capacity and nobody after it answering is Codex's failure, never Free AI's "budget" (which CI reads as a grey skip) or "search-unsupported".
-    if (codexRefusal) return codexRefusal;
-    if ((claudeShut || lateShut()) && freeAiCannot) return json(429, {why: claudeShut ? claudeCheck.why : lateShut().detail});   // Codex did not answer, Claude is shut and Free AI takes neither a search nor an image
-    return apiFinish(env, note);
+    if (!verdict.ok && !verdict.ranOut) return {refusal: json(429, {why: claudeShut && verdict.quota ? claudeCheck.why : verdict.why})};   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
+    return {model, chain, first: asked[0], env, verdict, claudeCheck, claudeShut, freeAiCannot, hasLater};
   }
 
-  // Codex's step: a Response when Codex answered or refused for good, null when it ran out and a later engine is configured, {passOn: 'overloaded' | 'failed', detail} when its model was at capacity, or it failed in a container that has not answered yet (whileStarting), and a later engine is configured.
+  // `session`: the conversation key the Worker built from the verified run token ('' = a plain call); only a call with one may use `delta` and `endSession`.
+  async answer(lane, body, session = '') {
+    const door = await this.admit(lane, body);
+    if (door.refusal) return door.refusal;
+    const {env, chain} = door, note = newNote(), day = new Date(Date.now()).toISOString().slice(0, 10);
+    const ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note};
+    const waitMs = chain.includes('claude') && configured('claude', env) && await mayPassOn({chain, body, env, storage: this.ctx.storage, verdict: door.verdict}) ? this.busyMs : undefined;   // undefined = wait for a Claude slot as long as it takes
+    const done = await walk(chain, (engine, left, last) => this.turn(engine, {door, ctx, lane, body, session, left, waitMs: last ? undefined : waitMs}), (engine, v, ms) => this.record(day, engine, v, ms));
+    if (!done.reply) return this.ending(done, door, body, note);
+    // Why (1 Nov 2026, owner: CI jobs "need to be aware" which model answers, models behave differently): a reply names its engine and model, and `fellBack` lists the engines that were tried first and did not answer, with the reason. Claude answering after its busy turn did answer.
+    const fell = done.left.filter(entry => !(entry.engine === done.engine && entry.why === 'busy'));
+    return done.reply.ok && fell.length ? json(200, {...(await done.reply.json()), fellBack: fell}) : done.reply;
+  }
+
+  // One engine's turn as a verdict (lib/walk.mjs); null = the engine is not asked for this call.
+  async turn(engine, {door, ctx, lane, body, session, left, waitMs}) {
+    if (engine === 'codex') return this.codexStep(lane, body, door.model, door.verdict, door.hasLater, door.first === 'codex', session);
+    if (engine === 'claude') return this.claudeStep(lane, body, waitMs);
+    if (door.freeAiCannot && left.some(entry => entry.engine === 'claude' && entry.why === 'budget')) return null;   // Why (8 Nov 2026, Gitar on #492): Claude's line closed while this call waited for a slot; Free AI takes neither a search nor an image, so the call reaches the budget refusal, not a red `fallback:unsupported`
+    const reply = (!body.search && apiPrecheck(body)) || await freeAiStep(ctx);
+    if (!reply) return !body.search && configured(engine, door.env) ? unavailable('unavailable') : null;
+    return reply.ok ? answered(reply) : reply.status === 400 ? refused(reply) : failed('bad-answer', '', reply);   // a 400 (empty prompt) is nobody's answer to retry
+  }
+
+  // Records one turn: the engine's day counts and, for a real answer or a broken run, its record for demotion (lib/adapt.mjs). A refusal, a lost login or a 4xx says nothing about the engine.
+  async record(day, engine, v, ms) {
+    const storage = this.ctx.storage, env = this.brokerEnv;
+    if (v.verdict === 'answered' || v.verdict === 'refused') {
+      await recordOutcome(storage, day, engine, v.reply.ok ? 'ok' : 'failed', ms);
+      if (v.reply.ok || v.reply.status === 502) await recordPerf(storage, env, engine, v.reply.ok);
+      return;
+    }
+    if (v.why === 'failed' || v.why === 'overloaded') await recordPerf(storage, env, engine, false);
+    if (v.counted) await recordOutcome(storage, day, engine, {'ran-out': 'ranOut', busy: 'busy'}[v.why] ?? 'failed');
+  }
+
+  // The one place a call that nobody answered ends. The first engine's own words win (its real failure, never Free AI's "budget" which CI reads as a grey skip); then a pinned engine's reason, the Claude line's own refusal, and Free AI's.
+  ending({held, left}, door, body, note) {
+    if (held) return held;
+    const late = left.find(entry => entry.engine === 'claude' && entry.why === 'budget'), shut = door.claudeShut ? door.claudeCheck.why : late?.detail;   // the line closed at the door, or while this call waited for a slot
+    if (body.only === true) {
+      if (shut && door.first === 'claude') return json(429, {why: shut});
+      if (door.first === 'free-ai') return apiFinish(door.env, note);   // Why (Gitar on #296): their own reasons stay: fallback:search-unsupported, fallback:unavailable, the 429 day cap
+      return json(503, {why: `only-${door.first}: ${left.find(entry => entry.engine === door.first)?.why ?? (configured(door.first, door.env) ? 'unavailable' : 'not-configured')}`, engine: door.first, tried: left});   // strict call: nobody else answers, and the reason is named
+    }
+    if (shut && door.freeAiCannot) return json(429, {why: shut});   // Claude did not answer, its line is shut and Free AI takes neither a search nor an image
+    return apiFinish(door.env, note);
+  }
+
+  // Codex's step as a verdict (lib/walk.mjs). `hasLater`: another engine is configured after Codex. A reply the container sends back carries a `kind` (container/kinds.mjs): out-of-quota, at-capacity, login-lost, stalled, failed.
   async codexStep(lane, body, model, verdict, hasLater, loginChecked, session = '') {
-    if (!loginChecked) { const refusal = await this.loginRefusal(); if (refusal) return refusal; }
-    if (verdict.ranOut) return hasLater ? null : json(429, {why: verdict.why});
+    if (!loginChecked) { const refusal = await this.loginRefusal(); if (refusal) return refused(refusal); }
+    if (verdict.ranOut) return unavailable('ran-out');   // the Codex week is used up (the door found others to answer)
     const entered = Date.now();
     const unlock = session ? await this.turns(session) : () => {};   // before the slot: a waiting turn of one conversation must not hold a slot others need
     try {
@@ -254,19 +262,22 @@ export class CodexBroker extends Container {
         };
         let starting = !(await this.ctx.storage.get('answered').catch(() => true));   // a storage failure counts as answered: the failure stands, never hidden behind another engine
         let reply, text;
-        try { reply = await this.toContainer('/call', JSON.stringify(sent), () => { starting = true; }); text = await reply.text(); }
-        catch (error) { const line = mark('threw', {error: String(error?.message || error).slice(0, 80)}); const waiting = await this.whileStarting(hasLater, `call: ${String(error?.message || error)}`, starting, line).catch(() => null); if (waiting) return waiting; throw error; }   // a failing diagnostic never replaces the container's own error
+        try { reply = await this.toContainer('/call', JSON.stringify(sent), () => { starting = true; }); text = await reply.text(); }   // a call refused by a draining container lands on a NEW one, which has answered nothing yet
+        catch (error) { const line = mark('threw', {error: String(error?.message || error).slice(0, 80)}); return this.codexFailure(`call: ${String(error?.message || error)}`, undefined, line, starting, 'cut'); }   // a cut call is a failed turn: the next engine answers, never the same call sent twice
         let answer;
-        try { answer = JSON.parse(text); } catch { const line = mark(reply.status, {note: 'not JSON'}); return (await this.whileStarting(hasLater, `container: ${text}`, starting, line)) || json(502, {why: `container: ${text.slice(0, 300)}`, timeline: line}); }   // the platform's own error text (not our server's JSON): say it, never crash (a 1101 hid it, 28 Oct 2026)
+        try { answer = JSON.parse(text); } catch { const line = mark(reply.status, {note: 'not JSON'}); return this.codexFailure(`container: ${text}`, `container: ${text.slice(0, 300)}`, line, starting, 'cut'); }   // the platform's own error text (not our server's JSON): say it, never crash (a 1101 hid it, 28 Oct 2026)
         const timeline = mark(reply.status, typeof answer.trace === 'string' ? {codex: answer.trace} : {});
         if (answer.authFile) await this.ctx.storage.put('login', answer.authFile);   // write-through BEFORE the reply goes out: a rotated token is never only in the container
         await this.markIfAnswered(reply, answer);
-        if (!reply.ok && exhausted(answer.error) && hasLater) return null;
-        if (!reply.ok && overloaded(answer.error) && hasLater) return {passOn: 'overloaded', detail: codexMessage(answer.error).slice(0, 200), refusal: json(502, {why: answer.error})};   // counted as a failure (and for JOB-202's demotion), but a later engine answers
         if (!reply.ok) {
-          const lost = answer.error === 'login-lost', why = tokenShaped(answer.error) ? 'codex-failed (detail withheld: token-shaped)' : answer.error;
-          if (lost) await this.ctx.storage.put('lost', true);
-          return (!lost && await this.whileStarting(hasLater, why, starting, timeline)) || json(reply.status === 500 && lost ? 503 : 502, {why, timeline});
+          const kind = kindOfReply(answer);
+          if (answer.error === 'draining') return this.codexFailure('a draining container answered every try', undefined, timeline, starting, 'cut');   // a deploy, not the engine: not counted against it
+          if (kind === 'out-of-quota' && hasLater && !tokenShaped(answer.error)) return unavailable('ran-out');
+          const said = codexMessage(answer.error);
+          if (kind === 'at-capacity' && !tokenShaped(said) && !tokenShaped(answer.error)) return failed('overloaded', said.slice(0, 200), json(502, {why: answer.error, timeline}));   // a text that looks like a key is a plain failure below (its detail is withheld)   // a failure for JOB-202's demotion, though another engine answers
+          const lost = kind === 'login-lost', why = tokenShaped(answer.error) ? 'codex-failed (detail withheld: token-shaped)' : answer.error;
+          if (lost) { await this.ctx.storage.put('lost', true); return refused(json(503, {why, timeline})); }   // the owner must see it: no other engine hides it
+          return this.codexFailure(why, why, timeline, starting);
         }
         if (answer.limits) { this.limits = answer.limits; await this.ctx.storage.put('limits', answer.limits); }
         // Why ([bf], 5 Nov 2026, owner: "that context should be only once"): a conversation's call counts what it added (input minus cached, plus output); every other call counts in full, as before (lib/sessions.mjs countedOf).
@@ -277,9 +288,9 @@ export class CodexBroker extends Container {
           await storage.put('meter', record(latest, lane, used, Date.now() / 1000, answer.limits?.resetsAt));
           if (session && answer.session?.mode) await storage.put('sessions', settle((await storage.get('sessions')) || {}, session, {now: Date.now(), tier: body.tier ?? 'mid', mode: answer.session.mode}));   // the clock after the turn: a slow one must not look idle
         });
-        const refused = refuseReply(answer.reply, sentText(sent));
-        if (refused) return json(422, {why: refused});
-        return json(200, {reply: answer.reply, tokens: {...answer.tokens, counted}, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'codex', timeline, ...(answer.session ? {session: answer.session} : {})});
+        const bad = refuseReply(answer.reply, sentText(sent));
+        if (bad) return refused(json(422, {why: bad}));   // Why (code-review, 8 Nov 2026): a reply the guard refuses (a key-shaped text, the prompt echoed) ends the call as on main; another engine is not asked the same prompt
+        return answered(json(200, {reply: answer.reply, tokens: {...answer.tokens, counted}, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'codex', timeline, ...(answer.session ? {session: answer.session} : {})}));
       } finally { release(); }
     } finally { unlock(); }
   }
@@ -299,40 +310,40 @@ export class CodexBroker extends Container {
   }
 
   // Why (1 Nov 2026, first live Claude call failed with no reason shown): a failed Claude step says why in `fellBack[].detail` and /health `lastError`, scrubbed: nothing token-shaped, at most 200 characters.
-  async claudeFailed(skip, text) {
+  async claudeFailure(text) {
     const clean = String(text || '').replace(/\s+/g, ' ').trim();
     const detail = (refuseReply(clean) ? '(detail withheld: token-shaped)' : clean).slice(0, 200);
     const state = (await this.ctx.storage.get('claude:state')) || {};
     await this.ctx.storage.put('claude:state', {...state, lastError: {at: Date.now(), text: detail}});
-    await skip('claude', 'failed', true, detail);
+    return failed('failed', detail);
   }
 
   // Whether Claude's own seven-day window allows a call now (lib/budget.mjs claudeAllow), read from the last Claude reply's limits.
   async claudeLine() { return claudeAllow(claudeWeekPercent(((await this.ctx.storage.get('claude:state')) || {}).limits)); }
 
-  // The Claude subscription's step: a Response when it answered (or refused a token-shaped reply), null when it is not configured, backing off, out of allowance (waits for the reset the CLI reports) or failed.
-  // Why (1 Nov 2026): only measured signals say "ran out" (the CLI's own rate_limit_event or a limit message); an unknown failure is a plain failure and the chain moves on. An invalid token is shown in /health and sent to Telegram once a day.
-  // `waitMs` (set only for a call that may pass on, lib/busy.mjs): how long to wait for a free slot; past it the step is skipped as `busy` and nothing was sent to the container. Undefined = wait as long as it takes.
-  async claudeStep(lane, body, skip, waitMs) {
+  // The Claude subscription's step as a verdict (lib/walk.mjs); null when it is not configured.
+  // Why (1 Nov 2026): only measured signals say "ran out" (the container's `kind` from the CLI's own rate_limit_event or a limit message); an unknown failure is a plain failure and the chain moves on. An invalid token is shown in /health and sent to Telegram once a day.
+  // `waitMs` (set only for a call that may pass on, lib/busy.mjs): how long to wait for a free slot; past it the step is `busy` and nothing was sent to the container. Undefined = wait as long as it takes.
+  async claudeStep(lane, body, waitMs) {
     const env = this.brokerEnv, storage = this.ctx.storage;
     if (!env.CLAUDE_CODE_OAUTH_TOKEN) return null;   // no token = not configured (search is Claude's too since 2 Nov 2026: the WebSearch tool)
     const now = Date.now(), state = (await storage.get('claude:state')) || {};
-    if ((state.invalidUntil || 0) > now) { skip('claude', 'token-invalid', false); return null; }
-    if ((state.limitUntil || 0) > now) { skip('claude', 'ran-out', false); return null; }
+    if ((state.invalidUntil || 0) > now) return unavailable('token-invalid', '', false);
+    if ((state.limitUntil || 0) > now) return unavailable('ran-out', '', false);
     const model = CLAUDE_MODELS[body.tier ?? 'mid'];
     const priority = queueOf(lane), waitStarted = Date.now();
     const releaseClaude = await this.claudeGate.acquire(priority, waitMs);
-    if (!releaseClaude) { await skip('claude', 'busy'); return null; }
+    if (!releaseClaude) return unavailable('busy');
     const release = await this.gate.acquire(priority, waitMs === undefined ? undefined : Math.max(0, waitMs - (Date.now() - waitStarted)));   // the 4 shared slots count against the same deadline
-    if (!release) { releaseClaude(); await skip('claude', 'busy'); return null; }
+    if (!release) { releaseClaude(); return unavailable('busy'); }
     try {
       // Why (8 Nov 2026, code-review): the line was read when the call came in, and a call waits for a slot with no deadline (searches, the retry turn); a Claude call that finished meanwhile may have moved the week to 90%. Read it again with the slot in hand, so no call starts past the line.
       const late = await this.claudeLine();
-      if (!late.ok) { await skip('claude', 'budget', false, late.why); return null; }
+      if (!late.ok) return unavailable('budget', late.why, false);
       const reply = await this.toContainer('/claude', JSON.stringify({prompt: body.prompt, schema: body.schema, images: body.images, model, ...(body.search === true ? {search: true} : {})}));
       let answer;
       let raw = '';
-      try { raw = await reply.text(); answer = JSON.parse(raw); } catch { await this.claudeFailed(skip, 'platform: ' + raw); return null; }   // the platform's own error text, not our server's JSON
+      try { raw = await reply.text(); answer = JSON.parse(raw); } catch { return await this.claudeFailure('platform: ' + raw); }   // the platform's own error text, not our server's JSON
       if (answer.limits) {
         // Why (8 Nov 2026, code-review): a rate_limit_event may carry one window only; a missing seven-day window must not turn a known 95% into "unknown" and reopen Claude. The old reading stands until its own reset.
         const before = ((await storage.get('claude:state')) || {}).limits?.sevenDay;
@@ -340,25 +351,29 @@ export class CodexBroker extends Container {
         await storage.put('claude:state', {...((await storage.get('claude:state')) || {}), limits: kept});
       }
       if (!reply.ok) {
-        const error = String(answer.error || '');
-        if (error === 'claude-auth') {
+        const kind = kindOfReply(answer);
+        if (kind === 'login-lost') {
           await storage.put('claude:state', {...((await storage.get('claude:state')) || {}), invalidUntil: now + 3600_000});   // retried hourly: a new token needs no deploy of ours
           await noteOnce(storage, env, new Date(now).toISOString().slice(0, 10), 'claude-token-invalid', 'AI broker: the Claude subscription token is invalid or expired. Claude is skipped, the next engine answers. Fix: claude setup-token, then update the Worker secret CLAUDE_CODE_OAUTH_TOKEN.');
-          await skip('claude', 'token-invalid');
-        } else if (error === 'claude-limit') {
+          return unavailable('token-invalid');
+        }
+        if (kind === 'out-of-quota') {
           const until = answer.resetsAt ? answer.resetsAt * 1000 : now + 600_000;   // the CLI's reset time, else ten minutes
           await storage.put('claude:state', {...((await storage.get('claude:state')) || {}), limitUntil: Math.max(until, now + 60_000)});
-          await skip('claude', 'ran-out');
-        } else await this.claudeFailed(skip, error);
-        return null;
+          return unavailable('ran-out');
+        }
+        return await this.claudeFailure(String(answer.error || ''));
       }
-      const refused = refuseReply(answer.reply, sentText({prompt: body.prompt}));
-      if (refused) return json(422, {why: refused});
-      return json(200, {reply: answer.reply, tokens: answer.tokens, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'claude'});
-    } catch (e) { await this.claudeFailed(skip, 'call: ' + String(e?.message || e)); return null; }
+      const bad = refuseReply(answer.reply, sentText({prompt: body.prompt}));
+      if (bad) return failed('bad-answer', '', json(422, {why: bad}));   // as on main: a refused Claude reply goes on to an engine not yet run (engines.test.js), Codex's own is final
+      return answered(json(200, {reply: answer.reply, tokens: answer.tokens, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'claude'}));
+    } catch (e) { return await this.claudeFailure('call: ' + String(e?.message || e)); }
     finally { release(); releaseClaude(); }
   }
 }
+
+/** The container's coded kind; an older container image (a deploy in flight) sends none, so the text is read the same way. */
+const kindOfReply = answer => answer?.kind ?? kindOf(answer?.error);
 
 export default {
   async fetch(request, env) {

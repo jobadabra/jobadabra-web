@@ -9,7 +9,7 @@ import path from 'node:path';
 import http from 'node:http';
 import net from 'node:net';
 import {spawn} from 'node:child_process';
-import {body, success, harness, CodexBroker} from './harness.mjs';
+import {body, success, harness, CodexBroker, containerError} from './harness.mjs';
 
 const refused = () => new Response(JSON.stringify({error: 'draining'}), {status: 503, headers: {'x-broker-draining': '1'}});
 const SERVER = process.env.DRAIN_SERVER || new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url).pathname;   // the env var points the real-process test at an older server.mjs to prove it fails there
@@ -54,12 +54,13 @@ test('a container that stays draining for ever does not hold the call past the w
 
 test('a call a container ACCEPTED and then lost is never sent twice', async () => {
   const {broker: b, seen} = broker({sequence: [() => { throw new Error('Container suddenly disconnected'); }]});
-  await assert.rejects(b.call('scheduled', body), /disconnected/);
+  const cut = await b.call('scheduled', body);   // the cut call is a failed turn (walk): a 502 saying why, the same call never goes to the container again
+  assert.equal(cut.status, 502); assert.match((await cut.json()).why, /disconnected/);
   assert.deepEqual(seen, ['/call']);
 });
 
 test('a refused call lands on a NEW container: if that one fails while it starts, the call still passes on to the next engine (#285 holds across the swap)', async () => {
-  const codexFailed = () => new Response(JSON.stringify({error: 'codex-failed:1 ps/mcp … Transport channel closed'}), {status: 500});
+  const codexFailed = () => containerError('codex-failed:1 ps/mcp … Transport channel closed');
   const claudeOk = () => new Response(JSON.stringify({reply: 'claude ok', tokens: {input: 5, output: 3}, ms: 7}));
   const {broker: b, seen} = broker({sequence: [refused, codexFailed, claudeOk], env: {CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token'}});   // the harness broker had already answered before the swap
   const answer = await (await b.call('scheduled', body)).json();

@@ -1,5 +1,6 @@
 // The broker Worker loaded offline for tests: Cloudflare's Container runtime replaced, isolated storage and transport per test (shared by worker.test.js and engines.test.js).
 import {readFileSync} from 'node:fs';
+import {kindOf} from '../../../../workers/ai-broker/container/kinds.mjs';
 
 // Node cannot load Cloudflare's Container runtime. Keep the actual Worker and its libraries;
 // substitute the runtime constructor, then provide isolated storage and transport per test.
@@ -15,6 +16,8 @@ const source = readFileSync(workerUrl, 'utf8')
 export const {CodexBroker, default: entry} = await import('data:text/javascript;base64,' + Buffer.from(source + `\n//# sourceURL=${workerUrl.href}`).toString('base64'));
 export const day = Date.parse('2026-10-30T23:59:59Z');
 export const body = {prompt: 'offline test', tier: 'small'};
+// A failed container reply as server.mjs sends it: the error text plus the coded `kind` (container/kinds.mjs; owner, 8 Nov 2026: "Yes, codes").
+export const containerError = (error, extra = {}, status = 500) => new Response(JSON.stringify({error, kind: kindOf(error), ...extra}), {status});
 export const success = () => new Response(JSON.stringify({reply: 'ok', tokens: {input: 2, output: 3}, ms: 1}));
 
 export function harness(meter, env = {}) {

@@ -11,6 +11,7 @@ import {spawn as spawnProcess} from 'node:child_process';
 import {buildArgs} from '../../../../workers/ai-broker/lib/args.mjs';
 import {weeklyWindow} from '../../../../workers/ai-broker/container/weekly.mjs';
 import {readTurn, threadTable, turnUsage} from '../../../../workers/ai-broker/container/threads.mjs';
+import {kindOf} from '../../../../workers/ai-broker/container/kinds.mjs';
 
 // The stand-in "codex": a real OS process. It counts the turns of its conversation in its folder; turn STALL_AT leaves a grandchild holding stdout and stderr (the way a helper process of the CLI would) and never answers.
 const STAND_IN = `const fs = require('node:fs'), cp = require('node:child_process');
@@ -38,7 +39,7 @@ function serverWith(dir, {stallAt, stray}) {
   };
   vm.runInNewContext(fs.readFileSync(new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, ''), {
     http: {createServer(fn) { handler = fn; return {listen() {}}; }},
-    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, turnUsage, Buffer, setTimeout, clearTimeout, setInterval,
+    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, turnUsage, kindOf, Buffer, setTimeout, clearTimeout, setInterval,
     process: {on() {}, env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: process.env.PATH, CALL_TIMEOUT_MS: '1500', KILL_GRACE_MS: '500'}, kill: (pid, signal) => process.kill(pid, signal)},
   });
   return body => new Promise(resolve => {
@@ -65,6 +66,7 @@ for (const stray of ['same-group', 'own-group']) {
     const stalled = await Promise.race([call({prompt: 'full prompt', model: 'm', session: session('warm')}), new Promise(resolve => setTimeout(() => resolve('no answer'), 3500))]);
     assert.notEqual(stalled, 'no answer', 'the guard answered within 3.5 s (guard 1.5 s + at most 0.5 s grace); the old run() waited for the helper, about 5 s');
     assert.equal(stalled.status, 500);
+    assert.equal(stalled.body.kind, 'stalled', 'the HTTP reply carries the coded kind the Worker reads');
     assert.match(stalled.body.error, /^codex-failed:null \[killed after 1\.5 s: codex did not finish\]/, 'the failure says it was the guard');
     assert.match(stalled.body.error, /\[codex events: 2, last: thread\.started > turn\.started\]/, 'and what codex had printed before it stalled');
     assert.match(stalled.body.trace, /^0 spawn\|\d+ thread\.started\|\d+ turn\.started\|\d+ guard$/, 'the stalled call says where it stopped, with times');

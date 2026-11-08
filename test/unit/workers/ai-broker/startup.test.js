@@ -1,13 +1,13 @@
 // The broker's first minutes (jobadabra-web #285; owner, 5 Nov 2026: "Fix readiness", then "Rework: pass on while starting").
 // The incident (1 Nov 2026, 21:39): the container application was replaced, /health said ready from the stored login alone, and the next 4 of 4 calls failed with Codex's "Transport channel closed".
-// Intended: `starting` until a real Codex call is answered; while starting, a failed Codex call goes to the next engine; once answered, a failure is a failure again. No call of our own.
+// Intended: `starting` until a real Codex call is answered (that only decides what /health says); a failed Codex call goes to the next engine whether or not the container has answered (the walk, 8 Nov 2026; #285 had said a failure stands once answered). No call of our own.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {body, success, harness} from './harness.mjs';
+import {body, success, harness, containerError} from './harness.mjs';
 
 const config = JSON.parse(readFileSync(new URL('../../../../workers/ai-broker/wrangler.jsonc', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
-const MCP_CLOSED = () => new Response(JSON.stringify({error: 'codex-failed:1 ps/mcp … Transport channel closed'}), {status: 500});
+const MCP_CLOSED = () => containerError('codex-failed:1 ps/mcp … Transport channel closed');
 const claudeOk = () => new Response(JSON.stringify({reply: 'claude ok', tokens: {input: 5, output: 3}, ms: 7}));
 const healthOf = async broker => (await broker.health()).json();
 
@@ -43,14 +43,14 @@ test('no call of our own: starting a container only puts the login back, and /he
   assert.deepEqual(seen, ['/auth']);
 });
 
-test('once the container has answered, a Codex failure is a failure again (no pass-on, Claude is not asked)', async t => {
+test('once the container has answered, a Codex failure goes on to the next engine too (gi\'s stalled Codex, 8 Nov 2026), and says why', async t => {
   const world = await fresh(t, {codex: success});
   await world.broker.call('scheduled', body);
   assert.equal((await healthOf(world.broker)).state, 'ready');
   world.codex = MCP_CLOSED;
-  const failed = await world.broker.call('scheduled', body);
-  assert.equal(failed.status, 502); assert.match((await failed.json()).why, /Transport channel closed/);
-  assert.equal(world.seen.includes('/claude'), false);
+  const answer = await (await world.broker.call('scheduled', body)).json();
+  assert.equal(answer.engine, 'claude'); assert.equal(answer.fellBack[0].why, 'failed'); assert.match(answer.fellBack[0].detail, /Transport channel closed/);
+  assert.equal((await healthOf(world.broker)).state, 'ready', 'a failure after the proof does not un-prove the container');
 });
 
 test('a new container start (a deploy, a wake from sleep) passes failures on again until it has answered', async t => {
@@ -79,11 +79,11 @@ test('a container that is down or answers with the platform\'s own text is also 
 });
 
 test('a lost login is never passed on: the owner sees login-lost, and Codex out of allowance counts as an answer', async t => {
-  const lost = await fresh(t, {codex: () => new Response(JSON.stringify({error: 'login-lost'}), {status: 500})});
+  const lost = await fresh(t, {codex: () => containerError('login-lost')});
   const refused = await lost.broker.call('scheduled', body);
   assert.equal(refused.status, 503);
   assert.equal((await healthOf(lost.broker)).state, 'login-lost');
-  const full = await fresh(t, {codex: () => new Response(JSON.stringify({error: "You've hit your usage limit. Try again at 9:00 AM."}), {status: 500})});
+  const full = await fresh(t, {codex: () => containerError("You've hit your usage limit. Try again at 9:00 AM.")});
   assert.equal((await (await full.broker.call('scheduled', body)).json()).engine, 'claude');
   assert.equal((await healthOf(full.broker)).state, 'ready');
 });
@@ -109,11 +109,12 @@ test('a conversation turn passed on while starting leaves a hole, so the next tu
   assert.equal((await world.storage.get('sessions'))[key].stale, true);
 });
 
-test('a thrown container error is rethrown once the container has answered, and a token-shaped one is withheld while starting', async t => {
+test('a thrown container error goes on to the next engine whether or not the container has answered, and a token-shaped one is withheld', async t => {
   const proven = await fresh(t, {codex: success});
   await proven.broker.call('scheduled', body);
   proven.codex = () => { throw new Error('container unavailable'); };
-  await assert.rejects(() => proven.broker.call('scheduled', body), /container unavailable/);
+  const cut = await (await proven.broker.call('scheduled', body)).json();
+  assert.equal(cut.engine, 'claude'); assert.match(cut.fellBack[0].detail, /container unavailable/);
   const leaky = await fresh(t, {codex: () => { throw new Error('boom sk-' + 'a'.repeat(30)); }});
   assert.equal((await (await leaky.broker.call('scheduled', body)).json()).engine, 'claude');
   assert.equal(JSON.stringify(await healthOf(leaky.broker)).includes('sk-aaaa'), false);
@@ -134,11 +135,11 @@ test('calls sent together in the first minute all pass on, even when another cal
   const answer = await (await world.broker.call('scheduled', body)).json();
   assert.equal(answer.engine, 'claude'); assert.equal(answer.fellBack[0].why, 'failed');
   world.codex = MCP_CLOSED;
-  assert.equal((await world.broker.call('scheduled', body)).status, 502, 'the next call is sent after the proof: a failure stands');
+  assert.equal((await (await world.broker.call('scheduled', body)).json()).engine, 'claude', 'the next call is sent after the proof: its failure goes on as well');
 });
 
 test('when nobody answers after the pass-on, the 502 keeps the Worker leg timeline (a8\'s one timeline), also for a platform text', async t => {
-  const refused = () => new Response(JSON.stringify({error: 'claude-failed: nope'}), {status: 500});
+  const refused = () => containerError('claude-failed: nope');
   for (const codex of [MCP_CLOSED, () => new Response('Internal Server Error', {status: 500})]) {
     const world = await fresh(t, {codex, claude: refused});
     const failed = await world.broker.call('scheduled', body);
@@ -148,13 +149,12 @@ test('when nobody answers after the pass-on, the 502 keeps the Worker leg timeli
   }
 });
 
-test('a storage failure while reading the proof never hides the container\'s own failure behind another engine', async t => {
+test('a storage failure while reading the proof never hides the container\'s own failure: fellBack carries it', async t => {
   const world = await fresh(t);
   const read = world.storage.get;
   world.storage.get = async key => { if (key === 'answered') throw new Error('storage down'); return read(key); };
-  const failed = await world.broker.call('scheduled', body);
-  assert.equal(failed.status, 502); assert.match((await failed.json()).why, /Transport channel closed/);
-  assert.equal(world.seen.includes('/claude'), false);
+  const answer = await (await world.broker.call('scheduled', body)).json();
+  assert.equal(answer.engine, 'claude'); assert.match(answer.fellBack[0].detail, /Transport channel closed/);
 });
 
 test('a key across the 300th character of a platform text is not kept in startError or fellBack', async t => {
