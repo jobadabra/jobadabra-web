@@ -73,7 +73,7 @@ test('a by-hand Search check (its by-hand environment) gets the by-hand lane; th
 // Owner, 8 Nov 2026 ("by-hand Search checks may use the 30% PR reserve (about 1 run a day)", then "codex up to 100%, Claude up to 90%"): a by-hand check waits behind PR checks and stops at its day cap; the reserve and the Claude exception are gone.
 test('a by-hand Search check runs to 100% of the Codex week, waits behind PR checks, and stops at its day cap', () => {
   assert.equal(allow('byhand', newMeter(2000000000), 99).ok, true);
-  assert.deepEqual(allow('byhand', newMeter(2000000000), 100), {ok: false, why: 'budget:week 100% of 100% (byhand)'});
+  assert.deepEqual(allow('byhand', newMeter(2000000000), 100), {ok: false, quota: true, why: 'budget:week 100% of 100% (byhand)'});
   assert.equal(queueOf('byhand'), 'scheduled');
   assert.equal(queueOf('drift'), 'scheduled');
   assert.equal(queueOf('pr'), 'pr');
@@ -167,9 +167,9 @@ test('every lane may use the week up to 100%: refused at the cap, allowed just b
     const below = record(newMeter(2000000000), lane, (cap - 0.1) * TOKENS_PER_PERCENT, 1);
     const full = record(newMeter(2000000000), lane, cap * TOKENS_PER_PERCENT, 1);
     assert.deepEqual(allow(lane, below, null), {ok: true}, `${lane}: own share below cap`);
-    assert.deepEqual(allow(lane, full, null), {ok: false, why: `budget:own-share ${cap.toFixed(1)}% of ${cap}% (${lane})`});
+    assert.deepEqual(allow(lane, full, null), {ok: false, quota: true, why: `budget:own-share ${cap.toFixed(1)}% of ${cap}% (${lane})`});
     assert.deepEqual(allow(lane, fresh, cap - 0.1), {ok: true}, `${lane}: week below cap`);
-    assert.deepEqual(allow(lane, fresh, cap), {ok: false, why: `budget:week ${cap}% of ${cap}% (${lane})`});
+    assert.deepEqual(allow(lane, fresh, cap), {ok: false, quota: true, why: `budget:week ${cap}% of ${cap}% (${lane})`});
     assert.deepEqual(allow(lane, below, cap - 0.1), {ok: true}, `${lane}: both below cap`);
     assert.deepEqual(allow(lane, fresh, null), {ok: true}, `${lane}: no week reading yet`);
   }
@@ -182,8 +182,8 @@ test('own share never exceeds the whole-week reading: a seed estimate over the c
     const cap = CAP[lane], m = record(newMeter(2000000000), lane, (cap + 0.1) * TOKENS_PER_PERCENT, 1);
     assert.equal(ownSharePct(m), cap + 0.1, 'by the seed alone the broker reads over the cap');
     assert.deepEqual(allow(lane, m, cap - 0.1), {ok: true}, lane);
-    assert.deepEqual(allow(lane, m, cap), {ok: false, why: `budget:own-share ${cap.toFixed(1)}% of ${cap}% (${lane})`});
-    assert.deepEqual(allow(lane, m, null), {ok: false, why: `budget:own-share ${(cap + 0.1).toFixed(1)}% of ${cap}% (${lane})`}, 'no whole-week reading yet: the seed estimate stands');
+    assert.deepEqual(allow(lane, m, cap), {ok: false, quota: true, why: `budget:own-share ${cap.toFixed(1)}% of ${cap}% (${lane})`});
+    assert.deepEqual(allow(lane, m, null), {ok: false, quota: true, why: `budget:own-share ${(cap + 0.1).toFixed(1)}% of ${cap}% (${lane})`}, 'no whole-week reading yet: the seed estimate stands');
   }
 });
 

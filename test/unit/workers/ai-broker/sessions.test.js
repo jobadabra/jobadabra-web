@@ -11,6 +11,7 @@ import {day, body, harness, entry} from './harness.mjs';
 import {buildArgs} from '../../../../workers/ai-broker/lib/args.mjs';
 import {weeklyWindow} from '../../../../workers/ai-broker/container/weekly.mjs';
 import {readTurn, threadTable, turnUsage, IDLE_MS as THREAD_IDLE_MS, MAX_THREADS} from '../../../../workers/ai-broker/container/threads.mjs';
+import {kindOf} from '../../../../workers/ai-broker/container/kinds.mjs';
 import {IDLE_MS, TURN_CAP, countedOf, keyedLock, markGap, planOf, sessionKey, sessionKeyOf, settle} from '../../../../workers/ai-broker/lib/sessions.mjs';
 
 const ref = (repository, file) => `${repository}/.github/workflows/${file}@refs/heads/main`;
@@ -127,7 +128,7 @@ async function serverWithCodex(t) {
   };
   vm.runInNewContext(fs.readFileSync(new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, ''), {
     http: {createServer(fn) { handler = fn; return {listen() {}}; }},
-    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, turnUsage, Buffer, setTimeout, clearTimeout, setInterval,
+    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, turnUsage, kindOf, Buffer, setTimeout, clearTimeout, setInterval,
     process: {on() {}, env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: ''}},
   });
   const post = payload => new Promise(resolve => {

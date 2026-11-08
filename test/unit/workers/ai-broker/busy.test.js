@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {day, body, success, harness} from './harness.mjs';
+import {day, body, success, harness, containerError} from './harness.mjs';
 import {LANES} from '../../../../workers/ai-broker/lib/lanes.mjs';
 import {slots} from '../../../../workers/ai-broker/lib/queue.mjs';
 import {BUSY_MS} from '../../../../workers/ai-broker/lib/busy.mjs';
@@ -165,7 +165,7 @@ test('Claude busy while Codex still has allowance (Claude first, Codex behind it
 });
 
 // Design (8 Nov 2026, owner: "Actually, codex up to 100%, Claude up to 90%"): Codex free -> Codex; Codex out -> Claude while its week reads under 90%; Claude at 90% -> Free AI, or `budget:claude-week` when Free AI cannot take the call. Every lane, one rule (budget.mjs).
-const capacity = (broker) => { const fetcher = broker.containerFetch; broker.containerFetch = async (url, init) => String(url).endsWith('/call') ? new Response(JSON.stringify({error: 'codex-failed:1 Selected model is at capacity'}), {status: 502}) : fetcher(url, init); };
+const capacity = (broker) => { const fetcher = broker.containerFetch; broker.containerFetch = async (url, init) => String(url).endsWith('/call') ? containerError('codex-failed:1 Selected model is at capacity', {}, 502) : fetcher(url, init); };
 
 test('every lane x (Codex %, Claude %): Codex to 100%, then Claude until its week reads 90%, then Free AI', async t => {
   const states = [[0, 95, 'codex'], [99, 95, 'codex'], [100, null, 'claude'], [100, 50, 'claude'], [100, 89.9, 'claude'], [100, 90, 'free-ai'], [100, 97, 'free-ai']];

@@ -46,7 +46,7 @@ export const ownSharePct = (meter, tokensPerPercent = TOKENS_PER_PERCENT) => Obj
 
 /**
  * Whether `lane` may call now: {ok: true} or {ok: false, why}. weekUsedPercent is Codex's own whole-week figure (null = not read yet: not a reason to stop).
- * A refusal is said as a reason word the job shows in its check ("budget:daily", "budget:own-share", "budget:week"); daily refusals replay or go grey; weekly exhaustion may select the broker's day-capped fallback.
+ * A refusal that is the plan's allowance used up carries `quota: true` (the door lets another engine answer, worker.js admit); a daily cap does not. A refusal is said as a reason word the job shows in its check ("budget:daily", "budget:own-share", "budget:week"); daily refusals replay or go grey; weekly exhaustion may select the broker's day-capped fallback.
  * This only checks: reserve accepted calls with recordCall() atomically. `now` is epoch seconds.
  */
 export function allow(lane, meter, weekUsedPercent, tokensPerPercent = TOKENS_PER_PERCENT, now = Date.now() / 1000) {
@@ -55,8 +55,8 @@ export function allow(lane, meter, weekUsedPercent, tokensPerPercent = TOKENS_PE
   // Why (30 Oct 2026, owner's goal: a green hand beta): the seed ratio was never replaced by a measured one, so 43.2M tokens read 60.06% while Codex said the whole week, the owner's
   // sessions included, was 32% used: every scheduled and manual run was refused with "own-share 60.1% of 60%". A part cannot exceed the whole, so the share is capped by the week reading.
   const own = Math.min(ownSharePct(meter, tokensPerPercent), weekUsedPercent ?? Infinity);
-  if (own >= CODEX_LIMIT_PCT) return {ok: false, why: `budget:own-share ${own.toFixed(1)}% of ${CODEX_LIMIT_PCT}% (${lane})`};
-  if (weekUsedPercent != null && weekUsedPercent >= CODEX_LIMIT_PCT) return {ok: false, why: `budget:week ${weekUsedPercent}% of ${CODEX_LIMIT_PCT}% (${lane})`};
+  if (own >= CODEX_LIMIT_PCT) return {ok: false, quota: true, why: `budget:own-share ${own.toFixed(1)}% of ${CODEX_LIMIT_PCT}% (${lane})`};
+  if (weekUsedPercent != null && weekUsedPercent >= CODEX_LIMIT_PCT) return {ok: false, quota: true, why: `budget:week ${weekUsedPercent}% of ${CODEX_LIMIT_PCT}% (${lane})`};
   return {ok: true};
 }
 

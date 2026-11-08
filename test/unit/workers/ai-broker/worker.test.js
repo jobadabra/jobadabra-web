@@ -1,7 +1,7 @@
 // Exercises broker admission, persistence and failure accounting offline; only Cloudflare's runtime and Codex transport are replaced.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {day, body, success, harness} from './harness.mjs';
+import {day, body, success, harness, containerError} from './harness.mjs';
 
 test('concurrent calls across the cap dispatch only 24 and preserve token completions', async t => {
   t.mock.method(Date, 'now', () => day);
@@ -23,7 +23,7 @@ test('each failure counts before dispatch and survives an eviction or rerun', as
   t.mock.method(Date, 'now', () => day);
   const {broker, restart} = harness();
   const responses = [
-    () => new Response(JSON.stringify({error: 'codex failed'}), {status: 500}),
+    () => containerError('codex failed'),
     () => new Response('not JSON', {status: 502}),
     () => { throw new Error('container unavailable'); },
     () => new Response(JSON.stringify({reply: 'sk-' + 'a'.repeat(30), tokens: {input: 1, output: 1}, ms: 1})),
@@ -33,8 +33,7 @@ test('each failure counts before dispatch and survives an eviction or rerun', as
       assert.equal((await (await broker.health()).json()).daily.drift, i + 1, 'reservation precedes transport');
       return responses[i % 4]();
     };
-    if (i % 4 === 2) await assert.rejects(() => broker.call('drift', body), /container unavailable/);
-    else assert.equal((await broker.call('drift', body)).status, [502, 502, 0, 422][i % 4]);
+    assert.equal((await broker.call('drift', body)).status, [502, 502, 502, 422][i % 4]);   // a thrown call is a failed turn now (8 Nov 2026), not a rethrow
   }
   const resumed = restart();
   assert.equal((await resumed.call('drift', body)).status, 429);
@@ -47,7 +46,8 @@ test('a container leg that throws or answers with text still leaves its timeline
   t.mock.method(console, 'log', line => { lines.push(String(line)); });
   const {broker} = harness();
   broker.containerFetch = async () => { throw new Error('connection reset'); };
-  await assert.rejects(() => broker.call('drift', body), /connection reset/);
+  const threw = await broker.call('drift', body);
+  assert.equal(threw.status, 502); assert.match((await threw.json()).why, /connection reset/);
   broker.containerFetch = async () => new Response('error code: 1101', {status: 502});
   const reply = await broker.call('drift', body);
   const logged = lines.map(line => JSON.parse(line)).filter(line => line.codexCall);

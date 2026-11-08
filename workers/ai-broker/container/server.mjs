@@ -9,6 +9,7 @@ import {weeklyWindow} from './weekly.mjs';
 import {buildArgs} from '../lib/args.mjs';
 import {readTurn, threadTable, turnUsage} from './threads.mjs';
 import {CLAUDE_TIMEOUT_MS, claudeArgs, claudeInput, readClaude} from './claude.mjs';
+import {kindOf} from './kinds.mjs';
 
 const HOME = process.env.CODEX_HOME, AUTH = path.join(HOME, 'auth.json');
 const CALL_TIMEOUT_MS = Number(process.env.CALL_TIMEOUT_MS) || 100000;   // under the callers' own wait, so a hung codex comes back with its last output instead of a dropped request (28 Oct 2026)
@@ -201,10 +202,10 @@ http.createServer((req, res) => {
       }
       if (req.url === '/claude' && req.method === 'POST') {
         try { return reply(200, await callClaude(JSON.parse(Buffer.concat(chunks).toString('utf8')))); }
-        catch (e) { return reply(500, {error: String(e.message || e).slice(0, 1000), ...(e.detail || {})}); }   // no authFile: the Codex login stays out of the Claude route
+        catch (e) { return reply(500, {error: String(e.message || e).slice(0, 1000), kind: kindOf(e.message), ...(e.detail || {})}); }   // no authFile: the Codex login stays out of the Claude route
       }
       if (req.url === '/health') return reply(200, {hasLogin: !!readAuth(), limits: readAuth() ? await readLimits() : null});
       return reply(404, {error: 'not found'});
-    } catch (e) { return reply(500, {error: String(e.message || e).slice(0, 1000), authFile: readAuth(), ...(e.trace ? {trace: e.trace} : {})}); }
+    } catch (e) { return reply(500, {error: String(e.message || e).slice(0, 1000), kind: kindOf(e.message), authFile: readAuth(), ...(e.trace ? {trace: e.trace} : {})}); }
   });
 }).listen(Number(process.env.BROKER_TEST_PORT) || 8080);   // the env var is only for the real-process drain test (test/unit/workers/ai-broker/drain.test.js); the Worker's defaultPort is 8080, and a platform variable called PORT must not move it
