@@ -100,3 +100,13 @@ test('code-review 8 Nov 2026: a reply the guard refuses (key-shaped, prompt echo
   assert.equal((await leaky.broker.call('scheduled', body)).status, 422);
   assert.equal(leaky.seen.includes('/claude'), false);
 });
+
+test('Gitar on #503: a reply the guard refuses from an engine AFTER Codex ends the call (as on main), Free AI is not asked the same prompt', async t => {
+  let freeCalls = 0;
+  const env = {...withToken, FALLBACK_FREE_AI_DAY_USD: '2', AI: {run: async () => { freeCalls++; return {response: 'free answer', usage: {prompt_tokens: 1, completion_tokens: 1}}; }}};
+  const leaky = () => new Response(JSON.stringify({reply: 'sk-' + 'a'.repeat(30), tokens: {input: 1, output: 1}, ms: 1}));
+  const w = world(t, {codex: plain("codex-failed:1 You've hit your usage limit"), claude: leaky, env});
+  const reply = await w.broker.call('scheduled', body);
+  assert.equal(reply.status, 422); assert.equal(freeCalls, 0);
+  assert.deepEqual(w.seen.filter(p => p !== '/auth'), ['/call', '/claude']);
+});

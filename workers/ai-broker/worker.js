@@ -207,7 +207,14 @@ export class CodexBroker extends Container {
   }
 
   // One engine's turn as a verdict (lib/walk.mjs); null = the engine is not asked for this call.
+  // Why (1 Nov 2026, Gitar on #289; kept 8 Nov 2026, Gitar on #503): an engine that answers badly (a reply the guard refuses, an unusable one) before Codex has run is not the end of the call; after Codex it IS the last-resort answer, unless an engine that was only busy has not had its turn.
   async turn(engine, {door, ctx, lane, body, session, left, waitMs}) {
+    const v = await this.step(engine, {door, ctx, lane, body, session, left, waitMs});
+    const after = door.chain.includes('codex') && door.chain.indexOf(engine) > door.chain.indexOf('codex');
+    return v?.why === 'bad-answer' && after && !left.some(entry => entry.why === 'busy') ? refused(v.reply) : v;
+  }
+
+  async step(engine, {door, ctx, lane, body, session, left, waitMs}) {
     if (engine === 'codex') return this.codexStep(lane, body, door.model, door.verdict, door.hasLater, door.first === 'codex', session);
     if (engine === 'claude') return this.claudeStep(lane, body, waitMs);
     if (door.freeAiCannot && left.some(entry => entry.engine === 'claude' && entry.why === 'budget')) return null;   // Why (8 Nov 2026, Gitar on #492): Claude's line closed while this call waited for a slot; Free AI takes neither a search nor an image, so the call reaches the budget refusal, not a red `fallback:unsupported`
@@ -365,7 +372,7 @@ export class CodexBroker extends Container {
         return await this.claudeFailure(String(answer.error || ''));
       }
       const bad = refuseReply(answer.reply, sentText({prompt: body.prompt}));
-      if (bad) return failed('bad-answer', '', json(422, {why: bad}));   // as on main: a refused Claude reply goes on to an engine not yet run (engines.test.js), Codex's own is final
+      if (bad) return failed('bad-answer', '', json(422, {why: bad}));   // whether it ends the call depends on its place in the chain: worker.js turn()
       return answered(json(200, {reply: answer.reply, tokens: answer.tokens, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'claude'}));
     } catch (e) { return await this.claudeFailure('call: ' + String(e?.message || e)); }
     finally { release(); releaseClaude(); }
