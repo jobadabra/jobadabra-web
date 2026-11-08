@@ -72,7 +72,7 @@ function messageBody(body, maxTokens) {
   return {max_tokens: maxTokens, messages: [{role: 'user', content}]};
 }
 
-// Why (8 Nov 2026, fr; replayed on the 7 Nov digest prompt, 2 of 5 calls): Free AI's model (Qwen3) thinks before it answers and the thinking counts against max_tokens, ~1.5k to 5k tokens for a short ask and more for a long one.
+// Why (8 Nov 2026, fr; replayed on the 7 Nov digest prompt, 2 of 5 calls): Free AI's model then (Qwen3) thought before it answered and the thinking counted against max_tokens, ~1.5k to 5k tokens for a short ask and more for a long one. Gemma 4 (now, thinking off) answers in 150 to 500 tokens, but the ceiling still bounds a looping reply.
 // The old ceiling of 6096 cut a call that thought past ~4k `length`, and a cut-off answer is thrown away as `fallback:reply-refused` (33 of ~500 Search check calls, 2 of 5 digest replays); the call is paid for either way.
 // The ceiling is now the most the model can take after the prompt: 16000 (the digest's retry asks for 16000) inside the context window. It bounds one call's spend at 16000 output tokens, not the day's cap.
 export const FREE_AI_OUTPUT_MAX = 16000, FREE_AI_MIN_OUTPUT = 256;
@@ -109,7 +109,7 @@ async function settle(storage, day, amount, actual) {
 class PromptTooLarge extends Error {}
 
 /**
- * Runs the request with its ceiling; if the provider says prompt plus ceiling pass its window (bytes per token vary: Qwen3 counts each digit as a token), tries once more with the room that always fits. Takes env, model, request, hold ({output} is lowered to the ceiling used).
+ * Runs the request with its ceiling; if the provider says prompt plus ceiling pass its window (bytes per token vary: a model may count each digit as a token), tries once more with the room that always fits. Takes env, model, request, hold ({output} is lowered to the ceiling used).
  * Why (8 Nov 2026, fr, code review; probed live): the provider's 400 says "your prompt contains at least N input tokens", but N is only the least that overflows (window + 1 minus the ceiling asked), not the count. A token is at least one byte, so window - bytes - margin always fits. No room even then: PromptTooLarge.
  */
 async function runInWindow(env, model, request, hold) {

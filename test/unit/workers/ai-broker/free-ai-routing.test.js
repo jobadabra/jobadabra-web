@@ -53,3 +53,9 @@ test('the fence is stripped only around the whole reply, and a bare reply is unt
   assert.equal(stripFence('{"a": 1}'), '{"a": 1}');
   assert.equal(stripFence('  ```\n[1]\n```  '), '[1]');
 });
+
+test('a reply that loops on blank lines is stripped in linear time, not quadratic (60,000 newlines took 6.5 s with a regex)', () => {
+  const started = Date.now();
+  stripFence('{"a":1}' + '\n'.repeat(200_000) + 'x'); stripFence('```json\n' + ' '.repeat(200_000) + '```');
+  assert.ok(Date.now() - started < 500, `${Date.now() - started} ms`);
+});

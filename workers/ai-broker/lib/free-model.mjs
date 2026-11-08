@@ -19,5 +19,14 @@ const SCHEMA_ASK = 'Reply with ONE JSON object only, no other text, matching thi
 /** The prompt with the answer's JSON schema written into it. */
 export const promptWithSchema = (prompt, schema) => `${prompt}\n\n${SCHEMA_ASK}${JSON.stringify(schema)}`;
 
-/** A reply without the markdown fence the model wraps JSON in (```json … ```). */
-export const stripFence = text => String(text ?? '').replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+/**
+ * A reply without the markdown fence the model wraps JSON in (```json … ```). Linear in the reply's length.
+ * Why (8 Nov 2026, fr, code review): a trailing-fence regex (`\s*```\s*$`) is quadratic on a long whitespace run, and a model that loops on blank lines produces exactly that (60,000 newlines took 6.5 s of CPU in the worker).
+ */
+export function stripFence(text) {
+  let reply = String(text ?? '').trim();
+  const open = /^```(?:json)?\s*/i.exec(reply);
+  if (open) reply = reply.slice(open[0].length);
+  if (reply.endsWith('```')) reply = reply.slice(0, -3);
+  return reply.trim();
+}
