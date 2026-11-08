@@ -226,7 +226,7 @@ test('the Worker keeps its egress list and exports what the list needs (it canno
   assert.match(src, /interceptHttps = true/);   // without it HTTPS fails with the internet off: codex timed out on chatgpt.com (28 Oct 2026)
   assert.match(src, /allowedHosts = HOSTS/);
   assert.match(src, /HOSTS = \['chatgpt\.com', 'auth\.openai\.com', 'api\.openai\.com', 'api\.anthropic\.com'\]/);   // the Claude engine adds api.anthropic.com (1 Nov 2026) and nothing else
-  assert.match(src, /refuseReply\(answer\.reply\)/);   // the last layer against a credential in a reply
+  assert.match(src, /refuseReply\(answer\.reply, sentText\(body\)\)/);   // the last layer against a credential in a reply
 });
 
 test('a planted injection\'s reply is refused: tokens, login fields, long encodings, long text', () => {
@@ -234,6 +234,18 @@ test('a planted injection\'s reply is refused: tokens, login fields, long encodi
   for (const text of [`Here: ${jwt}`, '{"refresh_token": "abc"}', 'x'.repeat(120), 'sk-' + 'a'.repeat(30), 'y '.repeat(10001)])
     assert.match(refuseReply(text), /^reply-refused/, text.slice(0, 20));
   assert.equal(refuseReply('{"verdict":"pass","reason":"the image is mostly red"}'), null);
+});
+
+test('a long link path the model copied from the caller\'s text passes; the same run not sent, a JWT or a login field copied, is refused', () => {
+  const path = 'careers/' + 'senior-digital-marketing-specialist-zagreb-'.repeat(3) + 'r0012345';   // 100+ characters of the base64 shape
+  const prompt = `Home page: https://example.test\n\nOpen jobs -> https://example.test/${path}`, reply = JSON.stringify({links: [`https://example.test/${path}`]});
+  assert.match(refuseReply(reply), /a long base64 run/);   // the old call shape (no caller text) still refuses
+  assert.equal(refuseReply(reply, prompt), null);
+  assert.match(refuseReply(reply + ' ' + 'Q'.repeat(120), prompt), /a long base64 run/);   // a second run not in the prompt
+  assert.match(refuseReply(JSON.stringify({links: [`https://example.test/${path}X`]}), prompt), /a long base64 run/);   // one character more than was sent
+  const jwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJvd25lciJ9.c2lnbmF0dXJl';
+  assert.match(refuseReply(`see ${jwt}`, `page says ${jwt}`), /a JWT/);
+  assert.match(refuseReply('{"refresh_token": "abc"}', '{"refresh_token": "abc"}'), /a login field name/);
 });
 
 test('the week reading is the window that lasts a week, whichever slot it sits in', () => {
