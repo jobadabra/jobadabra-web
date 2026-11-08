@@ -17,12 +17,11 @@ export const READY_ROW = 'app-ready';
  * `complete`: forms filled with nothing required left ('prepared'); `needs`: filled but something is left for the person ('partial'). A form the person cleared, or one that hit a wall, is not counted.
  */
 export async function mailNight(env, batch, now = new Date()) {
+  let item = null, held = null;   // set once the mail is built: a throw after the claim holds it for the digest
   try {
     const counts = await env.STATS.prepare("SELECT SUM(state = 'prepared') AS complete, SUM(state = 'partial') AS needs FROM ready_jobs WHERE batch = ? AND cleared_at IS NULL").bind(batch.id).first();
     const complete = Number(counts?.complete || 0), needs = Number(counts?.needs || 0);
     if (!complete && !needs) return {skipped: 'nothing'};
-    const claim = await env.STATS.prepare('UPDATE ready_batches SET mailed_at = ? WHERE id = ? AND mailed_at IS NULL').bind(now.toISOString(), batch.id).run();
-    if (!(claim.meta?.changes ?? claim.changes)) return {skipped: 'already'};
     const account = await accountOf(env, batch.install);
     if (!account?.email) return {skipped: 'no_address'};
     const locale = await recipientNotificationLanguage(env, await addrOf(account.email));
@@ -30,7 +29,11 @@ export async function mailNight(env, batch, now = new Date()) {
     const text = [mailText(locale, 'readyIntro'), needs ? mailText(locale, 'readyNeeds', {count: needs}) : ''].filter(Boolean).join('\n\n');
     const html = [mailText(locale, 'readyIntro'), needs ? mailText(locale, 'readyNeeds', {count: needs}) : ''].filter(Boolean).map(line => `<p>${line}</p>`).join('');
     // Why (review of 2/5): /open reaches only 'jobs' and 'sessions'; the forms the night filled are marked in the Jobs list.
-    const item = {subject: mailText(locale, 'readySubject', {count}), html, text, buttons: [{text: mailText(locale, 'readyButton'), url: `${SITE}/open?view=jobs`}]};
+    item = {subject: mailText(locale, 'readySubject', {count}), html, text, buttons: [{text: mailText(locale, 'readyButton'), url: `${SITE}/open?view=jobs`}]};
+    held = account;
+    // Why (Gitar on #496): the claim comes after everything that can fail before the mail exists, so a night is never claimed with no mail built; from here a refusal or a throw is held for the digest.
+    const claim = await env.STATS.prepare('UPDATE ready_batches SET mailed_at = ? WHERE id = ? AND mailed_at IS NULL').bind(now.toISOString(), batch.id).run();
+    if (!(claim.meta?.changes ?? claim.changes)) return {skipped: 'already'};
     const sent = await deliver(env, account, item, now, {row: READY_ROW, locale});
     if (sent.ok) return {sent: true};
     if (['person_off', 'rule_off'].includes(sent.reason)) return {skipped: sent.reason};   // the person's no, or the owner's stop: nothing is held
@@ -38,9 +41,13 @@ export async function mailNight(env, batch, now = new Date()) {
     return {skipped: await toDigest(env, account, item, now) ? 'held' : sent.reason};
   } catch (error) {
     console.error(`ready mail: ${error.message}`);
+    if (item && held && await claimedBy(env, batch.id, now)) await toDigest(env, held, item, now);
     return {skipped: 'failed'};
   }
 }
+
+// True when this call made the claim (mailed_at is exactly `now`), so a throw before it never holds a mail the night did not claim. Never throws.
+const claimedBy = async (env, id, now) => { try { return (await env.STATS.prepare('SELECT mailed_at FROM ready_batches WHERE id = ?').bind(id).first())?.mailed_at === now.toISOString(); } catch { return false; } };
 
 // Holds the mail for the digest unless the person's choice for the row says no; true when it was held. Never throws.
 async function toDigest(env, account, item, now) {

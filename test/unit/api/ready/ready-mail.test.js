@@ -40,8 +40,8 @@ async function setup({address: given = 'me@example.com', confirmed = true} = {})
   return {e, sent};
 }
 // A finished night with jobs in the given states (counts are all the site keeps of them).
-function night(e, states, {state = 'finished', id = 'night-1'} = {}) {
-  e.STATS.db.prepare("INSERT INTO ready_batches (id, install, night, created_at, state, expires_at) VALUES (?, ?, '2026-11-08', '2026-11-07T20:00:00Z', ?, '2026-11-08T03:00:00Z')").run(id, INSTALL, state);
+function night(e, states, {state = 'finished', id = 'night-1', date = '2026-11-08'} = {}) {
+  e.STATS.db.prepare("INSERT INTO ready_batches (id, install, night, created_at, state, expires_at) VALUES (?, ?, ?, '2026-11-07T20:00:00Z', ?, '2026-11-08T03:00:00Z')").run(id, INSTALL, date, state);
   states.forEach((each, index) => e.STATS.db.prepare("INSERT INTO ready_jobs (batch, job, host, state) VALUES (?, ?, 'jobs.example.com', ?)").run(id, `j${index}`, each));
   return {id, install: INSTALL};
 }
@@ -136,5 +136,23 @@ test('a send that fails is held for the digest, not lost and not retried: the ni
   assert.notEqual(mailed(e), null);
   assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM mail_held WHERE mail_row = ?').get('app-ready').n, 1);
   assert.deepEqual(await mailNight(e, batch, now), {skipped: 'already'});
+  assert.equal(sent.length, 0);
+});
+
+test('a send that throws after the claim is held for the digest, a throw before the claim holds nothing and claims nothing', async () => {
+  const {e, sent} = await setup();
+  const batch = night(e, ['prepared']);
+  const real = e.EMAIL.send;
+  e.EMAIL.send = async () => { throw new Error('provider down'); };
+  const asked = e.STATS.prepare;
+  e.STATS.prepare = text => { if (/FROM mail_log WHERE addr = \? AND template NOT LIKE/.test(text) || /INSERT INTO mail_log/.test(text)) throw new Error('D1 hiccup'); return asked(text); };   // deliver()'s own claim throws
+  assert.deepEqual(await mailNight(e, batch, now), {skipped: 'failed'});
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM mail_held WHERE mail_row = ?').get('app-ready').n, 1, 'held although deliver threw');
+  e.STATS.prepare = asked; e.EMAIL.send = real;
+  const early = night(e, ['prepared'], {id: 'night-2', date: '2026-11-09'});
+  e.STATS.prepare = text => { if (/FROM pro_accounts/.test(text)) throw new Error('D1 hiccup'); return asked(text); };
+  assert.deepEqual(await mailNight(e, early, now), {skipped: 'failed'});
+  e.STATS.prepare = asked;
+  assert.equal(mailed(e, 'night-2'), null, 'a night whose mail was never built is not claimed');
   assert.equal(sent.length, 0);
 });
