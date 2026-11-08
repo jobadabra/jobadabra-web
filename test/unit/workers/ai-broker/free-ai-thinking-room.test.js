@@ -86,3 +86,13 @@ test('a prompt the provider says cannot fit even after the retry is prompt-too-l
   const state = await storage.get(dayKey);
   assert.equal(state.held['free-ai'], 0); assert.equal(state.spent['free-ai'], 0);
 });
+
+test('an unavailable Free AI logs the provider\'s message, not a blanked line (Gitar on #490)', async t => {
+  t.mock.method(Date, 'now', () => day); noNetwork(t);
+  const lines = []; t.mock.method(console, 'error', line => lines.push(String(line)));
+  const {broker, storage} = harness(undefined, env(async () => { throw new Error('AiError: {"error":{"message":"Capacity temporarily exceeded, please retry","code":3040}}'); }));
+  await past(storage);
+  const reply = await broker.call('pr', {tier: 'small', prompt: 'x'});
+  assert.equal((await reply.json()).why, 'fallback:unavailable');
+  assert.ok(lines.some(line => /free-ai-step unavailable: Capacity temporarily exceeded, please retry model=/.test(line)), lines.join('\n'));
+});

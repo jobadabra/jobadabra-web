@@ -162,7 +162,9 @@ export async function freeAiStep({storage, env, body, lane, weekUsedPercent, fet
     if ((choice && choice.finish_reason !== 'stop') || choice?.message?.refusal) message.stop_reason = 'refused';
   } catch (caught) {
     if (caught instanceof PromptTooLarge) { await settle(storage, day, hold.amount, 0); return refusal('fallback:prompt-too-large', `${caught.message} lane=${lane}`); }   // the provider refused before generating: nothing was used, the hold is released
-    console.error(`free-ai-step unavailable: ${String(caught?.message || caught).replace(/"[^"]*"/g, '"…"').slice(0, 200)} model=${model} max=${hold.output} lane=${lane} ms=${Date.now() - started}`); note.unavailable = true; return null;
+    // The provider's own words: its JSON error's "message" field when it has one, else the text; 200 characters. Probed 8 Nov 2026: Workers AI's 400 names the limit and does not echo the prompt (Gitar on #490: blanking every quoted string wiped the cause).
+    const raw = String(caught?.message || caught), cause = (raw.match(/"message"\s*:\s*"([^"]*)"/)?.[1] ?? raw).slice(0, 200);
+    console.error(`free-ai-step unavailable: ${cause} model=${model} max=${hold.output} lane=${lane} ms=${Date.now() - started}`); note.unavailable = true; return null;
   }   // an ambiguous transport failure keeps the hold: only known usage releases it; the cause is logged (8 Nov 2026: the broker's log had only "503")
   const usage = message?.usage;
   if (!validUsage(usage)) { note.unavailable = true; return null; }
