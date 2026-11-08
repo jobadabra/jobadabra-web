@@ -92,7 +92,7 @@ test('Claude is open under 90% of its week and closed from 90%; an unknown readi
   assert.deepEqual([0.5, 0.899].map(u => claudeAllow(claudeWeekPercent(week(u), 2000000000))), [{ok: true}, {ok: true}]);
   assert.deepEqual(claudeAllow(claudeWeekPercent(week(0.9), 2000000000)), {ok: false, why: 'budget:claude-week 90% of 90%'});
   assert.deepEqual(claudeAllow(claudeWeekPercent(week(1), 2000000000)), {ok: false, why: 'budget:claude-week 100% of 90%'});
-  for (const unknown of [null, {}, {sevenDay: null}, week(0.99, 1999999999), week(99), week(-0.1), week(NaN), {sevenDay: {resetsAt: 2000000100}}]) {
+  for (const unknown of [null, {}, {sevenDay: null}, week(0.99, 1999999999), week(99), week(-0.1), week(NaN), {sevenDay: {resetsAt: 2000000100}}, {sevenDay: {utilization: 0.95}}]) {
     assert.equal(claudeWeekPercent(unknown, 2000000000), null, JSON.stringify(unknown));
     assert.deepEqual(claudeAllow(claudeWeekPercent(unknown, 2000000000)), {ok: true});
   }

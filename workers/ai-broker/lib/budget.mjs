@@ -56,12 +56,12 @@ export function allow(lane, meter, weekUsedPercent, tokensPerPercent = TOKENS_PE
 
 /**
  * The Claude subscription's seven-day usage in percent, from the CLI's last rate_limit_event as stored ({sevenDay: {utilization 0..1, resetsAt epoch seconds}}), or null when unknown.
- * Unknown = never read, a shape that is not a fraction, or a window already reset (the old reading says nothing about the new week): not a reason to stop, as for Codex. `now` is epoch seconds.
+ * Unknown = never read, a shape that is not a fraction, no reset time, or a window already reset (the old reading says nothing about the new week): not a reason to stop, as for Codex. `now` is epoch seconds.
  */
 export function claudeWeekPercent(limits, now = Date.now() / 1000) {
   const week = limits?.sevenDay;
   if (!week || !Number.isFinite(week.utilization) || week.utilization < 0 || week.utilization > 1) return null;
-  if (Number.isFinite(week.resetsAt) && week.resetsAt <= now) return null;
+  if (!Number.isFinite(week.resetsAt) || week.resetsAt <= now) return null;   // a reading with no reset time could never expire: while Claude is shut nothing refreshes it (code-review, 8 Nov 2026)
   return Math.round(week.utilization * 1000) / 10;
 }
 

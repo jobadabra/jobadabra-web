@@ -153,7 +153,7 @@ export class CodexBroker extends Container {
     this.limits ||= (await this.ctx.storage.get('limits')) || null;   // kept in storage: an eviction must not switch the whole-week brake off (Gitar #221)
     if (this.limits?.resetsAt && this.limits.resetsAt <= Date.now() / 1000) this.limits = null;
     // Why (8 Nov 2026, owner: "Actually, codex up to 100%, Claude up to 90%"; replaces the 5 Nov line that kept held lanes and by-hand checks off Claude): every lane passes on to Claude when Codex refuses, until Claude's own seven-day window reads 90% used. Past that no lane starts a Claude call, a call that names Claude included: Free AI answers, or the call gets `budget:claude-week`. The reading is the CLI's, stored with each Claude call (`claude:state`); an unknown or reset window is not a reason to stop.
-    const claudeCheck = claudeAllow(claudeWeekPercent(((await this.ctx.storage.get('claude:state')) || {}).limits));
+    const claudeCheck = await this.claudeLine();
     const claudeShut = !claudeCheck.ok && chain.includes('claude') && configured('claude', env);
     // Why (5 Nov 2026, owner's brief: "A job refused here gets the normal refusal, and its items wait for the next run"; review; carried to the Claude line on 8 Nov 2026): with Claude shut a search or an image has nobody left, Free AI takes neither, so it is the line's own `budget:` refusal (below), never `fallback:*`, which clients show red. A Free AI that really failed keeps its reason (owner, 4 Nov 2026: a fallback that cannot answer is a failure the job shows).
     const freeAiCannot = body.search === true || body.images?.length > 0;
@@ -174,7 +174,7 @@ export class CodexBroker extends Container {
       return check;
     });
     if (!verdict.ok && !verdict.ranOut) return json(429, {why: claudeShut && exhausted(verdict.why) ? claudeCheck.why : verdict.why});   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
-    const walk = claudeShut ? chain.filter(engine => engine !== 'claude') : chain;
+    const walk = claudeShut ? chain.filter(engine => engine !== 'claude' && !(engine === 'free-ai' && freeAiCannot)) : chain;   // Why (8 Nov 2026, Gitar on #492): the engines left out of `others` are left out of the walk too, so Codex failing at runtime keeps its own 502 and Free AI never answers a search or an image with a red `fallback:unsupported`
     const later = walk.slice(walk.indexOf('codex') + 1).filter(engine => configured(engine, env));   // the part of this call's walk after Codex
     const note = newNote(), ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note}, day = new Date(Date.now()).toISOString().slice(0, 10), skipped = [];
     let busyPassed = false, held = null, codexRefusal = null;   // busyPassed: Claude's slots were full for too long and the call went on; held: the last refusal of an engine it went on to; codexRefusal: Codex's own 502 when it passed on for capacity
@@ -214,7 +214,8 @@ export class CodexBroker extends Container {
     }
     // Why (5 Nov 2026, review of the capacity pass-on): Codex at capacity and nobody after it answering is Codex's failure, never Free AI's "budget" (which CI reads as a grey skip) or "search-unsupported".
     if (codexRefusal) return codexRefusal;
-    if (claudeShut && freeAiCannot) return json(429, {why: claudeCheck.why});   // Codex did not answer, Claude is shut and Free AI takes neither a search nor an image
+    const late = skipped.find(entry => entry.engine === 'claude' && entry.why === 'budget');   // the line closed while this call waited for a Claude slot
+    if ((claudeShut || late) && freeAiCannot) return json(429, {why: claudeShut ? claudeCheck.why : late.detail});   // Codex did not answer, Claude is shut and Free AI takes neither a search nor an image
     return apiFinish(env, note);
   }
 
@@ -278,6 +279,9 @@ export class CodexBroker extends Container {
     await skip('claude', 'failed', true, detail);
   }
 
+  // Whether Claude's own seven-day window allows a call now (lib/budget.mjs claudeAllow), read from the last Claude reply's limits.
+  async claudeLine() { return claudeAllow(claudeWeekPercent(((await this.ctx.storage.get('claude:state')) || {}).limits)); }
+
   // The Claude subscription's step: a Response when it answered (or refused a token-shaped reply), null when it is not configured, backing off, out of allowance (waits for the reset the CLI reports) or failed.
   // Why (1 Nov 2026): only measured signals say "ran out" (the CLI's own rate_limit_event or a limit message); an unknown failure is a plain failure and the chain moves on. An invalid token is shown in /health and sent to Telegram once a day.
   // `waitMs` (set only for a call that may pass on, lib/busy.mjs): how long to wait for a free slot; past it the step is skipped as `busy` and nothing was sent to the container. Undefined = wait as long as it takes.
@@ -294,11 +298,19 @@ export class CodexBroker extends Container {
     const release = await this.gate.acquire(priority, waitMs === undefined ? undefined : Math.max(0, waitMs - (Date.now() - waitStarted)));   // the 4 shared slots count against the same deadline
     if (!release) { releaseClaude(); await skip('claude', 'busy'); return null; }
     try {
+      // Why (8 Nov 2026, code-review): the line was read when the call came in, and a call waits for a slot with no deadline (searches, the retry turn); a Claude call that finished meanwhile may have moved the week to 90%. Read it again with the slot in hand, so no call starts past the line.
+      const late = await this.claudeLine();
+      if (!late.ok) { await skip('claude', 'budget', false, late.why); return null; }
       const reply = await this.containerFetch('http://c/claude', {method: 'POST', body: JSON.stringify({prompt: body.prompt, schema: body.schema, images: body.images, model, ...(body.search === true ? {search: true} : {})})});
       let answer;
       let raw = '';
       try { raw = await reply.text(); answer = JSON.parse(raw); } catch { await this.claudeFailed(skip, 'platform: ' + raw); return null; }   // the platform's own error text, not our server's JSON
-      if (answer.limits) await storage.put('claude:state', {...((await storage.get('claude:state')) || {}), limits: answer.limits});
+      if (answer.limits) {
+        // Why (8 Nov 2026, code-review): a rate_limit_event may carry one window only; a missing seven-day window must not turn a known 95% into "unknown" and reopen Claude. The old reading stands until its own reset.
+        const before = ((await storage.get('claude:state')) || {}).limits?.sevenDay;
+        const kept = !answer.limits.sevenDay && before?.resetsAt > now / 1000 ? {...answer.limits, sevenDay: before} : answer.limits;
+        await storage.put('claude:state', {...((await storage.get('claude:state')) || {}), limits: kept});
+      }
       if (!reply.ok) {
         const error = String(answer.error || '');
         if (error === 'claude-auth') {
