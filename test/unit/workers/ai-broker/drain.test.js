@@ -9,7 +9,7 @@ import path from 'node:path';
 import http from 'node:http';
 import net from 'node:net';
 import {spawn} from 'node:child_process';
-import {body, success, harness} from './harness.mjs';
+import {body, success, harness, CodexBroker} from './harness.mjs';
 
 const refused = () => new Response(JSON.stringify({error: 'draining'}), {status: 503, headers: {'x-broker-draining': '1'}});
 const SERVER = process.env.DRAIN_SERVER || new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url).pathname;   // the env var points the real-process test at an older server.mjs to prove it fails there
@@ -37,6 +37,11 @@ test('Claude: the same hand-over on the Claude route', async () => {
   const reply = await b.call('scheduled', {...body, engine: 'claude', only: true});
   assert.equal((await reply.json()).engine, 'claude');
   assert.deepEqual(seen, ['/claude', '/claude']);
+});
+
+test('the hand-over wait leaves a refused call time to run before its caller (180 s, no retry) gives up', () => {
+  const wait = new CodexBroker({storage: {}}, {}).drainWaitMs;
+  assert.ok(wait + 100_000 + 10_000 <= 180_000, `${wait} ms of waiting + a 100 s Codex guard + a start must fit in the caller's 180 s`);
 });
 
 test('a container that stays draining for ever does not hold the call past the wait', async () => {

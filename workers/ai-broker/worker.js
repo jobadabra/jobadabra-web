@@ -21,7 +21,8 @@ export {ContainerProxy} from '@cloudflare/containers';   // required by the outb
 
 const PARALLEL = 4;  // PR 0 (28 Oct 2026): 4 at once, 60 of 60 answered
 const CLAUDE_PARALLEL = 3;
-const DRAIN_WAIT_MS = 170_000;   // Why (8 Nov 2026, bd): the old container finishes its calls before it exits, and the longest is the Claude guard (150 s, container/claude.mjs); a call that waited longer than that for the next container was never going to be served by it
+const CALLER_WAIT_MS = 180_000, CODEX_GUARD_MS = 100_000, START_MS = 10_000;   // the callers' own wait (desktop/e2e/lib/broker-client.mjs: AbortSignal.timeout(180000), an abort is not retried), the container's Codex guard (container/server.mjs), a cold start
+const DRAIN_WAIT_MS = CALLER_WAIT_MS - CODEX_GUARD_MS - START_MS;   // Why (8 Nov 2026, Gitar on #501): a call that waits for the next container must still have time to run in it before its caller gives up, or the hand-over only moves the loss; past this it is passed on like any start-up failure (Claude, Free AI) instead of answered to nobody. Calls the old container is still finishing are guarded at 100 s (Codex) and 150 s (Claude), so a drain longer than this wait costs the refused call its Codex turn, as every deploy did before
 const HOSTS = ['chatgpt.com', 'auth.openai.com', 'api.openai.com', 'api.anthropic.com'];   // the only hosts the container may reach (the reply is the only way out); api.anthropic.com is the Claude engine's (1 Nov 2026), measured: telemetry is off, so nothing else is needed
 const pass = req => fetch(req);
 /** The text the model was given for one call (the prompt and, in a conversation, the turn's delta that reached the container); the reply guard lets a long run through only when it was copied from here. */
