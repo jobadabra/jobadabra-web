@@ -23,8 +23,8 @@ const PARALLEL = 4;  // PR 0 (28 Oct 2026): 4 at once, 60 of 60 answered
 const CLAUDE_PARALLEL = 3;
 const HOSTS = ['chatgpt.com', 'auth.openai.com', 'api.openai.com', 'api.anthropic.com'];   // the only hosts the container may reach (the reply is the only way out); api.anthropic.com is the Claude engine's (1 Nov 2026), measured: telemetry is off, so nothing else is needed
 const pass = req => fetch(req);
-/** The text a caller sent for one call (its prompt and, in a conversation, the turn's delta); the reply guard lets a long run through only when it was copied from here. */
-const sentText = body => [body.prompt, body.delta].map(part => typeof part === 'string' ? part : JSON.stringify(part ?? '')).join('\n');
+/** The text the model was given for one call (the prompt and, in a conversation, the turn's delta that reached the container); the reply guard lets a long run through only when it was copied from here. */
+const sentText = sent => [sent.prompt, sent.session?.delta].map(part => typeof part === 'string' ? part : JSON.stringify(part ?? '')).join('\n');
 const json = (status, body) => new Response(JSON.stringify(body), {status, headers: {'content-type': 'application/json'}});
 
 export class CodexBroker extends Container {
@@ -274,7 +274,7 @@ export class CodexBroker extends Container {
           await storage.put('meter', record(latest, lane, used, Date.now() / 1000, answer.limits?.resetsAt));
           if (session && answer.session?.mode) await storage.put('sessions', settle((await storage.get('sessions')) || {}, session, {now: Date.now(), tier: body.tier ?? 'mid', mode: answer.session.mode}));   // the clock after the turn: a slow one must not look idle
         });
-        const refused = refuseReply(answer.reply, sentText(body));
+        const refused = refuseReply(answer.reply, sentText(sent));
         if (refused) return json(422, {why: refused});
         return json(200, {reply: answer.reply, tokens: {...answer.tokens, counted}, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'codex', timeline, ...(answer.session ? {session: answer.session} : {})});
       } finally { release(); }
@@ -335,7 +335,7 @@ export class CodexBroker extends Container {
         } else await this.claudeFailed(skip, error);
         return null;
       }
-      const refused = refuseReply(answer.reply, sentText(body));
+      const refused = refuseReply(answer.reply, sentText({prompt: body.prompt}));
       if (refused) return json(422, {why: refused});
       return json(200, {reply: answer.reply, tokens: answer.tokens, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'claude'});
     } catch (e) { await this.claudeFailed(skip, 'call: ' + String(e?.message || e)); return null; }

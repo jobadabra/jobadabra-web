@@ -226,7 +226,7 @@ test('the Worker keeps its egress list and exports what the list needs (it canno
   assert.match(src, /interceptHttps = true/);   // without it HTTPS fails with the internet off: codex timed out on chatgpt.com (28 Oct 2026)
   assert.match(src, /allowedHosts = HOSTS/);
   assert.match(src, /HOSTS = \['chatgpt\.com', 'auth\.openai\.com', 'api\.openai\.com', 'api\.anthropic\.com'\]/);   // the Claude engine adds api.anthropic.com (1 Nov 2026) and nothing else
-  assert.match(src, /refuseReply\(answer\.reply, sentText\(body\)\)/);   // the last layer against a credential in a reply
+  assert.equal(src.match(/refuseReply\(answer\.reply, sentText\(/g)?.length, 2);   // the last layer against a credential in a reply, on both engines' replies, with what the model was given
 });
 
 test('a planted injection\'s reply is refused: tokens, login fields, long encodings, long text', () => {
