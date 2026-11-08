@@ -73,15 +73,23 @@ function messageBody(body, maxTokens) {
     ...(body.schema ? {output_config: {format: {type: 'json_schema', schema: body.schema}}} : {})};
 }
 
-async function reserve(storage, env, day, model, request) {
+// Why (8 Nov 2026, fr; replayed on the 7 Nov digest prompt, 2 of 5 calls): Free AI's model (Qwen3) thinks before it answers and the thinking counts against max_tokens, ~1.5k to 5k tokens for a short ask and more for a long one.
+// The old ceiling of 6096 cut a call that thought past ~4k `length`, and a cut-off answer is thrown away as `fallback:reply-refused` (33 of ~500 Search check calls, 2 of 5 digest replays); the call is paid for either way.
+// The ceiling is now the most the model can take after the prompt: 16000 (the digest's retry asks for 16000) inside the context window. It bounds one call's spend at 16000 output tokens, not the day's cap.
+export const FREE_AI_WINDOW = 32768, FREE_AI_OUTPUT_MAX = 16000, FREE_AI_MIN_OUTPUT = 256;   // @cf/qwen/qwen3-30b-a3b-fp8: 32,768 tokens of context (Cloudflare's model page)
+
+/** The most output tokens a request can ask for: the window minus the prompt (bytes / 3, above the measured 4.2 to 5.6 bytes per token, for non-Latin text) and a margin, up to FREE_AI_OUTPUT_MAX. Below FREE_AI_MIN_OUTPUT the prompt does not fit. */
+export const outputRoom = request => Math.min(FREE_AI_OUTPUT_MAX, FREE_AI_WINDOW - Math.ceil(new TextEncoder().encode(JSON.stringify(request)).length / 3) - 512);
+
+async function reserve(storage, env, day, model, request, room) {
   // UTF-8 bytes of the whole request (text and schema) bound the input tokens; search is refused before reaching this calculation.
   const input = new TextEncoder().encode(JSON.stringify(request)).length + 1024;
   return storage.transaction(async tx => {
     const key = `fallback:${day}`, state = await tx.get(key) || fresh();
     const left = freeCap(env) - state.spent['free-ai'] - state.held['free-ai'];
     const inputCost = Math.ceil(1e6 * costUsd(model, {input_tokens: input, output_tokens: 0}));
-    const output = Math.min(6096, Math.floor((left - inputCost) / costUsd(model, {output_tokens: 1e6})));
-    if (output < 256) return null;
+    const output = Math.min(room, Math.floor((left - inputCost) / costUsd(model, {output_tokens: 1e6})));
+    if (output < FREE_AI_MIN_OUTPUT) return null;
     const amount = Math.ceil(1e6 * costUsd(model, {input_tokens: input, output_tokens: output}));
     if (amount > left) return null;
     state.held['free-ai'] += amount;
@@ -98,6 +106,25 @@ async function settle(storage, day, amount, actual) {
     await tx.put(key, state);
   });
 }
+
+class PromptTooLarge extends Error {}
+
+/**
+ * Runs the request with its ceiling; if the provider says prompt plus ceiling pass its window (bytes per token vary: Qwen3 counts each digit as a token), tries once more with the room that always fits. Takes env, model, request, hold ({output} is lowered to the ceiling used).
+ * Why (8 Nov 2026, fr, code review; probed live): the provider's 400 says "your prompt contains at least N input tokens", but N is only the least that overflows (window + 1 minus the ceiling asked), not the count. A token is at least one byte, so window - bytes - margin always fits. No room even then: PromptTooLarge.
+ */
+async function runInWindow(env, model, request, hold) {
+  try { return await env.AI.run(model, request); } catch (caught) {
+    if (!/maximum context length/i.test(String(caught?.message))) throw caught;
+    const room = Math.min(hold.output, FREE_AI_WINDOW - new TextEncoder().encode(JSON.stringify(request)).length - 512);
+    if (room < FREE_AI_MIN_OUTPUT) throw new PromptTooLarge(`prompt of ${JSON.stringify(request).length} bytes may not fit the ${FREE_AI_WINDOW}-token window`);
+    hold.output = room;
+    return env.AI.run(model, {...request, max_tokens: room});
+  }
+}
+
+/** A refusal of this step: 503 with its reason word, and one log line naming why (the response carries only the word; the broker's log had no cause until 8 Nov 2026). */
+const refusal = (why, detail) => { console.error(`free-ai-step ${why}: ${detail}`); return json(503, {why}); };
 
 /** What the engines in one chain walk tell each other: any failed step makes the end "unavailable", not "cap reached"; a search nobody could take says so. */
 export const newNote = () => ({unavailable: false, search: false});
@@ -119,28 +146,37 @@ export async function freeAiStep({storage, env, body, lane, weekUsedPercent, fet
   const model = modelFor(undefined, env);
   let request;
   try { request = await toWorkersAi(messageBody(body, 4096)); } catch { return json(503, {why: 'fallback:unsupported'}); }
-  const hold = await reserve(storage, env, day, model, request);
+  const room = outputRoom(request);
+  if (room < FREE_AI_MIN_OUTPUT) return refusal('fallback:prompt-too-large', `prompt ${JSON.stringify(request).length} bytes leaves ${room} tokens in the ${FREE_AI_WINDOW}-token window`);   // not the day cap: no note, nothing held, nothing sent
+  const hold = await reserve(storage, env, day, model, request, room);
   if (!hold) { await notifyCap(storage, env, day, fetcher); return null; }
   request.max_tokens = hold.output;
-  let message;
+  let message, choiceFinish;
   try {
-    const result = await env.AI.run(model, request);
+    const result = await runInWindow(env, model, request, hold);
     // The translator normalizes missing usage to zero; require the provider's real meter first.
     if (!result?.usage || !Number.isSafeInteger(result.usage.prompt_tokens) || !Number.isSafeInteger(result.usage.completion_tokens)) throw new Error('missing usage');
     message = fromWorkersAi(result, model);
     const choice = result.choices?.[0];
+    choiceFinish = choice?.finish_reason;
     if ((choice && choice.finish_reason !== 'stop') || choice?.message?.refusal) message.stop_reason = 'refused';
-  } catch { note.unavailable = true; return null; }   // an ambiguous transport failure keeps the hold: only known usage releases it
+  } catch (caught) {
+    if (caught instanceof PromptTooLarge) { await settle(storage, day, hold.amount, 0); return refusal('fallback:prompt-too-large', `${caught.message} lane=${lane}`); }   // the provider refused before generating: nothing was used, the hold is released
+    // The provider's own words: its JSON error's "message" field when it has one, else the text; 200 characters. Probed 8 Nov 2026: Workers AI's 400 names the limit and does not echo the prompt (Gitar on #490: blanking every quoted string wiped the cause).
+    const raw = String(caught?.message || caught), cause = (raw.match(/"message"\s*:\s*"([^"]*)"/)?.[1] ?? raw).slice(0, 200);
+    console.error(`free-ai-step unavailable: ${cause} model=${model} max=${hold.output} lane=${lane} ms=${Date.now() - started}`); note.unavailable = true; return null;
+  }   // an ambiguous transport failure keeps the hold: only known usage releases it; the cause is logged (8 Nov 2026: the broker's log had only "503")
   const usage = message?.usage;
   if (!validUsage(usage)) { note.unavailable = true; return null; }
   const actual = Math.ceil(1e6 * costUsd(model, {...usage, input_tokens: usage.input_tokens + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0)}));
   await settle(storage, day, hold.amount, actual);
   const latest = await storage.get(`fallback:${day}`);
   if (latest.spent['free-ai'] + latest.held['free-ai'] >= cap) await notifyCap(storage, env, day, fetcher);
-  if (actual > hold.amount || usage.output_tokens > hold.output) return json(503, {why: 'fallback:usage-exceeded-reservation'});
+  const outcome = `model=${model} max=${hold.output} output=${usage.output_tokens} prompt=${usage.input_tokens} lane=${lane} ms=${Date.now() - started}`;
+  if (actual > hold.amount || usage.output_tokens > hold.output) return refusal('fallback:usage-exceeded-reservation', outcome);
   const reply = Array.isArray(message.content) ? message.content.filter(part => part.type === 'text').map(part => part.text).join('\n') : '';
-  if (!reply.trim() || !['end_turn', 'stop_sequence'].includes(message.stop_reason) || refuseReply(reply)) return json(503, {why: 'fallback:reply-refused'});
-  if (body.schema) { try { JSON.parse(reply); } catch { return json(503, {why: 'fallback:invalid-json'}); } }
+  if (!reply.trim() || !['end_turn', 'stop_sequence'].includes(message.stop_reason) || refuseReply(reply)) return refusal('fallback:reply-refused', `${outcome} finish=${choiceFinish ?? '-'} chars=${reply.length}${hold.output <= usage.output_tokens ? ' cut-off-at-ceiling' : ''}`);
+  if (body.schema) { try { JSON.parse(reply); } catch { return refusal('fallback:invalid-json', outcome); } }
   return json(200, {reply, tokens: {input: usage.input_tokens, output: usage.output_tokens}, ms: Date.now() - started,
     lane, tier: body.tier ?? 'mid', model, weekUsedPercent, engine: 'free-ai'});
 }
