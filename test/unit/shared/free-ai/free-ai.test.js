@@ -230,6 +230,20 @@ test('every 502 says in the log which path failed, on which model and step, afte
   assert.match(lines[1], /free-ai 502: Workers AI failed: upstream timed out \(3040\) .*action=roles .*ms=\d+/);
 });
 
+test('Gemma 4 end to end: the schema rides in the prompt, a fenced reply comes back as bare JSON, a fenced plain ask is left as written', async () => {
+  // Why (8 Nov 2026, fr; owner: "Gemma 4 for every ask"): Gemma loops on blank lines when forced by response_format, so the schema is written into the last user message and the reply arrives in a ```json fence. The Worker must hand the caller bare JSON, and must not retry a reply that is valid once unfenced.
+  const e = env();
+  e.AI.run = async (model, input) => { e.seen.push({model, input}); return answer('```json\n{"score": 61}\n```'); };
+  const message = await (await call(e, await key(), schemaBody)).json();
+  assert.equal(message.content[0].text, '{"score": 61}');
+  assert.equal(e.seen.length, 1, 'valid once unfenced: no second attempt, no second charge');
+  assert.equal(e.seen[0].model, SMALL);
+  assert.equal(e.seen[0].input.response_format, undefined);
+  assert.match(e.seen[0].input.messages.at(-1).content, /^score\n\nReply with ONE JSON object only/);
+  const plain = await (await call(e, await key(), {max_tokens: 50, messages: [{role: 'user', content: 'write'}]})).json();
+  assert.equal(plain.content[0].text, '```json\n{"score": 61}\n```', 'no schema asked: the text is as the model wrote it');
+});
+
 test('a plain-text ask is never retried', async () => {
   const e = env();
   await call(e, await key());
