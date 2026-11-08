@@ -128,14 +128,13 @@ test('an address not confirmed yet that already got today\'s one mail: the morni
   assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM mail_held WHERE mail_row = ?').get('app-ready').n, 1);
 });
 
-test('a send that fails gives the night back: the next end of it mails', async () => {
+test('a send that fails is held for the digest, not lost and not retried: the night stays claimed', async () => {
   const {e, sent} = await setup();
-  const real = e.EMAIL.send;
   e.EMAIL.send = async () => { throw new Error('provider down'); };
   const batch = night(e, ['prepared']);
-  assert.deepEqual(await mailNight(e, batch, now), {skipped: 'failed'});
-  assert.equal(mailed(e), null);
-  e.EMAIL.send = real;
-  assert.deepEqual(await mailNight(e, batch, now), {sent: true});
-  assert.equal(sent.length, 1);
+  assert.deepEqual(await mailNight(e, batch, now), {skipped: 'held'});
+  assert.notEqual(mailed(e), null);
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM mail_held WHERE mail_row = ?').get('app-ready').n, 1);
+  assert.deepEqual(await mailNight(e, batch, now), {skipped: 'already'});
+  assert.equal(sent.length, 0);
 });
