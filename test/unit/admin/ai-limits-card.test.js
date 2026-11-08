@@ -30,10 +30,11 @@ test('amber from 70%, red from 90%, and the verdict names the highest window', (
   assert.match(limitsCard(subscriptionOf(calm), FALLBACK, now), /Nothing near a limit/);
 });
 
-test('the Codex ring carries the 70% tick where scheduled jobs stop; the others have none', () => {
+test('the Claude week ring carries the 90% tick where the broker stops using Claude; the others have none', () => {
   const [codex, week, five, free] = windows(subscriptionOf(HEALTH), FALLBACK, now);
-  assert.equal(codex.tick, 70); assert.deepEqual([week.tick, five.tick, free.tick], [undefined, undefined, undefined]);
-  assert.match(limitsCard(subscriptionOf(HEALTH), FALLBACK, now), /rotate\(252\.0 70 70\)/);
+  assert.equal(week.tick, 90); assert.deepEqual([codex.tick, five.tick, free.tick], [undefined, undefined, undefined]);
+  assert.match(limitsCard(subscriptionOf(HEALTH), FALLBACK, now), /rotate\(324\.0 70 70\)/);
+  assert.match(limitsCard(subscriptionOf(HEALTH), FALLBACK, now), /Codex runs to 100% of its week, Claude to 90% of its week/);
 });
 
 test('a window whose reset is past shows no number (the reading is old), never a stale percent', () => {

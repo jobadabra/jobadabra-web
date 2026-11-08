@@ -94,13 +94,13 @@ test('a ledger stored before the paid API was removed still works and its Claude
   assert.equal((await (await broker.health()).json()).fallback.freeAi > 0, true);
 });
 
-test('fallback keeps drift daily admission; a search or an image Free AI cannot take goes grey, not to another engine', async t => {
+test('fallback keeps drift daily admission; a search or an image Free AI cannot take is refused by name, not sent to another engine', async t => {
   t.mock.method(Date, 'now', () => day);
   noPaidProvider(t);
   const {broker, storage} = harness(undefined, fallbackEnv());
   await storage.put('limits', {usedPercent: 100});
   const search = await broker.call('scheduled', {...body, search: true});
-  assert.equal(search.status, 429); assert.match((await search.json()).why, /^budget:week /);   // Why (5 Nov 2026): past the reserve line it is the line's refusal, the one clients skip; a call pinned to Free AI keeps fallback:search-unsupported (engines.test.js)
+  assert.equal(search.status, 503); assert.match((await search.json()).why, /fallback:search-unsupported/);   // Why (8 Nov 2026): the 70% reserve line that made this a grey `budget:week` is gone; the week really used up, no Claude configured and Free AI unable to search is a failure the job shows. With Claude configured and shut at 90%: `budget:claude-week` (busy.test.js)
   for (let i = 0; i < 24; i++) assert.equal((await broker.call('drift', body)).status, 200);
   const denied = await broker.call('drift', body);
   assert.equal(denied.status, 429); assert.match((await denied.json()).why, /budget:daily/);

@@ -1,9 +1,10 @@
-// A busy Claude passes calls on, and PR checks keep 30% of the Codex week (owner, 3 Nov 2026: "Busy = next engine + PR reserve").
+// A busy Claude passes calls on; every lane uses Codex to 100% and passes on to Claude until its seven-day window reads 90% (owner, 8 Nov 2026: "Actually, codex up to 100%, Claude up to 90%"; replaces the 3 Nov PR reserve).
 // Fakes only: the container is a promise the test releases, the clock is node's mock timers (setTimeout) plus a fixed Date.now. No provider is called.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {day, body, success, harness} from './harness.mjs';
+import {LANES} from '../../../../workers/ai-broker/lib/lanes.mjs';
 import {slots} from '../../../../workers/ai-broker/lib/queue.mjs';
 import {BUSY_MS} from '../../../../workers/ai-broker/lib/busy.mjs';
 import {newMeter, TOKENS_PER_PERCENT} from '../../../../workers/ai-broker/lib/budget.mjs';
@@ -15,7 +16,7 @@ const settles = promise => { const state = {done: false}; promise.then(() => { s
 const quiet = () => new Promise(resolve => setImmediate(resolve)).then(() => new Promise(resolve => setImmediate(resolve)));
 
 // A broker whose Claude calls stay in the container until the test releases them (`held`), so its 3 slots can be full. Codex's week is used up unless `week` says otherwise.
-async function setup(t, {engine = 'codex', week = 100, hold = true, free = () => ({response: 'free answer', usage: {prompt_tokens: 100, completion_tokens: 20}}), extra = {}} = {}) {
+async function setup(t, {engine = 'codex', week = 100, claude = null, hold = true, free = () => ({response: 'free answer', usage: {prompt_tokens: 100, completion_tokens: 20}}), extra = {}} = {}) {
   t.mock.method(Date, 'now', () => day);
   t.mock.timers.enable({apis: ['setTimeout']});
   const calls = {free: 0, claudeCli: 0}, held = [];
@@ -30,6 +31,7 @@ async function setup(t, {engine = 'codex', week = 100, hold = true, free = () =>
   };
   await made.storage.put('limits', {usedPercent: week, resetsAt: day / 1000 + 3600});
   made.broker.limits = null;
+  if (claude !== null) await made.storage.put('claude:state', {limits: {status: 'allowed', fiveHour: null, sevenDay: {utilization: claude / 100, resetsAt: day / 1000 + 3600, status: 'allowed'}}});   // the CLI's own reading, a fraction
   const releaseOne = () => held.shift()();
   const drain = async promise => { const state = settles(promise); for (let i = 0; i < 500 && !state.done; i++) { while (held.length) held.shift()(); await quiet(); } return promise; };   // lets every held container call finish until `promise` is settled
   const fill = async () => {   // three searches take Claude's three slots and stay there
@@ -162,110 +164,136 @@ test('Claude busy while Codex still has allowance (Claude first, Codex behind it
   await Promise.all(running);
 });
 
-test('PR reserve: at 71% of the Codex week scheduled, bench and drift work goes to Free AI, never to Claude, while a PR check still gets Codex', async t => {
-  const {broker, calls} = await setup(t, {week: 71, hold: false});
-  for (const lane of ['scheduled', 'bench', 'drift']) {
+// Design (8 Nov 2026, owner: "Actually, codex up to 100%, Claude up to 90%"): Codex free -> Codex; Codex out -> Claude while its week reads under 90%; Claude at 90% -> Free AI, or `budget:claude-week` when Free AI cannot take the call. Every lane, one rule (budget.mjs).
+const capacity = (broker) => { const fetcher = broker.containerFetch; broker.containerFetch = async (url, init) => String(url).endsWith('/call') ? new Response(JSON.stringify({error: 'codex-failed:1 Selected model is at capacity'}), {status: 502}) : fetcher(url, init); };
+
+test('every lane x (Codex %, Claude %): Codex to 100%, then Claude until its week reads 90%, then Free AI', async t => {
+  const states = [[0, 95, 'codex'], [99, 95, 'codex'], [100, null, 'claude'], [100, 50, 'claude'], [100, 89.9, 'claude'], [100, 90, 'free-ai'], [100, 97, 'free-ai']];
+  for (const lane of LANES) for (const [week, claude, engine] of states) await t.test(`${lane}: Codex ${week}%, Claude ${claude}% -> ${engine}`, async t => {
+    const {broker, calls} = await setup(t, {week, claude, hold: false});
     const answer = await json(await broker.call(lane, body));
-    assert.equal(answer.engine, 'free-ai', `${lane} stops at 70%`); assert.deepEqual(answer.fellBack, [{engine: 'codex', why: 'ran-out'}]);
+    assert.equal(answer.engine, engine); assert.equal(calls.claudeCli, engine === 'claude' ? 1 : 0, 'Claude is asked only inside its line');
+  });
+});
+
+test('Codex at capacity passes to Claude for every lane under the line, to Free AI at it', async t => {
+  for (const lane of LANES) for (const [claude, engine] of [[50, 'claude'], [90, 'free-ai']]) await t.test(`${lane}: Claude ${claude}% -> ${engine}`, async t => {
+    const {broker, calls} = await setup(t, {week: 40, claude, hold: false});
+    capacity(broker);
+    assert.equal((await json(await broker.call(lane, body))).engine, engine); assert.equal(calls.claudeCli, engine === 'claude' ? 1 : 0);
+  });
+});
+
+test('the broker\'s own share at 100% passes on like the week reading; a stale or malformed Claude reading is not a reason to stop', async t => {
+  const own = await setup(t, {week: null, claude: 50, hold: false});
+  await own.storage.put('meter', {...newMeter(day / 1000 + 3600), tokens: {pr: 0, scheduled: 101 * TOKENS_PER_PERCENT, bench: 0, drift: 0}});
+  assert.equal((await json(await own.broker.call('scheduled', body))).engine, 'claude');
+  t.mock.timers.reset(); t.mock.reset();
+  for (const [name, week] of Object.entries({'window already reset': {utilization: 0.99, resetsAt: day / 1000 - 1}, 'not a fraction': {utilization: 99, resetsAt: day / 1000 + 3600}, 'no seven-day window': null})) {
+    const {broker, storage, calls} = await setup(t, {hold: false});
+    await storage.put('claude:state', {limits: {status: 'allowed', sevenDay: week}});
+    assert.equal((await json(await broker.call('scheduled', body))).engine, 'claude', name); assert.equal(calls.claudeCli, 1);
+    t.mock.timers.reset(); t.mock.reset();
   }
-  assert.equal(calls.claudeCli, 0, 'the owner\'s Claude plan was not asked');
-  const pr = await json(await broker.call('pr', body));
-  assert.equal(pr.engine, 'codex'); assert.equal(pr.fellBack, undefined);
-  assert.equal((await json(await broker.health())).limits.usedPercent, 71);
 });
 
-test('PR reserve: the broker\'s own share reaching the line stops Claude the same way as the week reading', async t => {
-  const {broker, storage, calls} = await setup(t, {week: null, hold: false});
-  await storage.put('meter', {...newMeter(day / 1000 + 3600), tokens: {pr: 0, scheduled: 71 * TOKENS_PER_PERCENT, bench: 0, drift: 0}});
-  assert.equal((await json(await broker.call('scheduled', body))).engine, 'free-ai');
-  assert.equal(calls.claudeCli, 0);
-});
-
-test('PR reserve: at the line a search, an image or no Free AI gets the line\'s budget reason (a skip, its items wait for the next run), Claude not asked', async t => {
+test('Claude at 90%: a search, an image or no Free AI gets `budget:claude-week` (a skip, its items wait for the next run), Claude not asked', async t => {
   const cases = {search: [{search: true}, {}], image: [{images: [{name: 'a.png', base64: 'AAAA'}]}, {}], 'no Free AI configured': [{}, {extra: {FALLBACK_FREE_AI_DAY_USD: '0'}}]};
-  for (const [name, [asked, options]] of Object.entries(cases)) await t.test(name, async t => {
-    const {broker, calls} = await setup(t, {week: 71, hold: false, ...options});
-    const refused = await broker.call('scheduled', {...body, ...asked});
-    assert.equal(refused.status, 429); assert.equal((await json(refused)).why, 'budget:week 71% of 70% (scheduled)');
+  for (const lane of ['scheduled', 'pr']) for (const [name, [asked, options]] of Object.entries(cases)) await t.test(`${lane}: ${name}`, async t => {
+    const {broker, calls} = await setup(t, {claude: 91, hold: false, ...options});
+    const refused = await broker.call(lane, {...body, ...asked});
+    assert.equal(refused.status, 429); assert.equal((await json(refused)).why, 'budget:claude-week 91% of 90%');
     assert.equal(calls.claudeCli, 0); assert.equal(calls.free, 0);
   });
 });
 
-test('PR reserve: at the line Free AI\'s day cap used up is a budget refusal too, Claude not asked', async t => {
-  const {broker, storage, calls} = await setup(t, {week: 71, hold: false});
-  await storage.put(`fallback:${new Date(day).toISOString().slice(0, 10)}`, {spent: {'free-ai': 2_000_000}, held: {'free-ai': 0}, notified: {}});
-  const refused = await broker.call('scheduled', body);
-  assert.equal(refused.status, 429); assert.match((await json(refused)).why, /^budget:fallback-day /);
-  assert.equal(calls.claudeCli, 0);
+test('Claude at 90% and Codex at capacity: Codex\'s own failure stands for a search or an image Free AI cannot take, and neither Claude nor Free AI is asked (Gitar on #492)', async t => {
+  for (const [name, asked] of Object.entries({search: {search: true}, image: {images: [{name: 'a.png', base64: 'AAAA'}]}})) await t.test(name, async t => {
+    const {broker, calls} = await setup(t, {week: 40, claude: 90, hold: false});
+    capacity(broker);
+    const failed = await broker.call('pr', {...body, ...asked});
+    assert.equal(failed.status, 502); assert.match((await json(failed)).why, /capacity/); assert.equal(calls.claudeCli, 0); assert.equal(calls.free, 0);
+  });
 });
 
-test('PR reserve: at the line a Free AI that really failed keeps its own reason, a failure the job shows (owner, 4 Nov 2026), Claude not asked', async t => {
+test('Claude at 90%: Free AI\'s day cap used up is a budget refusal too, and a Free AI that really failed keeps its own reason', async t => {
+  const capped = await setup(t, {claude: 90, hold: false});
+  await capped.storage.put(`fallback:${new Date(day).toISOString().slice(0, 10)}`, {spent: {'free-ai': 2_000_000}, held: {'free-ai': 0}, notified: {}});
+  const refused = await capped.broker.call('scheduled', body);
+  assert.equal(refused.status, 429); assert.match((await json(refused)).why, /^budget:fallback-day /);
+  assert.equal(capped.calls.claudeCli, 0);
   const cases = {'invalid JSON': [{schema: {type: 'object'}}, () => ({response: 'not json', usage: {prompt_tokens: 100, completion_tokens: 20}}), 'fallback:invalid-json'], 'Workers AI down': [{}, () => { throw new Error('down'); }, 'fallback:unavailable']};
   for (const [name, [asked, free, why]] of Object.entries(cases)) await t.test(name, async t => {
-    const {broker, calls} = await setup(t, {week: 71, hold: false, free});
+    const {broker, calls} = await setup(t, {claude: 90, hold: false, free});
     const failed = await broker.call('scheduled', {...body, ...asked});
     assert.equal(failed.status, 503); assert.equal((await json(failed)).why, why);
     assert.equal(calls.claudeCli, 0);
   });
 });
 
-test('PR reserve: at the line a lost login still stands when Codex is reached, Free AI does not hide it (review)', async t => {
-  const {broker, storage, calls} = await setup(t, {week: 71, hold: false});
-  await storage.put('adapt', {demoted: {codex: day + 60_000}});
-  await storage.put('lost', true);
-  const refused = await broker.call('scheduled', body);
-  assert.equal(refused.status, 503); assert.equal((await json(refused)).why, 'login-lost');
-  assert.equal(calls.free, 0); assert.equal(calls.claudeCli, 0);
-});
-
-test('PR reserve: a demoted Codex does not put Claude in front of scheduled work at the line', async t => {
-  const {broker, storage, calls} = await setup(t, {week: 71, hold: false});
-  await storage.put('adapt', {demoted: {codex: day + 60_000}});
-  assert.equal((await json(await broker.call('scheduled', body))).engine, 'free-ai');
-  assert.equal(calls.claudeCli, 0);
-});
-
-test('PR reserve: a call that names Claude, or a broker set to Claude first, is a choice and not a spill: Claude answers at the line', async t => {
-  for (const asked of [{engine: 'claude'}, {engine: 'claude', only: true}]) {
-    const {broker, calls} = await setup(t, {week: 71, hold: false});
-    assert.equal((await json(await broker.call('scheduled', {...body, ...asked}))).engine, 'claude');
-    assert.equal(calls.claudeCli, 1);
+test('Claude at 90%: a lost login still stands when Codex is reached, and a demoted Codex does not put Claude in front', async t => {
+  const lost = await setup(t, {claude: 95, hold: false});
+  await lost.storage.put('adapt', {demoted: {codex: day + 60_000}});
+  await lost.storage.put('lost', true);
+  const refused = await lost.broker.call('scheduled', body);
+  assert.equal(refused.status, 503); assert.equal((await json(refused)).why, 'login-lost'); assert.equal(lost.calls.free, 0); assert.equal(lost.calls.claudeCli, 0);
+  t.mock.timers.reset(); t.mock.reset();
+  for (const [claude, engine] of [[95, 'free-ai'], [50, 'claude']]) {
+    const {broker, storage, calls} = await setup(t, {claude, hold: false});
+    await storage.put('adapt', {demoted: {codex: day + 60_000}});
+    assert.equal((await json(await broker.call('scheduled', body))).engine, engine); assert.equal(calls.claudeCli, engine === 'claude' ? 1 : 0);
     t.mock.timers.reset(); t.mock.reset();
   }
-  const {broker} = await setup(t, {engine: 'claude', week: 71, hold: false});
-  assert.equal((await json(await broker.call('scheduled', body))).engine, 'claude');
 });
 
-test('PR reserve: below the line Codex at capacity still passes scheduled work to Claude (the line changes only the line)', async t => {
-  const {broker} = await setup(t, {week: 69, hold: false});
-  const fetcher = broker.containerFetch;
-  broker.containerFetch = async (url, init) => String(url).endsWith('/call') ? new Response(JSON.stringify({error: 'codex-failed:1 Selected model is at capacity'}), {status: 502}) : fetcher(url, init);
-  assert.equal((await json(await broker.call('scheduled', body))).engine, 'claude');
-});
-
-test('by-hand Search check (owner, 8 Nov 2026): Codex answers past the 70% line; Codex at capacity or the week used up goes to Free AI, never Claude (Gitar on web#489)', async t => {
-  const past = await setup(t, {week: 80, hold: false});
-  assert.equal((await json(await past.broker.call('byhand', body))).engine, 'codex');
+test('a call that names Claude is held to the line too: answered under 90%, Free AI or the budget refusal at it', async t => {
+  const under = await setup(t, {week: 40, claude: 50, hold: false});
+  assert.equal((await json(await under.broker.call('scheduled', {...body, engine: 'claude'}))).engine, 'claude');
   t.mock.timers.reset(); t.mock.reset();
-  const busy = await setup(t, {week: 69, hold: false});
-  const fetcher = busy.broker.containerFetch;
-  busy.broker.containerFetch = async (url, init) => String(url).endsWith('/call') ? new Response(JSON.stringify({error: 'codex-failed:1 Selected model is at capacity'}), {status: 502}) : fetcher(url, init);
-  assert.equal((await json(await busy.broker.call('byhand', body))).engine, 'free-ai');
-  assert.equal(busy.calls.claudeCli, 0);
+  const over = await setup(t, {week: 100, claude: 90, hold: false});
+  const named = await json(await over.broker.call('scheduled', {...body, engine: 'claude'}));
+  assert.equal(named.engine, 'free-ai'); assert.equal(over.calls.claudeCli, 0);
+  const strict = await over.broker.call('scheduled', {...body, engine: 'claude', only: true});
+  assert.equal(strict.status, 429); assert.equal((await json(strict)).why, 'budget:claude-week 90% of 90%');
   t.mock.timers.reset(); t.mock.reset();
-  const out = await setup(t, {week: 100, hold: false});
-  assert.equal((await json(await out.broker.call('byhand', body))).engine, 'free-ai');
-  assert.equal(out.calls.claudeCli, 0);
+  const first = await setup(t, {engine: 'claude', week: 100, claude: 95, hold: false});
+  assert.equal((await json(await first.broker.call('scheduled', body))).engine, 'free-ai'); assert.equal(first.calls.claudeCli, 0);
 });
 
-test('PR reserve: a PR check passes on only when the whole week is used up (100%), as before', async t => {
-  const {broker} = await setup(t, {week: 100, hold: false});
-  const pr = await json(await broker.call('pr', body));
-  assert.equal(pr.engine, 'claude'); assert.equal(pr.fellBack[0].why, 'ran-out');
-});
-
-test('PR reserve: with no other engine to pass on to, scheduled work at 71% is refused with the reason (a control no engine bypasses)', async t => {
-  const {broker} = await setup(t, {week: 71, hold: false, extra: {CLAUDE_CODE_OAUTH_TOKEN: undefined, FALLBACK_FREE_AI_DAY_USD: '0'}});
+test('with no other engine to pass on to, Codex used up and Claude at 95% is refused with the Claude reason', async t => {
+  const {broker} = await setup(t, {week: 100, claude: 95, hold: false, extra: {FALLBACK_FREE_AI_DAY_USD: '0'}});
   const refused = await broker.call('scheduled', body);
-  assert.equal(refused.status, 429); assert.equal((await json(refused)).why, 'budget:week 71% of 70% (scheduled)');
+  assert.equal(refused.status, 429); assert.equal((await json(refused)).why, 'budget:claude-week 95% of 90%');
+});
+
+test('/health says each lane\'s lines: the Codex week per lane, the day caps and the Claude week', async t => {
+  const {broker} = await setup(t, {hold: false});
+  const {lines} = await json(await broker.health());
+  assert.deepEqual(lines.week, {pr: 100, byhand: 100, scheduled: 100, bench: 100, drift: 100}); assert.deepEqual(lines.daily, {drift: 24, byhand: 800}); assert.equal(lines.claude, 90);
+});
+
+test('a call waiting for a Claude slot is held to the line again when it gets the slot: a Claude call that finished meanwhile moved the week to 90% (code-review, Gitar on #492)', async t => {
+  const cases = {search: {search: true}, image: {images: [{name: 'a.png', base64: 'AAAA'}]}, 'strict Claude call': {engine: 'claude', only: true}};
+  for (const [name, asked] of Object.entries(cases)) await t.test(name, async t => {
+    const {broker, storage, calls, fill, releaseOne, drain} = await setup(t, {week: 100, claude: 89});
+    const running = await fill();   // three pinned searches hold Claude's three slots
+    const waiter = broker.call('pr', {...body, ...asked});   // admitted at 89%, waits for a slot with no deadline
+    await until(() => broker.claudeGate.stats().waiting.pr === 1);
+    await storage.put('claude:state', {limits: {status: 'allowed', sevenDay: {utilization: 0.91, resetsAt: day / 1000 + 3600, status: 'allowed'}}});   // a finished call wrote 91%
+    releaseOne();
+    const refused = await waiter;
+    assert.equal(refused.status, 429); assert.equal((await json(refused)).why, 'budget:claude-week 91% of 90%');
+    assert.equal(calls.claudeCli, 3, 'the waiter never started a Claude call'); assert.equal(calls.free, 0);
+    await drain(Promise.all(running));
+  });
+});
+
+test('a rate_limit_event with no seven-day window keeps the known reading until its own reset', async t => {
+  const {broker, storage} = await setup(t, {week: 100, claude: 89, hold: false});
+  broker.containerFetch = async url => String(url).endsWith('/claude') ? new Response(JSON.stringify({reply: 'x', tokens: {input: 1, output: 1}, ms: 1, limits: {status: 'allowed', fiveHour: {utilization: 0.1, resetsAt: day / 1000 + 100}, sevenDay: null}})) : success();
+  assert.equal((await json(await broker.call('pr', body))).engine, 'claude');
+  assert.equal((await storage.get('claude:state')).limits.sevenDay.utilization, 0.89, 'the week reading stood');
+  await storage.put('claude:state', {limits: {status: 'allowed', sevenDay: {utilization: 0.89, resetsAt: day / 1000 - 1}}});   // a window already reset is not kept
+  assert.equal((await json(await broker.call('pr', body))).engine, 'claude');
+  assert.equal((await storage.get('claude:state')).limits.sevenDay, null);
 });
