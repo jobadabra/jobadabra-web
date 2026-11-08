@@ -106,6 +106,9 @@ test('the lines /health shows are the ones allow() uses', () => {
     assert.equal(allow(lane, newMeter(2000000000), lines.week[lane] - 0.1).ok, true); assert.equal(allow(lane, newMeter(2000000000), lines.week[lane]).ok, false);
   }
   assert.equal(lines.daily, DAILY); assert.equal(lines.claude, 90);
+  assert.deepEqual(lines.claudeWeek, {usedPercent: null, resetsAt: null}, 'no reading: unknown');
+  assert.deepEqual(linesOf(LANES, {sevenDay: {utilization: 0.62, resetsAt: 2000000100}}, 2000000000).claudeWeek, {usedPercent: 62, resetsAt: 2000000100});
+  assert.deepEqual(linesOf(LANES, {sevenDay: {utilization: 0.62, resetsAt: 1999999999}}, 2000000000).claudeWeek, {usedPercent: null, resetsAt: null}, 'a window already reset is unknown');
 });
 
 test('only the exact nightly workflow gets drift; PR priority and verified workflow precedence remain', () => {
