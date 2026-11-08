@@ -74,6 +74,7 @@ test('the person turned the row off: no mail, and the night is not mailed later 
   assert.equal(await setChoice(e, addr, 'app-ready', false, 'app', now), true);
   assert.deepEqual(await mailNight(e, night(e, ['prepared']), now), {skipped: 'person_off'});
   assert.equal(sent.length, 0);
+  assert.notEqual(mailed(e), null, 'the person\'s no keeps the night claimed: no mail later either');
 });
 
 test('nothing to check (walls, failures, cleared forms): no mail and the night stays unclaimed', async () => {
@@ -104,5 +105,37 @@ test('the cron tick that ends an over-time night sends its morning mail once, ev
   assert.equal(sent.length, 1);
   assert.equal(sent[0].subject, '2 applications are ready to check');
   assert.equal((await tick(e, new Date('2026-11-08T03:35:00Z'))).finished, 0);
+  assert.equal(sent.length, 1);
+});
+
+test('a capped night is mailed when its time is up, with the forms that finished after the cap counted', async () => {
+  const {e, sent} = await setup();
+  night(e, ['queued', 'queued'], {state: 'capped'});
+  // the AI call that crossed the cap: nothing was ready then, so nothing is mailed or claimed yet
+  assert.deepEqual(await mailNight(e, {id: 'night-1', install: INSTALL}, now), {skipped: 'nothing'});
+  e.STATS.db.prepare("UPDATE ready_jobs SET state = 'prepared' WHERE job = 'j0'").run();   // a form still filling reports after the cap
+  e.STATS.db.prepare("UPDATE ready_jobs SET state = 'partial' WHERE job = 'j1'").run();
+  assert.equal((await tick(e, new Date('2026-11-08T03:30:00Z'))).finished, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].subject, '2 applications are ready to check');
+});
+
+test('an address not confirmed yet that already got today\'s one mail: the morning mail waits for the digest, never dropped', async () => {
+  const {e, sent} = await setup({confirmed: false});
+  e.STATS.db.prepare("INSERT INTO mail_log (at, addr, list, template, status) VALUES ('2026-11-08T05:00:00.000Z', (SELECT email_hash FROM pro_accounts), 'service', 'message', 'sent')").run();
+  assert.deepEqual(await mailNight(e, night(e, ['prepared']), now), {skipped: 'held'});
+  assert.equal(sent.length, 0);
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM mail_held WHERE mail_row = ?').get('app-ready').n, 1);
+});
+
+test('a send that fails gives the night back: the next end of it mails', async () => {
+  const {e, sent} = await setup();
+  const real = e.EMAIL.send;
+  e.EMAIL.send = async () => { throw new Error('provider down'); };
+  const batch = night(e, ['prepared']);
+  assert.deepEqual(await mailNight(e, batch, now), {skipped: 'failed'});
+  assert.equal(mailed(e), null);
+  e.EMAIL.send = real;
+  assert.deepEqual(await mailNight(e, batch, now), {sent: true});
   assert.equal(sent.length, 1);
 });

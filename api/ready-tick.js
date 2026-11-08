@@ -17,7 +17,8 @@ export async function tick(env, now = new Date()) {
   for (const row of over) {
     await env.STATS.prepare(`UPDATE ready_jobs SET state = 'failed', wall = 'timeout', at = ?, step = NULL, step_n = NULL WHERE batch = ? AND state IN ${LIVE}`).bind(stamp, row.id).run();
     await env.STATS.prepare("UPDATE ready_batches SET state = 'finished', finished_at = ? WHERE id = ?").bind(stamp, row.id).run();
-    if (row.state === 'running') { await reportNight(env, row, now); await mailNight(env, row, now); }   // a capped night was reported (and mailed) when it was capped
+    if (row.state === 'running') await reportNight(env, row, now);   // a capped night was reported when it was capped
+    await mailNight(env, row, now);   // running or capped: the night's time is up, so every form that will report has (the claim keeps it to one mail)
     await closeNight(env, row.id);
     out.finished++;
   }
