@@ -5,7 +5,7 @@
 import {Container, getContainer} from '@cloudflare/containers';
 import {verifyRunToken, githubJwks} from './lib/oidc.mjs';
 import {laneOf, queueOf} from './lib/lanes.mjs';
-import {allow, offClaude, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
+import {allow, heldByReserve, offClaude, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
 import {refuseReply} from './lib/guard.mjs';
 import {slots} from './lib/queue.mjs';
 import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
@@ -173,7 +173,8 @@ export class CodexBroker extends Container {
       return check;
     });
     if (!verdict.ok && !verdict.ranOut) return json(429, {why: verdict.why});   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
-    const atLine = noClaude && verdict.ranOut === true, walk = atLine ? chain.filter(engine => engine !== 'claude') : chain;
+    // Why (8 Nov 2026, Gitar on web#489): a by-hand Search check passes the broker's own check up to 100%, so Codex really running out or at capacity reached Claude through the walk; its lane is off Claude whatever the verdict.
+    const atLine = noClaude && (verdict.ranOut === true || !heldByReserve(lane)), walk = atLine ? chain.filter(engine => engine !== 'claude') : chain;
     const later = walk.slice(walk.indexOf('codex') + 1).filter(engine => configured(engine, env));   // the part of this call's walk after Codex
     const note = newNote(), ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note}, day = new Date(Date.now()).toISOString().slice(0, 10), skipped = [];
     let busyPassed = false, held = null, codexRefusal = null;   // busyPassed: Claude's slots were full for too long and the call went on; held: the last refusal of an engine it went on to; codexRefusal: Codex's own 502 when it passed on for capacity

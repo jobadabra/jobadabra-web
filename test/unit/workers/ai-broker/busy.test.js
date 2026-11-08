@@ -243,6 +243,21 @@ test('PR reserve: below the line Codex at capacity still passes scheduled work t
   assert.equal((await json(await broker.call('scheduled', body))).engine, 'claude');
 });
 
+test('by-hand Search check (owner, 8 Nov 2026): Codex answers past the 70% line; Codex at capacity or the week used up goes to Free AI, never Claude (Gitar on web#489)', async t => {
+  const past = await setup(t, {week: 80, hold: false});
+  assert.equal((await json(await past.broker.call('byhand', body))).engine, 'codex');
+  t.mock.timers.reset(); t.mock.reset();
+  const busy = await setup(t, {week: 69, hold: false});
+  const fetcher = busy.broker.containerFetch;
+  busy.broker.containerFetch = async (url, init) => String(url).endsWith('/call') ? new Response(JSON.stringify({error: 'codex-failed:1 Selected model is at capacity'}), {status: 502}) : fetcher(url, init);
+  assert.equal((await json(await busy.broker.call('byhand', body))).engine, 'free-ai');
+  assert.equal(busy.calls.claudeCli, 0);
+  t.mock.timers.reset(); t.mock.reset();
+  const out = await setup(t, {week: 100, hold: false});
+  assert.equal((await json(await out.broker.call('byhand', body))).engine, 'free-ai');
+  assert.equal(out.calls.claudeCli, 0);
+});
+
 test('PR reserve: a PR check passes on only when the whole week is used up (100%), as before', async t => {
   const {broker} = await setup(t, {week: 100, hold: false});
   const pr = await json(await broker.call('pr', body));
