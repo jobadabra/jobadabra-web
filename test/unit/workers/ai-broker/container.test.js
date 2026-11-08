@@ -40,12 +40,12 @@ test('a multi-megabyte fixer prompt reaches the child intact without entering ar
   vm.runInNewContext(fs.readFileSync(new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, ''), {
     http: {createServer(fn) { handler = fn; return {listen() {}}; }},
     fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, turnUsage, Buffer, setTimeout, clearTimeout, setInterval,
-    process: {env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: ''}},
+    process: {on() {}, env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: ''}},
   });
   const prompt = '--private fixture\n' + 'é'.repeat(2 * 1024 * 1024);
   const request = new EventEmitter(); request.url = '/call'; request.method = 'POST';
   const result = new Promise(resolve => {
-    handler(request, {setHeader() {}, end(text) { resolve({status: this.statusCode, body: JSON.parse(text)}); }});
+    handler(request, {setHeader() {}, once() {}, end(text) { resolve({status: this.statusCode, body: JSON.parse(text)}); }});
   });
   request.emit('data', Buffer.from(JSON.stringify({prompt, images: [{name: 'image.png', base64: ''}]})));
   request.emit('end');
@@ -87,12 +87,12 @@ test('the container passes search through to Codex and preserves ordinary replie
   vm.runInNewContext(source.replace(/^import .*;\n/gm, ''), {
     http: {createServer(fn) { handler = fn; return {listen() {}}; }},
     fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, turnUsage, Buffer, setTimeout, clearTimeout, setInterval,
-    process: {env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: ''}},
+    process: {on() {}, env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: ''}},
   });
   for (const option of [{}, {search: false}, {search: true}]) {
     const request = new EventEmitter(); request.url = '/call'; request.method = 'POST';
     const result = new Promise(resolve => {
-      const response = {setHeader() {}, end(text) { resolve({status: this.statusCode, body: JSON.parse(text)}); }};
+      const response = {setHeader() {}, once() {}, end(text) { resolve({status: this.statusCode, body: JSON.parse(text)}); }};
       handler(request, response);
     });
     request.emit('data', Buffer.from(JSON.stringify({prompt: '--prompt', model: 'gpt-6.1-sol', schema: {type: 'object'}, images: [{name: 'picture.png', base64: Buffer.from('image fixture').toString('base64')}], ...option})));
@@ -146,11 +146,11 @@ test('the Codex week figure is read once, then served from memory and refreshed 
   const load = ttl => vm.runInNewContext(fs.readFileSync(new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, ''), {
     http: {createServer(fn) { handler = fn; return {listen() {}}; }},
     fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, turnUsage, Buffer, setTimeout, clearTimeout, setInterval,
-    process: {env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: '', LIMITS_TTL_MS: String(ttl)}},
+    process: {on() {}, env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: '', LIMITS_TTL_MS: String(ttl)}},
   });
   const call = () => new Promise(resolve => {
     const request = new EventEmitter(); request.url = '/call'; request.method = 'POST';
-    handler(request, {setHeader() {}, end(text) { resolve(JSON.parse(text)); }});
+    handler(request, {setHeader() {}, once() {}, end(text) { resolve(JSON.parse(text)); }});
     request.emit('data', Buffer.from(JSON.stringify({prompt: 'p', model: 'm'}))); request.emit('end');
   });
   load(60000);

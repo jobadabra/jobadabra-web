@@ -21,6 +21,8 @@ export {ContainerProxy} from '@cloudflare/containers';   // required by the outb
 
 const PARALLEL = 4;  // PR 0 (28 Oct 2026): 4 at once, 60 of 60 answered
 const CLAUDE_PARALLEL = 3;
+const CALLER_WAIT_MS = 180_000, CODEX_GUARD_MS = 100_000, START_MS = 10_000;   // the callers' own wait (desktop/e2e/lib/broker-client.mjs: AbortSignal.timeout(180000), an abort is not retried), the container's Codex guard (container/server.mjs), a cold start
+const DRAIN_WAIT_MS = CALLER_WAIT_MS - CODEX_GUARD_MS - START_MS;   // Why (8 Nov 2026, Gitar on #501): a call that waits for the next container must still have time to run in it before its caller gives up, or the hand-over only moves the loss; past this it is passed on like any start-up failure (Claude, Free AI) instead of answered to nobody. Calls the old container is still finishing are guarded at 100 s (Codex) and 150 s (Claude), so a drain longer than this wait costs the refused call its Codex turn, as every deploy did before
 const HOSTS = ['chatgpt.com', 'auth.openai.com', 'api.openai.com', 'api.anthropic.com'];   // the only hosts the container may reach (the reply is the only way out); api.anthropic.com is the Claude engine's (1 Nov 2026), measured: telemetry is off, so nothing else is needed
 const pass = req => fetch(req);
 /** The text the model was given for one call (the prompt and, in a conversation, the turn's delta that reached the container); the reply guard lets a long run through only when it was copied from here. */
@@ -44,6 +46,7 @@ export class CodexBroker extends Container {
   gate = slots(PARALLEL);
   claudeGate = slots(CLAUDE_PARALLEL);   // Why (1 Nov 2026): one Claude CLI call peaks near 210 MB (measured) and the container has 1 GiB, so at most 3 at once, and each also holds one of the 4 shared slots
   turns = keyedLock();   // one turn at a time per Codex conversation (lib/sessions.mjs); other keys and plain calls never wait
+  drainWaitMs = DRAIN_WAIT_MS; drainPollMs = 1000;   // how long a call waits for a stopping container to hand over (toContainer); a test shortens both
   busyMs = BUSY_MS;   // how long a call that may pass on waits for a Claude slot (lib/busy.mjs); a test shortens it
   limits = null;   // the last whole-week reading from Codex: {usedPercent, resetsAt}
 
@@ -249,9 +252,9 @@ export class CodexBroker extends Container {
           console.log(JSON.stringify({codexCall: lane, session: session ? 'conversation' : 'single', ...line}));
           return line;
         };
-        const starting = !(await this.ctx.storage.get('answered').catch(() => true));   // a storage failure counts as answered: the failure stands, never hidden behind another engine
+        let starting = !(await this.ctx.storage.get('answered').catch(() => true));   // a storage failure counts as answered: the failure stands, never hidden behind another engine
         let reply, text;
-        try { reply = await this.containerFetch('http://c/call', {method: 'POST', body: JSON.stringify(sent)}); text = await reply.text(); }
+        try { reply = await this.toContainer('/call', JSON.stringify(sent), () => { starting = true; }); text = await reply.text(); }
         catch (error) { const line = mark('threw', {error: String(error?.message || error).slice(0, 80)}); const waiting = await this.whileStarting(hasLater, `call: ${String(error?.message || error)}`, starting, line).catch(() => null); if (waiting) return waiting; throw error; }   // a failing diagnostic never replaces the container's own error
         let answer;
         try { answer = JSON.parse(text); } catch { const line = mark(reply.status, {note: 'not JSON'}); return (await this.whileStarting(hasLater, `container: ${text}`, starting, line)) || json(502, {why: `container: ${text.slice(0, 300)}`, timeline: line}); }   // the platform's own error text (not our server's JSON): say it, never crash (a 1101 hid it, 28 Oct 2026)
@@ -279,6 +282,20 @@ export class CodexBroker extends Container {
         return json(200, {reply: answer.reply, tokens: {...answer.tokens, counted}, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'codex', timeline, ...(answer.session ? {session: answer.session} : {})});
       } finally { release(); }
     } finally { unlock(); }
+  }
+
+  // The one door from this class to the container for a call. Design (8 Nov 2026, bd; the container half is in container/server.mjs):
+  //   serving -> (deploy: SIGTERM) -> draining -> gone -> next container serving.
+  //   Owner of a call: the container that ACCEPTED it, until it replies. A draining container accepts no new call: it answers `x-broker-draining` before starting anything, so that call has no owner yet and is sent again here, until a container accepts it (the next one starts on the first request after the old one is gone). Nothing is retried that a container accepted: a cut call is never sent twice. No counter moves on a refusal (the week and day counts are written once, from an answer).
+  async toContainer(path, payload, refused = () => {}) {
+    const until = Date.now() + this.drainWaitMs;
+    for (;;) {
+      const reply = await this.containerFetch(`http://c${path}`, {method: 'POST', body: payload});
+      if (!reply.headers.get('x-broker-draining')) return reply;
+      refused();   // the container this call goes to next is a new one, which has answered nothing yet
+      if (Date.now() >= until) return reply;   // still draining after the wait: the 503 `draining` stands, and codexStep passes it on like any start-up failure
+      await new Promise(resolve => setTimeout(resolve, this.drainPollMs));
+    }
   }
 
   // Why (1 Nov 2026, first live Claude call failed with no reason shown): a failed Claude step says why in `fellBack[].detail` and /health `lastError`, scrubbed: nothing token-shaped, at most 200 characters.
@@ -312,7 +329,7 @@ export class CodexBroker extends Container {
       // Why (8 Nov 2026, code-review): the line was read when the call came in, and a call waits for a slot with no deadline (searches, the retry turn); a Claude call that finished meanwhile may have moved the week to 90%. Read it again with the slot in hand, so no call starts past the line.
       const late = await this.claudeLine();
       if (!late.ok) { await skip('claude', 'budget', false, late.why); return null; }
-      const reply = await this.containerFetch('http://c/claude', {method: 'POST', body: JSON.stringify({prompt: body.prompt, schema: body.schema, images: body.images, model, ...(body.search === true ? {search: true} : {})})});
+      const reply = await this.toContainer('/claude', JSON.stringify({prompt: body.prompt, schema: body.schema, images: body.images, model, ...(body.search === true ? {search: true} : {})}));
       let answer;
       let raw = '';
       try { raw = await reply.text(); answer = JSON.parse(raw); } catch { await this.claudeFailed(skip, 'platform: ' + raw); return null; }   // the platform's own error text, not our server's JSON
