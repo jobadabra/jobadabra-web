@@ -45,7 +45,8 @@ async function readinessNight() {
   let state = {state: 'running'};
   for (const end = Date.now() + READ_WAIT_MS; state.state === 'running' && Date.now() < end; await pause(2000)) state = await (await fetch(`${base}/state?t=check`)).json();
   const reads = seen.filter(s => s.route === '/api/ready/result' && s.body?.job === 'r1').map(s => s.body);
-  console.log(JSON.stringify({readiness: state.state, error: state.error || '', results: reads.map(r => `${r.job}:${r.task}:${r.state}${r.why ? `:${r.why}` : ''}`)}));
+  const heard = seen.slice(cut).map(s => `${s.method} ${s.route}${s.body?.step ? `:${s.body.step}` : ''}`);   // routes and step words only: what the stand-in site heard during the read
+  console.log(JSON.stringify({readiness: state.state, error: state.error || '', results: reads.map(r => `${r.job}:${r.task}:${r.state}${r.why ? `:${r.why}` : ''}`), heard}));
   if (state.state !== 'held') return `the readiness night ended "${state.state}"${state.error ? `: ${state.error}` : ''}`;
   if (reads.length !== 1) return `expected 1 read posted, got ${reads.length}`;
   if (reads[0].task !== 'readiness' || reads[0].state !== 'read' || !reads[0].read || typeof reads[0].read !== 'object') return `the read arrived as ${reads[0].task}:${reads[0].state}${reads[0].why ? `:${reads[0].why}` : ''}, not a readiness "read" with its flags`;

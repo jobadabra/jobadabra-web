@@ -127,14 +127,15 @@ async function result(request, env, now) {
   const reading = row.task === 'readiness', checked = reading ? checkRead(given) : null;   // the batch's task decides what it may report, whatever the body says (api/ready-read.js)
   if (!given || (reading ? !checked : !OUTCOMES.includes(given.state))) return bad('bad outcome');
   if (reading && checked.read && !env.READY_KEK) return notSetUp();
-  let kept = reading && checked.read ? checked : null;   // sealed BEFORE the row takes the outcome, so a take can never find a "read" row without its object (code review of 2/4)
+  const live = reading && checked.read && await env.STATS.prepare(`SELECT 1 AS n FROM ready_jobs WHERE batch = ? AND job = ? AND cleared_at IS NULL AND state IN ${LIVE}`).bind(row.id, String(given.job)).first();   // Why (Gitar on #504): a repeated result for a form already read must not overwrite or delete its stored read
+  let kept = live ? checked : null;   // sealed BEFORE the row takes the outcome, so a take can never find a "read" row without its object (code review of 2/4)
   if (kept) { try { await keepRead(env, row, String(given.job), kept.read, now); } catch { kept = null; checked.state = 'failed'; checked.why = 'store'; } }
   const filled = reading ? null : num(given.filled), left = reading ? null : num(given.left), state = reading ? checked.state : given.state === 'prepared' && !(filled > 0 && left === 0) ? 'partial' : given.state;
   const micro = num(given.costMicro) || 0;
   const changed = await env.STATS.prepare(`UPDATE ready_jobs SET state = ?, filled = ?, left_empty = ?, human_check = ?, wall = ?, ms = ?, cost_micro = cost_micro + ?, at = ?, step = NULL, step_n = NULL, again_from = NULL
     WHERE batch = ? AND job = ? AND cleared_at IS NULL AND state IN ${LIVE}`).bind(state, filled, left, !reading && given.humanCheck ? 1 : 0, reading ? checked.why : String(given.wall || '').slice(0, 40), num(given.ms), micro, stamp(now), row.id, String(given.job)).run();
   if (!changed.meta?.changes) {   // a form the owner stopped
-    if (kept) await env.HOSTED_STATE.delete(keptKey(row.install, 'read', row.id, String(given.job))).catch(() => {});   // its read is not kept (api/ready-line.js) keeps what it was put back to; an unknown one is refused
+    if (kept && (await env.STATS.prepare('SELECT state FROM ready_jobs WHERE batch = ? AND job = ?').bind(row.id, String(given.job)).first())?.state !== 'read') await env.HOSTED_STATE.delete(keptKey(row.install, 'read', row.id, String(given.job))).catch(() => {});   // the form was stopped between the check and the update: its read is not kept (a row that holds a read keeps it) (api/ready-line.js) keeps what it was put back to; an unknown one is refused
     const known = await env.STATS.prepare('SELECT 1 AS n FROM ready_jobs WHERE batch = ? AND job = ?').bind(row.id, String(given.job)).first();
     return known ? json({ok: true, dropped: true, stop: false}) : json({ok: false, error: 'unknown job'}, 404);
   }

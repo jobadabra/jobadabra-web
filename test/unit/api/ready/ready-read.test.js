@@ -126,6 +126,15 @@ test('the result of a readiness night is checked: only its outcomes, never a fil
   assert.equal((await call(fill, 'POST', 'result', {job: 'j1', task: 'readiness', state: 'read', read: READ}, {authorization: `Bearer ${await readyToken(fill, made)}`})).status, 400, 'a fill night never takes a read');
 });
 
+test('a repeated result for a form already read keeps its read (a container retry after a timeout)', async () => {
+  const {e, bearer} = await night();
+  const first = {job: 'j1', task: 'readiness', state: 'read', read: READ};
+  await call(e, 'POST', 'result', first, bearer);
+  assert.equal((await (await call(e, 'POST', 'result', {...first, read: {...READ, why: 'again'}}, bearer)).json()).dropped, true);
+  const taken = await (await call(e, 'POST', 'reads', {}, await owner())).json();
+  assert.deepEqual(taken.reads.map(read => [read.job, read.state, read.read]), [['j1', 'read', READ]], 'the first read is still there, unchanged');
+});
+
 test('a store error while taking leaves the read for the next call; a stopped form keeps no object', async () => {
   const {e, bearer} = await night();
   await call(e, 'POST', 'result', {job: 'j1', task: 'readiness', state: 'read', read: READ}, bearer);
