@@ -10,7 +10,7 @@ export const LIMITS = {own: {pr: 100, byhand: 100, scheduled: RESERVE_PCT, bench
 export const heldByReserve = lane => LIMITS.week[lane] < 100;
 /** Whether this lane's calls never pass on to Claude (the owner's own plan): the lanes the reserve holds, and by-hand Search checks (5 Nov 2026 rule kept for them on 8 Nov). */
 export const offClaude = lane => heldByReserve(lane) || lane === 'byhand';
-export const DAILY = {drift: 24, byhand: 800};   // Why (30 Oct 2026, owner, JOB-45): 20 stored-answer prompts + up to 4 judges per UTC day; the broker must stop reruns and failed calls from exceeding 24. byhand: "about 1 run a day" (owner, 8 Nov 2026), one 18-persona press is ~500 calls, so a second full run the same day is cut.
+export const DAILY = {drift: 24, byhand: 800};   // Why (30 Oct 2026, owner, JOB-45): 20 stored-answer prompts + up to 4 judges per UTC day; the broker must stop reruns and failed calls from exceeding 24. byhand: "about 1 run a day" (owner, 8 Nov 2026), one 18-persona press is ~400-500 calls, so a second full run the same day is cut; press tapes share it (8 Nov 2026: ~45+ calls a persona, so about 6 personas a day).
 // Seed for tokens per 1% of the week (PR 0, 28 Oct 2026: 1% >= ~40 calls of ~18k tokens); the broker replaces it with its measured ratio.
 export const TOKENS_PER_PERCENT = 720000;
 

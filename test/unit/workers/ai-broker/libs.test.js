@@ -60,8 +60,11 @@ test('a by-hand Search check (its by-hand environment) gets the by-hand lane; th
   assert.equal(laneOf({event_name: 'workflow_dispatch', workflow_ref: search, environment: 'search-check-by-hand'}), 'byhand');
   assert.equal(laneOf({event_name: 'workflow_dispatch', job_workflow_ref: search, environment: 'search-check-by-hand'}), 'byhand');
   assert.equal(laneOf({event_name: 'workflow_dispatch', workflow_ref: search}), 'scheduled', 'the nightly (no environment) stays scheduled');
+  const tapes = 'GarryOne/jobadabra/.github/workflows/press-tapes.yml@refs/heads/main';   // owner, 8 Nov 2026: "Yes, tapes use it too (Recommended)"
+  assert.equal(laneOf({event_name: 'workflow_dispatch', workflow_ref: tapes, environment: 'search-check-by-hand'}), 'byhand');
+  assert.equal(laneOf({event_name: 'workflow_dispatch', workflow_ref: tapes}), 'scheduled');
   assert.equal(laneOf({event_name: 'workflow_dispatch', workflow_ref: search, environment: 'other'}), 'scheduled');
-  for (const other of ['central-scout.yml', 'search-personas-extra.yml', 'job-search-benchmark.yml']) {
+  for (const other of ['central-scout.yml', 'search-personas-extra.yml', 'press-tapes-old.yml', 'job-search-benchmark.yml']) {
     assert.notEqual(laneOf({event_name: 'workflow_dispatch', workflow_ref: `GarryOne/jobadabra/.github/workflows/${other}@refs/heads/main`, environment: 'search-check-by-hand'}), 'byhand', other);
   }
   assert.ok(LANES.includes('byhand'));
