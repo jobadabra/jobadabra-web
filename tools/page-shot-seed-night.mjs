@@ -3,7 +3,7 @@
 // fictional personas and counts. Laid over the product-quality seed, so Report only shows the Search area beside the other areas.
 import {readFileSync} from 'node:fs';
 import {writeState} from '../admin/ci-state.js';
-import {STATE_KEY, clean} from '../admin/search-night.js';
+import {STATE_KEY, clean, nights} from '../admin/search-night.js';
 
 // Why (6 Nov 2026, #461 and #466 red): the admin walks run EVERY seed on ONE database, and the quality seed's fill cards have fixed ids, so a second run of it died on UNIQUE fill_cards.id.
 // Every seed here that lays over it goes through this one helper, so a third night seed cannot repeat it.
@@ -53,4 +53,16 @@ export async function searchTrend({env}, seeds) {
   for (let back = 19; back >= 13; back--) kept.push(build(back, 6, 5 - (back % 2), 0));
   for (let back = 12; back >= 0; back--) if (back !== 9) kept.push(build(back, 18, back === 0 ? 8 : 15 + (back % 3), back === 6 ? 13 : back % 4 === 1 ? 2 : 0));
   await writeState(env, STATE_KEY, {nights: kept.reverse().map(item => ({...item, at: `${item.night}T04:00:00.000Z`}))}, now);
+}
+
+// The Night search tab with the step yield (8 Nov 2026, [pl]): the 18-candidate seed, and on its newest night MADE-UP step yields (scoring, job boards, employer sites, free job APIs) for the candidates that were measured; job
+// boards and employer sites carry no seconds, as the first jobadabra build that reports them. Nothing here is a real person or a real count.
+/** @param {{env: object}} context the seed context; `seeds` the seed table */
+export async function searchNightYield({env}, seeds) {
+  await searchNight18({env}, seeds);
+  const kept = await nights(env), [last] = kept;
+  const row = (step, seconds, jobs, local, localFit70) => ({step, seconds, jobs, local, scored: local, fit70: localFit70 + 1, localFit70});
+  last.rows = last.rows.map((item, i) => (item.kind !== 'measured' ? item : {...item, stepYield: [row('scoring', 20 + (i % 5) * 9, 18 + i, 4 + (i % 4), 1 + (i % 3)), row('job_boards', null, 10 + (i % 6), 2 + (i % 3), i % 2),
+    row('employer_sites', null, 30 + i * 3, 5 + (i % 5), 1 + (i % 2)), row('free_job_apis', 6 + (i % 4) * 5, 9 + (i % 7), 1 + (i % 3), i % 2)]}));
+  await writeState(env, STATE_KEY, {nights: kept}, new Date());
 }

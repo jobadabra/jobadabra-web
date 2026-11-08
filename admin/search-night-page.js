@@ -6,6 +6,7 @@ import {BAND_STYLE, verdictBand} from './verdict-band.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {COUNTERS} from './search-night-counters.js';
 import {EMPLOYER_SITES, HISTORY, SPREADS, reasonWords} from './search-night-judge.js';
+import {stepYieldSection} from './search-night-yield.js';
 import {TREND_STYLE, trendSection} from './search-night-trend.js';
 import {VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 
@@ -60,7 +61,7 @@ export function nightSection(judged, refs = {}) {
   return `${band}
 <section class="card"><h2>The ${last.total} candidates, night ${esc(last.night)}</h2><div class="scroll"><table><tr><th>Candidate</th><th>Result</th><th class="num">Relevant local · found</th><th class="num">Found of reference</th><th class="num">Press</th><th>Time ran out for</th></tr>${last.rows.map(row => personaRow(row, refs)).join('')}</table></div>
 <p class="muted">${last.out ? `On this night time ran out for employer sites in ${last.out} of ${last.total} personas.` : 'On this night employer sites were read in every persona.'}</p></section>
-${trendSection(judged)}
+${stepYieldSection(last.rows, last.night)}${trendSection(judged)}
 <section class="card"><h2>Last ${shown.length} night${shown.length === 1 ? '' : 's'}</h2>${strip(shown)}<div class="scroll"><table><tr><th>Night</th><th class="num">Measured</th><th class="num">Relevant local jobs</th><th class="num">Press (median)</th><th class="num">Employer sites out of time</th><th>Result</th></tr>${shown.map(nightRow).join('')}</table></div></section>
 <section class="card"><h2>How a night is judged</h2><p class="muted">A night <b>dropped</b> when any of three things holds: fewer than two thirds of the candidates were measured (a candidate is measured when the check found at least one right job for them, within the press limit); the relevant local jobs of all candidates, added up, fell below the median of the last ${HISTORY} nights with the same candidates minus ${SPREADS} spreads (the same rule the PR gate uses, a spread being the standard deviation of those nights; silent until ${HISTORY} earlier nights are stored); or time ran out for employer sites in two thirds or more of the candidates. Each candidate also shows its own usual (its median of those nights) and, once the weekly reference has run, how many of the right local jobs EURES lists (read outside the app) the night found. A candidate under its own usual is shown, never alarmed on its own. Under each reference the step counters of that candidate's press are listed (<b>EU portal jobs our read listed</b>, <b>employer sites read</b>, <b>titles asked</b>, <b>AI calls</b>, <b>seconds to the first job</b>); one that fell beyond the spread of its own last ${HISTORY} nights is marked with its usual and named in the head above (report only: it never drops a night by itself). A dropped night tells you once a day (Operations → Notifications, "Night search dropped"). The last 30 nights are kept; counts and seconds only, no job or company text.</p></section>`;
 }
