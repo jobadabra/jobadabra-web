@@ -95,7 +95,7 @@ export async function freeAi(request, env, now = new Date(), ctx = null, fetcher
   const began = Date.now();   // before a Pro step's Claude try (up to 50 s, shared/pro-claude.js), so a 502's ms= counts it (Gitar on #414)
   const claude = routed ? await claudeCall(env, routed, body, fetcher) : null;   // null on any failure: Workers AI answers below
   const model = claude ? routed : modelFor(request.headers.get('x-jp-action'), env);
-  let result;
+  let result, structured = false;
   // Why (5 Nov 2026, the first production hosted run: two 502s after 163 s and 173 s with no reason logged): a 502 names its cause.
   const failed = cause => { console.error(`free-ai 502: ${cause} model=${model}${routed ? ` claude=${routed} failed` : ''} action=${request.headers.get('x-jp-action') || '-'} ms=${Date.now() - began}`); return error(502, 'Free AI could not answer just now.'); };
   if (!claude) try {
@@ -104,12 +104,15 @@ export async function freeAi(request, env, now = new Date(), ctx = null, fetcher
       const [page] = await env.AI.toMarkdown([{name: 'cv.pdf', blob: new Blob([bytes], {type: 'application/pdf'})}]);
       return page?.data || '';
     };
-    const input = await toWorkersAi(body, readPdf, request.headers.get('x-jp-action') || '');   // the step picks the temperature (reading steps 0; desktop/lib/free-ai-models.js temperatureFor)
+    // Why (8 Nov 2026, fr; owner: "Open it now"): whether the ask wants JSON is read from the ask itself, not from `response_format` in the request built for the model: Gemma 4 gets its schema written into the prompt (desktop/lib/free-ai-translate.js), so that field is gone.
+    // The model is passed on because the translator shapes the request by it.
+    structured = Boolean(body.output_config?.format?.schema);
+    const input = await toWorkersAi(body, readPdf, request.headers.get('x-jp-action') || '', model);   // the step picks the temperature (reading steps 0; desktop/lib/free-ai-models.js temperatureFor)
     result = await env.AI.run(model, input);
     // Live (16 Oct 2026, 1 of 30): the model looped on whitespace to the token limit. A structured ask gets one more try, and both attempts are paid for.
-    if (input.response_format && !isJson(fromWorkersAi(result, model).content[0].text)) {
-      const first = fromWorkersAi(result, model).usage, again = await env.AI.run(model, {...input, temperature: body.temperature ?? 0.3});
-      if (!isJson(fromWorkersAi(again, model).content[0].text)) return failed('two bad JSON replies');
+    if (structured && !isJson(fromWorkersAi(result, model, structured).content[0].text)) {
+      const first = fromWorkersAi(result, model, structured).usage, again = await env.AI.run(model, {...input, temperature: body.temperature ?? 0.3});
+      if (!isJson(fromWorkersAi(again, model, structured).content[0].text)) return failed('two bad JSON replies');
       result = {...again, usage: {prompt_tokens: (again.usage?.prompt_tokens || 0) + first.input_tokens, completion_tokens: (again.usage?.completion_tokens || 0) + first.output_tokens}};
     }
   } catch (caught) {
@@ -117,7 +120,7 @@ export async function freeAi(request, env, now = new Date(), ctx = null, fetcher
     if (caught instanceof Unsupported) return error(422, `${caught.message} Add your own key in Settings → Connections → AI for this step.`, 'invalid_request_error');
     return failed(`Workers AI failed: ${String(caught?.message || caught).slice(0, 200)}`);
   }
-  const message = claude ? claude.message : fromWorkersAi(result, model);
+  const message = claude ? claude.message : fromWorkersAi(result, model, structured);
   const used = message.usage.input_tokens + message.usage.output_tokens, usd = claude ? claude.usd : costUsd(model, message.usage);
   const after = Math.round(usd * 1e6), freeUsd = claude ? 0 : usd, freeAfter = claude ? 0 : after;   // a Claude call is billed to the Pro credit only: Free's per-install, global and neuron counts measure Workers AI
   const work = Promise.all([

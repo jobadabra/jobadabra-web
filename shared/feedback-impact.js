@@ -6,6 +6,7 @@
 import {IMPACTS} from './feedback-actions.js';
 import {alertOwner} from './notify-send.js';
 import {SMALL, modelFor, costUsd} from './free-ai-models.js';
+import {fromWorkersAi, toWorkersAi} from './free-ai-translate.js';
 import {record} from './aicost.js';
 
 export const MAX_TRIES = 3, RETRY_DAYS = 7;
@@ -55,9 +56,9 @@ export async function attemptImpact(env, ref, now = new Date()) {
     const model = modelFor('feedback_impact', env);
     let answer = null, why = '';
     try {
-      const result = await env.AI.run(model, {messages: [{role: 'system', content: SYSTEM}, {role: 'user', content: messageOf(row)}], max_tokens: 400, temperature: 0,
-        response_format: {type: 'json_schema', json_schema: {name: 'impact', schema: SCHEMA}}});
-      answer = parseSuggestion(result?.choices?.[0]?.message?.content ?? result?.response);
+      // Why (8 Nov 2026, fr; owner: "Open it now"): the request is built by the same translator as every Free AI ask, so the model table alone decides how a schema is sent (Gemma 4 reads it in the prompt; a forced response_format made it loop on blank lines).
+      const result = await env.AI.run(model, await toWorkersAi({system: SYSTEM, messages: [{role: 'user', content: messageOf(row)}], max_tokens: 400, temperature: 0, output_config: {format: {type: 'json_schema', schema: SCHEMA}}}, async () => '', 'feedback_impact', model));
+      answer = parseSuggestion(fromWorkersAi(result, model, true).content[0].text);
       if (!answer) why = 'the answer was not high, medium or low';
       const usage = {input_tokens: result?.usage?.prompt_tokens || 0, output_tokens: result?.usage?.completion_tokens || 0};
       record(env, 'feedback-impact', 'other', model, usage, costUsd(model, usage), now).catch(() => {});   // the cost page shows it under "other"; never part of the verdict

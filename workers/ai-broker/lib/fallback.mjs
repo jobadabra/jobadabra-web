@@ -144,7 +144,8 @@ export async function freeAiStep({storage, env, body, lane, weekUsedPercent, fet
   if (!env.AI) { note.unavailable = true; return null; }
   const model = FREE_MODEL;
   let request;
-  try { request = await toWorkersAi(messageBody(body, 4096)); } catch { return json(503, {why: 'fallback:unsupported'}); }
+  // The model is named, not the table's default: the request's shape follows it (code review of the app move, 8 Nov 2026).
+  try { request = await toWorkersAi(messageBody(body, 4096), undefined, '', model); } catch { return json(503, {why: 'fallback:unsupported'}); }
   const room = outputRoom(request);
   if (room < FREE_AI_MIN_OUTPUT) return refusal('fallback:prompt-too-large', `prompt ${JSON.stringify(request).length} bytes leaves ${room} tokens in the ${FREE_WINDOW}-token window`);   // not the day cap: no note, nothing held, nothing sent
   const hold = await reserve(storage, env, day, request, room);
