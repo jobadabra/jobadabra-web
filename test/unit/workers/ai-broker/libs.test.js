@@ -2,8 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {verifyRunToken} from '../../../../workers/ai-broker/lib/oidc.mjs';
-import {laneOf, LANES} from '../../../../workers/ai-broker/lib/lanes.mjs';
-import {allow, newMeter, record, recordCall, callsToday, ownSharePct, TOKENS_PER_PERCENT} from '../../../../workers/ai-broker/lib/budget.mjs';
+import {laneOf, LANES, queueOf} from '../../../../workers/ai-broker/lib/lanes.mjs';
+import {allow, offClaude, DAILY, newMeter, record, recordCall, callsToday, ownSharePct, TOKENS_PER_PERCENT} from '../../../../workers/ai-broker/lib/budget.mjs';
 import {weeklyWindow} from '../../../../workers/ai-broker/container/weekly.mjs';
 import {refuseReply} from '../../../../workers/ai-broker/lib/guard.mjs';
 import {modelOf, tierOfClaude} from '../../../../workers/ai-broker/lib/tiers.mjs';
@@ -53,6 +53,35 @@ test('the lane comes from the verified claims', () => {
   assert.equal(laneOf({event_name: 'pull_request'}), 'pr');
   assert.equal(laneOf({event_name: 'schedule', job_workflow_ref: 'GarryOne/jobadabra/.github/workflows/central-scout.yml@refs/heads/main'}), 'scheduled');
   assert.equal(laneOf({event_name: 'workflow_dispatch', job_workflow_ref: 'GarryOne/jobadabra/.github/workflows/job-search-benchmark.yml@refs/heads/main'}), 'bench');
+});
+
+test('a by-hand Search check (its by-hand environment) gets the by-hand lane; the nightly and every other workflow keep theirs', () => {
+  const search = 'GarryOne/jobadabra/.github/workflows/search-personas.yml@refs/heads/main';
+  assert.equal(laneOf({event_name: 'workflow_dispatch', workflow_ref: search, environment: 'search-check-by-hand'}), 'byhand');
+  assert.equal(laneOf({event_name: 'workflow_dispatch', job_workflow_ref: search, environment: 'search-check-by-hand'}), 'byhand');
+  assert.equal(laneOf({event_name: 'workflow_dispatch', workflow_ref: search}), 'scheduled', 'the nightly (no environment) stays scheduled');
+  assert.equal(laneOf({event_name: 'workflow_dispatch', workflow_ref: search, environment: 'other'}), 'scheduled');
+  for (const other of ['central-scout.yml', 'search-personas-extra.yml', 'job-search-benchmark.yml']) {
+    assert.notEqual(laneOf({event_name: 'workflow_dispatch', workflow_ref: `GarryOne/jobadabra/.github/workflows/${other}@refs/heads/main`, environment: 'search-check-by-hand'}), 'byhand', other);
+  }
+  assert.ok(LANES.includes('byhand'));
+});
+
+// Owner, 8 Nov 2026 ("Fix Free AI + PR lane now (Recommended)": "by-hand Search checks may use the 30% PR reserve (about 1 run a day)"): the reserve, and nothing else PR checks have.
+test('a by-hand Search check may use the PR reserve to 100%, waits behind PR checks, never passes to Claude, and stops at its day cap', () => {
+  assert.equal(allow('byhand', newMeter(2000000000), 71).ok, true, 'past the 70% line it still runs');
+  assert.deepEqual(allow('byhand', newMeter(2000000000), 100), {ok: false, why: 'budget:week 100% of 100% (byhand)'});
+  assert.equal(queueOf('byhand'), 'scheduled');
+  assert.equal(queueOf('drift'), 'scheduled');
+  assert.equal(queueOf('pr'), 'pr');
+  assert.equal(offClaude('byhand'), true);
+  assert.equal(offClaude('scheduled'), true);
+  assert.equal(offClaude('pr'), false);
+  const day = 1999990000;
+  let m = newMeter(2000000000);
+  for (let i = 0; i < DAILY.byhand; i++) m = recordCall(m, 'byhand', day);
+  assert.deepEqual(allow('byhand', m, null, TOKENS_PER_PERCENT, day), {ok: false, why: `budget:daily ${DAILY.byhand} of ${DAILY.byhand} calls (byhand)`});
+  assert.equal(allow('byhand', m, null, TOKENS_PER_PERCENT, day + 86400).ok, true, 'a new UTC day starts at zero');
 });
 
 test('only the exact nightly workflow gets drift; PR priority and verified workflow precedence remain', () => {
