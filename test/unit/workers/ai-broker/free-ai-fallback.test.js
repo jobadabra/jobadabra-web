@@ -20,9 +20,10 @@ test('Codex out for the week: Free AI answers, keeps the schema, charges its own
   t.mock.method(Date, 'now', () => day);
   noPaidProvider(t);
   const env = fallbackEnv(async (model, request) => {
-    assert.equal(model, '@cf/qwen/qwen3-30b-a3b-fp8');
-    assert.deepEqual(request.response_format.json_schema.schema, {type: 'object'});
-    assert.equal(request.messages[0].content, 'offline test');
+    assert.equal(model, '@cf/google/gemma-4-26b-a4b-it');
+    assert.equal(request.response_format, undefined, 'a forced schema made the model loop on blank lines (extraction 0% valid)');
+    assert.deepEqual(request.chat_template_kwargs, {enable_thinking: false});
+    assert.equal(request.messages[0].content, 'offline test\n\nReply with ONE JSON object only, no other text, matching this JSON schema exactly: {"type":"object"}');
     return {response: '{"ok":true}', usage: {prompt_tokens: 100, completion_tokens: 20}};
   });
   const {broker, storage} = harness(undefined, env);
@@ -34,7 +35,7 @@ test('Codex out for the week: Free AI answers, keeps the schema, charges its own
   assert.equal(answer.engine, 'free-ai'); assert.equal(answer.reply, '{"ok":true}'); assert.deepEqual(answer.tokens, {input: 100, output: 20});
   assert.deepEqual(answer.fellBack.map(entry => entry.engine), ['codex']);
   const state = await storage.get(dayKey);
-  assert.equal(state.spent['free-ai'], 12); assert.equal(state.held['free-ai'], 0);   // ceil(100 × .0509 + 20 × .335) microdollars
+  assert.equal(state.spent['free-ai'], 16); assert.equal(state.held['free-ai'], 0);   // ceil(100 × .1 + 20 × .3) microdollars (Gemma 4, 8 Nov 2026)
   const health = (await (await broker.health()).json());
   assert.deepEqual(Object.keys(health.fallback).sort(), ['day', 'freeAi', 'freeAiCap', 'held']);
   assert.deepEqual(health.chain.map(item => item.name), ['codex', 'claude', 'free-ai']);
@@ -126,7 +127,7 @@ test('concurrent Free AI calls reserve the balance before the provider runs: one
   assert.deepEqual(replies.map(r => r.status).sort(), [200, 429]);
   assert.equal(called, 1);
   const state = await storage.get(dayKey);
-  assert.equal(state.held['free-ai'], 0); assert.equal(state.spent['free-ai'], 1_999_012);
+  assert.equal(state.held['free-ai'], 0); assert.equal(state.spent['free-ai'], 1_999_016);
 });
 
 test('a provider failure keeps the reservation (usage unknown) and says unavailable, not "cap reached"', async t => {
@@ -153,10 +154,10 @@ test('known usage is charged even for rejected answers and overclaims; unknown u
   t.mock.method(Date, 'now', () => day);
   noPaidProvider(t);
   const answers = [
-    [{response: '', usage: {prompt_tokens: 100, completion_tokens: 20}}, 'fallback:reply-refused', 12],
-    [{response: 'sk-' + 'a'.repeat(30), usage: {prompt_tokens: 100, completion_tokens: 20}}, 'fallback:reply-refused', 12],
+    [{response: '', usage: {prompt_tokens: 100, completion_tokens: 20}}, 'fallback:reply-refused', 16],
+    [{response: 'sk-' + 'a'.repeat(30), usage: {prompt_tokens: 100, completion_tokens: 20}}, 'fallback:reply-refused', 16],
     [{response: 'no meter'}, 'fallback:unavailable', 0],
-    [{response: 'bad usage', usage: {prompt_tokens: 100, completion_tokens: 1_000_000}}, 'fallback:usage-exceeded-reservation', 335_006],
+    [{response: 'bad usage', usage: {prompt_tokens: 100, completion_tokens: 1_000_000}}, 'fallback:usage-exceeded-reservation', 300_010],
   ];
   for (const [result, why, spent] of answers) {
     const env = fallbackEnv(async () => result); delete env.BRAIN_BOT_TOKEN;
@@ -179,7 +180,7 @@ test('Free AI filtered or errored completions go grey while known usage is still
     const response = await broker.call('pr', body);
     assert.equal(response.status, 503); assert.equal((await response.json()).why, 'fallback:reply-refused');
     const state = await storage.get(dayKey);
-    assert.equal(state.spent['free-ai'], 12); assert.equal(state.held['free-ai'], 0);
+    assert.equal(state.spent['free-ai'], 16); assert.equal(state.held['free-ai'], 0);
   }
 });
 
@@ -202,6 +203,6 @@ test('a Free AI answer that ends after UTC midnight is charged to the day it was
   const {broker, storage} = harness(undefined, fallbackEnv(async () => { now = day + 2000; return FREE; }));
   await storage.put('limits', {usedPercent: 100, resetsAt: day / 1000 + 10 * 86400});
   assert.equal((await broker.call('pr', body)).status, 200);
-  assert.equal((await storage.get(dayKey)).spent['free-ai'], 12);
+  assert.equal((await storage.get(dayKey)).spent['free-ai'], 16);
   assert.equal(await storage.get('fallback:2026-10-31'), undefined);
 });
