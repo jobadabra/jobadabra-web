@@ -21,8 +21,9 @@ export function cleanStepYield(raw) {
 
 const num = value => (value == null ? '–' : Number(value).toLocaleString('en-US'));
 const words = step => step.replace(/_/g, ' ').replace(/^./, letter => letter.toUpperCase()).replace(/\bapis\b/i, 'APIs');
-const perMinute = (local, seconds) => (isNum(local) && seconds > 0 ? Math.round((local * 600) / seconds) / 10 : null);
-const rate = value => (value == null ? '<span class="muted">not timed yet</span>' : `${value}/min`);
+// Why (Gitar, #497): null = never timed ("not timed yet"); a step timed at 0 s HAS a time but no rate, so it shows a dash, never the words that contradict its "0 s".
+const perMinute = (local, seconds) => (!isNum(seconds) ? null : seconds > 0 && isNum(local) ? Math.round((local * 600) / seconds) / 10 : '–');
+const rate = value => (value == null ? '<span class="muted">not timed yet</span>' : value === '–' ? '–' : `${value}/min`);
 const seconds = value => (value == null ? '–' : `${value} s`);
 const total = (rows, key) => rows.reduce((sum, row) => sum + (row[key] || 0), 0);
 
@@ -31,9 +32,9 @@ export function summarise(rows) {
   const steps = [];
   for (const row of rows) for (const item of row.stepYield || []) if (!steps.includes(item.step)) steps.push(item.step);
   return steps.map(step => {
-    const mine = rows.flatMap(row => (row.stepYield || []).filter(item => item.step === step)), timed = mine.filter(item => item.seconds > 0);
+    const mine = rows.flatMap(row => (row.stepYield || []).filter(item => item.step === step)), timed = mine.filter(item => isNum(item.seconds));
     return {step, personas: mine.length, seconds: median(timed.map(item => item.seconds)), jobs: total(mine, 'jobs'), local: total(mine, 'local'), localFit70: total(mine, 'localFit70'),
-      perMinute: perMinute(total(timed, 'local'), total(timed, 'seconds'))};
+      perMinute: timed.length ? perMinute(total(timed, 'local'), total(timed, 'seconds')) : null};
   });
 }
 

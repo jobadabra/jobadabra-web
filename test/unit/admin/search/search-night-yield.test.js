@@ -43,6 +43,15 @@ test('the card: a summary per step, every candidate under a toggle, escaped; not
   assert.match(stepYieldSection([{label: 'p1', stepYield: cleanStepYield([step('job_boards', null, 5, 2, 1)])}], NIGHT), /not timed yet/);
 });
 
+test('a step timed at 0 s is timed: its seconds count in the median and its rate is a dash, never "not timed yet" beside "0 s" (Gitar, #497)', () => {
+  const rows = [{label: 'p1', stepYield: cleanStepYield([step('free_job_apis', 0, 4, 2, 1)])}, {label: 'p2', stepYield: cleanStepYield([step('free_job_apis', 10, 4, 2, 1)])}];
+  const [apis] = summarise(rows);
+  assert.deepEqual([apis.seconds, apis.perMinute], [5, 24], 'median of 0 and 10 s; the rate is all local jobs over all timed seconds: 4 local in 10 s');
+  const alone = stepYieldSection([rows[0]], NIGHT);
+  assert.match(alone, /0 s/);
+  assert.ok(!alone.includes('not timed yet'), 'a timed step is never "not timed yet"');
+});
+
 test('the tab shows the card under the candidates for the newest night, and an older night without the list changes nothing', () => {
   const withYield = {...clean(verdict([[step('employer_sites', 40, 10, 5, 2)], [step('employer_sites', 20, 6, 3, 1)]]), {night: NIGHT}, NOW), at: `${NIGHT}T04:00:00.000Z`};
   const older = {...clean(verdict([null, null]), {night: '2026-11-19'}, NOW), at: '2026-11-19T04:00:00.000Z'};
