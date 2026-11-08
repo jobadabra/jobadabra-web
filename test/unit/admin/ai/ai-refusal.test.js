@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {ask} from '../../../../admin/build-digest.js';
 import {AiRefused, aiLine, describe, isRefusal, kindOf, reportRefusal, shouldTell, staysDown, tellOwner} from '../../../../admin/ai-refusal.js';
+import {reasonOf} from '../../../../desktop/e2e/lib/broker-reason.mjs';
 
 // The Codex broker's answers as askBroker (desktop/e2e/lib/broker-client.mjs) reports them: 'capped' = its allowance or login said no, 'no-token', 'unreachable', or an HTTP status.
 const answer = (status, detail) => ({broker: async () => ({ok: false, status, detail})});
@@ -51,8 +52,11 @@ test('reportRefusal logs the named error and tells once: the run before red mean
   const error = new AiRefused('capped', BUDGET);
   await reportRefusal(error, {job: 'Changelog publish', effect: 'Plain entries went out.', workflow: 'w.yml', zurichHour: 14, env, fetch, run: runs('success')});
   assert.equal(told.length, 1);
-  // Why (6 Nov 2026, public jobadabra#3345; owner: "make it human readable"): Telegram carries the plain cause, never the broker's raw words; a `budget:` reason reads as the allowance, and the job's effect line follows.
-  assert.match(told[0], /^⚠️ Changelog publish: 💳 The AI plan's allowance is used up\nPlain entries went out\.$/);
+  // Why (6 Nov 2026, public jobadabra#3345; owner: "make it human readable"): Telegram carries the plain cause, never the broker's raw words; a `budget:` reason reads as the plain row the public repo owns, and the job's effect line follows.
+  // Why (8 Nov 2026, fr; red main since 54b8319): the sentence itself is owned by desktop/e2e/lib/broker-reason.mjs (public jobadabra#3583 reworded "allowance is used up" to "Codex's week reached its line"); this test asserts the class, not a copy of the sentence: it is read from there.
+  const row = reasonOf(BUDGET).row;
+  assert.ok(row && !/budget:|broker/i.test(row), 'a plain row exists for a budget reason');
+  assert.equal(told[0], `⚠️ Changelog publish: 💳 ${row}\nPlain entries went out.`);
   assert.doesNotMatch(told[0], /budget:|AI skipped/, 'no raw broker words in the message');
   await reportRefusal(error, {job: 'Changelog publish', workflow: 'w.yml', zurichHour: 14, env, fetch, run: runs('failure')});
   assert.equal(told.length, 1, 'already red before: no second message');
