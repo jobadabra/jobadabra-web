@@ -6,7 +6,7 @@ import {Container, getContainer} from '@cloudflare/containers';
 import {verifyRunToken, githubJwks} from './lib/oidc.mjs';
 import {laneOf, queueOf, LANES} from './lib/lanes.mjs';
 import {allow, linesOf, claudeAllow, claudeWeekPercent, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
-import {refuseReply} from './lib/guard.mjs';
+import {refuseReply, loginValues} from './lib/guard.mjs';
 import {slots} from './lib/queue.mjs';
 import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
 import {modelOf, validEffort, weightOf, EFFORTS} from './lib/tiers.mjs';
@@ -27,8 +27,6 @@ const CALLER_WAIT_MS = 180_000, CODEX_GUARD_MS = 100_000, START_MS = 10_000;   /
 const DRAIN_WAIT_MS = CALLER_WAIT_MS - CODEX_GUARD_MS - START_MS;   // Why (8 Nov 2026, Gitar on #501): a call that waits for the next container must still have time to run in it before its caller gives up, or the hand-over only moves the loss; past this it is passed on like any start-up failure (Claude, Free AI) instead of answered to nobody. Calls the old container is still finishing are guarded at 100 s (Codex) and 150 s (Claude), so a drain longer than this wait costs the refused call its Codex turn, as every deploy did before
 const HOSTS = ['chatgpt.com', 'auth.openai.com', 'api.openai.com', 'api.anthropic.com'];   // the only hosts the container may reach (the reply is the only way out); api.anthropic.com is the Claude engine's (1 Nov 2026), measured: telemetry is off, so nothing else is needed
 const pass = req => fetch(req);
-/** The text the model was given for one call (the prompt and, in a conversation, the turn's delta that reached the container); the reply guard lets a long run through only when it was copied from here. */
-const sentText = sent => [sent.prompt, sent.session?.delta].map(part => typeof part === 'string' ? part : JSON.stringify(part ?? '')).join('\n');
 const json = (status, body) => new Response(JSON.stringify(body), {status, headers: {'content-type': 'application/json'}});
 
 export class CodexBroker extends Container {
@@ -52,6 +50,9 @@ export class CodexBroker extends Container {
   busyMs = BUSY_MS;   // how long a call that may pass on waits for a Claude slot (lib/busy.mjs); a test shortens it
   limits = null;   // the last whole-week reading from Codex: {usedPercent, resetsAt}
 
+  /** The broker's own login values (the stored Codex auth.json, the Claude token) for the reply guard (lib/guard.mjs); read fresh, so a rotated token is guarded at once. Never logged or returned. */
+  async login() { return loginValues(await this.ctx.storage.get('login'), this.brokerEnv.CLAUDE_CODE_OAUTH_TOKEN); }
+
   // Start (and every restart after a sleep): put the stored login back into CODEX_HOME.
   async onStart() {
     const login = await this.ctx.storage.get('login');
@@ -65,7 +66,7 @@ export class CodexBroker extends Container {
   // `source` is the text the detail is made of, `bodyWhy` what the 502 says (default: the same, scrubbed). Scrubbed whole, then cut: a key across the cut must not survive. A container that has not answered yet keeps the reason for /health `startError` (#285); a diagnostic write never decides the verdict.
   // Why (8 Nov 2026, bd): this replaces `whileStarting`, which passed a failure on only while the container was starting (#285, #435). Every failure goes on now, so "starting" only decides what /health shows.
   async codexFailure(source, bodyWhy, timeline, starting, why = 'failed') {
-    const clean = String(source || '').replace(/\s+/g, ' ').trim(), withheld = refuseReply(clean) || tokenShaped(clean), detail = (withheld ? '(detail withheld: token-shaped)' : clean).slice(0, 200);
+    const clean = String(source || '').replace(/\s+/g, ' ').trim(), withheld = tokenShaped(clean, await this.login()), detail = (withheld ? '(detail withheld: token-shaped)' : clean).slice(0, 200);
     if (starting) await this.ctx.storage.put('startError', {at: Date.now(), error: detail}).catch(() => {});
     return failed(why, detail, json(502, {why: bodyWhy ?? (withheld ? detail : clean.slice(0, 300)), ...(timeline ? {timeline} : {})}));
   }
@@ -197,7 +198,7 @@ export class CodexBroker extends Container {
     const door = await this.admit(lane, body);
     if (door.refusal) return door.refusal;
     const {env, chain} = door, note = newNote(), day = new Date(Date.now()).toISOString().slice(0, 10);
-    const ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note};
+    const ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note, login: await this.login()};
     const waitMs = chain.includes('claude') && configured('claude', env) && await mayPassOn({chain, body, env, storage: this.ctx.storage, verdict: door.verdict}) ? this.busyMs : undefined;   // undefined = wait for a Claude slot as long as it takes
     const done = await walk(chain, (engine, left, last) => this.turn(engine, {door, ctx, lane, body, session, left, waitMs: last ? undefined : waitMs}), (engine, v, ms) => this.record(day, engine, v, ms));
     if (!done.reply) return this.ending(done, door, body, note);
@@ -275,14 +276,15 @@ export class CodexBroker extends Container {
         try { answer = JSON.parse(text); } catch { const line = mark(reply.status, {note: 'not JSON'}); return this.codexFailure(`container: ${text}`, `container: ${text.slice(0, 300)}`, line, starting, 'cut'); }   // the platform's own error text (not our server's JSON): say it, never crash (a 1101 hid it, 28 Oct 2026)
         const timeline = mark(reply.status, typeof answer.trace === 'string' ? {codex: answer.trace} : {});
         if (answer.authFile) await this.ctx.storage.put('login', answer.authFile);   // write-through BEFORE the reply goes out: a rotated token is never only in the container
+        const login = await this.login();   // after the write-through: the guard knows the rotated token
         await this.markIfAnswered(reply, answer);
         if (!reply.ok) {
           const kind = kindOfReply(answer);
           if (answer.error === 'draining') return this.codexFailure('a draining container answered every try', undefined, timeline, starting, 'cut');   // a deploy, not the engine: not counted against it
-          if (kind === 'out-of-quota' && hasLater && !tokenShaped(answer.error)) return unavailable('ran-out');
+          if (kind === 'out-of-quota' && hasLater && !tokenShaped(answer.error, login)) return unavailable('ran-out');
           const said = codexMessage(answer.error);
-          if (kind === 'at-capacity' && !tokenShaped(said) && !tokenShaped(answer.error)) return failed('overloaded', said.slice(0, 200), json(502, {why: answer.error, timeline}));   // a text that looks like a key is a plain failure below (its detail is withheld)   // a failure for JOB-202's demotion, though another engine answers
-          const lost = kind === 'login-lost', why = tokenShaped(answer.error) ? 'codex-failed (detail withheld: token-shaped)' : answer.error;
+          if (kind === 'at-capacity' && !tokenShaped(said, login) && !tokenShaped(answer.error, login)) return failed('overloaded', said.slice(0, 200), json(502, {why: answer.error, timeline}));   // a text that looks like a key is a plain failure below (its detail is withheld)   // a failure for JOB-202's demotion, though another engine answers
+          const lost = kind === 'login-lost', why = tokenShaped(answer.error, login) ? 'codex-failed (detail withheld: token-shaped)' : answer.error;
           if (lost) { await this.ctx.storage.put('lost', true); return refused(json(503, {why, timeline})); }   // the owner must see it: no other engine hides it
           return this.codexFailure(why, why, timeline, starting);
         }
@@ -295,7 +297,7 @@ export class CodexBroker extends Container {
           await storage.put('meter', record(latest, lane, used, Date.now() / 1000, answer.limits?.resetsAt));
           if (session && answer.session?.mode) await storage.put('sessions', settle((await storage.get('sessions')) || {}, session, {now: Date.now(), tier: body.tier ?? 'mid', mode: answer.session.mode}));   // the clock after the turn: a slow one must not look idle
         });
-        const bad = refuseReply(answer.reply, sentText(sent));
+        const bad = refuseReply(answer.reply, login);
         if (bad) return refused(json(422, {why: bad}));   // Why (code-review, 8 Nov 2026): a reply the guard refuses (a key-shaped text, the prompt echoed) ends the call as on main; another engine is not asked the same prompt
         return answered(json(200, {reply: answer.reply, tokens: {...answer.tokens, counted}, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'codex', timeline, ...(answer.session ? {session: answer.session} : {})}));
       } finally { release(); }
@@ -319,7 +321,7 @@ export class CodexBroker extends Container {
   // Why (1 Nov 2026, first live Claude call failed with no reason shown): a failed Claude step says why in `fellBack[].detail` and /health `lastError`, scrubbed: nothing token-shaped, at most 200 characters.
   async claudeFailure(text) {
     const clean = String(text || '').replace(/\s+/g, ' ').trim();
-    const detail = (refuseReply(clean) ? '(detail withheld: token-shaped)' : clean).slice(0, 200);
+    const detail = (refuseReply(clean, await this.login()) ? '(detail withheld: token-shaped)' : clean).slice(0, 200);
     const state = (await this.ctx.storage.get('claude:state')) || {};
     await this.ctx.storage.put('claude:state', {...state, lastError: {at: Date.now(), text: detail}});
     return failed('failed', detail);
@@ -371,7 +373,7 @@ export class CodexBroker extends Container {
         }
         return await this.claudeFailure(String(answer.error || ''));
       }
-      const bad = refuseReply(answer.reply, sentText({prompt: body.prompt}));
+      const login = await this.login(), bad = refuseReply(answer.reply, login);
       if (bad) return failed('bad-answer', '', json(422, {why: bad}));   // whether it ends the call depends on its place in the chain: worker.js turn()
       return answered(json(200, {reply: answer.reply, tokens: answer.tokens, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'claude'}));
     } catch (e) { return await this.claudeFailure('call: ' + String(e?.message || e)); }

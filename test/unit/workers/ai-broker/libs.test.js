@@ -5,7 +5,7 @@ import {verifyRunToken} from '../../../../workers/ai-broker/lib/oidc.mjs';
 import {laneOf, LANES, queueOf} from '../../../../workers/ai-broker/lib/lanes.mjs';
 import {allow, claudeAllow, claudeWeekPercent, linesOf, CLAUDE_LIMIT_PCT, DAILY, newMeter, record, recordCall, callsToday, ownSharePct, TOKENS_PER_PERCENT} from '../../../../workers/ai-broker/lib/budget.mjs';
 import {weeklyWindow} from '../../../../workers/ai-broker/container/weekly.mjs';
-import {refuseReply} from '../../../../workers/ai-broker/lib/guard.mjs';
+import {refuseReply, loginValues, PIECE} from '../../../../workers/ai-broker/lib/guard.mjs';
 import {modelOf, tierOfClaude} from '../../../../workers/ai-broker/lib/tiers.mjs';
 import {slots} from '../../../../workers/ai-broker/lib/queue.mjs';
 import {readFileSync} from 'node:fs';
@@ -226,26 +226,55 @@ test('the Worker keeps its egress list and exports what the list needs (it canno
   assert.match(src, /interceptHttps = true/);   // without it HTTPS fails with the internet off: codex timed out on chatgpt.com (28 Oct 2026)
   assert.match(src, /allowedHosts = HOSTS/);
   assert.match(src, /HOSTS = \['chatgpt\.com', 'auth\.openai\.com', 'api\.openai\.com', 'api\.anthropic\.com'\]/);   // the Claude engine adds api.anthropic.com (1 Nov 2026) and nothing else
-  assert.equal(src.match(/refuseReply\(answer\.reply, sentText\(/g)?.length, 2);   // the last layer against a credential in a reply, on both engines' replies, with what the model was given
+  assert.equal(src.match(/refuseReply\(answer\.reply, login\)/g)?.length, 2);   // the last layer against a credential in a reply, on both engines' replies, with the broker's own login
 });
 
-test('a planted injection\'s reply is refused: tokens, login fields, long encodings, long text', () => {
-  const jwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJvd25lciJ9.c2lnbmF0dXJl';
-  for (const text of [`Here: ${jwt}`, '{"refresh_token": "abc"}', 'x'.repeat(120), 'sk-' + 'a'.repeat(30), 'y '.repeat(10001)])
-    assert.match(refuseReply(text), /^reply-refused/, text.slice(0, 20));
-  assert.equal(refuseReply('{"verdict":"pass","reason":"the image is mostly red"}'), null);
+// A login made here, never the real one: a Codex auth.json and a Claude subscription token, random each run.
+const randomRun = n => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'[b % 64]).join('');
+const fakeLogin = () => {
+  const access = `eyJ${randomRun(30)}.${randomRun(400)}.${randomRun(342)}`, refresh = `rt_${randomRun(60)}`, claude = `sk-ant-oat01-${randomRun(95)}`;
+  const auth = {OPENAI_API_KEY: null, tokens: {id_token: `eyJ${randomRun(30)}.${randomRun(300)}.${randomRun(342)}`, access_token: access, refresh_token: refresh, account_id: crypto.randomUUID()}, last_refresh: new Date().toISOString()};
+  return {access, refresh, claude, values: loginValues(JSON.stringify(auth), claude)};
+};
+const b64 = s => Buffer.from(s).toString('base64');
+
+test('a planted injection\'s reply is refused: JWTs, login fields, keys, long text, with or without the login known', () => {
+  const jwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJvd25lciJ9.c2lnbmF0dXJl', {values} = fakeLogin();
+  for (const login of [undefined, values])
+    for (const text of [`Here: ${jwt}`, '{"refresh_token": "abc"}', 'sk-' + 'a'.repeat(30), 'y '.repeat(10001)])
+      assert.match(refuseReply(text, login), /^reply-refused/, text.slice(0, 20));
+  assert.equal(refuseReply('{"verdict":"pass","reason":"the image is mostly red"}', values), null);
 });
 
-test('a long link path the model copied from the caller\'s text passes; the same run not sent, a JWT or a login field copied, is refused', () => {
-  const path = 'careers/' + 'senior-digital-marketing-specialist-zagreb-'.repeat(3) + 'r0012345';   // 100+ characters of the base64 shape
-  const prompt = `Home page: https://example.test\n\nOpen jobs -> https://example.test/${path}`, reply = JSON.stringify({links: [`https://example.test/${path}`]});
-  assert.match(refuseReply(reply), /a long base64 run/);   // the old call shape (no caller text) still refuses
-  assert.equal(refuseReply(reply, prompt), null);
-  assert.match(refuseReply(reply + ' ' + 'Q'.repeat(120), prompt), /a long base64 run/);   // a second run not in the prompt
-  assert.match(refuseReply(JSON.stringify({links: [`https://example.test/${path}X`]}), prompt), /a long base64 run/);   // one character more than was sent
-  const jwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJvd25lciJ9.c2lnbmF0dXJl';
-  assert.match(refuseReply(`see ${jwt}`, `page says ${jwt}`), /a JWT/);
-  assert.match(refuseReply('{"refresh_token": "abc"}', '{"refresh_token": "abc"}'), /a login field name/);
+test('a reply holding the broker\'s own login is refused: whole, base64, base64url, hex, or a piece of it', () => {
+  const {access, refresh, claude, values} = fakeLogin();
+  for (const [what, text] of [
+    ['the Claude token without its sk- prefix', `token: ${claude.slice(3)}`], ['the Codex refresh token', refresh], ['an access-token piece without its dots', access.split('.')[1].slice(100, 160)],
+    ['base64', b64(claude)], ['base64 of a piece at an odd offset', b64(claude.slice(7, 70))], ['base64url', Buffer.from(access).toString('base64url')],
+    ['base64 of the whole auth.json', b64(JSON.stringify({tokens: {access_token: access}}))], ['hex', Buffer.from(refresh).toString('hex')], ['HEX', Buffer.from(refresh).toString('hex').toUpperCase()],
+    [`a ${PIECE}-character piece`, `the page says ${claude.slice(40, 40 + PIECE)} here`],
+  ]) assert.equal(refuseReply(text, values), 'reply-refused: holds the login', what);
+  assert.match(refuseReply(claude, values), /^reply-refused/);   // whole, it is also key-shaped
+  assert.equal(refuseReply(`a shorter piece ${claude.slice(40, 40 + PIECE - 1)}`, values), null);
+  assert.ok(!refuseReply(claude, values).includes(claude.slice(20, 30)), 'the verdict never repeats what it matched');
+});
+
+test('web links pass however long: gi\'s web-search answer (run 42504935930, 8 Nov 2026) and #498\'s copied careers link', () => {
+  const {values} = fakeLogin();
+  const searched = JSON.stringify({jobs: [{title: 'Senior Data Engineer', url: `https://boards.example.test/${'acme-industries-group/jobs/senior-data-engineer-remote-europe-'.repeat(3)}4400123007/apply-now`}]});
+  assert.ok(/[A-Za-z0-9+/_-]{150,}/.test(searched), 'the link path is a 150+ character run, the shape the old rule refused');
+  assert.equal(refuseReply(searched, values), null);
+  assert.equal(refuseReply(searched), null);   // no login known (none stored yet, no Claude token): only the fixed shapes
+  const path = 'careers/' + 'senior-digital-marketing-specialist-zagreb-'.repeat(3) + 'r0012345';
+  assert.equal(refuseReply(JSON.stringify({links: [`https://example.test/${path}`]}), values), null);
+  assert.equal(refuseReply('Q'.repeat(400), values), null);   // a long run alone is not the login
+});
+
+test('the login values: every string under the Codex tokens, its API key, the Claude token; a non-JSON login is read whole', () => {
+  const values = loginValues(JSON.stringify({OPENAI_API_KEY: 'sk-proj-' + 'k'.repeat(40), tokens: {id_token: 'i'.repeat(50), access_token: 'a'.repeat(50), refresh_token: 'r'.repeat(50), account_id: 'short-id'}, last_refresh: '2026-11-10T08:00:00.000000Z'}), 'c'.repeat(100));
+  assert.deepEqual(values.sort(), ['a'.repeat(50), 'c'.repeat(100), 'i'.repeat(50), 'r'.repeat(50), 'sk-proj-' + 'k'.repeat(40)]);   // the refresh time is not a login; a value under a piece cannot be matched piece by piece
+  assert.deepEqual(loginValues('not json but a long secret-looking login file', undefined), ['not json but a long secret-looking login file']);
+  assert.deepEqual(loginValues(undefined, undefined), []);
 });
 
 test('the week reading is the window that lasts a week, whichever slot it sits in', () => {
