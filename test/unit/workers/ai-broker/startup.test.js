@@ -158,7 +158,7 @@ test('a storage failure while reading the proof never hides the container\'s own
 });
 
 test('a key across the 300th character of a platform text is not kept in startError or fellBack', async t => {
-  const key = `sk-${'a1B2c3D4e5F6g7H8i9J0'.repeat(2)}`, text = `${'word '.repeat(58)}${key}`;   // words, not a run of letters (that alone is token-shaped); the key starts at character 290 so the 300-cut keeps only its first 10
+  const key = `sk-${'a1B2c3D4e5F6g7H8i9J0'.repeat(2)}`, text = `${'word '.repeat(58)}${key}`;   // the key starts at character 290 so the 300-cut keeps only its first 10
   const world = await fresh(t, {codex: () => new Response(text, {status: 500})});
   const answer = await (await world.broker.call('scheduled', body)).json();
   assert.equal(answer.engine, 'claude');

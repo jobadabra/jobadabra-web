@@ -23,8 +23,8 @@ export async function underCap(storage, env) {
   return state.spent['free-ai'] + state.held['free-ai'] < cap;
 }
 
-/** Whether a failed Codex run's text could carry a credential, raw or once its JSON escapes are decoded (Gitar on #406: `sk-…` passes the raw check and decodes to a key). */
-export const tokenShaped = why => Boolean(refuseReply(why) || refuseReply(codexMessage(why)));
+/** Whether a failed Codex run's text could carry a credential (lib/guard.mjs, with the broker's login values), raw or once its JSON escapes are decoded (Gitar on #406: `sk-…` passes the raw check and decodes to a key). */
+export const tokenShaped = (why, login) => Boolean(refuseReply(why, login) || refuseReply(codexMessage(why), login));
 
 /** Today's measured Free AI USD and outstanding reservation, for broker health and the guarded admin page. */
 export async function fallbackToday(storage, env) {
@@ -123,7 +123,7 @@ export const apiPrecheck = body => typeof body.prompt !== 'string' || !body.prom
  * Free AI's step of the engine chain: a Response when it answered or refused for good, null when the next engine should try (not configured, cap reached, transport failure).
  * Every transport can be faked offline.
  */
-export async function freeAiStep({storage, env, body, lane, weekUsedPercent, fetcher = fetch, note, started = Date.now()}) {
+export async function freeAiStep({storage, env, body, lane, weekUsedPercent, fetcher = fetch, note, started = Date.now(), login = []}) {
   if (body.search) { note.search = true; return null; }   // Why (1 Nov 2026, widened 2 Nov): only Codex and the Claude subscription (WebSearch tool) can search, never this engine; the chain ends with fallback:search-unsupported when neither could take it
   const day = dayOf(), cap = freeCap(env);
   if (!cap) return null;
@@ -165,7 +165,7 @@ export async function freeAiStep({storage, env, body, lane, weekUsedPercent, fet
   if (actual > hold.amount || usage.output_tokens > hold.output) return refusal('fallback:usage-exceeded-reservation', outcome);
   const said = Array.isArray(message.content) ? message.content.filter(part => part.type === 'text').map(part => part.text).join('\n') : '';
   const reply = body.schema ? stripFence(said) : said;   // the model wraps JSON in a ```json fence; callers parse the reply, so they get it bare
-  if (!reply.trim() || !['end_turn', 'stop_sequence'].includes(message.stop_reason) || refuseReply(reply)) return refusal('fallback:reply-refused', `${outcome} finish=${choiceFinish ?? '-'} chars=${reply.length}${hold.output <= usage.output_tokens ? ' cut-off-at-ceiling' : ''}`);
+  if (!reply.trim() || !['end_turn', 'stop_sequence'].includes(message.stop_reason) || refuseReply(reply, login)) return refusal('fallback:reply-refused', `${outcome} finish=${choiceFinish ?? '-'} chars=${reply.length}${hold.output <= usage.output_tokens ? ' cut-off-at-ceiling' : ''}`);
   if (body.schema) { try { JSON.parse(reply); } catch { return refusal('fallback:invalid-json', outcome); } }
   return json(200, {reply, tokens: {input: usage.input_tokens, output: usage.output_tokens}, ms: Date.now() - started,
     lane, tier: body.tier ?? 'mid', model, weekUsedPercent, engine: 'free-ai'});

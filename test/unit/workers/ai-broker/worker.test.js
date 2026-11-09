@@ -154,3 +154,29 @@ test('a valid effort reaches Codex and counts for more of the week: low and none
     assert.equal((await storage.get('meter')).tokens.scheduled, counted, `${effort ?? 'default'} effort`);
   }
 });
+
+test('the Worker guards replies and failure details with its own stored login, a rotated one included; a long web link passes', async t => {
+  t.mock.method(Date, 'now', () => day);
+  const token = run => `eyJ${run.repeat(4)}.${run.repeat(30)}.${run.repeat(20)}`;   // made here, never the real one
+  const first = token('Ab3dE'), rotated = token('Zx9yW'), auth = access => JSON.stringify({tokens: {access_token: access, refresh_token: `rt_${access.slice(-60)}`}});
+  const {broker, storage} = harness();
+  await storage.put('login', auth(first));
+  const reply = text => async () => new Response(JSON.stringify({reply: text, tokens: {input: 1, output: 1}, ms: 1}));
+  const link = `https://boards.example.test/${'acme-industries-group/jobs/senior-data-engineer-remote-europe-'.repeat(3)}4400123007`;
+  broker.containerFetch = reply(JSON.stringify({links: [link]}));
+  assert.equal((await broker.call('drift', body)).status, 200);
+  broker.containerFetch = reply(`decoded: ${btoa(first.slice(5, 90))}`);
+  assert.equal((await broker.call('drift', body)).status, 422);
+  broker.containerFetch = async () => new Response(JSON.stringify({reply: `the new one: ${btoa(rotated)}`, authFile: auth(rotated), tokens: {input: 1, output: 1}, ms: 1}));
+  const refused = await broker.call('drift', body);
+  assert.equal(refused.status, 422); assert.deepEqual(await refused.json(), {why: 'reply-refused: holds the login'});   // the token the container just rotated is guarded in the same call
+  broker.containerFetch = async () => containerError(`codex-failed:1 boom ${rotated.slice(10, 70).replaceAll('.', '')}`);
+  const failed = await (await broker.call('drift', body)).json();
+  assert.match(JSON.stringify(failed), /withheld/); assert.ok(!JSON.stringify(failed).includes(rotated.slice(20, 44)));
+  broker.containerFetch = async () => new Response(`platform said ${rotated.slice(30, 90).replaceAll('.', '')}`, {status: 500});   // not JSON: its text was the 502's why, unscrubbed (code-review, 10 Nov 2026)
+  const platform = await broker.call('drift', body), text = await platform.text();
+  assert.equal(platform.status, 502); assert.match(text, /withheld/); assert.ok(!text.includes(rotated.slice(40, 64)));
+  broker.login = async () => { throw new Error('storage down'); };   // the guard's read fails: a thrown call or a platform text reaches codexFailure with nothing read yet
+  const unread = await broker.codexFailure('container: Container crashed while proxying request', 'container: Container crashed while proxying request', null, false);
+  assert.equal(unread.why, 'failed'); assert.equal(unread.reply.status, 502); assert.match(await unread.reply.text(), /withheld/);   // the detail is withheld; the failure still moves on, never a throw
+});
