@@ -190,7 +190,7 @@ test('a finished readiness night closes its container at once and mails nothing'
   assert.deepEqual(taken.reads.map(read => [read.job, read.state, read.why]), [['j1', 'read', ''], ['j2', 'failed', 'the night could not start']]);
 });
 
-test('Ready to send does not see readiness nights: its state, report, morning and stop stay the fill night', async () => {
+test('Ready to send does not see readiness nights in its state, report or morning; Stop reaches them', async () => {
   const e = env();
   await call(e, 'POST', 'batch', fillBody(), await owner());
   await call(e, 'POST', 'batch', readBody(), await owner());   // the newer batch of the same night
@@ -199,9 +199,23 @@ test('Ready to send does not see readiness nights: its state, report, morning an
   assert.equal((await (await call(e, 'GET', 'report', undefined, await owner())).json()).nights.length, 1);
   await call(e, 'POST', 'run', {task: 'readiness'}, await owner());   // the readiness night runs; the fill night is still queued
   assert.equal((await call(e, 'GET', 'held', undefined, await owner())).status, 404, 'a read night holds no tab for the morning');
-  assert.deepEqual(await (await call(e, 'POST', 'stop', {}, await owner())).json(), {ok: true, stopped: 1});   // Stop on the night stops the fill row only
-  assert.deepEqual(e.STATS.db.prepare("SELECT b.task, j.state FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch ORDER BY b.task, j.job").all().map(row => `${row.task}:${row.state}`), ['fill:stopped', 'readiness:queued', 'readiness:queued']);
-  assert.equal(e.STATS.db.prepare("SELECT state FROM ready_batches WHERE task = 'readiness'").get().state, 'running');
+});
+
+test('Stop on the rows stops a readiness night too: its forms read stopped, the container is told at its next step, the night ends and its container closes', async () => {
+  // Coordinator, 9 Nov 2026 (cloud runner 3/4 scope, finding 3 of 2/4's review): Stop on the rows stops a readiness night too.
+  const {e, made, bearer} = await night();
+  await call(e, 'POST', 'batch', fillBody(), await owner());   // a fill night waiting beside it
+  assert.equal((await (await call(e, 'POST', 'progress', {job: 'j1', step: 'looking'}, bearer)).json()).stop, false);
+  assert.deepEqual(await (await call(e, 'POST', 'stop', {job: 'j1'}, await owner())).json(), {ok: true, stopped: 2}, 'j1 in both nights');
+  assert.equal((await (await call(e, 'POST', 'progress', {job: 'j1', step: 'looking'}, bearer)).json()).stop, true, 'the container drops this form at its next step');
+  assert.equal((await (await call(e, 'POST', 'progress', {job: 'j2', step: 'looking'}, bearer)).json()).stop, false, 'the other form is not told to stop');
+  assert.equal((await call(e, 'POST', 'result', {job: 'j1', task: 'readiness', state: 'read', read: READ}, bearer)).status, 200, 'a late result is dropped, not an error');
+  assert.deepEqual([...e.HOSTED_STATE.m.keys()].filter(key => key.includes('/read/')), [], 'a stopped form keeps no read');
+  assert.deepEqual(await (await call(e, 'POST', 'stop', {}, await owner())).json(), {ok: true, stopped: 1}, 'the whole night: what is left, j2');
+  assert.equal(e.STATS.db.prepare('SELECT state FROM ready_batches WHERE id = ?').get(made.batch).state, 'finished');
+  assert.ok(e.READY_RUNNER.seen.some(url => url.startsWith(`https://runner/close?batch=${made.batch}`)), 'nothing is held, so the container closes at once');
+  assert.deepEqual((await (await call(e, 'POST', 'reads', {}, await owner())).json()).reads, [], 'stopped forms are not reads to take');
+  assert.equal((await call(e, 'POST', 'stop', {}, await owner())).status, 404, 'nothing left to stop');
 });
 
 test('the night token may report a read night\'s steps, and only that night', async () => {
