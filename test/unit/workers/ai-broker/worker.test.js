@@ -173,4 +173,10 @@ test('the Worker guards replies and failure details with its own stored login, a
   broker.containerFetch = async () => containerError(`codex-failed:1 boom ${rotated.slice(10, 70).replaceAll('.', '')}`);
   const failed = await (await broker.call('drift', body)).json();
   assert.match(JSON.stringify(failed), /withheld/); assert.ok(!JSON.stringify(failed).includes(rotated.slice(20, 44)));
+  broker.containerFetch = async () => new Response(`platform said ${rotated.slice(30, 90).replaceAll('.', '')}`, {status: 500});   // not JSON: its text was the 502's why, unscrubbed (code-review, 10 Nov 2026)
+  const platform = await broker.call('drift', body), text = await platform.text();
+  assert.equal(platform.status, 502); assert.match(text, /withheld/); assert.ok(!text.includes(rotated.slice(40, 64)));
+  broker.login = async () => { throw new Error('storage down'); };   // the guard's read fails: a thrown call or a platform text reaches codexFailure with nothing read yet
+  const unread = await broker.codexFailure('container: Container crashed while proxying request', 'container: Container crashed while proxying request', null, false);
+  assert.equal(unread.why, 'failed'); assert.equal(unread.reply.status, 502); assert.match(await unread.reply.text(), /withheld/);   // the detail is withheld; the failure still moves on, never a throw
 });

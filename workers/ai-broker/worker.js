@@ -66,9 +66,9 @@ export class CodexBroker extends Container {
   // `source` is the text the detail is made of, `bodyWhy` what the 502 says (default: the same, scrubbed). Scrubbed whole, then cut: a key across the cut must not survive. A container that has not answered yet keeps the reason for /health `startError` (#285); a diagnostic write never decides the verdict.
   // Why (8 Nov 2026, bd): this replaces `whileStarting`, which passed a failure on only while the container was starting (#285, #435). Every failure goes on now, so "starting" only decides what /health shows.
   async codexFailure(source, bodyWhy, timeline, starting, why = 'failed') {
-    const clean = String(source || '').replace(/\s+/g, ' ').trim(), withheld = tokenShaped(clean, await this.login()), detail = (withheld ? '(detail withheld: token-shaped)' : clean).slice(0, 200);
+    const clean = String(source || '').replace(/\s+/g, ' ').trim(), login = await this.login().catch(() => null), withheld = !login || tokenShaped(clean, login), detail = (withheld ? '(detail withheld: token-shaped)' : clean).slice(0, 200);   // a login that cannot be read withholds the detail: the failure still moves on, nothing unchecked goes out
     if (starting) await this.ctx.storage.put('startError', {at: Date.now(), error: detail}).catch(() => {});
-    return failed(why, detail, json(502, {why: bodyWhy ?? (withheld ? detail : clean.slice(0, 300)), ...(timeline ? {timeline} : {})}));
+    return failed(why, detail, json(502, {why: withheld ? detail : bodyWhy ?? clean.slice(0, 300), ...(timeline ? {timeline} : {})}));   // Why (code-review, 10 Nov 2026): bodyWhy (the not-JSON container text) went out raw even when its detail was withheld
   }
 
   // "Answered" = Codex ran end to end in this container: a reply, or Codex's own "usage limit" / "at capacity" (it reached OpenAI and was told no). A start-up failure like "Transport channel closed" is not an answer.
@@ -198,7 +198,7 @@ export class CodexBroker extends Container {
     const door = await this.admit(lane, body);
     if (door.refusal) return door.refusal;
     const {env, chain} = door, note = newNote(), day = new Date(Date.now()).toISOString().slice(0, 10);
-    const ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note, login: await this.login()};
+    const ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note};
     const waitMs = chain.includes('claude') && configured('claude', env) && await mayPassOn({chain, body, env, storage: this.ctx.storage, verdict: door.verdict}) ? this.busyMs : undefined;   // undefined = wait for a Claude slot as long as it takes
     const done = await walk(chain, (engine, left, last) => this.turn(engine, {door, ctx, lane, body, session, left, waitMs: last ? undefined : waitMs}), (engine, v, ms) => this.record(day, engine, v, ms));
     if (!done.reply) return this.ending(done, door, body, note);
@@ -219,7 +219,7 @@ export class CodexBroker extends Container {
     if (engine === 'codex') return this.codexStep(lane, body, door.model, door.verdict, door.hasLater, door.first === 'codex', session);
     if (engine === 'claude') return this.claudeStep(lane, body, waitMs);
     if (door.freeAiCannot && left.some(entry => entry.engine === 'claude' && entry.why === 'budget')) return null;   // Why (8 Nov 2026, Gitar on #492): Claude's line closed while this call waited for a slot; Free AI takes neither a search nor an image, so the call reaches the budget refusal, not a red `fallback:unsupported`
-    const reply = (!body.search && apiPrecheck(body)) || await freeAiStep(ctx);
+    const reply = (!body.search && apiPrecheck(body)) || await freeAiStep({...ctx, login: await this.login()});   // read at its turn: a token Codex rotated earlier in this call is guarded too
     if (!reply) return !body.search && configured(engine, door.env) ? unavailable('unavailable') : null;
     return reply.ok ? answered(reply) : reply.status === 400 ? refused(reply) : failed('bad-answer', '', reply);   // a 400 (empty prompt) is nobody's answer to retry
   }
@@ -298,7 +298,7 @@ export class CodexBroker extends Container {
           if (session && answer.session?.mode) await storage.put('sessions', settle((await storage.get('sessions')) || {}, session, {now: Date.now(), tier: body.tier ?? 'mid', mode: answer.session.mode}));   // the clock after the turn: a slow one must not look idle
         });
         const bad = refuseReply(answer.reply, login);
-        if (bad) return refused(json(422, {why: bad}));   // Why (code-review, 8 Nov 2026): a reply the guard refuses (a key-shaped text, the prompt echoed) ends the call as on main; another engine is not asked the same prompt
+        if (bad) return refused(json(422, {why: bad}));   // Why (code-review, 8 Nov 2026): a reply the guard refuses (the broker's login, a JWT, a key) ends the call as on main; another engine is not asked the same prompt
         return answered(json(200, {reply: answer.reply, tokens: {...answer.tokens, counted}, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'codex', timeline, ...(answer.session ? {session: answer.session} : {})}));
       } finally { release(); }
     } finally { unlock(); }
@@ -321,7 +321,7 @@ export class CodexBroker extends Container {
   // Why (1 Nov 2026, first live Claude call failed with no reason shown): a failed Claude step says why in `fellBack[].detail` and /health `lastError`, scrubbed: nothing token-shaped, at most 200 characters.
   async claudeFailure(text) {
     const clean = String(text || '').replace(/\s+/g, ' ').trim();
-    const detail = (refuseReply(clean, await this.login()) ? '(detail withheld: token-shaped)' : clean).slice(0, 200);
+    const login = await this.login().catch(() => null), detail = (!login || refuseReply(clean, login) ? '(detail withheld: token-shaped)' : clean).slice(0, 200);   // a login that cannot be read withholds the detail, never throws
     const state = (await this.ctx.storage.get('claude:state')) || {};
     await this.ctx.storage.put('claude:state', {...state, lastError: {at: Date.now(), text: detail}});
     return failed('failed', detail);

@@ -14,12 +14,12 @@ const SHAPES = [
 ];
 /**
  * The piece length matched. Why (10 Nov 2026): 24 random base64 characters are 144 bits, so no honest text holds one by chance, and the prefix every token of a kind shares (`sk-ant-oat01-`, 13) is shorter;
- * every login value is several pieces long (Claude's token ~108 characters, the OpenAI tokens 60 to 2,000), so a quarter of a token is already caught. A value shorter than a piece (an account id) is not a credential.
+ * every login value is several pieces long (Claude's token ~108 characters, the OpenAI tokens 60 to 2,000), so a quarter of a token is already caught. A value shorter than a piece is skipped (no login is that short); the account id under `tokens` (a UUID) is kept: not a credential, but refusing it costs nothing.
  */
 export const PIECE = 24;
 
 /**
- * The login values the guard refuses, from the stored Codex auth.json text and the Claude token: every string under `tokens`, the API key, the Claude token; each PIECE characters or longer.
+ * The login values the guard refuses, from the stored Codex auth.json text and the Claude token: every string under `tokens` (the account id too), the API key, the Claude token; each PIECE characters or longer.
  * A login that is not JSON is taken whole: never skipped. Never logged or returned anywhere but to refuseReply.
  */
 export function loginValues(authFile, claudeToken) {
