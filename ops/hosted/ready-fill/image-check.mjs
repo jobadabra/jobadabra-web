@@ -5,16 +5,22 @@
 // paid call), the read must arrive as a `read` result, nothing may be sent to the form, and no question text may reach the container's log.
 // Fictional data only: jobs whose pages the stand-in serves itself, no AI model, no key, no address outside this machine.
 import {execFileSync, spawnSync} from 'node:child_process';
+import fs from 'node:fs';
 import http from 'node:http';
+import https from 'node:https';
+import os from 'node:os';
+import path from 'node:path';
 
 const image = process.argv[2] || 'ready-fill:local';
-const SITE_PORT = 8799, BOX_PORT = 8780, WAIT_MS = 4 * 60 * 1000, READ_WAIT_MS = 3 * 60 * 1000, name = `ready-check-${process.pid}`;
+const SITE_PORT = 8799, TLS_PORT = 8798, BOX_PORT = 8780, WAIT_MS = 4 * 60 * 1000, READ_WAIT_MS = 3 * 60 * 1000, name = `ready-check-${process.pid}`;
 const seen = [];
 let phase = 'fill';   // which night the stand-in site plays: its batch lists that night's job
 const QUESTION = 'Why do you want this role?';   // the read's page text: it may reach the site, never the container's log
 const FORM_PAGE = `<h1>Apply: SRE at Acme</h1><form method="post"><label>${QUESTION} <input name="why" required></label><button type="submit" onclick="fetch('/pressed')">Submit application</button></form>`;
-const job = id => ({id, url: `http://host.docker.internal:${SITE_PORT}/${id === 'r1' ? 'read-job' : 'job'}`, title: 'SRE', company: 'Acme', fit: 80, kit: {answers: {}}, letter: 'Dear Acme', cv: '', letterPdf: ''});
-const site = http.createServer((request, response) => {
+// Why (9 Nov 2026, cloud runner 2/4, tries 1-2 on "unreadable"): the night's extension copy is allowed on https://*/* only (extension-copy.mjs), and every real job is https; a read page served over http waits for "Allow" and never looks.
+// The read's page is therefore served over https with a certificate made for this run, and the container's Chromium is told to accept it (NIGHT_BROWSER_ARGS, set by this check alone).
+const job = id => ({id, url: id === 'r1' ? `https://host.docker.internal:${TLS_PORT}/read-job` : `http://host.docker.internal:${SITE_PORT}/job`, title: 'SRE', company: 'Acme', fit: 80, kit: {answers: {}}, letter: 'Dear Acme', cv: '', letterPdf: ''});
+const handle = (request, response) => {
   const chunks = []; request.on('data', chunk => chunks.push(chunk)); request.on('end', () => {
     const raw = Buffer.concat(chunks), video = (request.headers['content-type'] || '').startsWith('video/');   // Watch the fill: the night's video of the job, bytes not JSON
     seen.push({route: request.url.split('?')[0], method: request.method, body: video ? {bytes: raw.length, head: raw.subarray(0, 4).toString('hex')} : raw.length ? JSON.parse(raw.toString()) : null});
@@ -28,7 +34,10 @@ const site = http.createServer((request, response) => {
     if (request.url.startsWith('/api/ready/ai')) return response.end(JSON.stringify({stop_reason: 'end_turn', usage: {input_tokens: 10, output_tokens: 10}, content: [{type: 'text', text: JSON.stringify({kind: 'form', confidence: 0.95})}]}));   // the page-kind call of the read, answered here: no model
     response.end(JSON.stringify({ok: true}));
   });
-});
+};
+const certDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ready-check-tls-')), keyFile = path.join(certDir, 'key.pem'), certFile = path.join(certDir, 'cert.pem');
+execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', keyFile, '-out', certFile, '-days', '1', '-subj', '/CN=host.docker.internal', '-addext', 'subjectAltName=DNS:host.docker.internal'], {stdio: 'ignore'});
+const site = http.createServer(handle), pages = https.createServer({key: fs.readFileSync(keyFile), cert: fs.readFileSync(certFile)}, handle);
 const docker = (...args) => execFileSync('docker', args, {encoding: 'utf8'}).trim();
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 let failed = '';
@@ -57,8 +66,9 @@ async function readinessNight() {
   return '';
 }
 await new Promise(resolve => site.listen(SITE_PORT, '0.0.0.0', resolve));
+await new Promise(resolve => pages.listen(TLS_PORT, '0.0.0.0', resolve));
 try {
-  docker('run', '-d', '--name', name, '--add-host=host.docker.internal:host-gateway', '-p', `${BOX_PORT}:8080`, image);
+  docker('run', '-d', '--name', name, '--add-host=host.docker.internal:host-gateway', '-e', 'NIGHT_BROWSER_ARGS=--ignore-certificate-errors', '-p', `${BOX_PORT}:8080`, image);
   let up = false;
   for (const end = Date.now() + 60000; !up && Date.now() < end; await pause(500)) up = await fetch(`http://127.0.0.1:${BOX_PORT}/health`).then(r => r.ok, () => false);
   if (!up) throw new Error('the container did not answer /health within 60 s');
@@ -88,7 +98,7 @@ try {
 finally {
   try { console.log(docker('logs', '--tail', '20', name)); } catch { /* no container */ }
   try { docker('rm', '-f', name); } catch { /* already gone */ }
-  site.close();
+  site.close(); pages.close(); fs.rmSync(certDir, {recursive: true, force: true});
 }
 if (failed) { console.error(`image check FAILED: ${failed}`); process.exit(1); }
 console.log('image check OK: a fresh container says gone; the night read its batch, tried the job, posted its result and its video; a readiness night read a form and sent its read to the site alone; docker stop ended it with exit 0');

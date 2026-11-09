@@ -26,3 +26,10 @@ test('main.mjs answers 400 for a refused task and hands the task to runNight', (
   assert.match(main, /if \(run\.error\) return json\(response, 400/);
   assert.match(main, /runNight\(\{chromium, site: run\.site, token, task: run\.task,/);
 });
+
+test('the browser flags the image check needs come from an env only it sets: the image bakes none in', () => {
+  // Why (9 Nov 2026, cloud runner 2/4): the check serves its read page over https with its own certificate and sets NIGHT_BROWSER_ARGS=--ignore-certificate-errors on its container; a deployed container must never carry that.
+  assert.match(readFileSync(new URL('../../hosted/ready-fill/main.mjs', import.meta.url), 'utf8'), /extraArgs: \(process\.env\.NIGHT_BROWSER_ARGS \|\| ''\)/);
+  assert.doesNotMatch(readFileSync(new URL('../../hosted/ready-fill/Dockerfile', import.meta.url), 'utf8'), /NIGHT_BROWSER_ARGS|ignore-certificate-errors/);
+  assert.doesNotMatch(readFileSync(new URL('../../workers/ready-runner/wrangler.jsonc', import.meta.url), 'utf8'), /NIGHT_BROWSER_ARGS|ignore-certificate-errors/);
+});

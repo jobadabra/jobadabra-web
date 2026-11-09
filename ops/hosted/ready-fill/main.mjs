@@ -24,7 +24,7 @@ const server = http.createServer(async (request, response) => {
       if (run.error) return json(response, 400, {ok: false, error: run.error});
       if (night || status.state === 'running') return json(response, 409, {ok: false, error: 'already running'});
       token = run.token; status = {state: 'running', task: run.task, jobs: 0, filled: 0};
-      runNight({chromium, site: run.site, token, task: run.task, log: (what, data) => { log(what, data); if (what === 'job') { status.jobs++; if (['prepared', 'partial'].includes(data.state)) status.filled++; } }})
+      runNight({chromium, site: run.site, token, task: run.task, extraArgs: (process.env.NIGHT_BROWSER_ARGS || '').split(/\s+/).filter(Boolean), log: (what, data) => { log(what, data); if (what === 'job') { status.jobs++; if (['prepared', 'partial'].includes(data.state)) status.filled++; } }})
         .then(done => { night = done; status.state = 'held'; }, error => { status = {...status, state: 'failed', error: why(error)}; log('night failed', {error: status.error}); });
       return json(response, 202, {ok: true});
     }
