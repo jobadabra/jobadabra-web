@@ -33,14 +33,15 @@ export async function requeue(env, batch, job) {
 function putBack(env, batch, row, now) {
   const before = (() => { try { return JSON.parse(row.again_from || 'null'); } catch { return null; } })();
   const fields = before ? RESULT.map(name => before[name] ?? null) : ['stopped', null, null, null, '', null, stamp(now)];
-  return env.STATS.prepare(`UPDATE ready_jobs SET ${RESULT.map(name => `${name} = ?`).join(', ')}, step = NULL, step_n = NULL, started_at = NULL, again_from = NULL WHERE batch = ? AND job = ?`)
+  return env.STATS.prepare(`UPDATE ready_jobs SET ${RESULT.map(name => `${name} = ?`).join(', ')}, step = NULL, step_n = NULL, started_at = NULL, again_from = NULL WHERE batch = ? AND job = ? AND state IN ${LIVE}`)
     .bind(...fields, batch, row.job);
 }
 
 // POST (owner) {job} or {}: Stop one form, or every form of the install's open nights still waiting or filling (a Ready to send night and a readiness night alike: api/ready-read.js). The container learns it at its next step (progress answers stop)
 // or from the night's end (its token stops working); a stopped form's late result is dropped (ready.js result). A night with nothing left ends; a readiness night holds nothing, so its container closes at once. -> {status, body}
 export async function stop(env, install, job, now = new Date()) {
-  const {results: nights} = await env.STATS.prepare("SELECT id, task FROM ready_batches WHERE install = ? AND state IN ('queued', 'running') ORDER BY created_at DESC").bind(install).all();
+  const {results: open} = await env.STATS.prepare("SELECT id, task, state FROM ready_batches WHERE install = ? AND state IN ('queued', 'running') ORDER BY created_at DESC").bind(install).all();
+  const seen = new Set(), nights = open.filter(night => !seen.has(night.task) && seen.add(night.task));   // Why (code review): the newest open night of each task, as the fill Stop always did; an older night still running is not this press's
   let stopped = 0;
   for (const night of nights) {
     const {results} = await env.STATS.prepare(`SELECT job, again_from FROM ready_jobs WHERE batch = ? AND cleared_at IS NULL AND state IN ${LIVE}${job ? ' AND job = ?' : ''}`).bind(night.id, ...(job ? [job] : [])).all();
@@ -50,7 +51,7 @@ export async function stop(env, install, job, now = new Date()) {
     const left = (await env.STATS.prepare(`SELECT COUNT(*) AS n FROM ready_jobs WHERE batch = ? AND state IN ${LIVE}`).bind(night.id).first()).n;
     if (left) continue;
     await env.STATS.prepare('UPDATE ready_batches SET state = \'finished\', finished_at = ? WHERE id = ?').bind(stamp(now), night.id).run();
-    if (night.task === 'readiness') await closeNight(env, night.id);
+    if (night.task === 'readiness' && night.state === 'running') await closeNight(env, night.id);   // a night not started has no container: closing it would wake one just to stop it
   }
   return stopped ? {status: 200, body: {ok: true, stopped}} : {status: 404, body: {ok: false, error: 'nothing is filling'}};
 }

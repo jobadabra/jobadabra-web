@@ -218,6 +218,17 @@ test('Stop on the rows stops a readiness night too: its forms read stopped, the 
   assert.equal((await call(e, 'POST', 'stop', {}, await owner())).status, 404, 'nothing left to stop');
 });
 
+test('Stop reaches the newest open night of each task only, and a readiness night that has not started wakes no container', async () => {
+  const e = env();
+  const older = await (await call(e, 'POST', 'batch', {...fillBody(), night: '2026-11-08'}, await owner(), new Date('2026-11-08T12:00:00Z'))).json();   // last night's, still open (an earlier stamp than the other two, which share `evening`)
+  const newer = await (await call(e, 'POST', 'batch', fillBody(), await owner())).json();
+  const read = await (await call(e, 'POST', 'batch', readBody(), await owner())).json();   // queued: no container yet
+  assert.deepEqual(await (await call(e, 'POST', 'stop', {}, await owner())).json(), {ok: true, stopped: 3}, 'the newer fill row and the two read rows');
+  const states = batch => e.STATS.db.prepare('SELECT j.state FROM ready_jobs j WHERE j.batch = ? ORDER BY j.job').all(batch).map(row => row.state);
+  assert.deepEqual([states(older.batch), states(newer.batch), states(read.batch)], [['queued'], ['stopped'], ['stopped', 'stopped']], "last night's open batch is not this press's");
+  assert.deepEqual(e.READY_RUNNER.seen, [], 'a night that never started has no container to close');
+});
+
 test('the night token may report a read night\'s steps, and only that night', async () => {
   const {e, bearer} = await night();
   for (const step of ['opening', 'looking', 'pressing', 'landed', 'judging', 'planning']) assert.equal((await (await call(e, 'POST', 'progress', {job: 'j1', step, n: 1}, bearer)).json()).stop, false, step);
