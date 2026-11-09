@@ -6,9 +6,9 @@ export const START_TIMEOUT_MS = 60 * 1000;
 export async function consume(batch, runner, log = console) {
   const done = {ok: 0, failed: 0};
   await Promise.all(batch.messages.map(async message => {
-    const {batch: night, token, site} = message.body || {};
+    const {batch: night, token, site, task} = message.body || {};   // task: fill | readiness (api/ready-read.js); a message from before it carries none, and the container then runs a fill
     try {
-      const reply = await runner(night).fetch(new Request('http://container/run', {method: 'POST', body: JSON.stringify({token, site}), signal: AbortSignal.timeout(START_TIMEOUT_MS)}));
+      const reply = await runner(night).fetch(new Request('http://container/run', {method: 'POST', body: JSON.stringify({token, site, ...(task ? {task} : {})}), signal: AbortSignal.timeout(START_TIMEOUT_MS)}));
       reply.ok ? done.ok++ : done.failed++;
     } catch (error) {
       done.failed++;

@@ -10,6 +10,7 @@ const DAY = 86400000;
 export const KINDS = {
   video: {ext: 'webm', type: 'video/webm', max: 25 * 1024 * 1024, keepMs: 7 * DAY},
   handoff: {ext: 'json', type: 'application/json', max: 2 * 1024 * 1024, keepMs: DAY},
+  read: {ext: 'json', type: 'application/json', max: 64 * 1024, keepMs: DAY},   // a readiness night's read (api/ready-read.js): not a route of this file, sealed and dropped with the others
 };
 export const VIDEO_MAX_SECS = 180;
 export const keptPrefix = (install, kind, batch) => `ready/${install}/${kind}/${batch}/`;
@@ -41,7 +42,7 @@ export async function keptPut(request, env, row, kind, now = new Date()) {
 // The owner's: the kept bytes of that job in his latest batch that still holds it, opened. -> Uint8Array or null.
 export async function keptGet(env, install, kind, job) {
   if (!goodJob(job)) return null;
-  const found = await env.STATS.prepare('SELECT b.id FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch WHERE b.install = ? AND j.job = ? AND j.cleared_at IS NULL ORDER BY b.created_at DESC LIMIT 1').bind(install, job).first();
+  const found = await env.STATS.prepare("SELECT b.id FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch WHERE b.install = ? AND b.task = 'fill' AND j.job = ? AND j.cleared_at IS NULL ORDER BY b.created_at DESC LIMIT 1").bind(install, job).first();
   const object = found && await env.HOSTED_STATE.get(keptKey(install, kind, found.id, job));
   return object ? open(env, label(install), new Uint8Array(await object.arrayBuffer()), 'READY_KEK') : null;
 }

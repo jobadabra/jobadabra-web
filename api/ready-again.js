@@ -11,7 +11,7 @@ export const GONE = 'gone: the server no longer holds this form';
 // -> {status, body}
 export async function fillAgain(env, install, job, now = new Date()) {
   if (!env.READY_QUEUE) return {status: 503, body: {ok: false, error: 'not wired: the Queue is not set up'}};
-  const row = await env.STATS.prepare('SELECT b.id, b.state, j.state AS job_state FROM ready_batches b JOIN ready_jobs j ON j.batch = b.id WHERE b.install = ? AND j.job = ? AND j.cleared_at IS NULL ORDER BY b.created_at DESC LIMIT 1')
+  const row = await env.STATS.prepare("SELECT b.id, b.state, j.state AS job_state FROM ready_batches b JOIN ready_jobs j ON j.batch = b.id WHERE b.install = ? AND b.task = 'fill' AND j.job = ? AND j.cleared_at IS NULL ORDER BY b.created_at DESC LIMIT 1")
     .bind(install, job).first();
   if (['queued', 'filling'].includes(row?.job_state) && ['queued', 'running'].includes(row?.state)) return {status: 409, body: {ok: false, error: 'already filling'}};
   // A night already running takes the form at the end of its line (sketch, owner 18 Oct 2026: "one server, forms in a line"): the container reads the night again after each form.

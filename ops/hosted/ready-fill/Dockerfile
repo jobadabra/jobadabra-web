@@ -8,8 +8,13 @@ COPY desktop/ready-fill/*.mjs ./
 COPY hosted/ready-fill/*.mjs ./
 COPY extension ./extension
 COPY app-core/src ./app-core/src
-# The app's form-address rule, at /desktop/lib so `../../desktop/lib/form-address.js` resolves from /night as it does in the repo; its package.json says it is an ES module.
-COPY desktop/lib/form-address.js /desktop/lib/form-address.js
+# The app's files the night imports, at /desktop/... so `../../desktop/lib/x.js` resolves from /night as it does in the repo; desktop/package.json says they are ES modules.
+# Why (8 Nov 2026, cloud runner 2/4): form-address.js is the fill's; the rest are the readiness night's (read-night.mjs and down). test/integration/ready-fill-image.test.js follows every import and fails on a file missing here.
+COPY desktop/lib/form-address.js desktop/lib/triage-reader.js desktop/lib/triage-read.js desktop/lib/session-tab.js /desktop/lib/
+COPY desktop/lib/ladder/rung1-kept.js desktop/lib/ladder/rung2-sketch.js desktop/lib/ladder/rung3-digest.js /desktop/lib/ladder/
+COPY desktop/lib/ai/models.js /desktop/lib/ai/models.js
+# desktop/shared/alias-schema.js is generated in the app by scripts/stage.mjs from this file, so the image takes it from its source.
+COPY extension/alias-schema.js /desktop/shared/alias-schema.js
 COPY desktop/package.json /desktop/package.json
 ENV NODE_ENV=production EXTENSION_DIR=/night/extension
 EXPOSE 8080
