@@ -1,4 +1,4 @@
-// /admin/job-search/lab (owner, 10 Nov 2026: the old 6-recording replay and its four tabs are retired): the route, the four tabs, a retired tab's bookmark, the removed upload route. Each tab has its own test file.
+// /admin/job-search/lab (owner, 10 Nov 2026: the old 6-recording replay and its four tabs are retired): the route, the five tabs, a retired tab's bookmark, the removed upload route. Each tab has its own test file.
 import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
@@ -30,10 +30,10 @@ test('the route: owner only, the page is in the "Job search" group, the group is
   assert.equal(PAGES.find(item => item.path === '/admin/job-search/lab').group, 'Job search');
 });
 
-test('the Lab has four tabs, and the old replay\'s tabs are gone (owner, 10 Nov 2026: retire it)', () => {
-  assert.deepEqual(TABS.map(([, name]) => name), ['Real installs', 'Random draws', 'Night search', 'Session checks']);
+test('the Lab has five tabs, and the old replay\'s tabs are gone (owner, 10 Nov 2026: retire it)', () => {
+  assert.deepEqual(TABS.map(([, name]) => name), ['Real installs', 'Random draws', 'Night search', 'Finish line', 'Session checks']);
   const html = page();
-  assert.deepEqual([...html.matchAll(/<a href="\?tab=(\w+)"/g)].map(match => match[1]), ['real', 'draws', 'night', 'checks']);
+  assert.deepEqual([...html.matchAll(/<a href="\?tab=(\w+)"/g)].map(match => match[1]), ['real', 'draws', 'night', 'finish', 'checks']);
   for (const gone of ['Replays', 'Needs a fix', 'Fixed', 'History', "Each candidate's newest search"]) assert.ok(!html.includes(gone), `${gone} is retired`);
 });
 

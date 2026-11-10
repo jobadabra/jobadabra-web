@@ -9,6 +9,7 @@ import {writeState} from './ci-state.js';
 import {COUNTERS} from './search-night-counters.js';
 import {cleanStepYield} from './search-night-yield.js';
 import {alertText, euresOf, judgeAll} from './search-night-judge.js';
+import {cleanInout, cleanSources} from './search-finish.js';
 import {markNights} from './search-night-prs.js';
 import {HAND_KEY, KEEP_HAND, handRuns} from './search-night-hand.js';
 
@@ -73,7 +74,7 @@ export function clean(verdict, {night, run = null} = {}, now = new Date()) {
   // against nights of the same kind only (admin/search-night-judge.js). A verdict without the word is from before the switch: EURES was on.
   return {night, run, eures: euresOf(verdict), engine: engineOf(rows), state: text(verdict.state, 20), head: text(verdict.head, 300), rows: rows.map((row, index) => ({
     persona: Number.isInteger(row.persona) && row.persona > 0 && row.persona < 100 ? row.persona : index + 1, label: text(row.label, 80), kind: KINDS.includes(row.kind) ? row.kind : 'unknown', why: text(row.why, 120),
-    local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note), counters: counters(row.counters), stepYield: cleanStepYield(row.step_yield), relevantSources: relevantSources(row.relevant_sources, row.local),
+    local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note), counters: counters(row.counters), inout: cleanInout(row.inout), sources: cleanSources(row.sources), stepYield: cleanStepYield(row.step_yield), relevantSources: relevantSources(row.relevant_sources, row.local),
     place: verdictCounts(row.place, PLACE_VERDICTS, row.found), role: verdictCounts(row.role, ROLE_VERDICTS, row.found)}))};
 }
 
