@@ -20,7 +20,7 @@ const CSS = `.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(16
 .scroll{overflow-x:auto}.state{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
 .state.good{background:#16341f;color:#6fdc8c}.state.bad{background:#40181a;color:#ff8a80}.state.wait{background:#262c33;color:#b9c0c7}
 .why{color:#8d949c;font-size:12px;margin-top:4px}.chip{display:inline-block;border:1px solid #2a2f37;border-radius:999px;padding:1px 9px;font-size:12px;color:#8d949c}
-h2{margin:0 0 8px}td.num span{font-size:11px}`;
+.down{color:#ff8a80}h2{margin:0 0 8px}td.num span{font-size:11px}`;
 
 export function page(drawRows = [], tab = 'real', real = [], sending = null, sessionChecks = [], nightRows = [], nightRef = {}) {
   const shown = TABS.some(([key]) => key === tab) ? tab : 'real';

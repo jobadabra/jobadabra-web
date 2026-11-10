@@ -60,4 +60,5 @@ test('the tab shows each check with its boards, what broke and the conclusion', 
   assert.match(html, /What broke/);
   assert.match(html, /Conclusion/);
   assert.match(page([], 'checks'), /No session check yet/);
+  assert.match(page([], 'checks', [], null, [{...check(), boards: check().boards}]).match(/<style>[\s\S]*?<\/style>/)[0], /\.down\{color:#ff8a80\}/, 'the red "0 relevant" keeps its colour (the Lab page\'s own CSS draws it)');
 });
