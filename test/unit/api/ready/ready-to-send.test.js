@@ -10,7 +10,7 @@ import {dropKept} from '../../../../api/ready-kept.js';
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0089_ready.sql', '0090_ready_fill_at.sql', '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0143_ready_task.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0089_ready.sql', '0090_ready_fill_at.sql', '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0143_ready_task.sql', '0144_ready_read_day.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE IF NOT EXISTS revoked (who TEXT PRIMARY KEY, reason TEXT, at TEXT)');
   const statement = (text, args = []) => ({bind: (...v) => statement(text, v), run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
@@ -43,7 +43,9 @@ test('off, or any install but the owner, reaches nothing: a class check over eve
   const stranger = {'x-ready-owner': 'owner-secret', 'x-api-key': await keyOf('someone-else-9')};
   for (const sub of subs) for (const method of ['GET', 'POST', 'DELETE']) {
     const response = await call(e, method, sub, method === 'POST' ? {job: 'j1'} : undefined, stranger);
-    assert.ok([401, 405].includes(response.status), `${method} ${sub} -> ${response.status}`);
+    // The readiness routes are open to any install with its own key (api/ready-read-access.js), and it only ever reaches its own: batch/run/reads/stop answer it as they answer anyone (never the owner's data; test/unit/api/ready/ready-read.test.js).
+    const own = ['batch', 'run', 'reads', 'stop'].includes(sub);
+    assert.ok(own ? [200, 400, 401, 404, 405].includes(response.status) : [401, 405].includes(response.status), `${method} ${sub} -> ${response.status}`);
   }
   assert.equal((await call(env({READY_OWNER: ''}), 'GET', 'state', undefined, await owner())).status, 404);   // no owner set: closed
 });

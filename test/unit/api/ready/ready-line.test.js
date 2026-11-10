@@ -11,7 +11,7 @@ import {ready} from '../../../../api/ready.js';
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0089_ready.sql', '0090_ready_fill_at.sql', '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0143_ready_task.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0089_ready.sql', '0090_ready_fill_at.sql', '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0143_ready_task.sql', '0144_ready_read_day.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE IF NOT EXISTS revoked (who TEXT PRIMARY KEY, reason TEXT, at TEXT)');
   const statement = (text, args = []) => ({bind: (...v) => statement(text, v), run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
@@ -93,7 +93,7 @@ test('the whole night\'s Stop puts back every form waiting or filling; a form wi
   const night = tokenOf(e, 0);
   await call(e, 'POST', 'progress', {job: 'j1', step: 'opening'}, night);
   const stranger = {'x-ready-owner': 'owner-secret', 'x-api-key': await keyOf('someone-else-9')};
-  assert.equal((await call(e, 'POST', 'stop', {}, stranger)).status, 401, 'owner only');
+  assert.equal((await call(e, 'POST', 'stop', {}, stranger)).status, 404, "another install has no night of its own to stop (api/ready-read-access.js), and never the owner's");
   const stopped = await call(e, 'POST', 'stop', {}, await owner());
   assert.deepEqual(await stopped.json(), {ok: true, stopped: 2});
   assert.deepEqual(await rows(e), {j1: 'stopped', j2: 'stopped'});

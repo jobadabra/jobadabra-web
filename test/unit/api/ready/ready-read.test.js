@@ -12,7 +12,7 @@ import {tick} from '../../../../api/ready-tick.js';
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0089_ready.sql', '0090_ready_fill_at.sql', '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0142_ready_mailed.sql', '0143_ready_task.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0089_ready.sql', '0090_ready_fill_at.sql', '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0142_ready_mailed.sql', '0143_ready_task.sql', '0144_ready_read_day.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE IF NOT EXISTS revoked (who TEXT PRIMARY KEY, reason TEXT, at TEXT)');
   const statement = (text, args = []) => ({bind: (...v) => statement(text, v), run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
@@ -53,7 +53,8 @@ test('a readiness night is its own night: a fill night of the same day is not re
   const token = {authorization: `Bearer ${await readyToken(e, again.batch)}`};
   assert.equal((await call(e, 'GET', 'batch', undefined, token)).status, 401);   // queued, not started: no token yet works
   for (const bad of ['auto', 'Fill', 7, {}]) assert.equal((await call(e, 'POST', 'batch', {...readBody(), task: bad}, await owner())).status, 400, `task ${JSON.stringify(bad)}`);
-  assert.equal((await call(e, 'POST', 'batch', readBody(), await stranger())).status, 401);
+  assert.equal((await call(e, 'POST', 'batch', readBody(), await stranger())).status, 200, 'another install with its own key reads its own night (api/ready-read-access.js); never this one');
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM ready_batches WHERE install = 'owner-install-1' AND task = 'readiness'").get().n, 1);
 });
 
 test('a readiness batch keeps only the pages to read: no contact, no facts, no kit, nothing of the person', async () => {
@@ -79,7 +80,7 @@ test('run starts the night of the task asked for, and the queue message carries 
   assert.equal(fill.status, 202);
   assert.deepEqual(e.READY_QUEUE.sent.map(message => message.task), ['readiness', 'fill']);
   assert.equal((await call(e, 'POST', 'run', {task: 'auto'}, await owner())).status, 400);
-  assert.equal((await call(e, 'POST', 'run', {task: 'readiness'}, await stranger())).status, 401);
+  assert.equal((await call(e, 'POST', 'run', {task: 'readiness'}, await stranger())).status, 404, 'another install has no night of its own queued: it cannot start the owner\'s');
 });
 
 test('the cron starts a due readiness night with its task too, and the runner passes the task to /run', async () => {
@@ -96,7 +97,7 @@ test('the cron starts a due readiness night with its task too, and the runner pa
 
 test('a read is sealed on the site, and the rows hold words and counts only', async () => {
   const {e, made, bearer} = await night();
-  const posted = await call(e, 'POST', 'result', {job: 'j1', task: 'readiness', state: 'read', read: READ, why: '', ms: 41000, costMicro: 500000}, bearer);
+  const posted = await call(e, 'POST', 'result', {job: 'j1', task: 'readiness', state: 'read', read: READ, why: '', ms: 41000, costMicro: 50000}, bearer);   // under today's $0.15 (api/ready-read-access.js)
   assert.equal(posted.status, 200);
   assert.deepEqual(await posted.json(), {ok: true, stop: false});
   const keys = [...e.HOSTED_STATE.m.keys()].filter(key => key.includes('/read/'));
@@ -105,7 +106,7 @@ test('a read is sealed on the site, and the rows hold words and counts only', as
   const row = e.STATS.db.prepare("SELECT * FROM ready_jobs WHERE job = 'j1'").get();
   assert.equal(row.state, 'read');
   assert.ok(!JSON.stringify(row).includes(QUESTION) && !JSON.stringify(row).includes('Work permit'));
-  assert.equal(e.STATS.db.prepare('SELECT cost_micro FROM ready_batches WHERE id = ?').get(made.batch).cost_micro, 500000);
+  assert.equal(e.STATS.db.prepare('SELECT cost_micro FROM ready_batches WHERE id = ?').get(made.batch).cost_micro, 50000);
 });
 
 test('the result of a readiness night is checked: only its outcomes, never a fill outcome; a bad or oversize read is stored as unreadable', async () => {
@@ -154,7 +155,7 @@ test('the app takes the reads once: they come back opened, then they are gone fr
   assert.deepEqual(await (await call(e, 'POST', 'reads', {}, await owner())).json(), {ok: true, reads: [], pending: 2});
   await call(e, 'POST', 'result', {job: 'j1', task: 'readiness', state: 'read', read: READ, why: '', ms: 41000, costMicro: 10}, bearer);
   await call(e, 'POST', 'result', {job: 'j2', task: 'readiness', state: 'unreadable', read: null, why: 'afterApply', ms: 30000, costMicro: 10}, bearer);
-  assert.equal((await call(e, 'POST', 'reads', {}, await stranger())).status, 401);
+  assert.deepEqual((await (await call(e, 'POST', 'reads', {}, await stranger())).json()).reads, [], "another install's reads are its own: none of the owner's");
   assert.equal((await call(e, 'POST', 'reads', {}, bearer)).status, 401);   // the night token does not read what the night wrote
   assert.equal((await call(e, 'GET', 'reads', undefined, await owner())).status, 405);   // taking removes: never a GET
   const taken = await (await call(e, 'POST', 'reads', {}, await owner())).json();

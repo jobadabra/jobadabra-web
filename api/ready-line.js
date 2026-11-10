@@ -39,9 +39,9 @@ function putBack(env, batch, row, now) {
 
 // POST (owner) {job} or {}: Stop one form, or every form of the install's open nights still waiting or filling (a Ready to send night and a readiness night alike: api/ready-read.js). The container learns it at its next step (progress answers stop)
 // or from the night's end (its token stops working); a stopped form's late result is dropped (ready.js result). A night with nothing left ends; a readiness night holds nothing, so its container closes at once. -> {status, body}
-export async function stop(env, install, job, now = new Date()) {
+export async function stop(env, install, job, now = new Date(), only = null) {   // only: a task, for an Always on install that is not the owner (code review of 3/4: its key alone must not stop a Ready to send night)
   const {results: open} = await env.STATS.prepare("SELECT id, task, state FROM ready_batches WHERE install = ? AND state IN ('queued', 'running') ORDER BY created_at DESC").bind(install).all();
-  const seen = new Set(), nights = open.filter(night => !seen.has(night.task) && seen.add(night.task));   // Why (code review): the newest open night of each task, as the fill Stop always did; an older night still running is not this press's
+  const seen = new Set(), nights = open.filter(night => (!only || night.task === only) && !seen.has(night.task) && seen.add(night.task));   // Why (code review): the newest open night of each task, as the fill Stop always did; an older night still running is not this press's
   let stopped = 0;
   for (const night of nights) {
     const {results} = await env.STATS.prepare(`SELECT job, again_from FROM ready_jobs WHERE batch = ? AND cleared_at IS NULL AND state IN ${LIVE}${job ? ' AND job = ?' : ''}`).bind(night.id, ...(job ? [job] : [])).all();
