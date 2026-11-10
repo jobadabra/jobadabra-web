@@ -1,16 +1,25 @@
 // Cloud browser runner 3/4 (spec jobadabra docs/superpowers/specs/2026-11-08-cloud-browser-runner-design.md): who may start a readiness night, and what it may cost.
 // Owner, 8-9 Nov 2026 (via the coordinator, "asked via AskUserQuestion"): access "Any user, no matter Free or Pro. But within their AI credit."; "We should have a cap" = "30 reads, $0.15/day (Recommended)";
 // "In the end, we care about AI credit": a read's whole cost (container seconds and the page-kind calls) comes out of the person's AI credit, the same meter as every other AI call.
-// Invariants: only the readiness task opens to an Always on install; Ready to send's own routes stay the owner's. A person with their own Claude key (BYOK) is unlimited here and spends none of our credit.
+// Invariants: only the readiness task opens to an Always on install; Ready to send's own routes stay the owner's.
+// Design (owner, 10 Nov 2026, asked via AskUserQuestion: "The daily cap makes sense only on Free Trial and on Free AI... on Pro... They should go unlimited and as fast, within their AI credit"; "Abuse-only ceiling"):
+//   - The daily cap (30 reads, $0.15) is for a night whose AI is OURS and whose account is not Pro: a Free trial on Free AI. It is taken at the batch, so the person hears it at once.
+//   - Pro (any AI) has no daily cap; on our AI its credit is the bound.
+//   - A claimed own key (batch.ai.key) is not trusted: the lane follows who PAYS. The night's first model call answered by Anthropic with that key flips ready_batches.own_ok; until then a trial's read takes a slot of the daily cap
+//     when its result arrives, so a made-up key reads 30 forms and stops like Free AI does. Once proven, the person's reads are theirs.
+//   - Every claimed key has an abuse-only ceiling (about 500 reads a day), not a product limit: a broken loop is caught, and the owner is told once a day through the switchboard (event ready-read-ceiling).
 // A read is never logged here. Guard: test/unit/api/ready/ready-read-access.test.js.
 import {installOf} from '../shared/hosted.js';
 import {chargeCall, proLane} from '../shared/pro-ai.js';
 import {allowanceOf, busyCap, count, installCap, keysOf, limitsOf, who} from '../shared/free-ai.js';
 import {tokenFor} from '../shared/guard.js';
+import {notify} from '../shared/notify.js';
 
 export const DAY_READS = 30, DAY_MICRO = 150_000;   // one install's reads and micro-USD per UTC day
 export const MICRO_PER_SECOND = 12;   // what the night prices a container second at (desktop/ready-fill/night.mjs costMicro), the figure result.costMicro carries
 const num = value => (Number(value) > 0 ? Number(value) : 0);
+export const OWN_READS = 500;   // the abuse-only ceiling on a claimed own key (owner, 10 Nov 2026: "about 500 reads/day")
+export const ownReads = env => num(env.READY_READ_OWN_MAX) || OWN_READS;
 export const dayReads = env => num(env.READY_READ_DAY_MAX) || DAY_READS;
 export const dayMicro = env => Math.round(num(env.READY_READ_DAY_USD) * 1e6) || DAY_MICRO;
 const dayOf = now => now.toISOString().slice(0, 10);
@@ -91,4 +100,21 @@ export async function chargeContainer(env, install, micro, now = new Date()) {
     await Promise.all([kv.put(keys.dayUsd, String(installDay + micro), {expirationTtl: 2 * 86400}), kv.put(keys.monthUsd, String(installMonth + micro), {expirationTtl: 40 * 86400}),
       kv.put(keys.life, String(life + micro)), kv.put(keys.usd, String(global + micro), {expirationTtl: 2 * 86400})]);
   } catch { /* the meter is best effort: the night's own cost_micro and /admin/ai/costs still carry it */ }
+}
+
+/** True for a Pro account (or a credit code) on its own credit lane: the daily cap does not apply to its nights (api/ready.js stores it as ready_batches.strict = 0). */
+export const isPro = async (env, install) => !!(await proLane(env, install));
+
+/**
+ * Takes `n` reads of today's abuse-only ceiling for a claimed own key. -> null, or {status: 429, limit, used, error}. The first refusal of a day tells the owner once (switchboard event ready-read-ceiling).
+ * A real user never sees it: it only catches a loop that reads without end.
+ */
+export async function reserveOwn(env, install, n, now = new Date()) {
+  const day = dayOf(now), max = ownReads(env);
+  const changed = n <= max && await env.STATS.prepare(`INSERT INTO ready_read_days (install, day, own) VALUES (?, ?, ?) ON CONFLICT (install, day) DO UPDATE SET own = own + excluded.own WHERE own + excluded.own <= ?`).bind(install, day, n, max).run();
+  if (changed?.meta?.changes) return null;
+  const told = await env.STATS.prepare('UPDATE ready_read_days SET own_alerted = 1 WHERE install = ? AND day = ? AND own_alerted = 0').bind(install, day).run().catch(() => null);
+  if (told?.meta?.changes) await notify(env, {event: 'ready-read-ceiling', text: `☁️ A cloud readiness install reached its abuse ceiling today (${max} reads on its own AI key): ${install.slice(0, 8)}. Reads stop until 00:00 UTC; a real user does not read this many forms.`}).catch(() => {});
+  const row = await env.STATS.prepare('SELECT own FROM ready_read_days WHERE install = ? AND day = ?').bind(install, day).first();
+  return {status: 429, limit: max, used: row?.own || 0, error: "Today's cloud checks reached their safety limit. They start again tomorrow (00:00 UTC)."};
 }

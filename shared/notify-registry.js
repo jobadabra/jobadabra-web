@@ -33,6 +33,8 @@ export const ALERTS = [
   a('pr-check-scorecard', '📊 PR check scorecard (monthly)', 'main', 'every', 'engineering', {wired: true, jobs: ['pr-check-scorecard.yml']}),
   a('daily-build-digest', '🗓 Daily build digest', 'main', 'daily', 'engineering', {on: false, jobs: ['jobadabra-web/daily-digest.yml']}),
   a('record-sites', '📼 Record sites / watch list: new failures', 'main', 'daily', 'engineering', {wired: true, on: false, modes: ['every', 'daily'], jobs: ['record-sites.yml', 'watch-live.yml']}),
+  // Why (10 Nov 2026, owner: "Abuse-only ceiling"): a person's own AI key has no daily cap on cloud readiness, only a ceiling (about 500 reads) that catches a broken loop; the owner is told once a day (api/ready-read-access.js).
+  a('ready-read-ceiling', '☁️ A cloud readiness install hit its abuse ceiling', 'ai', 'daily', 'engineering', {wired: true}),
   a('ai-fixer-round', '🔧 AI fixer: PR ready / red / conflict', 'ai', 'every', 'engineering', {wired: true, jobs: ['ai-fixer.yml', 'ai-fixer-follow.yml']}),
   a('ai-persona-night', '🧑‍💻 AI persona night report', 'ai', 'problems', 'engineering', {status: 'new', modes: ['every', 'problems'], jobs: ['ai-user-agents.yml']}),
   a('ai-credit', '🪫 AI credit ran out / AI refused a job / AI step skipped', 'ai', 'daily', 'engineering', {wired: true, modes: ['every', 'daily']}),

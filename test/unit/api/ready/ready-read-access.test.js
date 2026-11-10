@@ -11,7 +11,7 @@ import {ready, readyToken} from '../../../../api/ready.js';
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0089_ready.sql', '0090_ready_fill_at.sql', '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0142_ready_mailed.sql', '0143_ready_task.sql', '0144_ready_read_day.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0089_ready.sql', '0090_ready_fill_at.sql', '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0142_ready_mailed.sql', '0143_ready_task.sql', '0144_ready_read_day.sql', '0145_ready_read_lanes.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE IF NOT EXISTS revoked (who TEXT PRIMARY KEY, reason TEXT, at TEXT)');
   const statement = (text, args = []) => ({bind: (...v) => statement(text, v), run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
@@ -117,13 +117,50 @@ test("Free AI's own stops hold for a cloud read too: the kill switch, the global
   }
 });
 
-test("their own Claude key skips the credit check, but today's cap still counts every read (a key is not validated here, so a made-up one cannot lift the cap)", async () => {
-  const e = always({WAITLIST: kv()});
+const FAKE = {ai: {key: 'sk-ant-api03-' + 'x'.repeat(30)}};
+const answering = status => async () => new Response(JSON.stringify(status === 200 ? {content: [{type: 'text', text: '{}'}], usage: {input_tokens: 100, output_tokens: 10}} : {error: {message: 'invalid x-api-key'}}), {status});
+const read = (e, bearer, job) => call(e, 'POST', 'result', {job, task: 'readiness', state: 'read', read: READ, ms: 1000, costMicro: 12}, bearer).then(response => response.json());
+const modelCall = (e, bearer) => call(e, 'POST', 'ai', {messages: [{role: 'user', content: 'page kind?'}]}, bearer);
+
+test("a claimed own key skips the credit check and the trial's daily cap at the batch; only the abuse-only ceiling holds it, and it tells the owner once", async () => {
+  const e = always({WAITLIST: kv(), READY_READ_OWN_MAX: '20'});
   e.WAITLIST.get = async key => (key.startsWith('freeai:life:') ? String(9_000_000) : null);   // the trial's credit is spent
-  const own = {...readBatch(15), ai: {key: 'sk-ant-api03-' + 'x'.repeat(30)}};
-  assert.equal((await call(e, 'POST', 'batch', own, await member())).status, 200, 'no credit refusal');
-  assert.equal((await call(e, 'POST', 'batch', {...own, night: '2026-11-10', jobs: forms(15, 50)}, await member())).status, 200);
-  assert.equal((await call(e, 'POST', 'batch', {...own, night: '2026-11-11', jobs: forms(1, 90)}, await member())).status, 429, 'past 30 forms');
+  assert.equal((await call(e, 'POST', 'batch', {...readBatch(15), ...FAKE}, await member())).status, 200, 'no credit refusal, and 15 forms is not a cap');
+  assert.equal((await call(e, 'POST', 'batch', {...readBatch(15, '2026-11-10', 50), ...FAKE}, await member())).status, 429, 'past the ceiling of 20');
+  assert.equal(e.STATS.db.prepare('SELECT own_alerted AS n FROM ready_read_days').get().n, 1, 'the owner is told once');
+  assert.equal((await call(e, 'POST', 'batch', {...readBatch(15, '2026-11-11', 70), ...FAKE}, await member())).status, 429);
+  assert.equal(e.STATS.db.prepare('SELECT own_alerted AS n FROM ready_read_days').get().n, 1, 'and not again');
+});
+
+test("a made-up key keeps the trial's daily cap: Anthropic never answers it, so each read takes a slot as its result arrives and the cap ends the night", async () => {
+  const e = always({READY_READ_DAY_MAX: '2', fetchFn: answering(401)});
+  const {made, bearer} = await started(e, {...readBatch(3), ...FAKE});
+  assert.equal((await modelCall(e, bearer)).status, 502, 'Anthropic refused the key');
+  assert.equal(e.STATS.db.prepare('SELECT own_ok AS n FROM ready_batches').get().n, 0, 'the lane did not flip to theirs');
+  assert.equal((await read(e, bearer, 'j0')).stop, false);
+  assert.equal((await read(e, bearer, 'j1')).stop, false);
+  assert.equal((await read(e, bearer, 'j2')).stop, true, 'the third read is past the trial cap of 2');
+  assert.equal(e.STATS.db.prepare('SELECT reads FROM ready_read_days').get().reads, 2, 'two slots taken, the third refused');
+  assert.equal(e.STATS.db.prepare('SELECT state FROM ready_batches WHERE id = ?').get(made.batch).state, 'finished');
+});
+
+test("a key Anthropic answered is the person's own: its reads take no slot of the daily cap, however many", async () => {
+  const e = always({READY_READ_DAY_MAX: '2', fetchFn: answering(200)});
+  const {bearer} = await started(e, {...readBatch(5), ...FAKE});
+  assert.equal((await modelCall(e, bearer)).status, 200);
+  assert.equal(e.STATS.db.prepare('SELECT own_ok AS n FROM ready_batches').get().n, 1);
+  for (const job of ['j0', 'j1', 'j2', 'j3']) assert.equal((await read(e, bearer, job)).stop, false, job);
+  assert.equal(e.STATS.db.prepare('SELECT COALESCE(SUM(reads), 0) AS n FROM ready_read_days').get().n, 0, 'the daily cap never counted them');
+});
+
+test("a Pro install (here a credit code's lane) has no daily cap on our AI: 15 forms past a cap of 2 are queued, within its credit", async () => {
+  const e = always({PRO_PLAN: 'promo', READY_READ_DAY_MAX: '2', WAITLIST: kv()});
+  e.STATS.db.exec('CREATE TABLE IF NOT EXISTS install_credit (install TEXT PRIMARY KEY, credit_micro INTEGER NOT NULL DEFAULT 0, credit_added_micro INTEGER NOT NULL DEFAULT 0, updated_at TEXT)');
+  e.STATS.db.prepare("INSERT INTO install_credit (install, credit_micro, credit_added_micro, updated_at) VALUES ('member-1', 5000000, 5000000, 'x')").run();
+  const made = await call(e, 'POST', 'batch', readBatch(15), await member());
+  assert.equal(made.status, 200);
+  assert.equal(e.STATS.db.prepare('SELECT strict FROM ready_batches').get().strict, 0, 'the daily cap does not apply to this night');
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM ready_read_days').get().n, 0);
 });
 
 test('an Always on install queues public pages only: an IP, localhost or an internal name never reaches the container', async () => {
