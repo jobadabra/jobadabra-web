@@ -37,7 +37,7 @@ const BLIND = ['unmeasured', 'fault', 'unknown', 'not-run'];
  * Pure arithmetic over what was sent; nothing is made up: a person without a market count is out of the sums, and a sum with no counted source is null ("not counted"), never 0.
  * @param {object} ref reference() output: {<persona>: {market, countedOn, sources}}
  * @param {object|null} run the newest run ({rows: [{persona, kind, local}]}) or null
- * @returns {{people: number, counted: number, market: number|null, ours: number|null, countedOn: string, sources: {source, kinds: object, read, right, only}[]}}
+ * @returns {{people: number, counted: number, market: number|null, ours: number|null, countedOn: string, measured: number, sources: {source, kinds: object, read, right, only}[]}}
  */
 export function coverage(ref, run) {
   const ids = Object.keys(ref || {}), counted = ids.filter(id => ref[id].market != null);
@@ -50,5 +50,5 @@ export function coverage(ref, run) {
     return {source, kinds, read: sum(rows.map(row => row.read)), right: sum(rows.map(row => row.right)), only: sum(rows.map(row => row.only)), total: rows.length};
   }).filter(row => row.total > 0);
   return {people: ids.length, counted: counted.length, market: sum(counted.map(id => ref[id].market)), countedOn: [...new Set(ids.map(id => ref[id].countedOn).filter(Boolean))].join(', '),
-    ours: both.length ? sum(both.map(id => mine.get(id))) : null, oursOf: both.length ? sum(both.map(id => ref[id].market)) : null, sources};
+    ours: both.length ? sum(both.map(id => mine.get(id))) : null, oursOf: both.length ? sum(both.map(id => ref[id].market)) : null, measured: both.length, sources};   // Why (Gitar, 10 Nov 2026): the share is over the people counted AND measured in the run, not over every counted person: the card says how many
 }

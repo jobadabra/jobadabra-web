@@ -41,6 +41,8 @@ test('coverage: market over the people counted, our right jobs of the same peopl
   const eures = c.sources.find(row => row.source === 'eures'), web = c.sources.find(row => row.source === 'web_search');
   assert.deepEqual([eures.right, eures.only, eures.kinds], [40, 10, {counted: 2}], 'EURES: counted for the two people who sent it; the person with no sources adds nothing');
   assert.deepEqual([web.right, web.only, web.read], [null, null, null], 'not counted everywhere: null, never 0');
+  const unmeasured = coverage(ref, {rows: [{persona: 1, kind: 'measured', local: 8}, {persona: 2, kind: 'fault', local: 4}]});
+  assert.deepEqual([unmeasured.market, unmeasured.ours, unmeasured.oursOf, unmeasured.measured], [50, 8, 40, 1], 'a counted but unmeasured person is in the market headline, not in the share: the card says how many people the share is over');
   assert.deepEqual(coverage({}, run).sources, []);
   assert.equal(coverage(ref, {rows: [{persona: 1, kind: 'fault', local: 8}]}).ours, null, 'a person the night could not measure is not "0 of the market"');
 });
@@ -52,7 +54,7 @@ test('the card: nothing sent says so; sent rows draw the market, our share, each
   const ref = {1: cleanMarket(person()), 2: cleanMarket(person({market: 10}))};
   const html = finishSection(judged, [], ref);
   assert.match(html, /market 50 right jobs · 2 of 2 people/);
-  assert.match(html, /our list holds 12 of 50 \(24%\)/);
+  assert.match(html, /our list holds 12 of 50 \(24%\) · 2 measured people/);
   assert.match(html, /2 counted/);
   assert.match(html, /2 by hand/);
   assert.match(html, /counted 2026-11-09/);
