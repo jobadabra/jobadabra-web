@@ -101,14 +101,31 @@ test('within their AI credit: a Free install past its trial, month or day line i
   assert.equal((await call(day, 'POST', 'batch', readBatch(), await member())).status, 402);
 });
 
-test('their own Claude key is unlimited here: no credit check, no cap, no charge', async () => {
+test("their own Claude key skips the credit check, but today's cap still counts every read (a key is not validated here, so a made-up one cannot lift the cap)", async () => {
   const e = always({WAITLIST: kv()});
-  e.WAITLIST.get = async key => (key.startsWith('freeai:life:') ? String(9_000_000) : null);
+  e.WAITLIST.get = async key => (key.startsWith('freeai:life:') ? String(9_000_000) : null);   // the trial's credit is spent
   const own = {...readBatch(15), ai: {key: 'sk-ant-api03-' + 'x'.repeat(30)}};
-  assert.equal((await call(e, 'POST', 'batch', own, await member())).status, 200);
+  assert.equal((await call(e, 'POST', 'batch', own, await member())).status, 200, 'no credit refusal');
   assert.equal((await call(e, 'POST', 'batch', {...own, night: '2026-11-10', jobs: forms(15, 50)}, await member())).status, 200);
-  assert.equal((await call(e, 'POST', 'batch', {...own, night: '2026-11-11', jobs: forms(15, 90)}, await member())).status, 200, 'past 30 forms');
-  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM ready_read_days').get().n, 0);
+  assert.equal((await call(e, 'POST', 'batch', {...own, night: '2026-11-11', jobs: forms(1, 90)}, await member())).status, 429, 'past 30 forms');
+});
+
+test('an Always on install queues public pages only: an IP, localhost or an internal name never reaches the container', async () => {
+  const e = always();
+  for (const url of ['https://127.0.0.1/x', 'https://localhost/x', 'https://10.0.0.5/jobs', 'https://[::1]/x', 'https://intranet.corp/x', 'https://printer.local/x', 'https://2130706433/x', 'https://metadata/x'])
+    assert.equal((await call(e, 'POST', 'batch', {task: 'readiness', night: '2026-11-09', jobs: [{id: 'a', url}]}, await member())).status, 400, url);
+  assert.equal((await call(e, 'POST', 'batch', {task: 'readiness', night: '2026-11-09', jobs: [{id: 'a', url: 'https://jobs.example.org/p/1'}]}, await member())).status, 200);
+});
+
+test("the owner's install that is also an Always on member: its key alone reaches the readiness night, never his Ready to send night", async () => {
+  const e = always();
+  e.STATS.db.prepare('INSERT INTO hosted_schedules (account, install, freq_hours, next_run_at, state, last_seen_at, created_at) VALUES (?, ?, 24, ?, ?, ?, ?)').run('acct-o', 'owner-install-1', '2026-11-10T00:00:00Z', 'on', '2026-11-09T00:00:00Z', '2026-11-09T00:00:00Z');
+  const full = {'x-ready-owner': 'owner-secret', 'x-api-key': await keyOf('owner-install-1')}, keyOnly = {'x-api-key': await keyOf('owner-install-1')};
+  const fill = await (await call(e, 'POST', 'batch', {night: '2026-11-09', readyBy: '07:30', contact: {name: 'A'}, jobs: [{id: 'f1', url: 'https://boards.example.com/a/1', title: 'SRE', company: 'Acme', kit: {}, letter: '', cv: ''}]}, full)).json();
+  await call(e, 'POST', 'batch', readBatch(1), keyOnly);
+  assert.equal((await call(e, 'POST', 'batch', {night: '2026-11-10', jobs: forms(1, 5)}, keyOnly)).status, 401, 'a fill night needs the secret');
+  assert.equal((await call(e, 'POST', 'stop', {}, keyOnly)).status, 200);
+  assert.deepEqual(e.STATS.db.prepare('SELECT j.state FROM ready_jobs j WHERE j.batch = ?').all(fill.batch).map(row => row.state), ['queued'], 'his fill night is not stopped by the key alone');
 });
 
 test("a read's container seconds come out of the Free install's own lines (day, month, trial), and the night lands on /admin/ai/costs as 'ready-read'", async () => {

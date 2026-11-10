@@ -15,7 +15,7 @@ import {closeNight, morning, readyToken} from './ready-morning.js';
 import {dropKept, jobsWithKept, keptPut, keptKey, videoGet} from './ready-kept.js';
 import {mailNight} from './ready-mail.js';
 import {checkRead, keepRead, takeReads, taskOf} from './ready-read.js';
-import {MICRO_PER_SECOND, addMicro, chargeContainer, creditRefusal, readerOf, reserveReads} from './ready-read-access.js';
+import {MICRO_PER_SECOND, addMicro, chargeContainer, creditRefusal, publicHost, readerOf, reserveReads} from './ready-read-access.js';
 export {readyToken};
 
 export const readyOn = env => env.READY_TO_SEND === 'on' && !!env.HOSTED_STATE && !!env.READY_OWNER;
@@ -107,8 +107,10 @@ async function batch(request, env, now) {
   const jobs = Array.isArray(given?.jobs) ? given.jobs : [];
   const good = job => typeof job?.id === 'string' && /^[\w.:-]{1,64}$/.test(job.id) && /^https:\/\/[^\s/]+/.test(String(job.url)) && String(job.url).length <= 2000;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(given?.night)) || !jobs.length || jobs.length > MAX_JOBS || !jobs.every(good) || new Set(jobs.map(job => job.id)).size !== jobs.length) return bad('bad batch');
-  if (task === 'readiness' && !/^sk-ant-[\w-]{20,300}$/.test(String(given.ai?.key || ''))) {   // the person's own Claude key (BYOK) is unlimited and spends none of our credit; every other read is within their AI credit and today's cap
-    const refused = await creditRefusal(env, install, now) || await reserveReads(env, install, jobs.length, now);
+  if (task === 'readiness' && !reader.owner && !jobs.every(job => publicHost(job.url))) return bad('bad batch');   // an Always on install's forms are public pages: never our container's own network (code review of 3/4)
+  if (task === 'readiness') {   // today's cap counts every read (the container seconds are ours, whatever key answers the questions); the AI credit is checked unless the person's own Claude key answers (it is not validated here, so it never lifts the cap)
+    const own = /^sk-ant-[\w-]{20,300}$/.test(String(given.ai?.key || ''));
+    const refused = (own ? null : await creditRefusal(env, install, now)) || await reserveReads(env, install, jobs.length, now);
     if (refused) return json({ok: false, error: refused.error, ...(refused.limit ? {limit: refused.limit, used: refused.used} : {})}, refused.status);
   }
   const old = await env.STATS.prepare('SELECT id FROM ready_batches WHERE install = ? AND night = ? AND task = ?').bind(install, given.night, task).first();
@@ -147,9 +149,11 @@ async function result(request, env, now) {
     return known ? json({ok: true, dropped: true, stop: false}) : json({ok: false, error: 'unknown job'}, 404);
   }
   // A read within the person's AI credit (no own Claude key): its container seconds come out of the credit meter, and today's budget can end the night (api/ready-read-access.js).
-  const metered = reading && !(await readBlob(env, row.install, row.id).catch(() => null))?.ai?.key;
   let spent = false;
-  if (metered) { await chargeContainer(env, row.install, (num(given.ms) || 0) / 1000 * MICRO_PER_SECOND, now); spent = await addMicro(env, row.install, micro, now); }
+  if (reading) {
+    if (!(await readBlob(env, row.install, row.id).catch(() => null))?.ai?.key) await chargeContainer(env, row.install, (num(given.ms) || 0) / 1000 * MICRO_PER_SECOND, now);   // their own key: their AI, but never our container for free
+    spent = await addMicro(env, row.install, micro, now);
+  }
   const total = row.cost_micro + micro, capped = total >= cap(env) || spent;
   if (reading && capped) await env.STATS.prepare(`UPDATE ready_jobs SET state = 'failed', wall = 'cap', at = ? WHERE batch = ? AND cleared_at IS NULL AND state IN ${LIVE}`).bind(stamp(now), row.id).run();   // a read the cap kept from starting is told to the app as a form it could not read, never left "reading"
   const waiting = (await env.STATS.prepare(`SELECT COUNT(*) AS n FROM ready_jobs WHERE batch = ? AND state IN ${LIVE}`).bind(row.id).first()).n;
@@ -226,6 +230,7 @@ export async function sweep(env, now = new Date()) {
   const old = stamp(new Date(now.getTime() - COUNTS_KEEP_DAYS * 24 * HOUR));
   await env.STATS.prepare('DELETE FROM ready_jobs WHERE batch IN (SELECT id FROM ready_batches WHERE created_at < ?)').bind(old).run();
   out.purged = (await env.STATS.prepare('DELETE FROM ready_batches WHERE created_at < ?').bind(old).run()).meta?.changes || 0;
+  await env.STATS.prepare('DELETE FROM ready_read_days WHERE day < ?').bind(old.slice(0, 10)).run().catch(() => {});   // the day counters of 3/4 go with the counts
   return out;
 }
 
@@ -276,7 +281,7 @@ export async function ready(request, env, now = new Date()) {
     if (request.method !== 'POST') return json({ok: false, error: 'Use POST'}, 405);
     const job = String((await request.json().catch(() => null))?.job || '');
     if (job && !/^[\w.:-]{1,64}$/.test(job)) return bad('bad job');
-    const done = await stop(env, install, job, now);
+    const done = await stop(env, install, job, now, reader.owner ? null : 'readiness');
     return json(done.body, done.status);
   }
   if (sub === 'run') {   // the owner starts his queued night now (a manual test; the cron would start it at its fill time); an Always on install starts its readiness night

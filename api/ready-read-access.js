@@ -15,6 +15,14 @@ export const dayReads = env => num(env.READY_READ_DAY_MAX) || DAY_READS;
 export const dayMicro = env => Math.round(num(env.READY_READ_DAY_USD) * 1e6) || DAY_MICRO;
 const dayOf = now => now.toISOString().slice(0, 10);
 
+/** A form an Always on install queues is a public https page: not a bare IP, localhost or an internal name (the container must never be a way into its own network). Pure. */
+export function publicHost(url) {
+  let host;
+  try { host = new URL(String(url)).hostname.toLowerCase(); } catch { return false; }
+  if (host.startsWith('[') || /^\d+\.\d+\.\d+\.\d+$/.test(host) || /^\d+$/.test(host)) return false;   // an IP literal, v6 or v4 (decimal forms included)
+  return host.includes('.') && !/(^|\.)(localhost|local|internal|lan|home|corp|intranet|localdomain)$/.test(host);
+}
+
 /** The install's Always on schedule is on (the same "Always on user" the hosted routes mean). */
 export async function memberOf(env, install) {
   if (!env.STATS || !install) return false;
