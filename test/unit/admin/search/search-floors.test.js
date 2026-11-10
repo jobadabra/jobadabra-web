@@ -1,4 +1,4 @@
-// Floors that only rise (cr G2, 10 Nov 2026; sa: "the card draws them and computes nothing"). Guard for admin/search-floors.js (the kept shape) and admin/search-floors-page.js (the card), mounted in the Finish line tab.
+// Floors that only rise (cr G2, 10 Nov 2026; sa: "the card draws them and computes nothing"). Guard for admin/search-floors.js (the kept shape) and the Floors card in admin/search-finish-page.js (Finish line tab).
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {clean} from '../../../../admin/search-night.js';
@@ -57,4 +57,20 @@ test('seconds to first job reads as a ceiling, and a hostile merge subject is es
   assert.match(html, /seconds to first job 95, ceiling 60/);
   assert.match(html, /EURES in = out share 50%, floor 90%/, 'a share is a fraction 0-1, drawn as a percent');
   assert.ok(!/<img src=x/.test(html));
+});
+
+test('code review of #527: a by-hand run never hides the night\'s red rows; green only when a floor is held; unreadable red rows are not green; odd keys and numbers are cleaned', () => {
+  const nightRed = night('2026-11-18', {floors: checked}), hand = {...night('2026-11-18', {floors: {checked: false, why: 'by-hand run'}}), hand: true, at: '2026-11-18T23:00:00Z'};
+  const drawn = finishSection(judgeAll([nightRed]), [{day: '2026-11-18', at: '2026-11-18T23:00:00Z', rows: hand.rows, floors: hand.floors, engine: 'unknown'}]);
+  assert.match(drawn, /1 under the floor/, 'the newest NIGHT decides');
+  assert.ok(!/floors: not checked \(by-hand run\)/.test(drawn));
+  const empty = finishSection(judgeAll([night('2026-11-18', {floors: {checked: true, series: 's', red: [], levels: {}}})]), []);
+  assert.ok(!/all above their floors/.test(empty) && /no floor to hold yet/.test(empty), 'nothing guarded is not green');
+  const lost = cleanFloors({checked: true, red: [{persona: '3', number: 'right'}, {persona: 4, number: 'salary'}], levels: {}});
+  assert.equal(lost.unreadable, 2);
+  assert.match(finishSection(judgeAll([night('2026-11-18', {floors: {checked: true, red: [{persona: '3', number: 'right'}, {persona: 4, number: 'salary'}], levels: {}}})]), []), /2 under the floor \(2 not readable here\)/, 'rows the site could not read are said, never green');
+  assert.deepEqual(Object.keys(cleanFloors({checked: true, levels: {0: {right: {floor: 1}}, '07': {right: {floor: 1}}, 7: {right: {floor: 1}}, 12: {right: {floor: 1}}}}).levels), ['7', '12'], '0 and 07 are no person');
+  const odd = cleanFloors({checked: true, series: ['x'], merges: [{}, 'ok'], red: [{persona: 1, number: 'eures_inout', floor: 0.995, now: -1, below: 0}]});
+  assert.deepEqual([odd.series, odd.merges, odd.red[0].now, odd.red[0].below], ['', ['ok'], null, null], 'text is strings only; a negative number and a below of 0 are not sent');
+  assert.match(finishSection(judgeAll([night('2026-11-18', {floors: {...checked, red: [{persona: 1, number: 'eures_inout', floor: 0.995, now: 0.9, spread: 0.01, below: 2}]}})]), []), /floor 99\.5%/, '0.995 is not rounded to 100%');
 });
