@@ -45,9 +45,15 @@ function github({commits = COMMITS, runs = RUNS, dates = DATES, fail = null} = {
   return {calls, fetcher};
 }
 
-// The repo files a yardstick pattern such as src/daily_search*.py stands for (a pattern with no star stands for itself).
+// Every file under a folder, as repo paths.
+const walk = dir => readdirSync(dir, {withFileTypes: true}).flatMap(entry => (entry.isDirectory() ? walk(`${dir}/${entry.name}`) : [`${dir}/${entry.name}`]));
+
+// The repo files a yardstick pattern such as src/daily_search*.py or src/** stands for (a pattern with no star stands for itself).
+// Why (10 Nov 2026, jobadabra #3684 turned the list into `src/**` plus `!src/...` exclusions; every web PR went red on this test, run 42885504405): GitHub's `paths:` takes `**` (any depth) and a leading `!` (leave the file out); the old reader
+// took one folder level and read every line as an include, so it listed folders and the excluded files too.
 function expand(glob) {
   if (!glob.includes('*')) return [glob];
+  if (glob.endsWith('/**')) return existsSync(glob.slice(0, -3)) ? walk(glob.slice(0, -3)) : [];
   const dir = glob.slice(0, glob.lastIndexOf('/')), tail = glob.slice(glob.lastIndexOf('/') + 1), pattern = new RegExp(`^${tail.replace(/[.+]/g, '\\$&').replace(/\*/g, '.*')}$`);
   return existsSync(dir) ? readdirSync(dir).filter(name => pattern.test(name)).map(name => `${dir}/${name}`) : [];
 }
@@ -55,9 +61,12 @@ function expand(glob) {
 test('the search paths cover every stage file of the Find jobs pipeline yardstick, so a PR that moves its numbers is never missing', t => {
   const file = '.github/workflows/press-yardstick.yml';
   if (!existsSync(file)) return t.skip('the public workflow is not in this tree');
-  const globs = [...readFileSync(file, 'utf8').split('workflow_dispatch:')[0].matchAll(/^\s+- '([^']+)'$/gm)].map(match => match[1]).filter(glob => !glob.startsWith('tools/press-yardstick') && !glob.startsWith('.github/'));
-  assert.ok(globs.length >= 15, 'positive control: the yardstick list is read');
-  const files = globs.flatMap(expand);
+  const listed = [...readFileSync(file, 'utf8').split('workflow_dispatch:')[0].matchAll(/^\s+- '([^']+)'$/gm)].map(match => match[1]);
+  const globs = listed.filter(glob => !glob.startsWith('!') && !glob.startsWith('tools/press-yardstick') && !glob.startsWith('.github/'));
+  const left = new Set(listed.filter(glob => glob.startsWith('!')).flatMap(glob => expand(glob.slice(1))));
+  assert.ok(globs.length >= 5 && listed.length >= 15, 'positive control: the yardstick list is read');
+  const files = globs.flatMap(expand).filter(entry => !left.has(entry));
+  assert.ok(!files.includes('src/ai/apply_batch.py') && files.includes('src/ai/score.py'), 'positive control: a `!` line leaves its file out and `**` reaches files in folders');
   assert.ok(files.some(entry => entry.startsWith('src/daily_search_')), 'positive control: a pattern is expanded to the repo files');
   assert.deepEqual(files.filter(entry => !SEARCH_PATHS.some(path => inPath(entry, path))), [], 'a stage file of the yardstick that the marks would miss');
 });
@@ -175,8 +184,8 @@ test('a GitHub that does not answer holds the upload for the budget only; the ni
 });
 
 test('a path with more commits than the paging reads is named, not marked with PRs missing', async () => {
-  const bulk = Array.from({length: 700}, (_, i) => ({...commit('9', '2026-11-08T05:00:00Z', `bulk ${i} (#${5000 + i})`, ['src/press/rank.py'], null), oid: String(i).padStart(40, '0')}));
-  await assert.rejects(searchCommits(ENV, sha('d'), '2026-11-06T00:00:00Z', github({commits: bulk}).fetcher), /over 600 commits/);
+  const bulk = Array.from({length: 1100}, (_, i) => ({...commit('9', '2026-11-08T05:00:00Z', `bulk ${i} (#${5000 + i})`, ['src/press/rank.py'], null), oid: String(i).padStart(40, '0')}));
+  await assert.rejects(searchCommits(ENV, sha('d'), '2026-11-06T00:00:00Z', github({commits: bulk}).fetcher), /over 1000 commits/);
 });
 
 test('a night re-run by hand later has the newest build: history is read from that build, so no night gets a final "no PR" for commits the older tip cannot reach (Gitar on #507)', async () => {
