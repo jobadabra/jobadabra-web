@@ -105,15 +105,21 @@ export async function chargeContainer(env, install, micro, now = new Date()) {
 /** True for a Pro account (or a credit code) with credit to spend: the daily cap does not apply to its nights (api/ready.js stores it as ready_batches.strict = 0). A Pro whose credit is out is on the Free rules again (code review of the lane caps). */
 export const isPro = async (env, install) => { const lane = await proLane(env, install); return !!lane && !lane.blocked; };
 
+/** A short fingerprint of a claimed key (SHA-256, first 16 hex): what ready_batches.own_proof keeps, never the key. */
+export async function proofOf(key) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(key || ''))));
+  return [...digest.slice(0, 8)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 /**
  * A claimed own key is admitted at the batch only while the trial's daily cap has room, unless Anthropic already answered that key today (a proven key is the person's own, whatever the cap says). -> null, or the same 429 as reserveReads.
  * Why (code review of the lane caps): the slot of a claimed key is taken as its results arrive, so without this a made-up key would get one read past the cap from every new batch.
  */
-export async function claimedRefusal(env, install, now = new Date()) {
+export async function claimedRefusal(env, install, key, now = new Date()) {
   const day = dayOf(now), max = dayReads(env), usd = dayMicro(env);
   const row = await env.STATS.prepare('SELECT reads, micro FROM ready_read_days WHERE install = ? AND day = ?').bind(install, day).first();
   if (!row || (row.reads < max && row.micro < usd)) return null;
-  const proven = await env.STATS.prepare('SELECT 1 AS n FROM ready_batches WHERE install = ? AND own_ok = 1 AND created_at >= ?').bind(install, `${day}T00:00:00`).first();
+  const proven = await env.STATS.prepare('SELECT 1 AS n FROM ready_batches WHERE install = ? AND own_ok = 1 AND own_proof = ? AND created_at >= ?').bind(install, await proofOf(key), `${day}T00:00:00`).first();   // THAT key, not any key: one real key proven today does not lift the cap for a made-up one (Gitar on #510)
   if (proven) return null;
   return {status: 429, limit: max, used: row.reads, error: row.micro >= usd ? "Today's cloud checks used their budget. They start again tomorrow (00:00 UTC)." : `Today's cloud checks are used up (${row.reads} of ${max} forms). They start again tomorrow (00:00 UTC).`};
 }

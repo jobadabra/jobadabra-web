@@ -157,6 +157,30 @@ test("a made-up key gets no new batch once the trial cap is full, and a key Anth
   assert.equal((await call(ok, 'POST', 'batch', {...readBatch(2, '2026-11-10', 30), ...FAKE}, await member())).status, 200, 'a proven key reads on');
 });
 
+test("one proven key does not lift the cap for another: a made-up key is still refused when the cap is full, the proven one reads on (Gitar on #510)", async () => {
+  const e = always({READY_READ_DAY_MAX: '1', fetchFn: answering(200)});
+  const {bearer} = await started(e, {...readBatch(2), ...FAKE});
+  await modelCall(e, bearer);
+  await read(e, bearer, 'j0');   // the key is proven (a proven key's reads take no slot)
+  e.STATS.db.prepare("INSERT INTO ready_read_days (install, day, reads) VALUES ('member-1', '2026-11-09', 1) ON CONFLICT (install, day) DO UPDATE SET reads = 1").run();   // and today's cap is full
+  assert.equal(e.STATS.db.prepare('SELECT own_proof FROM ready_batches').get().own_proof.length, 16, 'a fingerprint is kept, never the key');
+  const other = {ai: {key: 'sk-ant-api03-' + 'y'.repeat(30)}};
+  assert.equal((await call(e, 'POST', 'batch', {...readBatch(2, '2026-11-10', 30), ...other}, await member())).status, 429, 'another key is not proven');
+  assert.equal((await call(e, 'POST', 'batch', {...readBatch(2, '2026-11-11', 60), ...FAKE}, await member())).status, 200, 'the proven key still is');
+});
+
+test("a Pro whose credit runs out after its batch was queued is on the Free rules for the reads that follow (Gitar on #510)", async () => {
+  const e = always({PRO_PLAN: 'promo', READY_READ_DAY_MAX: '1', WAITLIST: kv()});
+  e.STATS.db.exec('CREATE TABLE IF NOT EXISTS install_credit (install TEXT PRIMARY KEY, credit_micro INTEGER NOT NULL DEFAULT 0, credit_added_micro INTEGER NOT NULL DEFAULT 0, updated_at TEXT)');
+  e.STATS.db.prepare("INSERT INTO install_credit (install, credit_micro, credit_added_micro, updated_at) VALUES ('member-1', 5000000, 5000000, 'x')").run();
+  const {bearer} = await started(e, readBatch(3));
+  assert.equal(e.STATS.db.prepare('SELECT strict FROM ready_batches').get().strict, 0, 'queued as a Pro night');
+  assert.equal((await read(e, bearer, 'j0')).stop, false, 'with credit: no cap');
+  e.STATS.db.prepare("UPDATE install_credit SET credit_micro = 0 WHERE install = 'member-1'").run();   // the credit is gone
+  assert.equal((await read(e, bearer, 'j1')).stop, false, 'the first read on the Free rules takes the one slot');
+  assert.equal((await read(e, bearer, 'j2')).stop, true, 'the next is past the daily cap');
+});
+
 test("a Pro whose credit is out is on the Free rules: a made-up key does not lift the trial cap for it (code review of the lane caps)", async () => {
   const e = always({PRO_PLAN: 'test', READY_READ_DAY_MAX: '2', WAITLIST: kv()});
   const account = await createAccount(e, 'pro@example.com', evening);
