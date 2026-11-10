@@ -18,7 +18,8 @@ export function search({days, searchNights}) {
   if (!judged.length) return notMeasured(base, 'no nightly search stored in the last 30 days');   // no night yet is "not measured", never 0
   // Why (6 Nov 2026, review): only nights with the newest night's persona count are one series, as in the judge: an average of 6-persona and 18-persona nights would read "better" just because the set tripled.
   // Why (10 Nov 2026, jobadabra [oe] 1/3): nights without EURES are their own series too: the switch alone lowers the jobs found, it is no "worse".
-  const newest = judged[0], nights = judged.filter(item => item.total === newest.total && euresOf(item) === euresOf(newest)), byNight = new Map(nights.map(item => [item.night, item]));
+  if (!judged.some(item => !item.notRun)) return notMeasured(base, 'the last nights did not run (no AI answered): not a zero');   // Why (10 Nov 2026, cr 2/6)
+  const ran = judged.filter(item => !item.notRun), newest = ran[0], nights = ran.filter(item => item.total === newest.total && euresOf(item) === euresOf(newest)), byNight = new Map(nights.map(item => [item.night, item]));
   if (!days.slice(-2 * WEEK).includes(newest.night)) return notMeasured(base, 'no nightly search in the last 14 days');   // a stopped job is the news, not an old number
   const series = days.map(day => (byNight.has(day) ? {day, value: byNight.get(day).measured, n: 1} : {day, value: null}));
   const now = pooled(series.slice(-WEEK)), before = pooled(series.slice(-2 * WEEK, -WEEK));

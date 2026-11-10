@@ -33,21 +33,24 @@ function pooledLocal(rows) {
  * @param {object[]} [earlier] the nights BEFORE this one, newest first
  * @returns {object} the night plus {total, measured, local, out, seconds, usual, floor, reasons: ('measured'|'local'|'employer-sites')[], dropped, notes} and each row with its own `usual` (null in the first week) and its step counters' `counterUsual` and `drops`; usual and floor are null while the first week lasts. `notes` (the counters that fell, one line each) is report only: it never adds a reason
  */
+/** A night that did not run: the verdict says so, or every person is 'not-run' (both AIs refused, cr 2/6, 10 Nov 2026). It is no result: not a drop, not a zero, never in a baseline. */
+export const notRunOf = night => night?.state === 'not-run' || ((night?.rows || []).length > 0 && night.rows.every(row => row.kind === 'not-run'));
+
 export function judgeNight(night, earlier = []) {
   const rows = night.rows || [], total = rows.length, measured = rows.filter(row => row.kind === 'measured').length, local = pooledLocal(rows);
   const out = rows.filter(row => (row.ranOut || []).includes(EMPLOYER_SITES)).length, need = twoThirds(total);
   // Only nights of the same persona count AND the same EURES switch are a baseline: a night without EURES finds fewer jobs by design, never a drop (owner, 10 Nov 2026, jobadabra [oe] 1/3).
-  const same = earlier.filter(item => (item.rows || []).length === total && euresOf(item) === euresOf(night)).slice(0, HISTORY);
+  const same = earlier.filter(item => (item.rows || []).length === total && euresOf(item) === euresOf(night) && !notRunOf(item)).slice(0, HISTORY);
   const history = same.map(item => pooledLocal(item.rows || [])).filter(isNum);
   const usual = history.length >= HISTORY ? median(history) : null, floor = usual > 0 ? usual - SPREADS * spreadOf(history) : null;
   const mineOf = row => same.map(item => (item.rows || []).find(other => other.persona === row.persona));
   const own = row => { const mine = mineOf(row).map(other => other?.local).filter(isNum); return {...row, usual: mine.length >= HISTORY ? median(mine) : null, ...judgeCounters(row, mineOf(row))}; };
-  const reasons = [];
-  if (total && measured < need) reasons.push('measured');
-  if (floor != null && local != null && local < floor) reasons.push('local');
-  if (total && out >= need) reasons.push('employer-sites');
+  const reasons = [], notRun = notRunOf(night);
+  if (!notRun && total && measured < need) reasons.push('measured');
+  if (!notRun && floor != null && local != null && local < floor) reasons.push('local');
+  if (!notRun && total && out >= need) reasons.push('employer-sites');
   const judgedRows = rows.map(own);
-  return {...night, rows: judgedRows, notes: counterNotes(judgedRows), total, measured, local, out, need, seconds: median(rows.map(row => row.seconds).filter(isNum)), usual, floor: floor == null ? null : round(floor, 1), reasons, dropped: reasons.length > 0};
+  return {...night, rows: judgedRows, notes: counterNotes(judgedRows), total, measured, local, out, need, seconds: median(rows.map(row => row.seconds).filter(isNum)), usual, floor: floor == null ? null : round(floor, 1), reasons, dropped: reasons.length > 0, notRun};
 }
 
 /** Every stored night judged against the ones before it only (newest first in, the same order out). */

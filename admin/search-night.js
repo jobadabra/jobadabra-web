@@ -14,7 +14,9 @@ import {HAND_KEY, KEEP_HAND, handRuns} from './search-night-hand.js';
 
 export const STATE_KEY = 'search-nights', KEEP_NIGHTS = 30, MAX_BYTES = 65536, MAX_ROWS = 40;   // Why (6 Nov 2026): 18 fixed personas a night (owner: "6 personas is too narrow"); the cap was 12 and would have refused the first 18-persona verdict with a 400, silent again. 40 leaves room; 18 rows are about 20 KB of the 64 KB
 // The row kinds of the gate (tools/persona-search/gate.py row_verdict): 🟢 measured, ⚪ none-right (scored, none right role and place), ⚪ nothing (no job scored), unmeasured (errored, refused or too slow), fault.
-export const KINDS = ['measured', 'none-right', 'nothing', 'unmeasured', 'fault'];
+export const KINDS = ['measured', 'none-right', 'nothing', 'unmeasured', 'fault', 'not-run'];
+// Why (10 Nov 2026, cr 2/6): a person whose press AI was refused by both Codex and Claude has kind 'not-run' (the check did not run for them): it is not a result, so every chart reads it as "not measured", never as 0 jobs, and a night where every person is not-run is not a drop.
+export const NOT_MEASURED = ['unmeasured', 'fault', 'unknown', 'not-run'];
 const DAY = /^\d{4}-\d\d-\d\d$/, RUN = /^\d{1,20}$/, RAN_OUT = 'time ran out for: ';
 const text = (value, max) => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 // Why (10 Nov 2026, [sa]: "store `engine` as a fixed word from now"): the Scoreboard says which AI a night ran on, so a change of AI reads as a new series. The gate already writes each row's engine as text
