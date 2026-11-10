@@ -253,8 +253,12 @@ export async function sweep(env, now = new Date()) {
     await clear(env, row.install, row.id, null, now); out.swept++;
   }
   const old = stamp(new Date(now.getTime() - COUNTS_KEEP_DAYS * 24 * HOUR));
-  await env.STATS.prepare('DELETE FROM ready_jobs WHERE batch IN (SELECT id FROM ready_batches WHERE created_at < ?)').bind(old).run();
-  out.purged = (await env.STATS.prepare('DELETE FROM ready_batches WHERE created_at < ?').bind(old).run()).meta?.changes || 0;
+  // Why (retro review of web #514, Gitar, 10 Nov 2026): an auto night's outcome the app has not taken (the Mac off past 30 days) is not a count to age out: its row is what tells the app a press happened ("check it"), so the purge
+  // leaves those rows and their night until `takeSubmits` clears them (the sealed proof itself still ages out at 30 days: the row then reads `unknown`, never silence). `ready_attempts` is never purged: the one-attempt key
+  // of a queued item must outlive every night (api/ready-auto.js), a row of ~100 bytes per press.
+  await env.STATS.prepare(`DELETE FROM ready_jobs WHERE batch IN (SELECT id FROM ready_batches WHERE created_at < ?)
+    AND NOT (cleared_at IS NULL AND state IN ('submitted', 'not_submitted', 'unknown', 'failed') AND batch IN (SELECT id FROM ready_batches WHERE task = 'auto'))`).bind(old).run();
+  out.purged = (await env.STATS.prepare('DELETE FROM ready_batches WHERE created_at < ? AND id NOT IN (SELECT batch FROM ready_jobs)').bind(old).run()).meta?.changes || 0;
   await env.STATS.prepare('DELETE FROM ready_read_days WHERE day < ?').bind(old.slice(0, 10)).run().catch(() => {});   // the day counters of 3/4 go with the counts
   return out;
 }

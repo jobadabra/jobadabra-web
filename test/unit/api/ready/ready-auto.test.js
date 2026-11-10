@@ -182,6 +182,23 @@ test('the Mac off for days: the outcome waits on the site until the app takes it
   assert.deepEqual(taken.submits.map(each => [each.job, each.state]), [['j0', 'submitted']], 'the app still learns it was sent');
 });
 
+// Why (retro review of web #514, Gitar, 10 Nov 2026): the 30-day counts purge deleted an auto night's untaken outcome rows, so a press the Mac was off too long to hear of vanished without a word.
+test('the Mac off for 40 days: the 30-day purge keeps the outcome rows the app has not taken, and the one-attempt key; the app still learns it was sent, once', async () => {
+  const e = pro();
+  const {made, bearer} = await started(e);
+  const {attempt} = await (await reserveFor(e, bearer, 'j0')).json();
+  await report(e, bearer, {job: 'j0', state: 'submitted', attempt, proof: {signature: 's'}});
+  const swept = await sweep(e, new Date(evening.getTime() + 40 * 24 * 3600 * 1000));
+  assert.equal(swept.purged, 0, 'a night holding an outcome nobody took is not purged');
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM ready_jobs WHERE job = ?').get('j0').n, 1, 'its row stays');
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM ready_attempts').get().n, 1, 'the item can never be reserved again');
+  const taken = await (await call(e, 'POST', 'reads', {}, await member(), new Date(evening.getTime() + 41 * 24 * 3600 * 1000))).json();
+  assert.deepEqual(taken.submits.map(each => [each.job, each.state]), [['j0', 'submitted']]);
+  const later = await sweep(e, new Date(evening.getTime() + 42 * 24 * 3600 * 1000));
+  assert.equal(later.purged >= 1, true, 'once taken, the night goes with the counts');
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM ready_jobs WHERE batch = ?').get(made.batch).n, 0);
+});
+
 test('no press once the kill switch is off, the night is capped, or Pro has lapsed', async () => {
   for (const change of [e => { e.READY_AUTO = 'off'; }, e => { e.STATS.db.prepare("UPDATE ready_batches SET state = 'capped'").run(); }, e => { e.STATS.db.prepare('UPDATE install_credit SET credit_micro = 0').run(); }]) {
     const e = pro();
