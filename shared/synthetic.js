@@ -4,6 +4,7 @@
 // No secret beyond what the Worker holds, no user data: the probe is one fixed install whose tokens are computed here (tokenFor), so nothing is minted and no counter moves.
 import {tokenFor} from './guard.js';
 import {alertOwner} from './notify-send.js';
+import {probeCard} from './owner-cards.js';
 import {chainOf, fetchHealth, problem} from './ai-broker.js';
 
 export const ROUND_MINUTES = [5, 20, 35, 50];   // UTC minutes of the Worker's every-5-minutes tick; not :15 / :40, where the CI collectors start (shared/intel-start.js)
@@ -100,8 +101,6 @@ export async function settle(db, rows, at) {
 }
 
 const label = id => PROBES.find(probe => probe.id === id)?.label || id;
-const text = value => String(value ?? '').replace(/[<>&]/g, char => ({'<': '&lt;', '>': '&gt;', '&': '&amp;'}[char]));
-const clock = iso => String(iso).slice(11, 16);
 
 /** The one Telegram message for the changes not told yet (rows with told = 0), then marks them told. Telegram failing leaves them untold: the next round tries again. */
 export async function tell(env, db, fetcher = fetch) {
@@ -109,11 +108,10 @@ export async function tell(env, db, fetcher = fetch) {
   const { results = [] } = await db.prepare('SELECT probe, state, red_since, streak, reason FROM synthetic_state WHERE told = 0 ORDER BY probe').all();
   if (!results.length) return 0;
   const base = env.SITE_URL || SITE;
-  const lines = results.map(row => (row.state === 'down'
-    ? `🔴 <b>Down</b> · ${text(label(row.probe))}\n<code>${text(row.reason)}</code> · ${row.streak} reds in a row since ${clock(row.red_since)} UTC`
-    : `🟢 <b>Back</b> · ${text(label(row.probe))}\nDown since ${clock(row.red_since)} UTC`));
+  // Why (10 Nov 2026, owner: every message reads like the Central scout one): one card for the changed probes (shared/owner-cards.js probeCard), not a Down/Back block per probe.
+  const text = probeCard(results.map(row => ({label: label(row.probe), state: row.state === 'down' ? 'down' : 'up', redSince: row.red_since, streak: row.streak, reason: row.reason})), base).text;
   // state = the changed probes and where each went, so the switchboard's "changes only" holds a repeat of the same state (Why 5 Nov 2026: mode `changes` needs it).
-  const told = await alertOwner(env, 'site-probe', {text: `${lines.join('\n\n')}\n\n<a href="${base}/admin/testing/overview">Testing overview</a>`, html: true, fetcher,
+  const told = await alertOwner(env, 'site-probe', {text, html: true, fetcher,
     state: results.map(row => `${row.probe}:${row.state}`).join(','), legacy: env.SENTRY_TELEGRAM_TOKEN && env.SENTRY_TELEGRAM_CHAT ? {token: env.SENTRY_TELEGRAM_TOKEN, chat: env.SENTRY_TELEGRAM_CHAT} : null}).catch(() => null);
   if (!told || (!told.sent && told.via !== 'switchboard')) return 0;   // could not deliver anywhere: stay untold, the next round retries
   await db.batch(results.map(row => db.prepare('UPDATE synthetic_state SET told = 1 WHERE probe = ?').bind(row.probe)));

@@ -98,7 +98,7 @@ test('without files the message is the words only (no photo call)', async () => 
   const e = env(), calls = [];
   await send(e, {...good, screenshot: undefined, logs: undefined}, telegramOk(calls));
   assert.deepEqual(calls.map(c => c.method), ['sendMessage']);
-  assert.ok(!JSON.parse(calls[0].body).text.includes('/admin/'));
+  assert.ok(!JSON.parse(calls[0].body).text.includes('📎'), 'no attachments line');
 });
 
 test('the file route is the owner\'s only; a bad ref, a missing kind or an expired file is a 404', async () => {
@@ -166,7 +166,7 @@ test('the screen data and the profile snapshot are kept beside the logs, served 
   const saved = row(e);
   assert.deepEqual([saved.logs, saved.page, saved.profile], [1, 1, 1]);
   assert.deepEqual([...e.FEEDBACK_FILES.kept.keys()].sort(), ['logs.txt', 'page.json', 'profile.json', 'screen.png'].map(name => `feedback/${saved.ref}/${name}`));
-  assert.match(JSON.parse(calls[0].body).text, /Screenshot · Logs · Screen data · Profile on \/admin/);
+  assert.match(JSON.parse(calls[0].body).text, /📎 Screenshot · Logs · Screen data · Profile/);
   const open = kind => file(new Request(`https://x/admin/growth/feedback/file?ref=${saved.ref}&kind=${kind}`, {headers: {Authorization: 'Bearer owner'}}), e);
   for (const kind of ['page', 'profile']) {
     const served = await open(kind);
@@ -217,7 +217,7 @@ test('a long report is kept whole, and Telegram shows its start with a link to t
   const told = JSON.parse(calls[0].body).text;
   assert.ok(told.length < 4096, 'Telegram refuses a message over 4096 characters');
   assert.doesNotMatch(told, new RegExp(ending));
-  assert.match(told, /Full text on \/admin/);
+  assert.match(told, /📎 Full text/);
   const over = await send(e, {...good, text: 'x'.repeat(MAX_TEXT + 500), screenshot: '', logs: ''}, telegramOk([]));
   assert.equal(over.status, 200);
   assert.equal(row(e).text.length, MAX_TEXT, 'beyond MAX_TEXT is cut, and the app says so before sending');

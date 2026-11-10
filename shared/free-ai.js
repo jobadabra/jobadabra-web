@@ -6,6 +6,7 @@ import {authorize, digestOf} from './guard.js';
 import {verifyLicense} from './license.js';
 import {asStream, fromWorkersAi, toWorkersAi, Unsupported} from './free-ai-translate.js';
 import {accountNeurons} from './free-ai-usage.js';
+import {freeAiCard} from './owner-cards.js';
 import {FREE_NEURONS_PER_DAY, costUsd, modelFor, neuronsOf} from './free-ai-models.js';
 import {PRO_PER_MINUTE, chargeCall, proLane} from './pro-ai.js';
 import {claudeCall, proRoute} from './pro-claude.js';
@@ -153,7 +154,7 @@ async function alertOnce(env, kv, day, before, after, fetcher) {
   const line = num(env.FREE_AI_ALERT_USD, LIMITS.alertUsd) * 1e6;
   if (before >= line || after < line || await kv.get(`freeai:alerted:${day}`)) return;
   await kv.put(`freeai:alerted:${day}`, '1', {expirationTtl: 2 * 86400});
-  await tellSpend(env, kv, `freeai:alerted:${day}`, `⚠️ <b>Free AI</b> spend today passed $${line / 1e6} (stops at $${num(env.FREE_AI_STOP_USD, LIMITS.stopUsd)}). /admin/ai/costs has the steps.`, fetcher);
+  await tellSpend(env, kv, `freeai:alerted:${day}`, freeAiCard('day', {usd: line / 1e6, stop: num(env.FREE_AI_STOP_USD, LIMITS.stopUsd)}).text, fetcher);
 }
 
 // One Telegram line the month the global spend first crosses the month alert line ($40 of the $60 stop).
@@ -161,7 +162,7 @@ async function monthAlert(env, kv, month, before, after, fetcher) {
   const line = num(env.FREE_AI_MONTH_ALERT_USD, LIMITS.monthAlertUsd) * 1e6;
   if (before >= line || after < line || await kv.get(`freeai:monalerted:${month}`)) return;
   await kv.put(`freeai:monalerted:${month}`, '1', {expirationTtl: 40 * 86400});
-  await tellSpend(env, kv, `freeai:monalerted:${month}`, `⚠️ <b>Free AI</b> spend this month passed $${line / 1e6} (stops at $${num(env.FREE_AI_MONTH_STOP_USD, LIMITS.monthStopUsd)}). /admin/ai/costs has the installs.`, fetcher);
+  await tellSpend(env, kv, `freeai:monalerted:${month}`, freeAiCard('month', {usd: line / 1e6, stop: num(env.FREE_AI_MONTH_STOP_USD, LIMITS.monthStopUsd)}).text, fetcher);
 }
 
 const isJson = text => { try { JSON.parse(text); return true; } catch { return false; } };
@@ -171,5 +172,5 @@ async function neuronAlert(env, kv, day, after, allowance, fetcher) {
   const line = allowance * 0.8;
   if (!Number.isFinite(allowance) || after < line || await kv.get(`freeai:neualert:${day}`)) return;
   await kv.put(`freeai:neualert:${day}`, '1', {expirationTtl: 2 * 86400});
-  await tellSpend(env, kv, `freeai:neualert:${day}`, `⚠️ <b>Free AI</b> used 80% of today's free allowance (${Math.round(line)} of ${allowance} neurons). It stops at 100% until 00:00 UTC. /admin/ai/costs has the day.`, fetcher);
+  await tellSpend(env, kv, `freeai:neualert:${day}`, freeAiCard('neurons', {used: Math.round(line), allowance}).text, fetcher);
 }

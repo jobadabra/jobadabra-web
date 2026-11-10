@@ -14,6 +14,7 @@ import {page, switchOff} from './mail-unsub.js';
 import {accountOf, createAccount, link} from '../shared/pro.js';
 import {escTags} from '../shared/html.js';
 import {alertOwner} from '../shared/notify-send.js';
+import {emailCard} from '../shared/owner-cards.js';
 
 const parseKey = key => { const [tag, install, token] = String(key || '').split('.'); return tag === 'JPF1' && install && token ? {install, token} : null; };
 const json = (status, body) => Response.json(body, {status});
@@ -31,9 +32,9 @@ async function tellOwner(env, fetcher, {email, install, changed}) {
   try {
     const total = (await env.STATS.prepare("SELECT COUNT(*) AS n FROM pro_accounts WHERE email IS NOT NULL AND email != ''").first().catch(() => null))?.n;
     // Why (5 Nov 2026, owner: an alert never carries a name or e-mail address): the address is on /admin/growth/email; the ping says that one came and links there.
-    const text = `📧 <b>${changed ? 'User e-mail changed' : 'New user e-mail'}</b> · install ${escTags(install.slice(0, 8))}${total ? ` · ${total} with an e-mail` : ''}`;
+    const text = emailCard({changed, install, total}).text;   // Why (10 Nov 2026, owner: every message reads like the Central scout one): one card (shared/owner-cards.js)
     const legacy = env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null;
-    const sent = await alertOwner(env, 'email-added', {text, html: true, link: `${env.SITE_URL || 'https://www.jobadabra.top'}/admin/growth/email?tab=people`, legacy, fetcher});
+    const sent = await alertOwner(env, 'email-added', {text, html: true, legacy, fetcher});
     if (!sent.sent && sent.via !== 'switchboard') console.log('account e-mail ping failed', String(sent.why).slice(0, 200));
   } catch (error) {
     console.log('account e-mail ping failed', String(error.message).split(env.BRAIN_BOT_TOKEN || '\u0000').join('<token>'));

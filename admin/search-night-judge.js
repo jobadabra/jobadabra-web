@@ -10,6 +10,7 @@
 // Why (6 Nov 2026, owner's rule of 27 Oct 2026 "no guessed number", tools/persona-search/gate.py QUALITY_SPREADS): the drop line for jobs is the PR gate's own rule, a spread being the sample standard deviation
 // of the nights before, so no number here was picked by hand; the median (the brief's word) keeps one empty night from moving the line. A median of 0 has no line below it, so it stays silent: the other two reasons catch a search that finds nothing.
 import {median, round} from './product-quality.js';
+import {nightCard} from '../shared/owner-cards.js';
 import {HISTORY, SPREADS, counterNotes, judgeCounters, spreadOf} from './search-night-counters.js';
 
 export {HISTORY, SPREADS};   // one source for the 7 nights and the 2 spreads: the per-step counters (admin/search-night-counters.js) use the same
@@ -59,10 +60,7 @@ export function reasonWords(verdict) {
   return verdict.reasons.map(reason => words[reason]);
 }
 
-/** The alert's text: counts only, no persona, job or employer name (the switchboard adds the Admin link). */
+/** The alert's text (a card, shared/owner-cards.js nightCard): counts only, no persona, job or employer name; the card carries the Admin link. */
 export function alertText(verdict) {
-  const parts = [`measured ${verdict.measured} of ${verdict.total}`];
-  if (verdict.reasons.includes('local')) parts.push(`relevant local jobs ${verdict.local} against a usual ${round(verdict.usual, 1)}`);
-  if (verdict.reasons.includes('employer-sites')) parts.push(`employer sites out of time in ${verdict.out}`);
-  return `🔎 Night search: ${parts.join(', ')}`;
+  return nightCard({...verdict, usual: round(verdict.usual, 1)}).text;
 }

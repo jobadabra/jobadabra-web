@@ -2,6 +2,7 @@
 // {install, purpose: 'index'}) and at most INDEX_PER_INSTALL_PER_DAY times a day; GET /api/index?summary=1 is public and holds only the counts;
 // PUT /api/index (Bearer INDEX_PUBLISH_KEY) is the private central scout (repo jobadabra/jobadabra-lab) publishing it.
 // Product data only: feeds, quality, last verified. Nothing about any user. Stored as one KV value (binding WAITLIST).
+import {employerCard} from '../shared/owner-cards.js';
 import {REGIONS, ROLES} from '../shared/pool-labels.js';
 import {sourceRanking} from './source-ranking.js';
 import {poolSnapshot, pooledKeys, storePoolSnapshot} from '../shared/pool-snapshot.js';
@@ -294,7 +295,7 @@ async function keepCopy(env, raw, day) {
   try { await env.WAITLIST.put(`${COPY_PREFIX}${day}`, raw, {expirationTtl: COPY_DAYS * 86400}); return 'kept'; }
   catch (error) {
     console.log(`index copy: ${String(error?.message || error).slice(0, 200)}`);
-    await alertOwner(env, 'index-copy-failed', {text: `🗂 Employer list: the copy of ${day} could not be saved. The publish went through, but this day has no way back.`, level: 'problem', legacy: brainBot(env)}).catch(() => {});
+    await alertOwner(env, 'index-copy-failed', {text: employerCard('copy-failed', {day}).text, html: true, level: 'problem', legacy: brainBot(env)}).catch(() => {});
     return 'failed';
   }
 }
@@ -302,7 +303,7 @@ async function keepCopy(env, raw, day) {
 /** A publish a guard stopped: the 409 the scout shows red, and the owner told. A failed telling never changes the refusal. */
 // Why (5 Nov 2026, owner's brief): the scout's run alone said so, and nobody reads a run that is red every 6 h; `daily` in the registry makes it at most one message a UTC day.
 async function refuse(env, why) {
-  await alertOwner(env, 'index-publish-refused', {text: `🗂 Employer list: a publish was refused, ${why}. The list stays as it was; look at the central scout's last run.`, level: 'problem', legacy: brainBot(env)}).catch(() => {});
+  await alertOwner(env, 'index-publish-refused', {text: employerCard('publish-refused', {why}).text, html: true, level: 'problem', legacy: brainBot(env)}).catch(() => {});
   return text(409, `Refused: ${why}`);
 }
 
@@ -332,7 +333,7 @@ async function publish(request, env) {
   // Why (6 Nov 2026, owner: "Alert on fields, block on employers (Recommended)"): on 2 Nov feeds with kinds fell from 3,926 to 9. A big drop of a field is told the same day but never refused:
   // the scout drops kinds judged before role_kinds.SINCE on purpose when that date moves, and a refusal then would freeze the list. The dated copy makes any drop restorable.
   // Told right after D1 holds the drop (review): a later write that fails would make the scout's retry compare with the drop, and nobody would hear of it.
-  if (previousKinds >= 10 && withKinds < previousKinds / 2) await alertOwner(env, 'index-kinds-dropped', {text: `🗂 Employer list: a publish kept ${withKinds} feeds with kinds of ${previousKinds}. It went through; if the scout did not mean it, restore the day before (index copies).`, level: 'problem', legacy: brainBot(env)}).catch(() => {});
+  if (previousKinds >= 10 && withKinds < previousKinds / 2) await alertOwner(env, 'index-kinds-dropped', {text: employerCard('kinds-dropped', {withKinds, previousKinds}).text, html: true, level: 'problem', legacy: brainBot(env)}).catch(() => {});
   await env.WAITLIST?.put(GENERATED_KEY, generated);
   await env.WAITLIST?.put(SUMMARY_KEY, JSON.stringify(summary(feeds)));
   // "No readable job site", checked here like everything published: a key, a name, a host, a date.

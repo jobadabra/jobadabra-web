@@ -7,6 +7,7 @@ import {escTags} from '../shared/html.js';
 import {TEXT_FILES} from '../shared/feedback.js';
 import {suggestImpact} from '../shared/feedback-impact.js';
 import {alertOwner} from '../shared/notify-send.js';
+import {feedbackCard} from '../shared/owner-cards.js';
 import {sendPhoto} from '../shared/notify-telegram.js';
 
 const PER_INSTALL_PER_DAY = 10;
@@ -33,11 +34,12 @@ export function decodeShot(value) {
 // Messages to the owner: the words first (with the logs link), then the screenshot as a photo under it. -> 'sent' | 'off' | 'failed: <why>'
 async function tell(env, fetcher, row, shot) {
   const legacy = env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null;
+  // Why (10 Nov 2026, owner: every message reads like the Central scout one): one card (shared/owner-cards.js feedbackCard): headline with version and platform, the person's words as a folded quote,
+  // the screen and attachments as facts, one link. Why (5 Nov 2026, owner: an alert never carries a name or e-mail address): the reporter's optional address is read on /admin, not in Telegram.
   const cut = row.text.length > TELEGRAM_TEXT;
-  const have = [cut && 'Full text', row.shot && 'Screenshot', row.logs && 'Logs', row.page && 'Screen data', row.profile && 'Profile', row.contact && 'Reply address'].filter(Boolean);
-  const link = have.length ? `\n\n📎 <a href="https://www.jobadabra.top/admin/feedback/inbox#${row.ref}">${have.join(' · ')} on /admin</a>` : '';
-  const message = `💬 <b>Feedback</b> · v${escTags(row.version)} · ${escTags(row.platform)}${row.screen ? ` · ${escTags(row.screen)}` : ''} · install ${escTags(row.install.slice(0, 8))}\n\n${escTags(cut ? `${row.text.slice(0, TELEGRAM_TEXT).replace(/[\uD800-\uDBFF]$/, '').trimEnd()}…` : row.text)}` +
-    link;   // Why (5 Nov 2026, owner: an alert never carries a name or e-mail address): the reporter's optional address is read on /admin, not in Telegram
+  const attachments = [cut && 'Full text', row.shot && 'Screenshot', row.logs && 'Logs', row.page && 'Screen data', row.profile && 'Profile', row.contact && 'Reply address'].filter(Boolean);
+  const message = feedbackCard({version: row.version, platform: row.platform, screen: row.screen, install: row.install, ref: row.ref, attachments,
+    text: cut ? `${row.text.slice(0, TELEGRAM_TEXT).replace(/[\uD800-\uDBFF]$/, '').trimEnd()}…` : row.text}).text;
   // The switchboard (the owner's switch, channel) first; the Brain bot as before when it cannot deliver (shared/notify-send.js).
   const first = await alertOwner(env, 'feedback-received', {text: message, html: true, legacy, fetcher});
   if (first.via === 'none' && !first.sent) return first.why === 'no-bot' || first.why === 'channel-not-connected' ? 'off' : `failed: ${first.why}`.slice(0, 200);

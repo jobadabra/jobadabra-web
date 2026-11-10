@@ -5,6 +5,7 @@
 // Guarded by test/unit/shared/feedback/feedback-impact.test.js (the fixed case set test/fixtures/feedback-impact-cases.json: a prompt change adds its case there and replays them all).
 import {IMPACTS} from './feedback-actions.js';
 import {alertOwner} from './notify-send.js';
+import {impactDownCard} from './owner-cards.js';
 import {SMALL, modelFor, costUsd} from './free-ai-models.js';
 import {fromWorkersAi, toWorkersAi} from './free-ai-translate.js';
 import {record} from './aicost.js';
@@ -80,7 +81,7 @@ async function tellOutage(env, text, kind, now, fetcher = fetch) {
   if (env.WAITLIST && await env.WAITLIST.get(key).catch(() => null)) return false;
   try {
     const legacy = env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null;
-    if (!(await alertOwner(env, 'feedback-impact-down', {text, level: 'problem', legacy, fetcher})).sent) return false;
+    if (!(await alertOwner(env, 'feedback-impact-down', {text, html: true, level: 'problem', legacy, fetcher})).sent) return false;
   } catch { return false; }
   await env.WAITLIST?.put(key, '1', {expirationTtl: 2 * 86400}).catch(() => {});
   return true;
@@ -102,7 +103,7 @@ export async function retryImpact(env, now = new Date(), limit = 20, fetcher = f
   }
   if (failed && !done) {
     const kind = kindOfFailure(last);
-    await tellOutage(env, `⚠️ AI skipped (${kind}): the AI could not suggest an impact for ${failed} feedback message${failed === 1 ? '' : 's'}. Last answer: ${last}. You can still rate them by hand on /admin/feedback/inbox.`, kind, now, fetcher);
+    await tellOutage(env, impactDownCard({kind, failed, last}).text, kind, now, fetcher);
     throw new Error(`feedback impact: AI skipped (${kind}) for all ${failed} rows: ${last}`);
   }
   return done;

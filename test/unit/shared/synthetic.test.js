@@ -88,12 +88,12 @@ test('one red is nothing; two reds tell once; a third tells nothing; the first g
   assert.equal(await round(5), 0, 'one red: no message');
   assert.equal(await round(20), 1, 'two reds: one message');
   assert.equal(w.telegram.length, 1);
-  assert.match(w.telegram[0].text, /Down<\/b> · Update feed[\s\S]*HTTP 502[\s\S]*2 reds in a row since 12:05 UTC/);
+  assert.match(w.telegram[0].text, /Update feed is down[\s\S]*2 reds in a row since 12:05 UTC[\s\S]*HTTP 502/);
   assert.equal(await round(35), 0, 'a third red: nothing more');
   assert.equal(w.telegram.length, 1);
   w.answers['https://www.jobpilotto.workers.dev/api/releases/latest'] = good['https://www.jobpilotto.workers.dev/api/releases/latest'];   // the feed recovers
   assert.equal(await round(50), 1, 'first green: back');
-  assert.match(w.telegram.at(-1).text, /Back<\/b> · Update feed[\s\S]*Down since 12:05 UTC/);
+  assert.match(w.telegram.at(-1).text, /Update feed is back up[\s\S]*was down since 12:05 UTC/);
   assert.equal(await round(51), 0);
   assert.equal(w.telegram.length, 2);
 });

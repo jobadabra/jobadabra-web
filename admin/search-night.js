@@ -106,7 +106,7 @@ export async function ingest(env, verdict, {night, run}, now = new Date(), fetch
   if (!judged) return {status: 200, body: {ok: true, night, stored: false, why: `older than the last ${KEEP_NIGHTS} nights`}};
   let alert = null;
   if (judged.dropped && kept[0].night === night) {
-    const told = await alertOwner(env, 'search-check-dropped', {text: alertText(judged), link: `${env.SITE_URL || 'https://www.jobadabra.top'}/admin/job-search/lab?tab=night`, level: 'problem', state: `night ${night}`, fetcher, now})
+    const told = await alertOwner(env, 'search-check-dropped', {text: alertText(judged), html: true, level: 'problem', state: `night ${night}`, fetcher, now})
       .catch(error => ({sent: false, via: 'none', why: `error: ${String(error?.message).slice(0, 80)}`}));
     alert = told.sent ? 'sent' : told.why || told.via;
   }

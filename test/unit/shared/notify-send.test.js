@@ -98,3 +98,16 @@ test('Free AI spend: its day, month and neuron alerts are one event with "every 
 test('Sentry: the switchboard ceiling sits above the sender\'s own 20 an hour, so the one summary line is not held back by it', () => {
   assert.ok(alertOf('sentry-issue').maxPerHour > 20);
 });
+
+// The owner's scenario of 8 Nov 2026 ("apply · red on main" came twice, 18:25 and 23:01, while the Engineering channel was not connected): the old bot sent both and the switchboard knew no state, so "changes only" held nothing.
+test('a send through the old bot while the channel is down keeps its state: the same state is held when the channel is back, a new one is told', async () => {
+  const e = env(), tg = telegram();
+  const first = await tell(e, tg, {legacy: OLD, state: 'red:abc:2026-11-05'}, 'main-red');
+  assert.deepEqual([first.sent, first.via], [true, 'fallback'], 'positive control: the channel is down, the old bot sent it');
+  await connect(e, 'engineering', NEW, '', tg.fetcher, NOW);
+  const again = await tell(e, tg, {legacy: OLD, state: 'red:abc:2026-11-05'}, 'main-red');
+  assert.deepEqual([again.sent, again.via, again.why], [false, 'switchboard', 'same-state']);
+  const other = await tell(e, tg, {legacy: OLD, state: 'red:def:2026-11-05'}, 'main-red');
+  assert.deepEqual([other.sent, other.via], [true, 'switchboard']);
+  assert.equal((await stats(e)).get('main-red').fallback, 1, 'Admin still counts the one send made without the switchboard');
+});

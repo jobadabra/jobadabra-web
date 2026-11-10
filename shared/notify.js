@@ -11,6 +11,7 @@
 import {open, seal} from './notify-vault.js';
 import {botName, chatTitle, lastChat, sendMessage} from './notify-telegram.js';
 import {alertOf, channelOf, effective} from './notify-registry.js';
+import {testCard} from './owner-cards.js';
 
 const KEEP_DAYS = 30, MAX_TEXT = 3500, MAX_HTML = 3750;   // Why (5 Nov 2026, code review): feedback HTML is ~3000 text + header + link, and escaping grows it; Telegram allows 4096 with the link
 const answer = (status, body) => ({status, body});
@@ -65,7 +66,7 @@ export async function channelStatus(env, id, fetcher = fetch) {
 export async function sendTest(env, id, fetcher = fetch, now = new Date()) {
   const bot = await botOf(env, id);
   if (!bot) return {ok: false, why: 'No bot connected to this channel yet.'};
-  const sent = await sendMessage(fetcher, bot.token, bot.chat, `🔔 Test from Admin → Operations → Notifications (${channelOf(id).name}). If you read this, the channel works.`);
+  const sent = await sendMessage(fetcher, bot.token, bot.chat, testCard(channelOf(id).name).text, {parse_mode: 'HTML'});
   await log(env, {event: '_test', at: now, channel: id, sent: sent.ok ? 1 : 0, reason: sent.ok ? '' : sent.why});
   return sent.ok ? {ok: true} : {ok: false, why: sent.why};
 }
@@ -85,8 +86,9 @@ export async function stats(env, now = new Date()) {
   } catch { /* the page draws without numbers */ }
   return out;
 }
-const lastSent = (env, event) => env.STATS.prepare('SELECT at, state FROM notify_log WHERE event = ? AND sent = 1 AND via = ? ORDER BY id DESC LIMIT 1').bind(event, 'switchboard').first();
-const sentSince = async (env, event, since) => Number((await env.STATS.prepare('SELECT COUNT(*) AS n FROM notify_log WHERE event = ? AND sent = 1 AND via = ? AND at >= ?').bind(event, 'switchboard', since.toISOString()).first())?.n) || 0;
+// Why (10 Nov 2026, owner: the same alert came twice while a channel was down): a message the owner got through the sender's old bot counts as sent, with its state, for "changes only", "daily" and the hourly limit. Admin's "sent without switchboard" count still reads via.
+const lastSent = (env, event) => env.STATS.prepare('SELECT at, state FROM notify_log WHERE event = ? AND sent = 1 ORDER BY id DESC LIMIT 1').bind(event).first();
+const sentSince = async (env, event, since) => Number((await env.STATS.prepare('SELECT COUNT(*) AS n FROM notify_log WHERE event = ? AND sent = 1 AND at >= ?').bind(event, since.toISOString()).first())?.n) || 0;
 
 /** The text as sent: an e-mail address replaced (an alert never carries personal data), cut to Telegram's size, the Admin link last. */
 export function words(text, link, html = false) {
@@ -100,7 +102,7 @@ export async function notify(env, payload, {now = new Date(), fetcher = fetch} =
   if (!alert) return answer(400, {ok: false, why: 'unknown-event'});
   if (!env.STATS) return answer(503, {ok: false, why: 'no-store'});
   try {
-    if (payload.fallback === true) { await log(env, {event: alert.id, at: now, channel: alert.channel, sent: 1, via: 'fallback'}); return answer(200, {ok: true, sent: false, logged: true}); }
+    if (payload.fallback === true) { await log(env, {event: alert.id, at: now, channel: alert.channel, sent: 1, via: 'fallback', state: String(payload.state || '').slice(0, 60)}); return answer(200, {ok: true, sent: false, logged: true}); }
     const mine = effective(alert, (await readSettings(env)).get(alert.id));
     const held = why => answer(200, {ok: true, sent: false, why});
     if (!mine.on) return held('off');

@@ -41,7 +41,7 @@ test('a first address pings the owner once, WITHOUT the address (owner, 5 Nov 20
   assert.equal(url, `https://api.telegram.org/bot${TOKEN}/sendMessage`);
   assert.equal(body.chat_id, '42');
   assert.equal(body.parse_mode, 'HTML');
-  assert.equal(body.text, '📧 <b>New user e-mail</b> · install install- · 1 with an e-mail\nhttps://www.jobadabra.top/admin/growth/email?tab=people');
+  assert.equal(body.text, '🟢 <b>New user e-mail · install install-</b>\n\n📧 1 install has an e-mail\n\n<a href="https://www.jobadabra.top/admin/growth/email?tab=people">Open the people list</a>');
   assert.ok(!body.text.includes('ana@example.com'), 'an alert never carries the address; /admin/growth/email?tab=people shows it');
   assert.equal((await put(s, 'install-aaaa1234', 'ana@example.com')).ok, true);
   await put(s, 'install-aaaa1234', null, 'GET');
@@ -54,7 +54,7 @@ test('the count is the accounts holding an address, and an address with an & nev
   s.e.STATS.db.exec("INSERT INTO pro_accounts (id, email_hash, email, created_at, plan) VALUES ('acc_x', 'hx', 'x', 'x', 'trial')");
   assert.equal((await put(s, 'install-bbbb1234', 'o&co@example.com')).ok, true);
   assert.ok(!/o&(amp;)?co/.test(s.calls[0].body.text), s.calls[0].body.text);
-  assert.ok(s.calls[0].body.text.includes('· 2 with an e-mail'));
+  assert.ok(s.calls[0].body.text.includes('2 installs have an e-mail'));
 });
 
 test('a changed address on an existing account pings once, worded "changed"', async () => {
@@ -62,7 +62,7 @@ test('a changed address on an existing account pings once, worded "changed"', as
   await put(s, 'install-aaaa1234', 'ana@example.com');
   assert.equal((await put(s, 'install-aaaa1234', 'ana.new@example.com')).ok, true);
   assert.equal(s.calls.length, 2);
-  assert.equal(s.calls[1].body.text, '📧 <b>User e-mail changed</b> · install install- · 1 with an e-mail\nhttps://www.jobadabra.top/admin/growth/email?tab=people');
+  assert.equal(s.calls[1].body.text, '🟢 <b>User e-mail changed · install install-</b>\n\n📧 1 install has an e-mail\n\n<a href="https://www.jobadabra.top/admin/growth/email?tab=people">Open the people list</a>');
 });
 
 test('a taken or Pro refusal pings nobody', async () => {
