@@ -37,7 +37,9 @@ export async function reportForm(request, env, pathname, now = new Date(), fetch
   }
   const params = new URL(request.url).searchParams, status = params.get('status'), why = /^[a-z0-9-]{1,40}$/.test(params.get('why') || '') ? params.get('why') : '';
   if (request.method === 'POST' && OWNER_STATUSES.includes(status)) {   // fetched by reports-fetch.mjs; fixed or unreplayable by the owner, with a reason word (shared/report-waiting.js stops at any of them)
-    await env.STATS.prepare('UPDATE form_reports SET status = ?, why = ? WHERE id = ?').bind(status, why, id).run();
+    // Why (retro review of web #515, Gitar, 10 Nov 2026): "fetched" only moves a report nobody had fetched; run again (reports-fetch.mjs) it must not reopen a report closed as fixed or unreplayable, nor wipe its reason word.
+    if (status === 'fetched') await env.STATS.prepare("UPDATE form_reports SET status = 'fetched' WHERE id = ? AND status = 'new'").bind(id).run();
+    else await env.STATS.prepare('UPDATE form_reports SET status = ?, why = ? WHERE id = ?').bind(status, why, id).run();
     return Response.json({ok: true});
   }
   return new Response('Method not allowed', {status: 405});

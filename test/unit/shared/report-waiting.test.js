@@ -69,3 +69,15 @@ test('the owner closes a fetched report as "cannot replay" with a reason word; t
   add(e, 'r2', '2026-11-09');
   assert.deepEqual(await reportCounts(e.STATS), {received: 2, waiting: 1, fetched: 0, fixed: 0, unreplayable: 1});
 });
+
+// Why (retro review of web #515, Gitar, 10 Nov 2026): reports-fetch.mjs run again asked "fetched" for a report already closed, which moved it back and wiped its reason word.
+test('a repeat "fetched" never reopens a closed report or wipes its reason; a new report still becomes fetched', async () => {
+  const e = env();
+  add(e, 'r1', '2026-10-27', 'unreplayable'); e.STATS.db.prepare("UPDATE form_reports SET why = 'no-page' WHERE id = 'r1'").run();
+  add(e, 'r2', '2026-10-27', 'fixed'); add(e, 'r3', '2026-10-27', 'new');
+  for (const id of ['r1', 'r2', 'r3']) assert.equal((await owner(e, `/api/report-form/${id}?status=fetched`)).status, 200);
+  const rows = Object.fromEntries(e.STATS.db.prepare('SELECT id, status, why FROM form_reports').all().map(row => [row.id, [row.status, row.why]]));
+  assert.deepEqual(rows, {r1: ['unreplayable', 'no-page'], r2: ['fixed', ''], r3: ['fetched', '']});
+  assert.equal((await owner(e, '/api/report-form/r3?status=fixed&why=done')).status, 200);
+  assert.deepEqual(e.STATS.db.prepare("SELECT status, why FROM form_reports WHERE id = 'r3'").get().status, 'fixed', 'a fetched report can still be closed');
+});
