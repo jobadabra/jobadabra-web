@@ -15,7 +15,7 @@ import {closeNight, morning, readyToken} from './ready-morning.js';
 import {dropKept, jobsWithKept, keptPut, keptKey, videoGet} from './ready-kept.js';
 import {mailNight} from './ready-mail.js';
 import {checkRead, keepRead, takeReads, taskOf} from './ready-read.js';
-import {MICRO_PER_SECOND, addMicro, chargeContainer, claimedRefusal, creditRefusal, isPro, proofOf, publicHost, readerOf, reserveOwn, reserveReads} from './ready-read-access.js';
+import {MICRO_PER_SECOND, addMicro, chargeContainer, claimedRefusal, creditRefusal, isPro, proofOf, publicHost, readerOf, reserveOwn, reserveReads, strictNow} from './ready-read-access.js';
 export {readyToken};
 
 export const readyOn = env => env.READY_TO_SEND === 'on' && !!env.HOSTED_STATE && !!env.READY_OWNER;
@@ -155,8 +155,8 @@ async function result(request, env, now) {
   if (reading) {
     const claimed = !!(await readBlob(env, row.install, row.id).catch(() => null))?.ai?.key;
     if (!(claimed && row.own_ok)) await chargeContainer(env, row.install, (num(given.ms) || 0) / 1000 * MICRO_PER_SECOND, now);   // our container is paid from their credit until Anthropic has answered their own key (a made-up key must not read free)
-    const strictNow = row.strict || !(await isPro(env, row.install));   // a Pro whose credit ran out after its batch was queued is on the Free rules again (Gitar on #510)
-    if (strictNow && !(claimed && row.own_ok)) {   // our AI on a non-Pro account (or a key Anthropic never answered): the daily cap; a claimed key's slot (and a Pro-turned-Free one's) is taken now, an unclaimed Free one's was taken at the batch
+    // a Pro whose credit ran out after its batch was queued is on the Free rules again (Gitar on #510)
+    if (await strictNow(env, row) && !(claimed && row.own_ok)) {   // our AI on a non-Pro account (or a key Anthropic never answered): the daily cap; a claimed key's slot (and a Pro-turned-Free one's) is taken now, an unclaimed Free one's was taken at the batch
       const refused = claimed || !row.strict ? await reserveReads(env, row.install, 1, now) : null;
       spent = (await addMicro(env, row.install, micro, now)) || !!refused;
     }
@@ -181,7 +181,7 @@ async function aiCall(request, env, now) {
   return relay(request, env, row, async (micro, answered = true) => {
     const total = (await env.STATS.prepare('SELECT cost_micro FROM ready_batches WHERE id = ?').bind(row.id).first()).cost_micro + micro;
     if (byok && answered) await env.STATS.prepare('UPDATE ready_batches SET own_ok = 1, own_proof = ? WHERE id = ? AND own_ok = 0').bind(await proofOf(byok), row.id).run();   // Anthropic answered with their key: the reads are theirs, not ours (a made-up key is refused by Anthropic, so `answered` is false)
-    const spent = row.task === 'readiness' && row.strict && !byok ? await addMicro(env, row.install, micro, now) : false;   // the page-kind call counts against today's budget too, on our AI and a non-Pro account
+    const spent = row.task === 'readiness' && !byok && await strictNow(env, row) ? await addMicro(env, row.install, micro, now) : false;   // the page-kind call counts against today's budget too, on our AI and a non-Pro account (or a Pro whose credit ran out)
     const capped = total >= cap(env) || spent;
     await env.STATS.prepare('UPDATE ready_batches SET cost_micro = ?, state = ? WHERE id = ?').bind(total, capped ? 'capped' : row.state, row.id).run();
     if (capped) await reportNight(env, {...row, cost_micro: total}, now);

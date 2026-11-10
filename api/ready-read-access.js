@@ -105,6 +105,12 @@ export async function chargeContainer(env, install, micro, now = new Date()) {
 /** True for a Pro account (or a credit code) with credit to spend: the daily cap does not apply to its nights (api/ready.js stores it as ready_batches.strict = 0). A Pro whose credit is out is on the Free rules again (code review of the lane caps). */
 export const isPro = async (env, install) => { const lane = await proLane(env, install); return !!lane && !lane.blocked; };
 
+/**
+ * Whether the daily cap applies to this night's reads NOW: the night was queued by a non-Pro account (`row.strict`), or its Pro has no credit left since. The one place that decides it, for the result of a read and for the
+ * night's model calls alike (Gitar on #510: a copy in each place drifted).
+ */
+export const strictNow = async (env, row) => !!row.strict || !(await isPro(env, row.install));
+
 /** A short fingerprint of a claimed key (SHA-256, first 16 hex): what ready_batches.own_proof keeps, never the key. */
 export async function proofOf(key) {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(key || ''))));

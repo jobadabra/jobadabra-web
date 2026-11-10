@@ -8,6 +8,7 @@ import {test} from 'node:test';
 import {tokenFor} from '../../../../shared/guard.js';
 import {ready, readyToken} from '../../../../api/ready.js';
 import {createAccount, link} from '../../../../shared/pro.js';
+import {strictNow} from '../../../../api/ready-read-access.js';
 
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
@@ -167,6 +168,16 @@ test("one proven key does not lift the cap for another: a made-up key is still r
   const other = {ai: {key: 'sk-ant-api03-' + 'y'.repeat(30)}};
   assert.equal((await call(e, 'POST', 'batch', {...readBatch(2, '2026-11-10', 30), ...other}, await member())).status, 429, 'another key is not proven');
   assert.equal((await call(e, 'POST', 'batch', {...readBatch(2, '2026-11-11', 60), ...FAKE}, await member())).status, 200, 'the proven key still is');
+});
+
+test("one definition of 'the daily cap applies now': a Pro night is strict only once its credit is gone, for a read's result and a model call alike (Gitar on #510)", async () => {
+  const e = always({PRO_PLAN: 'promo', WAITLIST: kv()});
+  e.STATS.db.exec('CREATE TABLE IF NOT EXISTS install_credit (install TEXT PRIMARY KEY, credit_micro INTEGER NOT NULL DEFAULT 0, credit_added_micro INTEGER NOT NULL DEFAULT 0, updated_at TEXT)');
+  e.STATS.db.prepare("INSERT INTO install_credit (install, credit_micro, credit_added_micro, updated_at) VALUES ('member-1', 5000000, 5000000, 'x')").run();
+  assert.equal(await strictNow(e, {strict: 0, install: 'member-1'}), false, 'a Pro night with credit');
+  assert.equal(await strictNow(e, {strict: 1, install: 'member-1'}), true, 'a night queued as Free stays Free');
+  e.STATS.db.prepare("UPDATE install_credit SET credit_micro = 0 WHERE install = 'member-1'").run();
+  assert.equal(await strictNow(e, {strict: 0, install: 'member-1'}), true, 'the credit is gone: the Free rules');
 });
 
 test("a Pro whose credit runs out after its batch was queued is on the Free rules for the reads that follow (Gitar on #510)", async () => {
