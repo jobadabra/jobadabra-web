@@ -15,7 +15,7 @@ import {closeNight, morning, readyToken} from './ready-morning.js';
 import {dropKept, jobsWithKept, keptPut, keptKey, videoGet} from './ready-kept.js';
 import {mailNight} from './ready-mail.js';
 import {checkRead, keepRead, takeReads, taskOf} from './ready-read.js';
-import {MICRO_PER_SECOND, addMicro, chargeContainer, creditRefusal, isPro, publicHost, readerOf, reserveOwn, reserveReads} from './ready-read-access.js';
+import {MICRO_PER_SECOND, addMicro, chargeContainer, claimedRefusal, creditRefusal, isPro, publicHost, readerOf, reserveOwn, reserveReads} from './ready-read-access.js';
 export {readyToken};
 
 export const readyOn = env => env.READY_TO_SEND === 'on' && !!env.HOSTED_STATE && !!env.READY_OWNER;
@@ -112,7 +112,7 @@ async function batch(request, env, now) {
   if (task === 'readiness') {   // the lane follows who pays: a claimed own key is not trusted, only an answer from Anthropic proves it (aiCall); until then a trial's reads take the daily cap as their results arrive
     const own = /^sk-ant-[\w-]{20,300}$/.test(String(given.ai?.key || '')), pro = await isPro(env, install);
     strict = pro ? 0 : 1;
-    const refused = (own ? null : await creditRefusal(env, install, now)) || (own ? await reserveOwn(env, install, jobs.length, now) : pro ? null : await reserveReads(env, install, jobs.length, now));
+    const refused = (own ? null : await creditRefusal(env, install, now)) || (own ? (pro ? null : await claimedRefusal(env, install, now)) || await reserveOwn(env, install, jobs.length, now) : pro ? null : await reserveReads(env, install, jobs.length, now));
     if (refused) return json({ok: false, error: refused.error, ...(refused.limit ? {limit: refused.limit, used: refused.used} : {})}, refused.status);
   }
   const old = await env.STATS.prepare('SELECT id FROM ready_batches WHERE install = ? AND night = ? AND task = ?').bind(install, given.night, task).first();
@@ -154,7 +154,7 @@ async function result(request, env, now) {
   let spent = false;
   if (reading) {
     const claimed = !!(await readBlob(env, row.install, row.id).catch(() => null))?.ai?.key;
-    if (!claimed) await chargeContainer(env, row.install, (num(given.ms) || 0) / 1000 * MICRO_PER_SECOND, now);   // their own key: their AI, but never our container for free
+    if (!(claimed && row.own_ok)) await chargeContainer(env, row.install, (num(given.ms) || 0) / 1000 * MICRO_PER_SECOND, now);   // our container is paid from their credit until Anthropic has answered their own key (a made-up key must not read free)
     if (row.strict && !(claimed && row.own_ok)) {   // our AI on a non-Pro account (or a key Anthropic never answered): the daily cap; a claimed key's slot is taken now, an unclaimed one's was taken at the batch
       const refused = claimed ? await reserveReads(env, row.install, 1, now) : null;
       spent = (await addMicro(env, row.install, micro, now)) || !!refused;

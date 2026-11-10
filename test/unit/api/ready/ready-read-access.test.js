@@ -7,6 +7,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {tokenFor} from '../../../../shared/guard.js';
 import {ready, readyToken} from '../../../../api/ready.js';
+import {createAccount, link} from '../../../../shared/pro.js';
 
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
@@ -142,6 +143,27 @@ test("a made-up key keeps the trial's daily cap: Anthropic never answers it, so 
   assert.equal((await read(e, bearer, 'j2')).stop, true, 'the third read is past the trial cap of 2');
   assert.equal(e.STATS.db.prepare('SELECT reads FROM ready_read_days').get().reads, 2, 'two slots taken, the third refused');
   assert.equal(e.STATS.db.prepare('SELECT state FROM ready_batches WHERE id = ?').get(made.batch).state, 'finished');
+});
+
+test("a made-up key gets no new batch once the trial cap is full, and a key Anthropic answered today still does (code review of the lane caps)", async () => {
+  const e = always({READY_READ_DAY_MAX: '1', fetchFn: answering(401)});
+  const {bearer} = await started(e, {...readBatch(2), ...FAKE});
+  await read(e, bearer, 'j0');   // the one slot of the day is taken
+  assert.equal((await call(e, 'POST', 'batch', {...readBatch(2, '2026-11-10', 30), ...FAKE}, await member())).status, 429, 'no second batch for a made-up key');
+  const ok = always({READY_READ_DAY_MAX: '1', fetchFn: answering(200)});
+  const proven = await started(ok, {...readBatch(2), ...FAKE});
+  await modelCall(ok, proven.bearer);
+  await read(ok, proven.bearer, 'j0');
+  assert.equal((await call(ok, 'POST', 'batch', {...readBatch(2, '2026-11-10', 30), ...FAKE}, await member())).status, 200, 'a proven key reads on');
+});
+
+test("a Pro whose credit is out is on the Free rules: a made-up key does not lift the trial cap for it (code review of the lane caps)", async () => {
+  const e = always({PRO_PLAN: 'test', READY_READ_DAY_MAX: '2', WAITLIST: kv()});
+  const account = await createAccount(e, 'pro@example.com', evening);
+  await link(e, account, 'member-1', evening);   // a Pro account with no AI credit: its lane is {blocked}
+  assert.equal((await call(e, 'POST', 'batch', readBatch(1), await member())).status, 402, 'without a key it is refused for credit');
+  assert.equal((await call(e, 'POST', 'batch', {...readBatch(2), ...FAKE}, await member())).status, 200);
+  assert.equal(e.STATS.db.prepare('SELECT strict FROM ready_batches').get().strict, 1, 'the daily cap stays on its night');
 });
 
 test("a key Anthropic answered is the person's own: its reads take no slot of the daily cap, however many", async () => {
