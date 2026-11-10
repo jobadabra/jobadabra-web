@@ -49,22 +49,36 @@ export const kitOf = job => ({stage: text(job?.stage, 40), eligible: typeof job?
 
 /**
  * POST /api/ready/reserve {job} (a night token of an auto night): takes the job's one attempt, then one of the install's day's cloud submits. -> {status, body: {ok, attempt} | {ok: false, error}}.
- * `already`: the job had its attempt, or is no longer live (stopped, reported); `ceiling`: the day's ~500 are used (the owner is told once a day). A refusal is final: the container never presses.
+ * The attempt is the queued item's (install, the Mac's session, job), kept in ready_attempts that no night, Stop or sweep deletes: the same item is never reserved twice, in any night.
+ * Refused: a night that is not running (capped, finished), READY_AUTO off or Pro lapsed since it started, a job no longer live, an item already pressed (`already`), the day's ~500 used (`ceiling`, the owner told once a day).
+ * Every refusal is final: the container never presses; a job refused once it was reserved ends `not_submitted` with the reason.
  */
 export async function reserve(env, row, given, now = new Date()) {
-  const job = String(given?.job || '');
+  const job = String(given?.job || ''), at = now.toISOString();
   if (row.task !== 'auto') return {status: 400, body: {ok: false, error: 'not an auto night'}};
   if (!/^[\w.:-]{1,64}$/.test(job)) return {status: 400, body: {ok: false, error: 'bad job'}};
+  if (row.state !== 'running') return {status: 409, body: {ok: false, error: 'stopped'}};   // Why (code review of cs 2/4): a capped night answered ok and counted the slot
+  const off = await autoRefusal(env, row.install);   // checked at each press, not only at the batch: the kill switch and a lapsed Pro stop a night already queued
+  if (off) return {status: off.status, body: {ok: false, error: 'off'}};
   const attempt = crypto.randomUUID();
-  const taken = await env.STATS.prepare(`UPDATE ready_jobs SET attempt = ?, at = ? WHERE batch = ? AND job = ? AND attempt IS NULL AND cleared_at IS NULL AND state IN ${LIVE}`).bind(attempt, now.toISOString(), row.id, job).run();
+  const taken = await env.STATS.prepare(`UPDATE ready_jobs SET attempt = ?, at = ? WHERE batch = ? AND job = ? AND attempt IS NULL AND session IS NOT NULL AND cleared_at IS NULL AND state IN ${LIVE}`).bind(attempt, at, row.id, job).run();
   if (!taken.meta?.changes) return {status: 409, body: {ok: false, error: 'already'}};
-  const day = dayOf(now), max = ownSubmits(env);
-  // Why (10 Nov 2026, owner "~500/day + alert"): one statement takes the slot, so two jobs cannot both slip under the ceiling; the attempt above stays used either way (a refused job is never tried again).
-  const counted = await env.STATS.prepare(`INSERT INTO ready_read_days (install, day, submits) VALUES (?, ?, 1) ON CONFLICT (install, day) DO UPDATE SET submits = submits + 1 WHERE submits + 1 <= ?`).bind(row.install, day, max).run();
-  if (counted.meta?.changes) return {status: 200, body: {ok: true, attempt}};
-  const told = await env.STATS.prepare('UPDATE ready_read_days SET submits_alerted = 1 WHERE install = ? AND day = ? AND submits_alerted = 0').bind(row.install, day).run().catch(() => null);
-  if (told?.meta?.changes) await notify(env, {event: 'ready-submit-ceiling', text: `☁️ A cloud Full automation install reached its abuse ceiling today (${max} submits): ${row.install.slice(0, 8)}. Cloud submits stop until 00:00 UTC; a real user does not send this many applications.`}).catch(() => {});
-  return {status: 429, body: {ok: false, error: 'ceiling'}};
+  const end = (wall, status, error) => env.STATS.prepare("UPDATE ready_jobs SET state = 'not_submitted', wall = ?, at = ?, step = NULL, step_n = NULL WHERE batch = ? AND job = ?").bind(wall, at, row.id, job).run()
+    .then(() => ({status, body: {ok: false, error}}));
+  try {
+    const owned = await env.STATS.prepare('INSERT INTO ready_attempts (install, session, job, attempt, batch, at) SELECT ?, session, job, ?, batch, ? FROM ready_jobs WHERE batch = ? AND job = ? ON CONFLICT DO NOTHING')
+      .bind(row.install, attempt, at, row.id, job).run();
+    if (!owned.meta?.changes) return end('already', 409, 'already');   // this queued item was pressed in another night
+    const day = dayOf(now), max = ownSubmits(env);
+    // Why (10 Nov 2026, owner "~500/day + alert"): one statement takes the slot, so two jobs cannot both slip under the ceiling; the attempt above stays used either way (a refused job is never tried again).
+    const counted = await env.STATS.prepare('INSERT INTO ready_read_days (install, day, submits) VALUES (?, ?, 1) ON CONFLICT (install, day) DO UPDATE SET submits = submits + 1 WHERE submits + 1 <= ?').bind(row.install, day, max).run();
+    if (counted.meta?.changes) return {status: 200, body: {ok: true, attempt}};
+    const told = await env.STATS.prepare('UPDATE ready_read_days SET submits_alerted = 1 WHERE install = ? AND day = ? AND submits_alerted = 0').bind(row.install, day).run().catch(() => null);
+    if (told?.meta?.changes) await notify(env, {event: 'ready-submit-ceiling', text: `☁️ A cloud Full automation install reached its abuse ceiling today (${max} submits): ${row.install.slice(0, 8)}. Cloud submits stop until 00:00 UTC; a real user does not send this many applications.`}).catch(() => {});
+    return end('ceiling', 429, 'ceiling');
+  } catch {
+    return end('reserve', 503, 'reserve failed');   // never pressed: told as not sent, never "check the employer's page"
+  }
 }
 
 /** Pure: an auto night's result body, checked. -> {state, why, outcome} (outcome: what is sealed for the app: the attempt and the page's own proof, no field value) or null. */
@@ -98,7 +112,8 @@ export async function takeSubmits(env, install, clear, now = new Date()) {
       const object = await env.HOSTED_STATE.get(keptKey(install, 'submit', row.batch, row.job));
       outcome = object ? JSON.parse(new TextDecoder().decode(await open(env, label(install), new Uint8Array(await object.arrayBuffer()), 'READY_KEK'))).outcome || null : null;
     } catch { retry++; continue; }
-    submits.push({job: row.job, night: row.night, state: row.state, why: row.wall || '', outcome, ms: row.ms ?? 0});
+    const lost = !outcome && ['submitted', 'unknown'].includes(row.state);   // a press whose sealed outcome is gone: the person checks, never a silent "submitted" without its proof
+    submits.push({job: row.job, night: row.night, state: lost ? 'unknown' : row.state, why: lost ? 'gone' : row.wall || '', outcome, ms: row.ms ?? 0});
     taken.push(row);
   }
   for (const batch of new Set(taken.map(row => row.batch))) await clear(env, install, batch, taken.filter(row => row.batch === batch).map(row => row.job), now);

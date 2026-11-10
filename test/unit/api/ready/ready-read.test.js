@@ -154,7 +154,7 @@ test('a store error while taking leaves the read for the next call; a stopped fo
 
 test('the app takes the reads once: they come back opened, then they are gone from the site', async () => {
   const {e, made, bearer} = await night();
-  assert.deepEqual(await (await call(e, 'POST', 'reads', {}, await owner())).json(), {ok: true, reads: [], submits: [], pending: 2});
+  assert.deepEqual(await (await call(e, 'POST', 'reads', {}, await owner())).json(), {ok: true, reads: [], submits: [], pendingSubmits: 0, pending: 2});
   await call(e, 'POST', 'result', {job: 'j1', task: 'readiness', state: 'read', read: READ, why: '', ms: 41000, costMicro: 10}, bearer);
   await call(e, 'POST', 'result', {job: 'j2', task: 'readiness', state: 'unreadable', read: null, why: 'afterApply', ms: 30000, costMicro: 10}, bearer);
   assert.deepEqual((await (await call(e, 'POST', 'reads', {}, await stranger())).json()).reads, [], "another install's reads are its own: none of the owner's");
@@ -166,7 +166,7 @@ test('the app takes the reads once: they come back opened, then they are gone fr
   assert.deepEqual(taken.reads[0].read, READ);
   assert.equal(taken.reads[1].read, null);
   assert.deepEqual([...e.HOSTED_STATE.m.keys()].filter(key => key.includes('/read/')), [], 'nothing of the reads is left');
-  assert.deepEqual(await (await call(e, 'POST', 'reads', {}, await owner())).json(), {ok: true, reads: [], submits: [], pending: 0});
+  assert.deepEqual(await (await call(e, 'POST', 'reads', {}, await owner())).json(), {ok: true, reads: [], submits: [], pendingSubmits: 0, pending: 0});
   assert.equal(e.STATS.db.prepare('SELECT state FROM ready_batches WHERE id = ?').get(made.batch).state, 'deleted', 'a night with nothing left is deleted');
   assert.ok(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM ready_jobs WHERE cleared_at IS NOT NULL').get().n === 2);
 });

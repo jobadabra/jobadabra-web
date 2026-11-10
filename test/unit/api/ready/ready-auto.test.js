@@ -8,6 +8,7 @@ import {test} from 'node:test';
 import {tokenFor} from '../../../../shared/guard.js';
 import {ready, readyToken} from '../../../../api/ready.js';
 import {tick} from '../../../../api/ready-tick.js';
+import {sweep} from '../../../../api/ready.js';
 import {checkItem} from '../../../../api/ready-auto.js';
 
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
@@ -154,4 +155,68 @@ test('a night past its time ends a reserved job unknown (the person checks), an 
   await tick(e, new Date(evening.getTime() + 4 * 3600 * 1000));
   assert.deepEqual([stateOf(e, 'j0').state, stateOf(e, 'j1').state], ['unknown', 'failed']);
   assert.equal(e.STATS.db.prepare('SELECT state FROM ready_batches').get().state, 'finished');
+});
+
+// Code review of cs 2/4: the one attempt lived on the night's row, so whatever deleted or cleared that row reset it. These play each way that happened.
+test('a night sent again cannot wipe a running night, and a job pressed once is never reserved again, in any night of the same queued item', async () => {
+  const e = pro();
+  const {bearer} = await started(e);
+  assert.equal((await reserveFor(e, bearer, 'j0')).status, 200);
+  const again = await call(e, 'POST', 'batch', autoBatch(), await member());
+  assert.equal(again.status, 409, 'the running night stays: its attempts and its token');
+  assert.equal(stateOf(e, 'j0').attempt.length > 0, true);
+  const other = await started(e, autoBatch(1, '2026-11-10'));
+  const twice = await reserveFor(e, other.bearer, 'j0');
+  assert.deepEqual([twice.status, (await twice.json()).error], [409, 'already'], 'the same item (job and session) in another night: its attempt is used');
+});
+
+test('the Mac off for days: the outcome waits on the site until the app takes it, while the job\'s form data still goes after 24 h', async () => {
+  const e = pro();
+  const {made, bearer} = await started(e);
+  const {attempt} = await (await reserveFor(e, bearer, 'j0')).json();
+  await report(e, bearer, {job: 'j0', state: 'submitted', attempt, proof: {signature: 's'}});
+  assert.equal((await call(e, 'POST', 'batch', {task: 'readiness', night: '2026-11-09', jobs: forms(1, 20)}, await member())).status, 200, 'another night of this install, swept with it: its clear ages out old kept objects');
+  await sweep(e, new Date(evening.getTime() + 30 * 3600 * 1000));
+  assert.equal([...e.HOSTED_STATE.m.keys()].some(key => key === `ready/member-1/${made.batch}.json`), false, 'the kit, CV and letter are gone after a day');
+  const taken = await (await call(e, 'POST', 'reads', {}, await member(), new Date(evening.getTime() + 50 * 3600 * 1000))).json();
+  assert.deepEqual(taken.submits.map(each => [each.job, each.state]), [['j0', 'submitted']], 'the app still learns it was sent');
+});
+
+test('no press once the kill switch is off, the night is capped, or Pro has lapsed', async () => {
+  for (const change of [e => { e.READY_AUTO = 'off'; }, e => { e.STATS.db.prepare("UPDATE ready_batches SET state = 'capped'").run(); }, e => { e.STATS.db.prepare('UPDATE install_credit SET credit_micro = 0').run(); }]) {
+    const e = pro();
+    const {bearer} = await started(e);
+    change(e);
+    assert.notEqual((await reserveFor(e, bearer, 'j0')).status, 200);
+    assert.equal(stateOf(e, 'j0').attempt, null, 'no attempt taken');
+  }
+});
+
+test('a job refused at the ceiling ends not_submitted at once, never unknown', async () => {
+  const e = pro({READY_AUTO_MAX: '1'});
+  const {bearer} = await started(e);
+  await reserveFor(e, bearer, 'j0');
+  assert.equal((await reserveFor(e, bearer, 'j1')).status, 429);
+  assert.deepEqual([stateOf(e, 'j1').state, stateOf(e, 'j1').wall], ['not_submitted', 'ceiling']);
+  await tick(e, new Date(evening.getTime() + 4 * 3600 * 1000));
+  assert.equal(stateOf(e, 'j1').state, 'not_submitted');
+});
+
+test('a store error makes only a press unknown: a night that could not run stays failed', async () => {
+  const e = pro();
+  const {bearer} = await started(e);
+  e.HOSTED_STATE.put = async () => { throw new Error('r2 down'); };
+  await report(e, bearer, {job: 'j1', state: 'failed', why: 'unreachable'});
+  assert.equal(stateOf(e, 'j1').state, 'failed');
+});
+
+test('Stop reaches the job in whichever open night holds it; a job already pressed says it can no longer be stopped', async () => {
+  const e = pro();
+  const first = await started(e);
+  await call(e, 'POST', 'batch', autoBatch(1, '2026-11-10', 5), await member(), new Date(evening.getTime() + 60000));   // a newer night, queued a minute later
+  assert.equal((await call(e, 'POST', 'stop', {job: 'j1'}, await member())).status, 200, 'j1 is only in the older, running night');
+  assert.notEqual(stateOf(e, 'j1').state, 'queued');
+  await reserveFor(e, first.bearer, 'j0');
+  const late = await call(e, 'POST', 'stop', {job: 'j0'}, await member());
+  assert.deepEqual([late.status, (await late.json()).error], [409, 'already pressed: it can no longer be stopped']);
 });

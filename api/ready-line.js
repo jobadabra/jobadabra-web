@@ -8,6 +8,8 @@ import {closeNight} from './ready-morning.js';
 export const STEPS = ['opening', 'form', 'filling', 'answering', 'reading'];
 export const READ_STEPS = ['opening', 'looking', 'pressing', 'landed', 'judging', 'planning'];   // a readiness night's (desktop/lib/triage-reader.js STEPS); a fill night reports STEPS
 export const AUTO_STEPS = [...STEPS, 'submitting'];   // a Full automation night's: the fill's, then its one press (api/ready-auto.js)
+// What a live row becomes when its night ends early (timeout, the cost cap): failed, or `unknown` once its press may have happened (an attempt taken: the person checks the employer's page). The one copy of that rule.
+export const ENDED = "CASE WHEN attempt IS NULL THEN 'failed' ELSE 'unknown' END";
 export const LIVE = "('queued', 'filling')";   // a row the night still works on: waiting its turn or filling
 const RESULT = ['state', 'filled', 'left_empty', 'human_check', 'wall', 'ms', 'at'];
 const stamp = at => at.toISOString();
@@ -34,15 +36,15 @@ export async function requeue(env, batch, job) {
 function putBack(env, batch, row, now) {
   const before = (() => { try { return JSON.parse(row.again_from || 'null'); } catch { return null; } })();
   const fields = before ? RESULT.map(name => before[name] ?? null) : ['stopped', null, null, null, '', null, stamp(now)];
-  return env.STATS.prepare(`UPDATE ready_jobs SET ${RESULT.map(name => `${name} = ?`).join(', ')}, step = NULL, step_n = NULL, started_at = NULL, again_from = NULL WHERE batch = ? AND job = ? AND state IN ${LIVE}`)
-    .bind(...fields, batch, row.job);
+  return env.STATS.prepare(`UPDATE ready_jobs SET ${RESULT.map(name => `${name} = ?`).join(', ')}, step = NULL, step_n = NULL, started_at = NULL, again_from = NULL WHERE batch = ? AND job = ? AND attempt IS NULL AND state IN ${LIVE}`)
+    .bind(...fields, batch, row.job);   // Why (code review of cs 2/4): a job reserved between Stop's read and this write may be pressed: it is left for its result
 }
 
 // POST (owner) {job} or {}: Stop one form, or every form of the install's open nights still waiting or filling (a Ready to send night and a readiness night alike: api/ready-read.js). The container learns it at its next step (progress answers stop)
 // or from the night's end (its token stops working); a stopped form's late result is dropped (ready.js result). A night with nothing left ends; a readiness night holds nothing, so its container closes at once. -> {status, body}
 export async function stop(env, install, job, now = new Date(), only = null) {   // only: a task or a list of tasks, for an Always on install that is not the owner (code review of 3/4: its key alone must not stop a Ready to send night)
   const {results: open} = await env.STATS.prepare("SELECT id, task, state FROM ready_batches WHERE install = ? AND state IN ('queued', 'running') ORDER BY created_at DESC").bind(install).all();
-  const seen = new Set(), nights = open.filter(night => (!only || [only].flat().includes(night.task)) && !seen.has(night.task) && seen.add(night.task));   // Why (code review): the newest open night of each task, as the fill Stop always did; an older night still running is not this press's
+  const seen = new Set(), nights = open.filter(night => (!only || [only].flat().includes(night.task)) && (night.task === 'auto' || (!seen.has(night.task) && seen.add(night.task))));   // an auto Stop reaches every open night: an older one may still press the job (code review of cs 2/4)   // Why (code review): the newest open night of each task, as the fill Stop always did; an older night still running is not this press's
   let stopped = 0;
   for (const night of nights) {
     // Why (10 Nov 2026, cs 2/4): a Full automation job whose attempt is taken may already be pressed; a Stop cannot unsend it, so it stays until its result says what happened (never put back and dropped)
@@ -55,5 +57,7 @@ export async function stop(env, install, job, now = new Date(), only = null) {  
     await env.STATS.prepare('UPDATE ready_batches SET state = \'finished\', finished_at = ? WHERE id = ?').bind(stamp(now), night.id).run();
     if (night.task !== 'fill' && night.state === 'running') await closeNight(env, night.id);   // a night not started has no container: closing it would wake one just to stop it
   }
-  return stopped ? {status: 200, body: {ok: true, stopped}} : {status: 404, body: {ok: false, error: 'nothing is filling'}};
+  if (stopped) return {status: 200, body: {ok: true, stopped}};
+  const pressed = job && await env.STATS.prepare(`SELECT 1 AS n FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch WHERE b.install = ? AND j.job = ? AND j.attempt IS NOT NULL AND j.cleared_at IS NULL AND j.state IN ${LIVE}`).bind(install, job).first();
+  return pressed ? {status: 409, body: {ok: false, error: 'already pressed: it can no longer be stopped'}} : {status: 404, body: {ok: false, error: 'nothing is filling'}};
 }

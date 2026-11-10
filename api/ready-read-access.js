@@ -1,7 +1,7 @@
 // Cloud browser runner 3/4 (spec jobadabra docs/superpowers/specs/2026-11-08-cloud-browser-runner-design.md): who may start a readiness night, and what it may cost.
 // Owner, 8-9 Nov 2026 (via the coordinator, "asked via AskUserQuestion"): access "Any user, no matter Free or Pro. But within their AI credit."; "We should have a cap" = "30 reads, $0.15/day (Recommended)";
 // "In the end, we care about AI credit": a read's whole cost (container seconds and the page-kind calls) comes out of the person's AI credit, the same meter as every other AI call.
-// Invariants: only the readiness task opens to an Always on install; Ready to send's own routes stay the owner's.
+// Invariants: only the readiness task (and, through api/ready-auto.js, a Pro install's auto task) opens to an Always on install; Ready to send's own routes stay the owner's.
 // Design (owner, 10 Nov 2026, asked via AskUserQuestion: "The daily cap makes sense only on Free Trial and on Free AI... on Pro... They should go unlimited and as fast, within their AI credit"; "Abuse-only ceiling"):
 //   - The daily cap (30 reads, $0.15) is for a night whose AI is OURS and whose account is not Pro: a Free trial on Free AI. It is taken at the batch, so the person hears it at once.
 //   - Pro (any AI) has no daily cap; on our AI its credit is the bound.

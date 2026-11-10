@@ -1,6 +1,6 @@
 // Ready to send, phase 1, the Worker's side (spec docs/superpowers/specs/2026-10-17-ready-to-send.md): the owner's app pushes tonight's batch (url, kit, CV, letter, contact) encrypted into R2; a container reads
-// it with a one-night token, fills each form and posts only counts; the owner's page asks what is ready. The server never presses Submit: no route here accepts a submit from the container, only the owner marks one.
-// Only the owner's install (env.READY_OWNER) reaches any route; READY_TO_SEND = off answers 404. The data is deleted on Done, after 24 h (sweep, from the cron) and on Delete everything.
+// it with a one-night token, fills each form and posts only counts; the owner's page asks what is ready. A fill night never presses Submit: its outcomes never include "submitted"; only a Full automation night (task auto, a Pro Always on install, api/ready-auto.js) may, through the container's one gate.
+// Ready to send's own routes are the owner's install (env.READY_OWNER); an Always on install reaches the readiness and auto nights only (api/ready-read-access.js, api/ready-auto.js). READY_TO_SEND = off answers 404. The data is deleted on Done, after 24 h (sweep, from the cron) and on Delete everything.
 // Counts, hosts and states stay 30 days for the morning measure; never a field value or an address. Guard: test/unit/api/ready/ready-to-send.test.js.
 import {equal, tokenFor} from '../shared/guard.js';   // tokenFor: the night token is checked in batchOf
 import {installOf} from '../shared/hosted.js';
@@ -8,7 +8,7 @@ import {open, seal} from './hosted-state.js';
 import {relay} from './ready-ai.js';
 import {makeLink, viaLink} from './ready-link.js';
 import {fillAgain} from './ready-again.js';
-import {LIVE, progress, stop} from './ready-line.js';
+import {ENDED, LIVE, progress, stop} from './ready-line.js';
 import {runNow} from './ready-tick.js';
 import {whyOf} from './ready-why.js';
 import {closeNight, morning, readyToken} from './ready-morning.js';
@@ -94,7 +94,7 @@ async function batch(request, env, now) {
     return json({ok: true, line: true, task: row.task, sentAt: row.created_at, stop: row.state === 'capped' || !data, night: row.night, contact: data?.contact || {}, readyBy: data?.readyBy || '', facts: data?.facts || {}, jobs: (data?.jobs || []).filter(job => queued.has(job.id)).map(job => ({...job, turn: queued.get(job.id)}))});
   }
   if (request.method !== 'POST') return json({ok: false, error: 'Use GET or POST'}, 405);
-  const reader = await readerOf(request, env, ownerOf);   // the owner, or an Always on install (api/ready-read-access.js): the latter for the readiness task only
+  const reader = await readerOf(request, env, ownerOf);   // the owner, or an Always on install (api/ready-read-access.js): the latter for the readiness and auto tasks only
   if (!reader) return deny();
   const install = reader.install;
   if (!env.READY_KEK) return notSetUp();
@@ -110,26 +110,29 @@ async function batch(request, env, now) {
   const jobs = Array.isArray(given?.jobs) ? given.jobs : [];
   const good = job => typeof job?.id === 'string' && /^[\w.:-]{1,64}$/.test(job.id) && /^https:\/\/[^\s/]+/.test(String(job.url)) && String(job.url).length <= 2000;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(given?.night)) || !jobs.length || jobs.length > MAX_JOBS || !jobs.every(good) || new Set(jobs.map(job => job.id)).size !== jobs.length) return bad('bad batch');
-  if (task !== 'fill' && !reader.owner && !jobs.every(job => publicHost(job.url))) return bad('bad batch');
-  if (task === 'auto' && !jobs.every(job => checkItem(job))) return bad('bad item');   // every job carries the Mac's own queued item; the site never makes one (spec "auto")   // an Always on install's forms are public pages: never our container's own network (code review of 3/4)
-  let strict = task === 'auto' ? 0 : 1;   // an auto night is Pro's: no daily cap, the ~500 ceiling at /reserve   // the daily cap can apply to this night (ready_batches.strict): not a Pro account's (api/ready-read-access.js, "Design")
+  if (task !== 'fill' && !reader.owner && !jobs.every(job => publicHost(job.url))) return bad('bad batch');   // an Always on install's forms are public pages: never our container's own network (code review of 3/4)
+  const items = task === 'auto' ? jobs.map(job => checkItem(job)) : [];   // every job carries the Mac's own queued item; the site never makes one (spec "auto")
+  if (items.some(item => !item)) return bad('bad item');
+  let strict = task === 'auto' ? 0 : 1;   // the daily cap can apply to this night (ready_batches.strict): not a Pro account's (api/ready-read-access.js, "Design") An auto night is Pro's: no daily cap, the ~500 ceiling is at /reserve.
   if (task === 'readiness') {   // the lane follows who pays: a claimed own key is not trusted, only an answer from Anthropic proves it (aiCall); until then a trial's reads take the daily cap as their results arrive
     const own = /^sk-ant-[\w-]{20,300}$/.test(String(given.ai?.key || '')), pro = await isPro(env, install);
     strict = pro ? 0 : 1;
     const refused = (own ? null : await creditRefusal(env, install, now)) || (own ? (pro ? null : await claimedRefusal(env, install, given.ai.key, now)) || await reserveOwn(env, install, jobs.length, now) : pro ? null : await reserveReads(env, install, jobs.length, now));
     if (refused) return json({ok: false, error: refused.error, ...(refused.limit ? {limit: refused.limit, used: refused.used} : {})}, refused.status);
   }
-  const old = await env.STATS.prepare('SELECT id FROM ready_batches WHERE install = ? AND night = ? AND task = ?').bind(install, given.night, task).first();
+  const old = await env.STATS.prepare('SELECT id, state FROM ready_batches WHERE install = ? AND night = ? AND task = ?').bind(install, given.night, task).first();
+  // Why (code review of cs 2/4): replacing an auto night deleted its rows, so its attempts and sealed outcomes, and its container's token; a night that started or pressed is never replaced
+  if (old && task === 'auto' && (old.state !== 'queued' || await env.STATS.prepare('SELECT 1 AS n FROM ready_jobs WHERE batch = ? AND attempt IS NOT NULL').bind(old.id).first())) return json({ok: false, error: 'this night already started'}, 409);
   if (old) { await clear(env, install, old.id, null, now); await env.STATS.batch([env.STATS.prepare('DELETE FROM ready_jobs WHERE batch = ?').bind(old.id), env.STATS.prepare('DELETE FROM ready_batches WHERE id = ?').bind(old.id)]); }
   const id = crypto.randomUUID();
   const reading = task === 'readiness';   // a read needs the page only: no kit, letter, CV, contact or facts are sealed for it
-  const kept = jobs.map(job => ({id: job.id, url: job.url, title: String(job.title || '').slice(0, 200), company: String(job.company || '').slice(0, 200), fit: num(job.fit), kit: reading ? {} : job.kit || {}, letter: reading ? '' : String(job.letter || ''), cv: reading ? '' : String(job.cv || ''), letterPdf: reading ? '' : String(job.letterPdf || ''), ...(task === 'auto' ? {item: checkItem(job), ...kitOf(job)} : {})}));
+  const kept = jobs.map((job, index) => ({id: job.id, url: job.url, title: String(job.title || '').slice(0, 200), company: String(job.company || '').slice(0, 200), fit: num(job.fit), kit: reading ? {} : job.kit || {}, letter: reading ? '' : String(job.letter || ''), cv: reading ? '' : String(job.cv || ''), letterPdf: reading ? '' : String(job.letterPdf || ''), ...(task === 'auto' ? {item: items[index], ...kitOf(job)} : {})}));
   const facts = Object.fromEntries(FACTS.map(name => [name, reading ? '' : String(given.facts?.[name] || '').slice(0, 40000)]));   // what the AI may answer from (profile, standard answers, ...): sealed with the batch, deleted with it
   const ai = /^sk-ant-[\w-]{20,300}$/.test(String(given.ai?.key || '')) ? {key: given.ai.key} : undefined;   // the user's own Claude key (BYOK): sealed with the batch, never sent back, deleted with it
   await writeBlob(env, install, id, {ai, contact: reading ? {} : given.contact || {}, readyBy: reading ? '' : String(given.readyBy || '').slice(0, 5), facts, jobs: kept});
   const fillAt = Number.isFinite(Date.parse(given.fillAt)) ? new Date(given.fillAt).toISOString() : null;   // when the night should start filling (the cron starts it then); none: at the next tick
   await env.STATS.batch([env.STATS.prepare('INSERT INTO ready_batches (id, install, night, created_at, fill_at, task, strict) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, install, given.night, stamp(now), fillAt, task, strict),
-    ...kept.map(job => env.STATS.prepare('INSERT INTO ready_jobs (batch, job, host) VALUES (?, ?, ?)').bind(id, job.id, new URL(job.url).hostname))]);
+    ...kept.map(job => env.STATS.prepare('INSERT INTO ready_jobs (batch, job, host, session) VALUES (?, ?, ?, ?)').bind(id, job.id, new URL(job.url).hostname, job.item?.session ?? null))]);   // session: the auto item's, the key of its one attempt (api/ready-auto.js)
   return json({ok: true, batch: id, queued: kept.length});
 }
 
@@ -148,7 +151,7 @@ async function result(request, env, now) {
   const liveAuto = auto && await env.STATS.prepare(`SELECT 1 AS n FROM ready_jobs WHERE batch = ? AND job = ? AND cleared_at IS NULL AND state IN ${LIVE}`).bind(row.id, String(given.job)).first();
   let kept = live ? checked : null;   // sealed BEFORE the row takes the outcome, so a take can never find a "read" row without its object (code review of 2/4)
   if (kept) { try { await keepRead(env, row, String(given.job), kept.read, now); } catch { kept = null; checked.state = 'failed'; checked.why = 'store'; } }
-  if (liveAuto) { try { await keepSubmit(env, row, String(given.job), checked.outcome, now); } catch { checked.state = checked.state === 'not_submitted' ? 'not_submitted' : 'unknown'; checked.why = 'store'; } }   // a press already made is never reported as not made
+  if (liveAuto) { try { await keepSubmit(env, row, String(given.job), checked.outcome, now); } catch { checked.state = checked.state === 'submitted' ? 'unknown' : checked.state; checked.why = 'store'; } }   // a press already made is never reported as not made
   const filled = cloud ? null : num(given.filled), left = cloud ? null : num(given.left), state = cloud ? checked.state : given.state === 'prepared' && !(filled > 0 && left === 0) ? 'partial' : given.state;
   const micro = num(given.costMicro) || 0;
   const changed = await env.STATS.prepare(`UPDATE ready_jobs SET state = ?, filled = ?, left_empty = ?, human_check = ?, wall = ?, ms = ?, cost_micro = cost_micro + ?, at = ?, step = NULL, step_n = NULL, again_from = NULL
@@ -172,7 +175,7 @@ async function result(request, env, now) {
     }
   }
   const total = row.cost_micro + micro, capped = total >= cap(env) || spent;
-  if (cloud && capped) await env.STATS.prepare(`UPDATE ready_jobs SET state = CASE WHEN attempt IS NULL THEN 'failed' ELSE 'unknown' END, wall = 'cap', at = ? WHERE batch = ? AND cleared_at IS NULL AND state IN ${LIVE}`).bind(stamp(now), row.id).run();   // a read the cap kept from starting is told to the app as a form it could not read, never left "reading"
+  if (cloud && capped) await env.STATS.prepare(`UPDATE ready_jobs SET state = ${ENDED}, wall = 'cap', at = ? WHERE batch = ? AND cleared_at IS NULL AND state IN ${LIVE}`).bind(stamp(now), row.id).run();   // a read the cap kept from starting is told to the app as a form it could not read, never left "reading"
   const waiting = (await env.STATS.prepare(`SELECT COUNT(*) AS n FROM ready_jobs WHERE batch = ? AND state IN ${LIVE}`).bind(row.id).first()).n;
   const next = capped && !cloud ? 'capped' : waiting ? row.state : 'finished';
   await env.STATS.prepare('UPDATE ready_batches SET cost_micro = ?, state = ?, finished_at = ? WHERE id = ?').bind(total, next, next === row.state ? null : stamp(now), row.id).run();
@@ -243,8 +246,12 @@ async function mine(request, env, now, sub) {
 export async function sweep(env, now = new Date()) {
   const out = {swept: 0, purged: 0};
   if (!readyOn(env) || !env.STATS) return out;
-  const {results} = await env.STATS.prepare('SELECT id, install FROM ready_batches WHERE created_at < ? AND deleted_at IS NULL').bind(stamp(new Date(now.getTime() - KEEP_HOURS * HOUR))).all();
-  for (const row of results) { await clear(env, row.install, row.id, null, now); out.swept++; }
+  const {results} = await env.STATS.prepare('SELECT id, install, task FROM ready_batches WHERE created_at < ? AND deleted_at IS NULL').bind(stamp(new Date(now.getTime() - KEEP_HOURS * HOUR))).all();
+  for (const row of results) {
+    // Why (code review of cs 2/4): an auto night's outcome waits for the app however long the Mac is off (a press it never hears of is the worst case); its form data still goes after a day
+    if (row.task === 'auto' && await env.STATS.prepare("SELECT 1 AS n FROM ready_jobs WHERE batch = ? AND cleared_at IS NULL AND state IN ('submitted', 'not_submitted', 'unknown', 'failed')").bind(row.id).first()) { await env.HOSTED_STATE.delete(keyOf(row.install, row.id)).catch(() => {}); continue; }
+    await clear(env, row.install, row.id, null, now); out.swept++;
+  }
   const old = stamp(new Date(now.getTime() - COUNTS_KEEP_DAYS * 24 * HOUR));
   await env.STATS.prepare('DELETE FROM ready_jobs WHERE batch IN (SELECT id FROM ready_batches WHERE created_at < ?)').bind(old).run();
   out.purged = (await env.STATS.prepare('DELETE FROM ready_batches WHERE created_at < ?').bind(old).run()).meta?.changes || 0;
@@ -299,10 +306,10 @@ export async function ready(request, env, now = new Date()) {
     const reader = await readerOf(request, env, ownerOf);
     if (!reader) return deny();
     if (request.method !== 'POST') return json({ok: false, error: 'Use POST'}, 405);
-    const reads = await takeReads(env, reader.install, clear, now), sent = await takeSubmits(env, reader.install, clear, now);
-    return json({...reads, submits: sent.submits, pending: reads.pending + sent.pending}, 200);
+    const sent = await takeSubmits(env, reader.install, clear, now), reads = await takeReads(env, reader.install, clear, now);   // the outcomes first: a failure after them loses no press
+    return json({...reads, submits: sent.submits, pendingSubmits: sent.pending}, 200);
   }
-  if (sub === 'stop') {   // the owner, or an Always on install, stops one form ({job}) or the whole night ({}); the latter has only readiness nights to stop
+  if (sub === 'stop') {   // the owner, or an Always on install, stops one form ({job}) or the whole night ({}); the latter has only its readiness and auto nights to stop
     const reader = await readerOf(request, env, ownerOf), install = reader?.install;
     if (!install) return deny();
     if (request.method !== 'POST') return json({ok: false, error: 'Use POST'}, 405);
@@ -311,7 +318,7 @@ export async function ready(request, env, now = new Date()) {
     const done = await stop(env, install, job, now, reader.owner ? null : ['readiness', 'auto']);
     return json(done.body, done.status);
   }
-  if (sub === 'run') {   // the owner starts his queued night now (a manual test; the cron would start it at its fill time); an Always on install starts its readiness night
+  if (sub === 'run') {   // the owner starts his queued night now (a manual test; the cron would start it at its fill time); an Always on install starts its readiness or auto night
     const reader = await readerOf(request, env, ownerOf), install = reader?.install;
     if (!install) return deny();
     if (request.method !== 'POST') return json({ok: false, error: 'Use POST'}, 405);
