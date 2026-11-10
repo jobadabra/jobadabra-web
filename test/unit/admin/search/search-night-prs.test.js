@@ -36,7 +36,7 @@ function github({commits = COMMITS, runs = RUNS, dates = DATES, fail = null} = {
     const query = JSON.parse(init.body).query, answer = {}, object = {};
     for (const [, i, oid] of query.matchAll(/s(\d+): object\(oid: "([0-9a-f]{40})"\)/g)) answer[`s${i}`] = dates[oid] ? {committedDate: dates[oid]} : null;
     for (const [, i, path, since, after] of query.matchAll(/h(\d+): history\(path: "([^"]+)", since: "([^"]+)", first: 100(?:, after: "(\d+)")?\)/g)) {
-      const hits = commits.filter(item => item.committedDate >= since && item.files.some(file => inPath(file, path))), from = Number(after || 0);
+      const tip = /object\(oid: "([0-9a-f]{40})"\)/.exec(query)[1], hits = commits.filter(item => item.committedDate >= since && item.committedDate <= (dates[tip] || '9') && item.files.some(file => inPath(file, path))), from = Number(after || 0);   // history from a tip reaches only what was merged up to it
       object[`h${i}`] = {pageInfo: {hasNextPage: from + 100 < hits.length, endCursor: String(from + 100)}, nodes: hits.slice(from, from + 100).map(item => ({oid: item.oid, committedDate: item.committedDate, messageHeadline: item.messageHeadline, associatedPullRequests: {nodes: item.pr ? [item.pr] : []}}))};
     }
     if (Object.keys(object).length) answer.object = object;
@@ -177,4 +177,13 @@ test('a GitHub that does not answer holds the upload for the budget only; the ni
 test('a path with more commits than the paging reads is named, not marked with PRs missing', async () => {
   const bulk = Array.from({length: 700}, (_, i) => ({...commit('9', '2026-11-08T05:00:00Z', `bulk ${i} (#${5000 + i})`, ['src/press/rank.py'], null), oid: String(i).padStart(40, '0')}));
   await assert.rejects(searchCommits(ENV, sha('d'), '2026-11-06T00:00:00Z', github({commits: bulk}).fetcher), /over 600 commits/);
+});
+
+test('a night re-run by hand later has the newest build: history is read from that build, so no night gets a final "no PR" for commits the older tip cannot reach (Gitar on #507)', async () => {
+  const runs = [...RUNS, {id: 910, head_sha: sha('d')}];
+  const list = [stored('2026-11-08', 903), stored('2026-11-07', 910), stored('2026-11-06', 901)];   // 11/07 was re-run by hand after 11/08's night: its build is the newest
+  const {nights: out} = await markNights(ENV, list, github({runs}).fetcher);
+  const by = Object.fromEntries(out.map(night => [night.night, night]));
+  assert.deepEqual(by['2026-11-07'].prs.map(pr => pr.n), [3650, null, 3631, 3624, 3592], 'everything merged between builds a and d, read from d');
+  assert.deepEqual(by['2026-11-08'].prs, [], 'its build is older than its neighbour\'s: an empty window, a real "no PR"');
 });

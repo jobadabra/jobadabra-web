@@ -110,7 +110,8 @@ export async function markNights(env, list, fetcher = fetch) {
     else jobs.push([night, before.build]);
   });
   if (jobs.length) {
-    const newest = jobs[jobs.length - 1][0].build, since = jobs.map(([, before]) => before.built).sort()[0];
+    // Why (10 Nov 2026, Gitar on #507): the tip is the newest BUILD, not the newest night's: a night re-run by hand later has a newer sha, and history from an older tip cannot reach commits merged after it.
+    const newest = jobs.map(([night]) => night.build).sort((a, b) => b.built.localeCompare(a.built))[0], since = jobs.map(([, before]) => before.built).sort()[0];
     const commits = await searchCommits(env, newest.sha, since, fetcher);
     for (const [night, before] of jobs) {
       const {prs, more} = prsIn(commits, before.built, night.build.built);
