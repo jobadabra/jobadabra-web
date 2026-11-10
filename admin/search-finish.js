@@ -67,7 +67,7 @@ export function weakest(nights, limit = 5) {
   const rows = [];
   for (const row of last.rows) for (const [source, item] of Object.entries(row.inout || {})) for (const [stage, lost] of Object.entries(item.lost)) {
     if (lost > 0) rows.push({persona: row.persona, label: row.label, source, stage, lost, in: item.in, out: item.out,
-      history: sent.slice(1, 7).reverse().map(night => night.rows.find(other => other.persona === row.persona)?.inout?.[source]?.lost?.[stage] ?? null)});
+      history: sent.slice(1, 7).reverse().map(night => { const before = night.rows.find(other => other.persona === row.persona)?.inout?.[source]; return before ? (before.lost[stage] ?? 0) : null; })});   // Why (self-review, 10 Nov 2026): a night that sent in = out with nothing lost at this stage is 0 lost, not "unknown"; only a night without the row is null
   }
   return {night: last.night, rows: rows.sort((a, b) => b.lost - a.lost || a.persona - b.persona).slice(0, limit)};
 }

@@ -59,7 +59,7 @@ ${figure({chart: stacked(days, [{name: 'At the line', tone: 's3'}, {name: 'Found
 function inout(runs) {
   const last = runs.find(run => tally(run).hasInout);
   if (!last) return '';
-  const people = peopleOf(last), max = Math.max(1, ...people.map(person => person.in || 0)), seg = (value, key, inn) => (value > 0 ? `<i title="${esc(key)} ${value}" style="width:${(value / inn) * 100}%;background:${COLORS[key]}"></i>` : '');
+  const people = peopleOf(last), max = Math.max(1, ...people.map(person => person.in || 0)), seg = (value, key, inn) => (value > 0 ? `<i title="${esc(key)} ${value}" style="width:${Math.min(100, (value / inn) * 100)}%;background:${COLORS[key]}"></i>` : '');
   const rows = people.map(person => {
     if (person.blind) return `<div class="fl-row"><div class="small">${who(person.persona, person.label)}</div><div class="fl-blind"></div><div>${chip('not measured', 'off')}</div></div>`;
     if (!(person.in > 0)) return `<div class="fl-row"><div class="small">${who(person.persona, person.label)}</div><div class="fl-bar"></div><div>${chip(person.in === 0 ? 'EURES lists none · no reference' : 'no in = out sent', 'off')}</div></div>`;

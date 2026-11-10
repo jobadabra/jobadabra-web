@@ -45,6 +45,8 @@ test('weakest: the worst person x source x stage rows of the newest night that s
   assert.equal(at, '2026-11-18');
   assert.deepEqual(rows.map(item => [item.persona, item.stage, item.lost, item.history]), [[13, 'after_kept', 20, [18]], [1, 'never_asked', 5, [null]]], 'nothing lost = no row; a night that did not send inout is not a run');
   assert.deepEqual(weakest([night('2026-11-18', [row(1)])]), {night: null, rows: []});
+  const zero = weakest([night('2026-11-18', [row(1, {inout: io(19, 14, {never_asked: 5})})]), night('2026-11-17', [row(1, {inout: io(19, 19)})])]);
+  assert.deepEqual(zero.rows[0].history, [0], 'a night that sent in = out with nothing lost at the stage is 0, not unknown');
 });
 
 test('sources: right jobs, share, "only it" stays null until sent, people served, the average over the runs that sent it', () => {
