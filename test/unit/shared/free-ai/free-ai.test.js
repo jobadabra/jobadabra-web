@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {DAY_MESSAGE, MONTH_MESSAGE, TRIAL_MESSAGE, freeAi, LIMITS} from '../../../../shared/free-ai.js';
 import {ACTIONS} from '../../../../shared/aicost.js';
+import {status} from '../../../../shared/trial.js';
 import {tokenFor} from '../../../../shared/guard.js';
 import {OSS, SMALL, STRONG, STEP_MODELS, costUsd, modelFor} from '../../../../shared/free-ai-models.js';
 import * as models from '../../../../shared/free-ai-models.js';
@@ -147,6 +148,22 @@ test('the trial: $2 for the install\'s life, counted apart from the day and mont
   const refused = await call(e, apiKey);
   assert.equal(refused.status, 429); assert.equal((await refused.json()).error.message, TRIAL_MESSAGE);
   assert.equal((await call({...e, FREE_AI_TRIAL_USD: '5'}, apiKey)).status, 200, 'the budget is the wrangler var');
+});
+
+test("a faked own-AI flag lifts only the application count: Free AI's $2 trial credit and its day line still refuse that install (owner, 10 Nov 2026: 30 applications on a trial's own AI, Free AI unchanged)", async () => {
+  const e = env(), apiKey = await key();
+  const flagged = await (await status(new Request('https://x/api/trial/status?own_ai=1', {headers: {'x-api-key': apiKey}}), e, new Date('2026-10-16T10:00:00Z'))).json();
+  assert.deepEqual([flagged.ownAi, flagged.limit], [true, 30], 'the flag took: 30 applications');
+  await call(e, apiKey);
+  const id = [...e.WAITLIST.m.keys()].find(k => k.startsWith('freeai:min:')).split(':')[2];
+  e.WAITLIST.m.set(`freeai:life:${id}`, String(2 * 1e6));
+  e.WAITLIST.m.set(`freeai:dusd:${id}:2026-10-16`, '0'); e.WAITLIST.m.set(`freeai:musd:${id}:2026-10`, '0');
+  const trial = await call(e, apiKey);
+  assert.equal(trial.status, 429); assert.equal((await trial.json()).error.message, TRIAL_MESSAGE, 'the $2 trial credit still ends it');
+  e.WAITLIST.m.set(`freeai:life:${id}`, '0');
+  e.WAITLIST.m.set(`freeai:dusd:${id}:2026-10-16`, String(LIMITS.installDayUsd * 1e6));
+  const day = await call(e, apiKey);
+  assert.equal(day.status, 429); assert.equal((await day.json()).error.message, DAY_MESSAGE, 'and so does the day line');
 });
 
 test('a licence key (Pro, founder, friend) is a separate lane: no trial budget, nothing counted for life', async () => {

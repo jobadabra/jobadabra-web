@@ -77,3 +77,21 @@ test('the pause line is claimed once a day per install, and only by a caller tha
   assert.equal((await (await ask(e, `${old}&claim=1`, undefined, tomorrow)).json()).notify, true);
   assert.equal((await (await ask(env(), `applied=1&claim=1`)).json()).notify, false);   // not over: no line
 });
+
+test('a trial on its own AI key has 30 free applications, granted by the app\'s flag once and kept after it switches back to our AI (owner, 10 Nov 2026: "Keep 30")', async () => {
+  const e = env(), first = 'applied=12&first=2026-10-10T00:00:00Z';
+  assert.deepEqual(((b) => [b.limit, b.bonus, b.ownAi])(await (await ask(e, first)).json()), [20, 0, false], 'no flag: 20');
+  assert.deepEqual(((b) => [b.limit, b.bonus, b.ownAi])(await (await ask(e, `${first}&own_ai=1`)).json()), [30, 10, true], 'the flag: 30');
+  assert.deepEqual(((b) => [b.limit, b.ownAi])(await (await ask(e, first)).json()), [30, true], 'switched back to our AI: still 30');
+  assert.deepEqual(((b) => [b.limit, b.ownAi])(await (await ask(env(), `${first}&own_ai=1`, await keyOf('install-0002'))).json()), [30, true], 'another install claims its own');
+  assert.equal((await (await ask(env(), first, await keyOf('install-0002'))).json()).limit, 20, 'and one that never claimed has 20');
+});
+
+test('the flag adds to the report bonus and never lowers it; a flag from a wrong key grants nothing', async () => {
+  const e = env({STATS: d1()});
+  e.STATS.db.exec('CREATE TABLE trial_bonus (ref TEXT PRIMARY KEY, install TEXT NOT NULL, apps INTEGER NOT NULL, at TEXT NOT NULL)');
+  e.STATS.db.prepare("INSERT INTO trial_bonus (ref, install, apps, at) VALUES ('r1', 'install-0001', 5, 'x')").run();
+  assert.equal((await (await ask(e, 'own_ai=1')).json()).limit, 35, '20 + 5 for the report + 10 for its own AI');
+  assert.equal((await ask(e, 'own_ai=1', 'nope')).status, 401);
+  assert.equal([...e.WAITLIST.m.keys()].filter(key => key.startsWith('trial:ownai:')).length, 1, 'only the real install was marked');
+});

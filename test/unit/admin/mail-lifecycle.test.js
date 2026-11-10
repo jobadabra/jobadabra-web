@@ -25,12 +25,13 @@ const kv = () => { const m = new Map(); return {m, get: async k => m.get(k) ?? n
 const now = new Date('2026-10-16T10:00:00Z');
 const setup = (extra = {}) => { const sent = [], e = {MAIL: 'on', TRIAL_REMINDERS: 'on', STATS: d1(), WAITLIST: kv(), STATS_SALT: 'salt', EMAIL: {send: async m => { sent.push(m); return {messageId: `m${sent.length}`}; }}, ...extra}; return {e, sent}; };
 // A trial account with one install, that applied `applied` times and started its first run `days` days ago.
-async function trial(e, email, {applied = 0, days = 5, install = `inst-${email}`} = {}) {
+async function trial(e, email, {applied = 0, days = 5, install = `inst-${email}`, ownAi = false} = {}) {
   const id = await createAccount(e, email, now, {plan: 'trial'});
   await link(e, id, install, now);
   const who = await digestOf(install);
   await e.WAITLIST.put(`trial:applied:${who}`, String(applied));
   await e.WAITLIST.put(`trial:first:${who}`, new Date(now.getTime() - days * 86400000).toISOString());
+  if (ownAi) await e.WAITLIST.put(`trial:ownai:${who}`, '1');   // the app's flag (shared/trial.js)
   return id;
 }
 
@@ -42,6 +43,15 @@ test('"N applications left" goes once to an account with 5 or fewer left; nobody
   assert.deepEqual(await run(e, now), {left: 1, ending: 0, paused: 0});
   assert.deepEqual(sent.map(m => [m.to, m.subject]), [['low@example.com', '4 free applications left']]);
   assert.deepEqual(await run(e, new Date(now.getTime() + 86400000)), {left: 0, ending: 0, paused: 0}, 'once only');
+});
+
+test('a trial on its own AI has 30: "N applications left" counts down from 30 and its mail names 30, in the person\'s numbers', async () => {
+  const {e, sent} = setup();
+  await trial(e, 'own@example.com', {applied: 22, ownAi: true});   // 8 left of 30: no mail yet
+  await trial(e, 'own-low@example.com', {applied: 27, ownAi: true});   // 3 left of 30
+  assert.deepEqual(await run(e, now), {left: 1, ending: 0, paused: 0});
+  assert.deepEqual(sent.map(m => [m.to, m.subject]), [['own-low@example.com', '3 free applications left']]);
+  assert.match(sent[0].text, /\(30 applications or 60 days/);
 });
 
 test('"trial ends in 3 days" needs the 20 applications done and 1-3 days left of the 60; an ongoing trial gets nothing', async () => {

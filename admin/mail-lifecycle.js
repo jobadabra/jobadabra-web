@@ -4,7 +4,7 @@
 import {digestOf} from '../shared/guard.js';
 import {addrOf, send} from '../shared/mail.js';
 import {audienceRows} from './email-audience.js';
-import {FREE_APPLICATIONS, stand} from '../shared/trial.js';
+import {OWN_AI_BONUS, stand} from '../shared/trial.js';
 import {OFFERS} from '../shared/pro-packages.js';
 
 export const PRICING_URL = 'https://www.jobadabra.top/pricing';
@@ -21,14 +21,15 @@ async function sentSince(env, to, template, since) {
 // The trial numbers of an account: the most applications and the earliest first run over its devices.
 async function trialOf(env, account, now) {
   const devices = (await env.STATS.prepare('SELECT install FROM pro_devices WHERE account = ?').bind(account.id).all()).results || [];
-  let applied = 0, first = null;
+  let applied = 0, first = null, ownAi = false;
   for (const {install} of devices) {
     const who = await digestOf(install);
-    const [a, f] = await Promise.all([env.WAITLIST.get(`trial:applied:${who}`), env.WAITLIST.get(`trial:first:${who}`)]);
+    const [a, f, own] = await Promise.all([env.WAITLIST.get(`trial:applied:${who}`), env.WAITLIST.get(`trial:first:${who}`), env.WAITLIST.get(`trial:ownai:${who}`)]);
+    if (own === '1') ownAi = true;
     applied = Math.max(applied, Number(a) || 0);
     if (f && (!first || f < first)) first = f;
   }
-  return stand({applied, first: first || account.trial_started_at || account.created_at, now});
+  return stand({applied, first: first || account.trial_started_at || account.created_at, now, bonus: ownAi ? OWN_AI_BONUS : 0});   // 30 free applications once any of its installs is on its own AI (shared/trial.js)
 }
 
 // -> {left: n, ending: n, paused: n} mails sent today.
@@ -39,11 +40,11 @@ export async function run(env, now = new Date()) {
   const accounts = (await env.STATS.prepare("SELECT id, email, created_at, trial_started_at FROM pro_accounts WHERE plan = 'trial' AND status = 'active' AND service_mail_off_at IS NULL ORDER BY created_at LIMIT ?").bind(MAX_PER_RUN).all()).results || [];
   for (const account of accounts) {
     const trial = await trialOf(env, account, now);
-    const left = FREE_APPLICATIONS - trial.used;
+    const left = trial.limit - trial.used;
     if (reminders && left > 0 && left <= LEFT_AT && !await sentSince(env, account.email, 'trial-left', '')) {
-      if ((await send(env, 'trial-left', account.email, {left}, {now})).ok) done.left++;
+      if ((await send(env, 'trial-left', account.email, {left, limit: trial.limit}, {now})).ok) done.left++;
     }
-    if (reminders && trial.used >= FREE_APPLICATIONS && trial.daysLeft > 0 && trial.daysLeft <= ENDING_DAYS && !await sentSince(env, account.email, 'trial-ending', '')) {
+    if (reminders && trial.used >= trial.limit && trial.daysLeft > 0 && trial.daysLeft <= ENDING_DAYS && !await sentSince(env, account.email, 'trial-ending', '')) {
       if ((await send(env, 'trial-ending', account.email, {days: trial.daysLeft, pricingUrl: PRICING_URL}, {now})).ok) done.ending++;
     }
   }

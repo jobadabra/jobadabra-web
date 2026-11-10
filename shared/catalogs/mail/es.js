@@ -51,9 +51,9 @@ export const messages = {
     "many": "Quedan {count} candidaturas gratuitas"
   },
   "trialOpening": {
-    "one": "Te queda {number} candidatura en tu prueba gratuita de Jobadabra (20 candidaturas o 60 días, lo que dure más).",
-    "other": "Te quedan {number} candidaturas en tu prueba gratuita de Jobadabra (20 candidaturas o 60 días, lo que dure más).",
-    "many": "Te quedan {number} candidaturas en tu prueba gratuita de Jobadabra (20 candidaturas o 60 días, lo que dure más)."
+    "one": "Te queda {number} candidatura en tu prueba gratuita de Jobadabra ({limit} candidaturas o 60 días, lo que dure más).",
+    "other": "Te quedan {number} candidaturas en tu prueba gratuita de Jobadabra ({limit} candidaturas o 60 días, lo que dure más).",
+    "many": "Te quedan {number} candidaturas en tu prueba gratuita de Jobadabra ({limit} candidaturas o 60 días, lo que dure más)."
   },
   "trialClosing": "Las búsquedas, el seguimiento y tus datos seguirán funcionando igual.",
   "trialEndingSubject": {

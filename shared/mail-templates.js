@@ -6,6 +6,7 @@ import {purchaseCreditWords} from './credit-purchase-words.js';
 import {codeBox, esc, jobRows, jobText, link} from './mail-frame.js';
 import {LIGHT as C} from './mail-palette.js';
 import {releaseHtml, releaseSubject, releaseText, releaseTitle} from './mail-release.js';
+import {FREE_APPLICATIONS} from './trial.js';
 
 // A message the app or an Always on run would send on Telegram, in the same layout: data {subject, html, text, buttons: [{text, url}], confirmUrl} (html/text from api/mail-html.js).
 // The first button is the frame's one orange button; the others are links under the text.
@@ -56,8 +57,8 @@ export const TEMPLATES = {
   'trial-left': {list: 'service',
     subject: ({left, locale} = {}) => mailText(locale, 'trialLeft', {count: left}),
     title: ({left, locale} = {}) => mailText(locale, 'trialLeft', {count: left}),
-    text: ({left, locale} = {}) => `${mailText(locale, 'trialOpening', {count: left, number: left})}\n${mailText(locale, 'trialClosing')}`,
-    html: ({left, locale} = {}) => `<p>${mailText(locale, 'trialOpening', {count: left, number: `<b>${esc(left)}</b>`})}</p><p>${mailText(locale, 'trialClosing')}</p>`},
+    text: ({left, limit = FREE_APPLICATIONS, locale} = {}) => `${mailText(locale, 'trialOpening', {count: left, number: left, limit})}\n${mailText(locale, 'trialClosing')}`,   // limit: the person's own number (30 on their own AI, shared/trial.js)
+    html: ({left, limit = FREE_APPLICATIONS, locale} = {}) => `<p>${mailText(locale, 'trialOpening', {count: left, number: `<b>${esc(left)}</b>`, limit})}</p><p>${mailText(locale, 'trialClosing')}</p>`},
   'trial-ending': {list: 'service',
     subject: ({days, locale} = {}) => mailText(locale, 'trialEndingSubject', {count: days}),
     title: ({days, locale} = {}) => mailText(locale, 'trialEndingSubject', {count: days}),
