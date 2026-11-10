@@ -66,3 +66,21 @@ export async function searchNightYield({env}, seeds) {
     row('employer_sites', null, 30 + i * 3, 5 + (i % 5), 1 + (i % 2)), row('free_job_apis', 6 + (i % 4) * 5, 9 + (i % 7), 1 + (i % 3), i % 2)]}));
   await writeState(env, STATE_KEY, {nights: kept}, new Date());
 }
+
+// The Night search chart with the merged search PRs as marks (10 Nov 2026, [pm]): the day-by-day seed, and on seven of its 18-candidate nights MADE-UP PR numbers and titles (1 to 20 PRs, one night with the
+// stored cap and "and more", one real "no PR" night, the first night "nothing to compare"). Nothing here is a real PR.
+/** @param {{env: object}} context the seed context; `seeds` the seed table */
+export async function searchTrendPrs({env}, seeds) {
+  await searchTrend({env}, seeds);
+  const kept = await nights(env), titles = ['Read job boards in the order they pay off', 'The title sort asks in batches of 30', 'Places are worked out before the first board', 'Employer sites get 20 s more on a long night', 'Drop a duplicate EURES read',
+    'Score only the jobs in the candidate\'s places', 'Skip boards that returned nothing for three nights', 'Judge: a job in the wrong country is wrong', 'Free job APIs run beside the boards', 'A tighter first-job clock'];
+  const prsOf = (count, seed) => Array.from({length: Math.min(count, 15)}, (_, i) => ({n: 3700 - seed * 17 - i, title: titles[(seed + i) % titles.length]}));
+  const plan = {0: 3, 1: 1, 2: 0, 3: 6, 5: 20, 6: 2, 8: 4, 10: 1};   // days back -> PRs merged since the night before; 4, 7, 9 and 11 have none; 12 is the oldest 18-candidate night
+  const day = back => new Date(Date.now() - back * DAY).toISOString().slice(0, 10);
+  const oldest = kept.filter(item => item.rows.length === 18).at(-1).night;
+  await writeState(env, STATE_KEY, {nights: kept.map(item => {
+    if (item.night === oldest || item.rows.length !== 18) return {...item, prs: null};
+    const back = Math.round((Date.parse(`${day(0)}T00:00:00Z`) - Date.parse(`${item.night}T00:00:00Z`)) / DAY), count = plan[back] ?? 0;
+    return {...item, prs: prsOf(count, back), ...(count > 15 ? {prsMore: count - 15} : {})};
+  })}, new Date());
+}

@@ -11,7 +11,6 @@ import {DRAWS_CSS, drawsSection} from './search-lab-draws-page.js';
 import {VISUALS_CSS, cards, statsStrip, tiles as visualTiles} from './search-lab-visuals.js';
 import {historySection} from './search-lab-history.js';
 import {canSend, realRows, realSection} from './search-lab-real.js';
-import {experimentsSection} from './search-lab-experiments.js';
 import {needsSection, fixedSection} from './search-lab-fixes.js';
 import {checks} from './session-checks.js';
 import {checksSection} from './session-checks-page.js';
@@ -57,8 +56,8 @@ export function page(all, drawRows = [], tab = 'lab', real = [], sending = null,
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Lab Job Search · Admin</title>
 <link rel="icon" href="/favicon-32.png"><style>${CHIP_STYLE}${CSS}${DRAWS_CSS}${VISUALS_CSS}${NIGHT_CSS}</style></head><body><main>
 <header><h1>🔬 Lab Job Search</h1><span class="muted">fictional candidates and real installs · counts and seconds only</span></header>
-<nav class="tabs"><a href="?tab=real" class="${tab === 'real' ? 'on' : ''}">Real installs</a><a href="?tab=draws" class="${tab === 'draws' ? 'on' : ''}">Random draws</a><a href="?tab=night" class="${tab === 'night' ? 'on' : ''}">Night search</a><a href="?tab=checks" class="${tab === 'checks' ? 'on' : ''}">Session checks</a><a href="?tab=experiments" class="${tab === 'experiments' ? 'on' : ''}">Experiments</a><a href="?tab=lab" class="${tab === 'lab' ? 'on' : ''} parked">Replays</a><a href="?tab=needs" class="${tab === 'needs' ? 'on' : ''} parked">Needs a fix</a><a href="?tab=fixed" class="${tab === 'fixed' ? 'on' : ''} parked">Fixed</a><a href="?tab=history" class="${tab === 'history' ? 'on' : ''} parked">History</a></nav>
-${tab === 'night' ? nightSection(nightRows, nightRef) : tab === 'checks' ? checksSection(sessionChecks) : tab === 'needs' ? needsSection(all) : tab === 'fixed' ? fixedSection(all) : tab === 'experiments' ? experimentsSection() : tab === 'draws' ? drawsSection(drawRows) : tab === 'real' ? realSection(real, rows, sending) : tab === 'history' ? historySection(all) : `${visualTiles(rows, newest)}${statsStrip(rows, all)}${cards(rows, all)}
+<nav class="tabs"><a href="?tab=real" class="${tab === 'real' ? 'on' : ''}">Real installs</a><a href="?tab=draws" class="${tab === 'draws' ? 'on' : ''}">Random draws</a><a href="?tab=night" class="${tab === 'night' ? 'on' : ''}">Night search</a><a href="?tab=checks" class="${tab === 'checks' ? 'on' : ''}">Session checks</a><a href="?tab=lab" class="${tab === 'lab' ? 'on' : ''} parked">Replays</a><a href="?tab=needs" class="${tab === 'needs' ? 'on' : ''} parked">Needs a fix</a><a href="?tab=fixed" class="${tab === 'fixed' ? 'on' : ''} parked">Fixed</a><a href="?tab=history" class="${tab === 'history' ? 'on' : ''} parked">History</a></nav>
+${tab === 'night' ? nightSection(nightRows, nightRef) : tab === 'checks' ? checksSection(sessionChecks) : tab === 'needs' ? needsSection(all) : tab === 'fixed' ? fixedSection(all) : tab === 'draws' ? drawsSection(drawRows) : tab === 'real' ? realSection(real, rows, sending) : tab === 'history' ? historySection(all) : `${visualTiles(rows, newest)}${statsStrip(rows, all)}${cards(rows, all)}
 <section class="card"><h2>Each candidate's newest search</h2>${table(rows)}</section>
 <section class="card"><h2>How a row is judged</h2><p class="muted">Against the candidate's last green run: <b>Worse</b> when jobs in your places or jobs scoring 70+ are fewer, a time is more than 25 % slower, or a time that was reached is not reached (the control gets no tolerance on times). <b>FAILED</b> when a step of the search crashed: its numbers are never shown as a result. <b>No valid replay</b> when the build asks for pages or answers the tape never recorded (a change to what the search requests): no numbers are shown for it. The replay is parked (19 Oct 2026): judge the search by Real installs and Random draws. ▲ / ▼ show the move since the last green run.</p></section>`}
 </main></body></html>`;
@@ -69,7 +68,7 @@ export async function view(request, env) {
   const url = new URL(request.url);
   if (url.searchParams.has('key')) return remember(url, env, request);
   let all = [];
-  const tab = ['lab', 'draws', 'history', 'real', 'experiments', 'needs', 'fixed', 'checks', 'night'].includes(url.searchParams.get('tab')) ? url.searchParams.get('tab') : 'real';
+  const tab = ['lab', 'draws', 'history', 'real', 'needs', 'fixed', 'checks', 'night'].includes(url.searchParams.get('tab')) ? url.searchParams.get('tab') : 'real';
   let drawRows = [];
   try { all = env.STATS ? await runs(env.STATS) : []; } catch { all = []; }
   try { drawRows = env.STATS && tab === 'draws' ? await draws(env.STATS) : []; } catch { drawRows = []; }

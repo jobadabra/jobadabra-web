@@ -9,6 +9,7 @@ import {writeState} from './ci-state.js';
 import {COUNTERS} from './search-night-counters.js';
 import {cleanStepYield} from './search-night-yield.js';
 import {alertText, judgeAll} from './search-night-judge.js';
+import {markNights} from './search-night-prs.js';
 
 export const STATE_KEY = 'search-nights', KEEP_NIGHTS = 30, MAX_BYTES = 65536, MAX_ROWS = 40;   // Why (6 Nov 2026): 18 fixed personas a night (owner: "6 personas is too narrow"); the cap was 12 and would have refused the first 18-persona verdict with a 400, silent again. 40 leaves room; 18 rows are about 20 KB of the 64 KB
 // The row kinds of the gate (tools/persona-search/gate.py row_verdict): 🟢 measured, ⚪ none-right (scored, none right role and place), ⚪ nothing (no job scored), unmeasured (errored, refused or too slow), fault.
@@ -64,8 +65,39 @@ export async function reference(env) {
 
 const answer = (status, body) => Response.json(body, {status, headers: {'Cache-Control': 'no-store'}});
 
+export const MARK_BUDGET_MS = 25000;   // Why (10 Nov 2026, code review): GitHub's slowness must not hold the CI upload (its own timeout is 60 s); the night and its alert are stored before this starts
+
+/**
+ * Fills the builds and merged search PRs of the nights that lack them (admin/search-night-prs.js) and stores them. Why here (10 Nov 2026): the upload is the one event every night has, so no job, page or hand step writes the marks.
+ * Never fails or holds the upload: the night and its alert are already stored; a GitHub error or a slow answer (over `budgetMs`) is a log line / 'slow' and the next upload tries again.
+ * Why it re-reads the store before writing (code review, 10 Nov 2026): GitHub answers take seconds, and an upload that landed meanwhile must not be put back to the list this call started from; only the build and PRs of nights still unmarked are merged in.
+ * -> how many nights got PRs, 'none', 'slow' or 'error'.
+ */
+async function marks(env, kept, now, fetcher, budgetMs) {
+  const work = (async () => {
+    const filled = await markNights(env, kept, fetcher);
+    if (!filled.changed) return 'none';
+    const byNight = new Map(filled.nights.map(item => [item.night, item]));
+    const fresh = await nights(env);
+    let count = 0;
+    const merged = fresh.map(item => {
+      const got = byNight.get(item.night);
+      if (!got || item.prs !== undefined || item.run !== got.run || got.prs === undefined) return item;
+      if (Array.isArray(got.prs)) count += 1;
+      const {prsMore, ...rest} = item;
+      return {...rest, build: got.build, prs: got.prs, ...(got.prsMore ? {prsMore: got.prsMore} : {})};
+    });
+    if (merged.every((item, index) => item === fresh[index])) return 'none';
+    await writeState(env, STATE_KEY, {nights: merged}, now);
+    return count;
+  })().catch(error => { console.error(`search night: PR marks not filled: ${String(error?.message || error).slice(0, 120)}`); return 'error'; });
+  let timer;
+  const slow = new Promise(resolve => { timer = setTimeout(() => resolve('slow'), budgetMs); });
+  try { return await Promise.race([work, slow]); } finally { clearTimeout(timer); }
+}
+
 /** Stores one night (an upload of the same night replaces it), keeps the newest KEEP_NIGHTS, judges the night, and tells the owner when the NEWEST night dropped (an older night filled in late is never news). */
-export async function ingest(env, verdict, {night, run}, now = new Date(), fetcher = fetch) {
+export async function ingest(env, verdict, {night, run}, now = new Date(), fetcher = fetch, budgetMs = MARK_BUDGET_MS) {
   const record = clean(verdict, {night, run}, now);
   if (record.error) return {status: 400, body: {ok: false, error: record.error}};
   const kept = [{...record, at: now.toISOString()}, ...(await nights(env)).filter(item => item.night !== night)].sort((a, b) => b.night.localeCompare(a.night)).slice(0, KEEP_NIGHTS);
@@ -78,7 +110,8 @@ export async function ingest(env, verdict, {night, run}, now = new Date(), fetch
       .catch(error => ({sent: false, via: 'none', why: `error: ${String(error?.message).slice(0, 80)}`}));
     alert = told.sent ? 'sent' : told.why || told.via;
   }
-  return {status: 200, body: {ok: true, night, measured: judged.measured, total: judged.total, dropped: judged.dropped, reasons: judged.reasons, alert}};
+  const marked = await marks(env, kept, now, fetcher, budgetMs);   // after the alert: GitHub's slowness never holds the owner's news
+  return {status: 200, body: {ok: true, night, measured: judged.measured, total: judged.total, dropped: judged.dropped, reasons: judged.reasons, alert, marked}};
 }
 
 /** PUT /search-check/night?night=YYYY-MM-DD&run=<workflow run>: the verdict as the body (Bearer REPLAYS_PUBLISH_KEY). A wrong or missing key and a missing store are a plain 404; the night defaults to today (UTC). */

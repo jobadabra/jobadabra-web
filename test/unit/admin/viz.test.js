@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {countTicks, moneyTicks} from '../../../admin/viz-time.js';
-import {VIZ_STYLE, bars, columns, figure, meter, meters, split, stacks} from '../../../admin/viz.js';
+import {VIZ_STYLE, bars, columns, figure, line, meter, meters, split, stacks} from '../../../admin/viz.js';
 
 const count = (html, needle) => html.split(needle).length - 1;
 
@@ -99,4 +99,20 @@ test('line: dots on a 0-100% axis, a day with no value breaks the line and has n
 test('the rows share one set of columns, so every track has the same length (Speed shot, 5 Nov 2026: the budget tick sat 4 px apart)', async () => {
   const {VIZ_STYLE} = await import('../../../admin/viz.js');
   assert.match(VIZ_STYLE, /\.vz-row\{display:grid;grid-template-columns:subgrid/); assert.match(VIZ_STYLE, /\.vz-bars\{display:grid;grid-template-columns:minmax\(110px,200px\) 1fr auto/);
+});
+
+test('time charts: a marked day draws a dashed line and a count pill at its left edge with the tooltip; the plot keeps its height and the pills sit in their own strip above it', () => {
+  const days = ['2026-11-05', '2026-11-06', '2026-11-07'].map((day, i) => ({day, values: [i + 1], tip: `${day} tip`, mark: i === 1 ? {count: 3, tip: '3 PRs\n#1 one'} : i === 2 ? {count: 120, tip: '120 PRs'} : undefined}));
+  const marked = columns(days, [{name: 'Found', tone: 's1'}]), plain = columns(days.map(({mark, ...rest}) => rest), [{name: 'Found', tone: 's1'}]);
+  assert.equal((marked.match(/class="vz-mark"/g) || []).length, 2);
+  assert.match(marked, />3<\/text>/);
+  assert.match(marked, />99\+<\/text>/, 'a long count is cut, not widened');
+  assert.match(marked, /data-tip="3 PRs\n#1 one"/);
+  assert.match(marked, /viewBox="0 0 720 234"/);
+  assert.match(plain, /viewBox="0 0 720 220"/, 'a chart with no mark is drawn as before');
+  assert.doesNotMatch(plain, /vz-mark/);
+  const heightOf = svg => svg.match(/<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="([\d.]+)" rx="2" fill="var\(--s1\)"/g).map(rect => Number(/height="([\d.]+)"/.exec(rect)[1]));
+  assert.deepEqual(heightOf(marked), heightOf(plain), 'the columns are as tall with marks as without');
+  const dots = line(days.map(({values, ...rest}) => ({...rest, value: values[0]})), {tone: 's2', percent: false, whole: true});
+  assert.equal((dots.match(/class="vz-mark"/g) || []).length, 2, 'the line has them too');
 });
