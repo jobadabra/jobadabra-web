@@ -78,6 +78,38 @@ function sourcesCard(runs) {
 ${rows.length ? `<table><tr><th>Source</th><th class="num">Right jobs</th><th class="num">Share</th><th class="num">Only it brought</th><th class="num">Fit 70+</th><th class="num">Seconds</th><th class="num">People served</th><th class="num">Average</th></tr>${body}</table>` : '<p class="muted">No run has sent per-source counts yet.</p>'}</section>`;
 }
 
+const NUMBER_WORDS = {right: 'right jobs', eures_inout: 'EURES in = out share', first_s: 'seconds to first job'};
+const CEILING = {first_s: true};   // lower is better: its "floor" is a ceiling
+const whoIn = (persona, labels) => who(persona, labels[persona]);
+const ordinal = n => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({1: 'st', 2: 'nd', 3: 'rd'}[n % 10] || 'th')}`;
+const value = item => (item == null ? '–' : String(item));
+
+// ---- Floors card (cr's G2, 10 Nov 2026; admin/search-floors.js keeps the fields, this draws them as sent and computes nothing) ----
+/** One red row in cr's words: "p3 · right jobs 0, floor 4 · 2nd night under · merges since the last green: …". */
+function redRow(item, labels) {
+  const word = CEILING[item.number] ? 'ceiling' : 'floor';
+  return `<li>${whoIn(item.persona, labels)} · ${esc(NUMBER_WORDS[item.number])} ${value(item.now)}, ${word} ${value(item.floor)} · ${item.below == null ? 'nights under not sent' : `${ordinal(item.below)} night under`}${item.merges.length ? ` · merges since the last green: ${item.merges.map(esc).join('; ')}` : ''}</li>`;
+}
+
+/**
+ * The card.
+ * @param {object[]} runs nights and by-hand runs, newest first (each may carry `floors` and `measure`)
+ */
+export function floorsCard(runs) {
+  const run = runs.find(item => item.floors), floors = run?.floors, labels = Object.fromEntries((run?.rows || []).map(row => [row.persona, row.label]));
+  const head = '<h2>🧱 Floors that only rise</h2>';
+  const note = `<div class="muted small">A floor is the best a person's number held for 3 measured nights; red = under it beyond the spread two nights in a row, on a scheduled night on the locked chain · for seconds to first job the line is a ceiling · the alert is the check's, not this card's</div>`;
+  if (!floors) return `<section class="card vz" id="finish-floors">${head}${note}<p>${chip('not sent yet', 'off')} <span class="muted small">no run has sent floors yet</span></p></section>`;
+  const where = `<span class="muted small">${run.hand ? 'by-hand run' : 'night'} ${esc(run.night)}${run.measure ? ` · measure ${esc(run.measure)}` : ''}</span>`;
+  if (!floors.checked) return `<section class="card vz" id="finish-floors">${head}${note}<p>${chip(`floors: not checked${floors.why ? ` (${esc(floors.why)})` : ''}`, 'off')} ${where}</p></section>`;
+  const persons = Object.keys(floors.levels).sort((a, b) => a - b), set = persons.reduce((total, key) => total + Object.values(floors.levels[key]).filter(item => item.floor != null).length, 0);
+  const verdict = floors.red.length ? chip(`${floors.red.length} under the floor`, 'bad') : chip('all above their floors', 'good');
+  const green = floors.last_green ? `last green run ${esc(floors.last_green.run)}${floors.last_green.sha ? ` (${esc(floors.last_green.sha.slice(0, 7))})` : ''}` : 'no green run known';
+  const table = persons.length ? `<details class="vz-more"><summary>All floors (${set} set)</summary><div class="scroll"><table><tr><th>Person</th>${Object.values(NUMBER_WORDS).map(word => `<th class="num">${esc(word)} · now / floor</th>`).join('')}</tr>${persons.map(key => `<tr><td>${whoIn(key, labels)}</td>${Object.keys(NUMBER_WORDS).map(number => { const item = floors.levels[key][number]; return `<td class="num">${item ? `${value(item.now)} / ${item.floor == null ? '<span class="muted">no floor yet</span>' : value(item.floor)}` : '–'}</td>`; }).join('')}</tr>`).join('')}</table></div></details>` : '';
+  return `<section class="card vz" id="finish-floors">${head}${note}<p>${verdict} ${set ? chip(`${set} floors set`, 'off') : chip('no floor yet: it needs 3 measured nights', 'off')} ${where} <span class="muted small">· ${green}</span></p>
+${floors.red.length ? `<ul>${floors.red.map(item => redRow(item, labels)).join('')}</ul>` : ''}${table}</section>`;
+}
+
 /**
  * The tab's body.
  * @param {object[]|null} judged the stored nights, newest first (admin/search-night-judge.js judgeAll); null = unreadable
@@ -86,5 +118,5 @@ ${rows.length ? `<table><tr><th>Source</th><th class="num">Right jobs</th><th cl
 export function finishSection(judged, hand = []) {
   if (!judged) return '<section class="card"><h2>The nights could not be read</h2><p class="muted">The store of the nightly Search check did not answer, so this tab cannot draw the finish line.</p></section>';
   const runs = runsOf(judged, hand);
-  return `${band(runs)}${weakCard(runs)}${overTime(runs)}${inout(runs)}${sourcesCard(runs)}${VIZ_TOOLTIP}`;
+  return `${band(runs)}${floorsCard(runs)}${weakCard(runs)}${overTime(runs)}${inout(runs)}${sourcesCard(runs)}${VIZ_TOOLTIP}`;
 }

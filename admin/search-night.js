@@ -10,6 +10,7 @@ import {COUNTERS} from './search-night-counters.js';
 import {cleanStepYield} from './search-night-yield.js';
 import {alertText, euresOf, judgeAll} from './search-night-judge.js';
 import {cleanInout, cleanSources} from './search-finish.js';
+import {cleanFloors, cleanMeasure} from './search-floors.js';
 import {markNights} from './search-night-prs.js';
 import {HAND_KEY, KEEP_HAND, handRuns} from './search-night-hand.js';
 
@@ -72,7 +73,7 @@ export function clean(verdict, {night, run = null} = {}, now = new Date()) {
   if (!Array.isArray(rows) || !rows.length || rows.length > MAX_ROWS || !rows.every(row => row && typeof row === 'object' && !Array.isArray(row))) return {error: `rows are 1 to ${MAX_ROWS} personas`};
   // Why (10 Nov 2026, owner: "we should make sure that our algorim/search can be as good as EURES, without using EURES"): CI's night runs with EURES off from jobadabra [oe] 1/3; a night says which, so it is judged
   // against nights of the same kind only (admin/search-night-judge.js). A verdict without the word is from before the switch: EURES was on.
-  return {night, run, eures: euresOf(verdict), engine: engineOf(rows), state: text(verdict.state, 20), head: text(verdict.head, 300), rows: rows.map((row, index) => ({
+  return {night, run, eures: euresOf(verdict), engine: engineOf(rows), measure: cleanMeasure(verdict.measure), floors: cleanFloors(verdict.floors), state: text(verdict.state, 20), head: text(verdict.head, 300), rows: rows.map((row, index) => ({
     persona: Number.isInteger(row.persona) && row.persona > 0 && row.persona < 100 ? row.persona : index + 1, label: text(row.label, 80), kind: KINDS.includes(row.kind) ? row.kind : 'unknown', why: text(row.why, 120),
     again: row.again === 1 ? 1 : 0, firstTry: text(row.first_try, 160),   // Why (10 Nov 2026, sa): a person graded "AI slow"/"AI queue full" presses once more at the end of the night; the numbers are the 2nd try's and the page says so, never as the better of two
     local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note), counters: counters(row.counters), inout: cleanInout(row.inout), sources: cleanSources(row.sources), stepYield: cleanStepYield(row.step_yield), relevantSources: relevantSources(row.relevant_sources, row.local),
