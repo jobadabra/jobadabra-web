@@ -14,9 +14,10 @@ import {CHIP_STYLE} from './chip.js';
 import {nights, reference} from './search-night.js';
 import {judgeAll} from './search-night-judge.js';
 import {NIGHT_CSS, nightSection} from './search-night-page.js';
+import {FINISH_STYLE, finishSection} from './search-finish-page.js';
 import {handRuns} from './search-night-hand.js';
 
-export const TABS = [['real', 'Real installs'], ['draws', 'Random draws'], ['night', 'Night search'], ['checks', 'Session checks']];
+export const TABS = [['real', 'Real installs'], ['draws', 'Random draws'], ['night', 'Night search'], ['finish', 'Finish line'], ['checks', 'Session checks']];
 const CSS = `.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}.tile b{display:block;font-size:28px;margin:4px 0}
 .scroll{overflow-x:auto}.state{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
 .state.good{background:#16341f;color:#6fdc8c}.state.bad{background:#40181a;color:#ff8a80}.state.wait{background:#262c33;color:#b9c0c7}
@@ -25,9 +26,9 @@ const CSS = `.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(16
 
 export function page(drawRows = [], tab = 'real', real = [], sending = null, sessionChecks = [], nightRows = [], nightRef = {}, hand = []) {
   const shown = TABS.some(([key]) => key === tab) ? tab : 'real';
-  const sections = {night: () => nightSection(nightRows, nightRef, hand), checks: () => checksSection(sessionChecks), draws: () => drawsSection(drawRows), real: () => realSection(real, sending)};
+  const sections = {night: () => nightSection(nightRows, nightRef, hand), finish: () => finishSection(nightRows, hand), checks: () => checksSection(sessionChecks), draws: () => drawsSection(drawRows), real: () => realSection(real, sending)};
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Lab Job Search · Admin</title>
-<link rel="icon" href="/favicon-32.png"><style>${CHIP_STYLE}${CSS}${DRAWS_CSS}${VISUALS_CSS}${NIGHT_CSS}</style></head><body><main>
+<link rel="icon" href="/favicon-32.png"><style>${CHIP_STYLE}${CSS}${DRAWS_CSS}${VISUALS_CSS}${NIGHT_CSS}${FINISH_STYLE}</style></head><body><main>
 <header><h1>🔬 Lab Job Search</h1><span class="muted">fictional candidates and real installs · counts and seconds only</span></header>
 <nav class="tabs">${TABS.map(([key, name]) => `<a href="?tab=${key}" class="${shown === key ? 'on' : ''}">${name}</a>`).join('')}</nav>
 ${sections[shown]()}
@@ -46,10 +47,10 @@ export async function view(request, env) {
   let sessionChecks = [];
   try { sessionChecks = env.STATS && tab === 'checks' ? await checks(env.STATS) : []; } catch { sessionChecks = []; }
   let nightRows = [];
-  try { nightRows = env.STATS && tab === 'night' ? judgeAll(await nights(env)) : []; } catch (error) { console.error(`night search: nights unreadable: ${error?.message || error}`); nightRows = null; }   // Why (6 Nov 2026, review): null says "could not be read"; [] would say "no night uploaded yet", the silent miss this tab exists to end
+  try { nightRows = env.STATS && (tab === 'night' || tab === 'finish') ? judgeAll(await nights(env)) : []; } catch (error) { console.error(`night search: nights unreadable: ${error?.message || error}`); nightRows = null; }   // Why (6 Nov 2026, review): null says "could not be read"; [] would say "no night uploaded yet", the silent miss this tab exists to end
   let nightRef = {};
   try { nightRef = env.STATS && tab === 'night' ? await reference(env) : {}; } catch (error) { console.error(`night search: reference unreadable: ${error?.message || error}`); nightRef = {}; }   // the weekly reference is the tab's extra column: unreadable = "no reference yet", never a broken tab
-  const hand = env.STATS && tab === 'night' ? await handRuns(env) : [];   // never throws: no by-hand run is []
+  const hand = env.STATS && (tab === 'night' || tab === 'finish') ? await handRuns(env) : [];   // never throws: no by-hand run is []
   let sending = null;
   try { sending = env.STATS && tab === 'real' ? await canSend(env.STATS) : null; } catch { sending = null; }
   return new Response(page(drawRows, tab, real, sending, sessionChecks, nightRows, nightRef, hand), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
