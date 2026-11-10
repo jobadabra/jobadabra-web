@@ -46,8 +46,8 @@ export const messages = {
     "other": "{count} kostenlose Bewerbungen übrig"
   },
   "trialOpening": {
-    "one": "Du hast noch {number} Bewerbung in deiner kostenlosen Jobadabra-Testphase (20 Bewerbungen oder 60 Tage, je nachdem, was länger reicht).",
-    "other": "Du hast noch {number} Bewerbungen in deiner kostenlosen Jobadabra-Testphase (20 Bewerbungen oder 60 Tage, je nachdem, was länger reicht)."
+    "one": "Du hast noch {number} Bewerbung in deiner kostenlosen Jobadabra-Testphase ({limit} Bewerbungen oder 60 Tage, je nachdem, was länger reicht).",
+    "other": "Du hast noch {number} Bewerbungen in deiner kostenlosen Jobadabra-Testphase ({limit} Bewerbungen oder 60 Tage, je nachdem, was länger reicht)."
   },
   "trialClosing": "Suche, Nachverfolgung und deine Daten funktionieren unverändert weiter.",
   "trialEndingSubject": {

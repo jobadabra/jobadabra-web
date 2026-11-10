@@ -46,8 +46,8 @@ export const messages = {
     "other": "{count} free applications left"
   },
   "trialOpening": {
-    "one": "You have {number} application left in your free Jobadabra trial (20 applications or 60 days, whichever lasts longer).",
-    "other": "You have {number} applications left in your free Jobadabra trial (20 applications or 60 days, whichever lasts longer)."
+    "one": "You have {number} application left in your free Jobadabra trial ({limit} applications or 60 days, whichever lasts longer).",
+    "other": "You have {number} applications left in your free Jobadabra trial ({limit} applications or 60 days, whichever lasts longer)."
   },
   "trialClosing": "Searches, tracking and your data keep working as they are.",
   "trialEndingSubject": {

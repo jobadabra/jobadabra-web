@@ -51,9 +51,9 @@ export const messages = {
     "other": "Au mai rămas {count} de candidaturi gratuite"
   },
   "trialOpening": {
-    "one": "Mai ai {number} candidatură în perioada gratuită de încercare Jobadabra (20 de candidaturi sau 60 de zile, oricare durează mai mult).",
-    "few": "Mai ai {number} candidaturi în perioada gratuită de încercare Jobadabra (20 de candidaturi sau 60 de zile, oricare durează mai mult).",
-    "other": "Mai ai {number} de candidaturi în perioada gratuită de încercare Jobadabra (20 de candidaturi sau 60 de zile, oricare durează mai mult)."
+    "one": "Mai ai {number} candidatură în perioada gratuită de încercare Jobadabra ({limit} de candidaturi sau 60 de zile, oricare durează mai mult).",
+    "few": "Mai ai {number} candidaturi în perioada gratuită de încercare Jobadabra ({limit} de candidaturi sau 60 de zile, oricare durează mai mult).",
+    "other": "Mai ai {number} de candidaturi în perioada gratuită de încercare Jobadabra ({limit} de candidaturi sau 60 de zile, oricare durează mai mult)."
   },
   "trialClosing": "Căutările, urmărirea și datele tale continuă să funcționeze ca până acum.",
   "trialEndingSubject": {
