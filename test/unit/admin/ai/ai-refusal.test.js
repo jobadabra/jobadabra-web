@@ -56,7 +56,8 @@ test('reportRefusal logs the named error and tells once: the run before red mean
   // Why (8 Nov 2026, fr; red main since 54b8319): the sentence itself is owned by desktop/e2e/lib/broker-reason.mjs (public jobadabra#3583 reworded "allowance is used up" to "Codex's week reached its line"); this test asserts the class, not a copy of the sentence: it is read from there.
   const row = reasonOf(BUDGET).row;
   assert.ok(row && !/budget:|broker/i.test(row), 'a plain row exists for a budget reason');
-  assert.equal(told[0], `⚠️ Changelog publish: 💳 ${row}\nPlain entries went out.`);
+  assert.match(told[0], /^🟠 <b>Changelog publish: AI refused a job<\/b>/);   // the card (public jobadabra#3644): headline, the plain cause row, the job's effect line
+  assert.ok(told[0].includes(`💳 ${row}`) && told[0].includes('Plain entries went out.'), told[0]);
   assert.doesNotMatch(told[0], /budget:|AI skipped/, 'no raw broker words in the message');
   await reportRefusal(error, {job: 'Changelog publish', workflow: 'w.yml', zurichHour: 14, env, fetch, run: runs('failure')});
   assert.equal(told.length, 1, 'already red before: no second message');

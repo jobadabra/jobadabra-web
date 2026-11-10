@@ -480,7 +480,7 @@ test('a deliberate move of role_kinds.SINCE: most kinds go, the publish passes, 
   await call(e, 'PUT', auth, {feeds: some(100, hiring)});
   assert.equal((await call(e, 'PUT', auth, {feeds: keepingKinds(10)})).status, 200);
   assert.equal(await kindsStored(e.STATS), 10);
-  assert.match(sent.join(), /kept 10 feeds with kinds of 100/);
+  assert.match(sent.join(), /10 feeds kept their kind · 90 lost it/);
 });
 
 test('kinds kept at half, or a list with under 10 kinds, tell nobody', async t => {
@@ -500,7 +500,7 @@ test('with no D1 the kinds count comes from the KV copy', async t => {
   const sent = told(t), e = withBot();
   await call(e, 'PUT', auth, {feeds: some(20, hiring)});
   assert.equal((await call(e, 'PUT', auth, {feeds: some(20)})).status, 200);
-  assert.match(sent.join(), /kept 0 feeds with kinds of 20/);
+  assert.match(sent.join(), /0 feeds kept their kind · 20 lost it/);
 });
 
 test('with D1 the kinds line is D1\'s count: an old KV copy that is no longer rewritten is not the line', async t => {
@@ -554,7 +554,7 @@ test('a publish that writes D1 and then fails still tells the owner its kinds dr
   await call(e, 'PUT', auth, {feeds: some(100, hiring)});
   const breaking = {...e, WAITLIST: {...e.WAITLIST, put: async key => { if (key === 'index:generated') throw new Error('KV down'); }}};
   await assert.rejects(() => call(breaking, 'PUT', auth, {feeds: some(100)}));
-  assert.match(sent.join(), /kept 0 feeds with kinds of 100/);
+  assert.match(sent.join(), /0 feeds kept their kind · 100 lost it/);
 });
 
 test('one stored body that is not JSON never stops a publish (review)', async t => {

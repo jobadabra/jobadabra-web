@@ -40,7 +40,7 @@ test('one message per issue, with its facts; the same issue is not told again on
   const w = world([issue(1, {substatus: 'new', level: 'fatal'}), issue(2)]);
   assert.deepEqual(await check(w.env, w.fetcher, NOW), {told: 1, held: 0, skipped: 0});
   const text = w.telegram[0].text;
-  for (const part of ['New', 'crash', 'Error 1', 'src/x.py in run', '2 users', '5 events', 'v0.9.1', '2026-10-01 00:00', 'issues/1/', '/admin/testing/sentry']) assert.ok(text.includes(part), part);
+  for (const part of ['New', 'crash', 'Error 1', 'src/x.py in run', '2 users', '5 events', 'v0.9.1', '2026-10-01 00:00', 'issues/1/', 'JOBADABRA-APP-1']) assert.ok(text.includes(part), part);
   assert.equal(w.telegram[0].chat_id, '42');
   assert.equal((await check(w.env, w.fetcher, NOW + 300000)).told, 0);
   assert.equal(w.telegram.length, 1);

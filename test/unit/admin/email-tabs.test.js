@@ -90,6 +90,8 @@ test('the pages that link into the E-mail page land on the tab that has what the
   const read = file => readFileSync(new URL(`../../../${file}`, import.meta.url), 'utf8');
   assert.match(read('admin/release-mail-page.js'), /href="\/admin\/growth\/email\?tab=releases">← All email/);
   assert.match(read('admin/email.js'), /href="\/admin\/growth\/email\?tab=templates">← All email/);
-  assert.match(read('api/account-email.js'), /admin\/growth\/email\?tab=people/);
-  assert.match(read('workers/www/index.js'), /admin\/growth\/email\?tab=people/);
+  // Why (10 Nov 2026): the two owner pings are cards built in shared/owner-cards.js (emailCard, waitlistCard); the senders only pass facts.
+  assert.match(read('shared/owner-cards.js'), /admin\/growth\/email\?tab=people/);
+  assert.match(read('api/account-email.js'), /emailCard/);
+  assert.match(read('workers/www/index.js'), /waitlistCard/);
 });

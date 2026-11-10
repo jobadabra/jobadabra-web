@@ -5,9 +5,10 @@
 // A known limit: the daily slot is shared, so if this alert goes out and a run more than six hours late then uploads a dropped night the same UTC day, that night's alert is held until the next day. Guard: test/unit/admin/search/search-night.test.js.
 import {alertOwner} from '../shared/notify-send.js';
 import {nights} from './search-night.js';
+import {nightMissingCard} from '../shared/owner-cards.js';
 
 export const CHECK_AT = '06:30', CHECK_UNTIL = '07:30';   // UTC; the run ends about two hours earlier even with a long queue, so a night not filed by now is not coming
-export const MISSING_TEXT = '🔎 Night search: no result last night';
+export const MISSING_TEXT = nightMissingCard().text;   // a card (shared/owner-cards.js), HTML
 
 /** True on the five-minute ticks from CHECK_AT up to CHECK_UNTIL UTC. Why (review, 6 Nov 2026): one tick with no retry would bring the silence back whenever Cloudflare skips it; the switchboard's daily limit (and the `missing <day>` state) already make it once, so the extra ticks cost one D1 read each. */
 export const isCheckTick = date => { const hhmm = date.toISOString().slice(11, 16); return hhmm >= CHECK_AT && hhmm < CHECK_UNTIL; };
@@ -20,7 +21,7 @@ export const isCheckTick = date => { const hhmm = date.toISOString().slice(11, 1
 export async function checkMissing(env, now = new Date(), fetcher = fetch) {
   const today = now.toISOString().slice(0, 10);
   if ((await nights(env)).some(night => night.night === today)) return {missing: false, alert: null};
-  const told = await alertOwner(env, 'search-check-dropped', {text: MISSING_TEXT, link: `${env.SITE_URL || 'https://www.jobadabra.top'}/admin/job-search/lab?tab=night`, level: 'problem', state: `missing ${today}`, fetcher, now})
+  const told = await alertOwner(env, 'search-check-dropped', {text: MISSING_TEXT, html: true, level: 'problem', state: `missing ${today}`, fetcher, now})
     .catch(error => ({sent: false, via: 'none', why: `error: ${String(error?.message).slice(0, 80)}`}));
   return {missing: true, alert: told.sent ? 'sent' : told.why || told.via};
 }

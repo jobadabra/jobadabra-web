@@ -8,6 +8,7 @@ import {test} from 'node:test';
 import {connect, saveSetting} from '../../../../shared/notify.js';
 import {KEEP_NIGHTS, MAX_BYTES, clean, ingestRoute, nights} from '../../../../admin/search-night.js';
 import {alertText, judgeAll, judgeNight} from '../../../../admin/search-night-judge.js';
+import {checkCard} from '../../../../shared/tg-card.js';
 import {nightSection} from '../../../../admin/search-night-page.js';
 import {page} from '../../../../admin/search-lab-page.js';
 import worker from '../../../../workers/www/index.js';
@@ -171,10 +172,11 @@ test('judgeAll: each night against the nights before it only; the two real night
 
 test('the alert says counts only: how many measured, and what dropped; no persona, job or employer name', () => {
   const [six, five] = judgeAll([clean(real('2026-11-06'), {night: '2026-11-06'}), clean(real('2026-11-05'), {night: '2026-11-05'})]);
-  assert.equal(alertText(six), '🔎 Night search: measured 2 of 6, employer sites out of time in 6');
-  assert.equal(alertText(five), '🔎 Night search: measured 0 of 6');
+  assert.match(alertText(six), /^🟠 <b>Night search: 2 of 6 personas measured<\/b>[\s\S]*2 measured · 4 missing[\s\S]*Employer sites out of time in 6/);
+  assert.match(alertText(five), /^🟠 <b>Night search: 0 of 6 personas measured<\/b>[\s\S]*0 measured · 6 missing/);
   const local = judgeNight(stored('2026-10-27', {locals: [8, 0, 0, 0, 0, 0]}), sums(USUAL));
-  assert.equal(alertText(local), '🔎 Night search: measured 6 of 6, relevant local jobs 8 against a usual 12');
+  assert.match(alertText(local), /Night search: 6 of 6 personas measured[\s\S]*Relevant local jobs 8 against a usual 12/);
+  for (const text of [alertText(six), alertText(five), alertText(local)]) assert.deepEqual(checkCard(text), []);
   for (const text of [alertText(six), alertText(five), alertText(local)]) assert.doesNotMatch(text, /Truck|Sofia|Carpenter|Brussels|Fictional/);
 });
 
@@ -183,7 +185,7 @@ test('the alert goes out once a night through the owner\'s switchboard: a second
   const first = await (await put(real('2026-11-06'), {night: '2026-11-06', env, tg})).json();
   assert.equal(first.alert, 'sent');
   assert.equal(tg.sends().length, 1);
-  assert.match(tg.sends()[0].body.text, /^🔎 Night search: measured 2 of 6, employer sites out of time in 6\nhttps:\/\/www\.jobadabra\.top\/admin\/job-search\/lab\?tab=night$/);
+  assert.match(tg.sends()[0].body.text, /^🟠 <b>Night search: 2 of 6 personas measured<\/b>[\s\S]*Employer sites out of time in 6[\s\S]*<a href="https:\/\/www\.jobadabra\.top\/admin\/job-search\/lab\?tab=night">Open the night search<\/a>$/);
   assert.equal((await (await put(real('2026-11-06'), {night: '2026-11-06', env, tg, at: new Date('2026-11-06T15:00:00Z')})).json()).alert, 'already-today', 'a re-run the same UTC day');
   assert.equal(tg.sends().length, 1);
   const healthy = await (await put(verdict(), {night: '2026-11-07', env, tg, at: new Date('2026-11-07T09:00:00Z')})).json();

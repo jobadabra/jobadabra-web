@@ -5,6 +5,7 @@
 // The owner's own app already tells fill errors to the owner's main Telegram (desktop/lib/real-errors.js); that is left alone. Guarded by test/unit/admin/sentry-alert.test.js.
 import {fixer, status} from './sentry.js';
 import {alertOwner} from '../shared/notify-send.js';
+import {sentryCard, sentryMoreCard} from '../shared/owner-cards.js';
 
 const SENTRY = 'https://de.sentry.io/api/0', ORG = 'job-pilotto', PROJECT = 'job-pilotto-app';
 const HOUR = 3600000;
@@ -42,18 +43,9 @@ export function kindOf(item, now) {
   return null;
 }
 
-const ICON = {new: '🆕', regressed: '🔁', spike: '📈'}, WORD = {new: 'New', regressed: 'Came back', spike: 'Spike'};
-const text = value => String(value ?? '').replace(/[<>&]/g, char => ({'<': '&lt;', '>': '&gt;', '&': '&amp;'}[char]));
-
-export function message(item, kind, {version, fix, base}) {
-  const pr = fix && status(item.shortId, fix);
-  return [`${ICON[kind]} <b>${WORD[kind]}</b> · ${item.level === 'fatal' ? '💥 crash' : text(item.level)}`,
-    `<b>${text(String(item.title).slice(0, 200))}</b>`,
-    item.culprit ? `<code>${text(String(item.culprit).slice(0, 120))}</code>` : '',
-    `👥 ${Number(item.userCount) || 0} users · 🔁 ${Number(item.count) || 0} events${version ? ` · v${text(version)}` : ''}`,
-    `First seen ${text(String(item.firstSeen || '').slice(0, 16).replace('T', ' '))} UTC`,
-    `<a href="${text(item.permalink)}">Sentry ${text(item.shortId)}</a> · <a href="${base}/admin/testing/sentry">/admin/testing/sentry</a>`,
-    pr ? `🛠️ Fixer: <a href="${text(pr.url)}">${text(pr.text)}</a>` : ''].filter(Boolean).join('\n');
+// Why (10 Nov 2026, owner: every message reads like the Central scout one): the issue is one card (shared/owner-cards.js sentryCard); the HTML escaping lives in the renderer.
+export function message(item, kind, {version, fix}) {
+  return sentryCard(item, kind, {version, fix: fix ? status(item.shortId, fix) : null}).text;
 }
 
 // -> true when delivered; false when the owner's switch holds it (not an error). Throws when neither the switchboard nor the old bot could deliver, so the issue is retried next round.
@@ -85,11 +77,11 @@ export async function check(env, fetcher = fetch, now = Date.now()) {
   for (const {item, kind} of due) {
     if (room <= 0) { held++; await remember(item, kind, 0); continue; }   // over the hourly limit: counted in the one summary, not told again
     const version = await get(`/issues/${item.id}/tags/release/`, env, fetcher).then(tag => tag?.topValues?.[0]?.name).catch(() => '');
-    const sent = await send(env, message(item, kind, {version, fix, base}), fetcher);
+    const sent = await send(env, message(item, kind, {version, fix}), fetcher);
     await remember(item, kind, sent ? 1 : 0);   // held by the owner's switch: remembered (cooldown), not counted toward the hourly limit
     if (sent) { room--; told++; }
   }
-  if (held) await send(env, `📬 ${held} more Sentry issue${held === 1 ? '' : 's'} this hour (new, back or spiking). <a href="${base}/admin/testing/sentry">/admin/testing/sentry</a>`, fetcher);
+  if (held) await send(env, sentryMoreCard(held, base).text, fetcher);
   return {told, held, skipped: 0};
 }
 

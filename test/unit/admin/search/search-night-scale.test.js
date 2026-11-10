@@ -115,8 +115,8 @@ test('a night that never arrived alerts once at 06:30 UTC: no night for the UTC 
   assert.deepEqual([CHECK_AT, isCheckTick(at('06:30')), isCheckTick(at('06:25')), isCheckTick(at('07:25')), isCheckTick(at('07:30')), isCheckTick(at('18:30'))], ['06:30', true, false, true, false, false], 'a window, so one skipped tick does not bring the silence back');
   await store([night('2026-11-06')], env, at('01:00'));   // yesterday's night is there; today's is not
   assert.deepEqual(await checkMissing(env, at('06:30'), tg.fetcher), {missing: true, alert: 'sent'});
-  assert.match(tg.sends()[0].body.text, /^🔎 Night search: no result last night\nhttps:\/\/www\.jobadabra\.top\/admin\/job-search\/lab\?tab=night$/);
-  assert.equal(tg.sends()[0].body.text.split('\n')[0], MISSING_TEXT);
+  assert.match(tg.sends()[0].body.text, /^🔴 <b>Night search: no result last night<\/b>[\s\S]*<a href="https:\/\/www\.jobadabra\.top\/admin\/job-search\/lab\?tab=night">Open the night search<\/a>$/);
+  assert.equal(tg.sends()[0].body.text, MISSING_TEXT);
   assert.equal((await checkMissing(env, at('06:30'), tg.fetcher)).alert, 'already-today', 'a second check the same day sends nothing');
   assert.equal(tg.sends().length, 1);
   await store([night('2026-11-07'), night('2026-11-06')], env, at('07:00'));

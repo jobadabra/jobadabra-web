@@ -18,6 +18,6 @@ export async function alertOwner(env, event, {text, link = '', html = false, sta
   if (asked?.bot && asked.bot.token === legacy.token && String(asked.bot.chat) === String(legacy.chat)) return {sent: false, via: 'none', why: plain(asked.body.why), bot: null};
   const posted = await sendMessage(fetcher, legacy.token, legacy.chat, words(text, link, html), html ? {parse_mode: 'HTML'} : {});
   if (!posted.ok) return {sent: false, via: 'fallback', why: posted.why, bot: null};
-  await notify(env, {event, fallback: true}, {fetcher, now}).catch(() => {});
+  await notify(env, {event, fallback: true, state}, {fetcher, now}).catch(() => {});
   return {sent: true, via: 'fallback', why: asked?.body?.why || '', id: posted.result?.message_id, bot: {token: legacy.token, chat: legacy.chat}};
 }

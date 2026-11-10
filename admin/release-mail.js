@@ -7,6 +7,7 @@ import {isOwner} from '../shared/auth.js';
 import {send} from '../shared/mail.js';
 import {ruleRefusal} from '../shared/mail-registry.js';
 import {alertOwner} from '../shared/notify-send.js';
+import {releaseMailCard} from '../shared/owner-cards.js';
 import {SITE} from '../shared/mail-frame.js';
 import {newestFirst} from './changelog.js';
 import {audienceRows} from './email-audience.js';
@@ -77,7 +78,7 @@ export async function draft(env, version, now = new Date(), {fetch: doFetch} = {
   // Why (28 Oct 2026, mac-27; 5 Nov 2026, nt 2/4): the switchboard sends it (Marketing & Sales channel); until that bot is connected, or if it cannot deliver, the owner-only Brain bot the Worker already has (api/brain.js) as before.
   const token = env.BUILDLOG_TELEGRAM_TOKEN || env.BRAIN_BOT_TOKEN, chat = env.BUILDLOG_TELEGRAM_CHAT || env.BRAIN_CHAT_ID;
   if (made.meta?.changes) {
-    const told = await alertOwner(env, 'release-mail-draft', {text: `✉️ What's new mail for ${version} is ready: "${data.headline}"`, link: `${SITE}/admin/growth/email?release=${version}`,
+    const told = await alertOwner(env, 'release-mail-draft', {text: releaseMailCard({version, headline: data.headline}).text, html: true,
       legacy: token && chat ? {token, chat} : null, ...(doFetch && {fetcher: doFetch})}).catch(error => ({sent: false, why: error.message}));
     if (!told.sent && told.via !== 'switchboard') console.error(`release mail ${version}: owner not told (${told.why})`);
   }

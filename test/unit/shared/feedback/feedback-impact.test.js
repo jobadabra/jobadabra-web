@@ -154,7 +154,7 @@ test('when the AI refuses every row of the daily retry, the cause is named, the 
     kv.clear(); told.length = 0;
     const e = refused(reason); add(e); add(e, CASES[1].text);
     await assert.rejects(retryImpact(e, now, 20, fetcher), new RegExp(`AI skipped \\((limit|rate)\\) for all 2 rows: ${reason.slice(0, 8)}`));
-    assert.equal(told.length, 1); assert.match(told[0], /AI skipped \((limit|rate)\).*2 feedback messages.*rate them by hand/);
+    assert.equal(told.length, 1); assert.match(told[0], /AI skipped \((limit|rate)\): 2 feedbacks not rated[\s\S]*rate them by hand/);
     assert.doesNotMatch(told[0], /secret-token/);
     e.STATS.db.prepare('UPDATE feedback SET impact_tries = 0').run();
     await assert.rejects(retryImpact(e, now, 20, fetcher));

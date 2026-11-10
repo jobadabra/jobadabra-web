@@ -3,6 +3,7 @@
 // Guarded by test/unit/shared/feedback/feedback-receipt.test.js.
 import {CLOCK_DAYS, REPLY_HOURS, UNANSWERED} from './feedback-reply.js';
 import {alertOwner} from './notify-send.js';
+import {overdueCard} from './owner-cards.js';
 
 const MAX_ROWS = 50, SUMMARY_FROM = 4;   // past three overdue at once (an outage), one line: nt's rule for a burst
 
@@ -37,10 +38,10 @@ export async function pingOverdue(env, now = new Date(), fetcher = fetch) {
   if (!claimed.length) return 0;
   const legacy = env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null;
   const lines = claimed.length >= SUMMARY_FROM
-    ? [{refs: claimed.map(row => row.ref), text: `⏰ ${claimed.length} feedbacks have had no reply for 24 h.`, link: '/admin/feedback/inbox'}]
-    : claimed.map(row => ({refs: [row.ref], text: `⏰ Feedback ${row.ref} from v${row.version} has had no reply for 24 h.`, link: `/admin/feedback/inbox#${row.ref}`}));
+    ? [{refs: claimed.map(row => row.ref), text: overdueCard({count: claimed.length}).text}]
+    : claimed.map(row => ({refs: [row.ref], text: overdueCard({ref: row.ref, version: row.version}).text}));
   for (const line of lines) {
-    const told = await alertOwner(env, 'feedback-overdue', {text: line.text, link: line.link, fetcher, now, legacy}).catch(() => null);
+    const told = await alertOwner(env, 'feedback-overdue', {text: line.text, html: true, fetcher, now, legacy}).catch(() => null);
     await release(env, line.refs, told);
   }
   return claimed.length;

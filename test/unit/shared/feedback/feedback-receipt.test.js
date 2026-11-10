@@ -109,7 +109,7 @@ test('the ping: one line per overdue report with no name, address or words, once
   add(e, at(2)); add(e, {...at(40), state: 'dismissed'}); add(e, {...at(40), state: 'deferred', told: 'app'});
   assert.equal(await pingOverdue(e, NOW, fetcher), 1);
   assert.equal(sent.length, 1);
-  assert.match(sent[0], new RegExp(`Feedback ${ref} from v0\\.9\\.1 has had no reply for 24 h`));
+  assert.match(sent[0], new RegExp(`Feedback ${ref} has had no reply for 24 h[\\s\\S]*from v0\\.9\\.1`));
   assert.doesNotMatch(sent[0], /ana@example|Setup stops/);
   assert.equal(await pingOverdue(e, NOW, fetcher), 0, 'a second tick pings nobody again');
   assert.equal(sent.length, 1);
@@ -120,7 +120,7 @@ test('a burst after an outage is one summary line, all of them claimed', async (
   const refs = [30, 31, 32, 33, 34].map(hours => add(e, at(hours)));
   assert.equal(await pingOverdue(e, NOW, fetcher), 5);
   assert.equal(sent.length, 1);
-  assert.match(sent[0], /5 feedbacks have had no reply for 24 h/);
+  assert.match(sent[0], /5 feedbacks with no reply for 24 h/);
   assert.ok(refs.every(ref => row(e, ref).overdue_told_at !== ''));
 });
 
