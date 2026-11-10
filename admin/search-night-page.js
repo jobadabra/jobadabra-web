@@ -17,7 +17,7 @@ export const NIGHT_CSS = `${CHIP_STYLE}${BAND_STYLE}${VIZ_STYLE}${TREND_STYLE}${
 .nwrap{display:flex;flex-direction:column;gap:6px}.nsteps{display:flex;gap:4px;flex-wrap:wrap}`;
 
 // What the gate's row kind means for the owner: measured = at least one right job; the others say why the row is not a pass.
-const KIND = {measured: ['✓ measured', 'good'], 'none-right': ['! scored, none right', 'warn'], nothing: ['✕ nothing scored', 'bad'], unmeasured: ['– not measured', 'off'], fault: ['✕ fault', 'bad'], unknown: ['– unknown', 'off']};
+const KIND = {measured: ['✓ measured', 'good'], 'none-right': ['! scored, none right', 'warn'], nothing: ['✕ nothing scored', 'bad'], unmeasured: ['– not measured', 'off'], fault: ['✕ fault', 'bad'], unknown: ['– unknown', 'off'], 'not-run': ['⚪ not run', 'off']};
 const kindChip = kind => chip(...KIND[kind] || KIND.unknown);
 const num = value => (value == null ? '–' : Number(value).toLocaleString('en-US'));
 const seconds = value => (value == null ? '–' : `${value} s`);
@@ -61,8 +61,8 @@ export function nightSection(judged, refs = {}, hand = []) {
   if (!judged) return '<section class="card"><h2>The nights could not be read</h2><p class="muted">The store of the nightly Search check did not answer, so this tab cannot say whether a night dropped. Reload in a minute; the Worker log names the cause.</p></section>';
   if (!judged.length) return '<section class="card"><h2>No night uploaded yet</h2><p class="muted">The nightly Search check (<code>search-personas.yml</code>, the fixed set of fictional candidates) uploads its verdict here when it ends. Until it does, nothing is measured: no row below stands in for it.</p></section>';
   const [last] = judged, shown = judged.slice(0, 14);
-  const band = verdictBand({icon: last.dropped ? '🔴' : '🟢', headline: `Night ${last.night}: measured ${last.measured} of ${last.total}`,
-    chips: [...(euresOf(last) === 'off' ? [{label: 'EURES off: our own sources only', tone: 'off', title: 'this night ran without EURES; it is compared with EURES-off nights only'}] : []), ...(last.dropped ? reasonWords(last).map(label => ({label, tone: 'bad'})) : [{label: 'nothing dropped', tone: 'good'}]), ...last.notes.map(label => ({label, tone: 'warn', title: 'a step counter fell beyond its own spread: report only, the night is not dropped for it'}))],
+  const band = verdictBand({icon: last.notRun ? '⚪' : last.dropped ? '🔴' : '🟢', headline: last.notRun ? `Night ${last.night}: not run (no AI answered)` : `Night ${last.night}: measured ${last.measured} of ${last.total}`,
+    chips: [...(euresOf(last) === 'off' ? [{label: 'EURES off: our own sources only', tone: 'off', title: 'this night ran without EURES; it is compared with EURES-off nights only'}] : []), ...(last.notRun ? [{label: 'not run: not a drop, not 0 jobs', tone: 'off'}] : last.dropped ? reasonWords(last).map(label => ({label, tone: 'bad'})) : [{label: 'nothing dropped', tone: 'good'}]), ...last.notes.map(label => ({label, tone: 'warn', title: 'a step counter fell beyond its own spread: report only, the night is not dropped for it'}))],
     note: last.head.replace(/^[\p{Extended_Pictographic}‍️\s]+/u, '') || 'the check\'s own line was empty'});
   return `${band}
 ${scoreboardSection(judged, hand)}

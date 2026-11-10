@@ -30,11 +30,11 @@ export function groups(judged) {
   return [...by].map(([, list], index) => {
     const [total, eures] = [list[0].total, euresOf(list[0])];
     const byDay = new Map(list.map(night => [night.night, night]), []), sorted = list.map(night => night.night).sort();
-    return {total, eures, current: index === 0, days: days(sorted[0], sorted.at(-1)).map(day => ({day, night: byDay.get(day) || null, elsewhere: taken.has(day)}))};
+    return {total, eures, current: index === 0, days: days(sorted[0], sorted.at(-1)).map(day => ({day, night: byDay.get(day)?.notRun ? null : byDay.get(day) || null, elsewhere: taken.has(day), notRun: !!byDay.get(day)?.notRun}))};
   });
 }
 
-const tipOf = (day, night, total, elsewhere = false) => (!night ? `${day} · ${elsewhere ? `no night with ${total} candidates (the night of this day had another number)` : 'no night stored'}`
+const tipOf = (day, night, total, elsewhere = false, notRun = false) => (!night ? `${day} · ${notRun ? 'not run (no AI answered): not a zero' : elsewhere ? `no night with ${total} candidates (the night of this day had another number)` : 'no night stored'}`
   : `${day} · found ${night.measured} of ${total} · right local jobs ${night.local ?? 'not counted'} · employer sites in time ${total - night.out} of ${total}${night.dropped ? ` · DROPPED: ${reasonWords(night).join('; ')}` : ''}`);
 
 const TIP_LINES = 8;   // PRs named in a mark's tooltip; the table under the charts has them all
@@ -53,8 +53,8 @@ export function markOf(night, day) {
 
 /** The charts of one group: found and in time as columns on one 0..total count axis, the right local jobs as a line from 0. */
 export function groupHtml(group) {
-  const {total, days: span} = group, columnsOf = span.map(({day, night, elsewhere}) => ({day, values: night ? [night.measured, total - night.out] : [null, null], tip: tipOf(day, night, total, elsewhere), mark: markOf(night, day)}));
-  const local = span.map(({day, night, elsewhere}) => ({day, value: night && isNum(night.local) ? night.local : null, tip: tipOf(day, night, total, elsewhere), mark: markOf(night, day)}));
+  const {total, days: span} = group, columnsOf = span.map(({day, night, elsewhere, notRun}) => ({day, values: night ? [night.measured, total - night.out] : [null, null], tip: tipOf(day, night, total, elsewhere, notRun), mark: markOf(night, day)}));
+  const local = span.map(({day, night, elsewhere, notRun}) => ({day, value: night && isNum(night.local) ? night.local : null, tip: tipOf(day, night, total, elsewhere, notRun), mark: markOf(night, day)}));
   const dropped = span.filter(item => item.night?.dropped);
   const found = columns(columnsOf, [{name: `Candidates found (of ${total})`, tone: 's1'}, {name: `Employer sites in time (of ${total})`, tone: 's3'}], {whole: true, gapLabel: 'no night with this number of candidates', labelEvery: Math.max(1, Math.ceil(span.length / 7))});
   const jobs = line(local, {tone: 's2', percent: false, whole: true, name: 'Relevant local jobs', labelEvery: Math.max(1, Math.ceil(span.length / 7))});

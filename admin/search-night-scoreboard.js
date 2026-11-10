@@ -12,7 +12,7 @@ import {euresOf} from './search-night-judge.js';
 export const FIVE = 5;   // "enough": a person with this many right jobs or more
 const DAY = 86400000;
 const isNum = value => typeof value === 'number' && Number.isFinite(value);
-const BLIND = ['unmeasured', 'fault', 'unknown'];   // rows the check could not measure (errored, refused, too slow); 'none-right' and 'nothing' ARE measured results
+import {NOT_MEASURED as BLIND} from './search-night.js';   // rows the check could not measure (errored, refused, too slow, not run); 'none-right' and 'nothing' ARE measured results
 const days = (from, to) => { const out = []; for (let at = Date.parse(`${from}T00:00:00Z`); at <= Date.parse(`${to}T00:00:00Z`); at += DAY) out.push(new Date(at).toISOString().slice(0, 10)); return out; };
 const median = list => { const sorted = list.filter(isNum).sort((a, b) => a - b); return sorted.length ? sorted[Math.floor((sorted.length - 1) / 2)] : null; };
 
@@ -36,7 +36,7 @@ const words = score => `${score.day} · ${score.right} of ${score.total} people 
  * @param {object[]} hand the by-hand runs (any order)
  */
 export function series(judged, hand = []) {
-  const total = judged[0]?.rows?.length, kept = judged.filter(night => night.rows.length === total).map(scoreOf);
+  const total = judged[0]?.rows?.length, kept = judged.filter(night => night.rows.length === total && !night.notRun).map(scoreOf);
   if (!kept.length) return {total, span: []};
   const oldest = kept.map(score => score.day).sort()[0];   // Why (10 Nov 2026, review): a by-hand run older than the stored nights would stretch the span to years of empty days; it stays in the store, not on the chart
   const handed = hand.filter(run => run?.rows?.length === total && (run.day || '') >= oldest).map(scoreOf);
