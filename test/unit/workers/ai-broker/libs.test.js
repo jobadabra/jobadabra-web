@@ -79,9 +79,14 @@ test('a by-hand Search check runs to 100% of the Codex week, waits behind PR che
   assert.equal(queueOf('pr'), 'pr');
   const day = 1999990000;
   let m = newMeter(2000000000);
-  for (let i = 0; i < DAILY.byhand; i++) m = recordCall(m, 'byhand', day);
-  assert.deepEqual(allow('byhand', m, null, TOKENS_PER_PERCENT, day), {ok: false, why: `budget:daily ${DAILY.byhand} of ${DAILY.byhand} calls (byhand)`});
-  assert.equal(allow('byhand', m, null, TOKENS_PER_PERCENT, day + 86400).ok, true, 'a new UTC day starts at zero');
+  for (let i = 0; i < DAILY.drift; i++) m = recordCall(m, 'drift', day);
+  assert.deepEqual(allow('drift', m, null, TOKENS_PER_PERCENT, day), {ok: false, why: `budget:daily ${DAILY.drift} of ${DAILY.drift} calls (drift)`});
+  assert.equal(allow('drift', m, null, TOKENS_PER_PERCENT, day + 86400).ok, true, 'a new UTC day starts at zero');
+  // owner, 10 Nov 2026: "As long as we're actively developing/testing. There should be no limits/caps": the by-hand lane has no day cap, its calls are still counted for /health
+  for (let i = 0; i < 2000; i++) m = recordCall(m, 'byhand', day);
+  assert.equal(callsToday(m, 'byhand', day), 2000);
+  assert.equal(allow('byhand', m, null, TOKENS_PER_PERCENT, day).ok, true, 'no by-hand day cap; the week lines still hold (above)');
+  assert.equal(Object.hasOwn(DAILY, 'byhand'), false);
 });
 
 // Owner, 8 Nov 2026 ("Actually, codex up to 100%, Claude up to 90%"): Claude's seven-day window is read as the CLI gives it (a fraction 0..1, measured), 90% and over is closed for every lane.

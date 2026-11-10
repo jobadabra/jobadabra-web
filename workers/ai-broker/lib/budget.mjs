@@ -12,21 +12,24 @@ export const linesOf = (lanes, claudeLimits = null, now = Date.now() / 1000) => 
   week: Object.fromEntries(lanes.map(lane => [lane, CODEX_LIMIT_PCT])), daily: DAILY, claude: CLAUDE_LIMIT_PCT,
   claudeWeek: {usedPercent: claudeWeekPercent(claudeLimits, now), resetsAt: claudeWeekPercent(claudeLimits, now) == null ? null : claudeLimits.sevenDay.resetsAt},
 });
-export const DAILY = {drift: 24, byhand: 800};   // Why (30 Oct 2026, owner, JOB-45; kept on 8 Nov 2026 when the 70% reserve went: it no longer protects a PR reserve, it still stops reruns and failed calls from running away): 20 stored-answer prompts + up to 4 judges per UTC day; the broker must stop reruns and failed calls from exceeding 24. byhand: "about 1 run a day" (owner, 8 Nov 2026), one 18-persona press is ~400-500 calls, so a second full run the same day is cut; press tapes share it (8 Nov 2026: ~45+ calls a persona, so about 6 personas a day).
+export const DAILY = {drift: 24};   // Why (30 Oct 2026, owner, JOB-45; kept on 8 Nov 2026 when the 70% reserve went: it no longer protects a PR reserve, it still stops reruns and failed calls from running away): 20 stored-answer prompts + up to 4 judges per UTC day; the broker must stop reruns and failed calls from exceeding 24.
+// Why (10 Nov 2026, owner, asked via AskUserQuestion by sa: "What do you mean by wakeup? As long as we're actively developing/testing. There should be no limits/caps"): the by-hand lane's 800 calls a day
+// (his 8 Nov "about 1 run a day") is gone. Its calls are still counted (COUNTED, /health `daily`); the plans' own lines hold every lane (Codex up to 100%, Claude up to 90%), and a night that finds Codex spent goes on to Claude (subs, #522).
+export const COUNTED = ['drift', 'byhand'];
 // Seed for tokens per 1% of the week (PR 0, 28 Oct 2026: 1% >= ~40 calls of ~18k tokens); the broker replaces it with its measured ratio.
 export const TOKENS_PER_PERCENT = 720000;
 
 /** Fresh meter state for the week that resets at resetsAt (epoch seconds). */
-export const newMeter = resetsAt => ({resetsAt, tokens: {pr: 0, byhand: 0, scheduled: 0, bench: 0, drift: 0}, daily: {day: null, calls: {drift: 0, byhand: 0}}});
+export const newMeter = resetsAt => ({resetsAt, tokens: {pr: 0, byhand: 0, scheduled: 0, bench: 0, drift: 0}, daily: {day: null, calls: Object.fromEntries(COUNTED.map(lane => [lane, 0]))}});
 
 /** Accepted calls in this UTC day (epoch seconds); old meters without daily state read as zero. */
 export const callsToday = (meter, lane, now = Date.now() / 1000) => meter.daily?.day === Math.floor(now / 86400) ? (meter.daily.calls?.[lane] ?? 0) : 0;
 
 /** Reserves one accepted call before dispatch, including failures. Call with allow() in the same storage transaction. */
 export function recordCall(meter, lane, now) {
-  if (!Object.hasOwn(DAILY, lane)) return meter;
+  if (!COUNTED.includes(lane)) return meter;
   const day = Math.floor(now / 86400);
-  if (meter.daily?.day !== day) meter.daily = {day, calls: {drift: 0, byhand: 0}};
+  if (meter.daily?.day !== day) meter.daily = {day, calls: Object.fromEntries(COUNTED.map(lane => [lane, 0]))};
   meter.daily.calls[lane] = callsToday(meter, lane, now) + 1;
   return meter;
 }
