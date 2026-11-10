@@ -9,6 +9,7 @@ import {writeState} from './ci-state.js';
 import {COUNTERS} from './search-night-counters.js';
 import {cleanStepYield} from './search-night-yield.js';
 import {alertText, judgeAll} from './search-night-judge.js';
+import {markNights} from './search-night-prs.js';
 
 export const STATE_KEY = 'search-nights', KEEP_NIGHTS = 30, MAX_BYTES = 65536, MAX_ROWS = 40;   // Why (6 Nov 2026): 18 fixed personas a night (owner: "6 personas is too narrow"); the cap was 12 and would have refused the first 18-persona verdict with a 400, silent again. 40 leaves room; 18 rows are about 20 KB of the 64 KB
 // The row kinds of the gate (tools/persona-search/gate.py row_verdict): 🟢 measured, ⚪ none-right (scored, none right role and place), ⚪ nothing (no job scored), unmeasured (errored, refused or too slow), fault.
@@ -64,6 +65,19 @@ export async function reference(env) {
 
 const answer = (status, body) => Response.json(body, {status, headers: {'Cache-Control': 'no-store'}});
 
+/**
+ * Fills the builds and merged search PRs of the nights that lack them (admin/search-night-prs.js) and stores them. Why here (10 Nov 2026): the upload is the one event every night has, so no job, page or hand step writes the marks.
+ * Never fails the upload: the night and its alert are already stored; a GitHub error is a log line and the next upload tries again. -> how many nights were filled, or 'none' / 'error'.
+ */
+async function marks(env, kept, now, fetcher) {
+  try {
+    const filled = await markNights(env, kept, fetcher);
+    if (!filled.changed) return 'none';
+    await writeState(env, STATE_KEY, {nights: filled.nights}, now);
+    return filled.nights.filter((item, index) => item.prs !== kept[index].prs).length;
+  } catch (error) { console.error(`search night: PR marks not filled: ${String(error?.message || error).slice(0, 120)}`); return 'error'; }
+}
+
 /** Stores one night (an upload of the same night replaces it), keeps the newest KEEP_NIGHTS, judges the night, and tells the owner when the NEWEST night dropped (an older night filled in late is never news). */
 export async function ingest(env, verdict, {night, run}, now = new Date(), fetcher = fetch) {
   const record = clean(verdict, {night, run}, now);
@@ -78,7 +92,8 @@ export async function ingest(env, verdict, {night, run}, now = new Date(), fetch
       .catch(error => ({sent: false, via: 'none', why: `error: ${String(error?.message).slice(0, 80)}`}));
     alert = told.sent ? 'sent' : told.why || told.via;
   }
-  return {status: 200, body: {ok: true, night, measured: judged.measured, total: judged.total, dropped: judged.dropped, reasons: judged.reasons, alert}};
+  const marked = await marks(env, kept, now, fetcher);   // after the alert: GitHub's slowness never holds the owner's news
+  return {status: 200, body: {ok: true, night, measured: judged.measured, total: judged.total, dropped: judged.dropped, reasons: judged.reasons, alert, marked}};
 }
 
 /** PUT /search-check/night?night=YYYY-MM-DD&run=<workflow run>: the verdict as the body (Bearer REPLAYS_PUBLISH_KEY). A wrong or missing key and a missing store are a plain 404; the night defaults to today (UTC). */

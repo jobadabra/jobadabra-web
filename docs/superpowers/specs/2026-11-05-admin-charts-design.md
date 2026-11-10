@@ -167,7 +167,7 @@ Owner (5 Nov 2026): "Please find all the sections/tables like this in the entire
 | Real use by role family ᵃ | How fast per role family? | 📊 chart · PR 7 | bars |
 | Real use, day by day ᵃ | Is real search getting better? | 📊 chart · PR 7 | line |
 | Fixes ᵃ | Which search fix is open? | 📋 stays | a work list |
-| Experiments ᵃ | What did we try? | 📋 stays | a log of dated experiments |
+| Experiments ᵃ | What did we try? | removed 10 Nov 2026: merged search PRs are marks on Night search | a log of dated experiments |
 | Draws ᵃ | Which draw is this? | 📋 stays | a run you look up |
 | Session checks (board, listed, relevant) ᵃ | Does each board list relevant jobs? | 📊 chart · PR 7 | bars: listed vs relevant per board |
 

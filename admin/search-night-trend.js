@@ -13,7 +13,11 @@ const isNum = value => typeof value === 'number' && Number.isFinite(value);
 const days = (from, to) => { const out = []; for (let at = Date.parse(`${from}T00:00:00Z`); at <= Date.parse(`${to}T00:00:00Z`); at += DAY) out.push(new Date(at).toISOString().slice(0, 10)); return out; };
 
 /** The card's own style: the chips it draws (the page keeps its own CHIP_STYLE; this guard, test/unit/shared/admin-chips.test.js, wants the style named in the file that draws chips). */
-export const TREND_STYLE = `${CHIP_STYLE}`;
+export const TREND_STYLE = `${CHIP_STYLE}
+.vz-mark-n{fill:var(--vz-ink);font-size:9.5px;font-weight:700}.vz-mark:focus{outline:none}.vz-mark:focus rect{stroke:var(--vz-text);stroke-width:1.5}
+.mk-swatch{display:inline-block;min-width:16px;text-align:center;background:#9085e9;color:#0b0d10;border-radius:4px;padding:0 4px;font-weight:700;font-size:11px}:root[data-theme=light] .mk-swatch{background:#6250d6;color:#fff}
+#tip{white-space:pre-line}   /* the PR list of a mark is one line a PR */
+.pr-list{margin:0;padding:0;list-style:none}.pr-list li{margin:2px 0}`;
 
 /**
  * The nights grouped by candidate count, newest count first: [{total, current, days: [{day, night | null}]}], each group's days continuous from its first to its last night (a day with no stored night is a gap, never a 0).
@@ -31,10 +35,24 @@ export function groups(judged) {
 const tipOf = (day, night, total, elsewhere = false) => (!night ? `${day} · ${elsewhere ? `no night with ${total} candidates (the night of this day had another number)` : 'no night stored'}`
   : `${day} · found ${night.measured} of ${total} · right local jobs ${night.local ?? 'not counted'} · employer sites in time ${total - night.out} of ${total}${night.dropped ? ` · DROPPED: ${reasonWords(night).join('; ')}` : ''}`);
 
+const TIP_LINES = 8;   // PRs named in a mark's tooltip; the table under the charts has them all
+const countOf = night => (Array.isArray(night?.prs) ? night.prs.length + (Number(night.prsMore) || 0) : 0);
+
+/**
+ * The mark of a night: {count, tip} when search PRs were merged between the build of the night before and this night's, else undefined (no PR = no mark, never a "0" mark; a night whose builds are unknown has none either).
+ * @param {object|null} night a judged night (admin/search-night-judge.js) with its `prs` (admin/search-night-prs.js)
+ */
+export function markOf(night, day) {
+  const count = countOf(night);
+  if (!count) return undefined;
+  const shown = night.prs.slice(0, TIP_LINES), rest = count - shown.length;
+  return {count, tip: [`${day} · ${count} search PR${count === 1 ? '' : 's'} merged since the night before:`, ...shown.map(pr => `${pr.n ? `#${pr.n}` : 'direct push'} ${pr.title}`), ...(rest > 0 ? [`and ${rest} more (listed under the charts)`] : [])].join('\n')};
+}
+
 /** The charts of one group: found and in time as columns on one 0..total count axis, the right local jobs as a line from 0. */
 export function groupHtml(group) {
-  const {total, days: span} = group, columnsOf = span.map(({day, night, elsewhere}) => ({day, values: night ? [night.measured, total - night.out] : [null, null], tip: tipOf(day, night, total, elsewhere)}));
-  const local = span.map(({day, night, elsewhere}) => ({day, value: night && isNum(night.local) ? night.local : null, tip: tipOf(day, night, total, elsewhere)}));
+  const {total, days: span} = group, columnsOf = span.map(({day, night, elsewhere}) => ({day, values: night ? [night.measured, total - night.out] : [null, null], tip: tipOf(day, night, total, elsewhere), mark: markOf(night, day)}));
+  const local = span.map(({day, night, elsewhere}) => ({day, value: night && isNum(night.local) ? night.local : null, tip: tipOf(day, night, total, elsewhere), mark: markOf(night, day)}));
   const dropped = span.filter(item => item.night?.dropped);
   const found = columns(columnsOf, [{name: `Candidates found (of ${total})`, tone: 's1'}, {name: `Employer sites in time (of ${total})`, tone: 's3'}], {whole: true, gapLabel: 'no night with this number of candidates', labelEvery: Math.max(1, Math.ceil(span.length / 7))});
   const jobs = line(local, {tone: 's2', percent: false, whole: true, name: 'Relevant local jobs', labelEvery: Math.max(1, Math.ceil(span.length / 7))});
@@ -44,9 +62,16 @@ export function groupHtml(group) {
 <p class="small" style="margin:6px 0 0">${dropped.length ? `${chip('✕ dropped', 'bad')} ${dropped.map(item => `<span title="${esc(reasonWords(item.night).join('; '))}">${esc(item.day.slice(5).replace('-', '/'))}</span>`).join(' · ')}` : chip('✓ no night dropped', 'good')}</p>`;
 }
 
+const link = n => (n ? `<a href="https://github.com/jobadabra/jobadabra/pull/${esc(n)}">#${esc(n)}</a>` : 'direct push');
+/** The text behind the marks: one row per night that has search PRs, every PR with its number and title (the marks' tooltips name the first few). '' when no night has one. */
+export function prTable(judged) {
+  const rows = (judged || []).filter(night => countOf(night)).map(night => `<tr><td>${esc(night.night)}</td><td class="num">${countOf(night)}</td><td><ul class="pr-list">${night.prs.map(pr => `<li>${link(pr.n)} ${esc(pr.title)}</li>`).join('')}${night.prsMore ? `<li class="muted">and ${esc(night.prsMore)} more</li>` : ''}</ul></td></tr>`);
+  return rows.length ? `<details class="vz-more"><summary>Search PRs behind the marks</summary><div class="scroll"><table><tr><th>Night</th><th class="num">PRs</th><th>Merged since the night before</th></tr>${rows.join('')}</table></div></details>` : '';
+}
+
 /** The card: one chart pair per candidate count; '' when no night is stored (the tab already says so). */
 export function trendSection(judged) {
-  const all = groups(judged);
+  const all = groups(judged), marked = (judged || []).some(night => countOf(night));
   if (!all.length) return '';
-  return `<section class="card" id="night-trend"><h2>📈 Day by day</h2><p class="muted small" style="margin:0">One point a night · a day with no stored night is a gap · a dropped night is the same verdict as the band above and the alert</p>${all.map(groupHtml).join('')}${VIZ_TOOLTIP}</section>`;   // the tab's one tooltip script: without it the points' exact numbers never show (nothing else on this page emits it)
+  return `<section class="card" id="night-trend"><h2>📈 Day by day</h2><p class="muted small" style="margin:0">One point a night · a day with no stored night is a gap · a dropped night is the same verdict as the band above and the alert</p>${marked ? `<p class="muted small" style="margin:2px 0 0"><span class="mk-swatch">7</span> A mark on a night = that many PRs that changed the search code were merged since the night before (hover for the titles). No mark = none.</p>` : ''}${all.map(groupHtml).join('')}${prTable(judged)}${VIZ_TOOLTIP}</section>`;   // the tab's one tooltip script: without it the points' exact numbers never show (nothing else on this page emits it)
 }
