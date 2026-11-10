@@ -13,7 +13,7 @@ const NOW = new Date('2026-11-19T06:00:00Z');
 // right = people with a right job, five = with five or more, blind = not measured; the rest were measured and found none right.
 const rowsOf = ({right, five, blind, jobs, first}, engine) => LABELS.map((label, i) => {
   const measured = i < right, blindRow = i >= LABELS.length - blind;
-  return {persona: i + 1, label, kind: measured ? 'measured' : blindRow ? 'unmeasured' : 'none-right', why: blindRow ? 'time ran out' : '', local: measured ? (i < five ? 5 + ((i + jobs) % 4) : 1 + ((i + jobs) % 4)) : 0, found: 10 + (i % 6), seconds: blindRow ? null : first + 6 * (i % 5), funnel_note: '', engine};
+  return {persona: i + 1, label, kind: measured ? 'measured' : blindRow ? 'unmeasured' : 'none-right', why: blindRow ? 'time ran out' : '', local: measured ? (i < five ? 5 + ((i + jobs) % 4) : 1 + ((i + jobs) % 4)) : 0, found: 10 + (i % 6), seconds: blindRow ? null : 150, counters: {eu: 140, sites: 12, titles: 30, ai: 8, firstS: blindRow ? null : first + 6 * (i % 5)}, funnel_note: '', engine};
 });
 
 /** @param {{env: object}} context the seed context */

@@ -19,9 +19,18 @@ const DAY = /^\d{4}-\d\d-\d\d$/, RUN = /^\d{1,20}$/, RAN_OUT = 'time ran out for
 const text = (value, max) => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 // Why (10 Nov 2026, [sa]: "store `engine` as a fixed word from now"): the Scoreboard says which AI a night ran on, so a change of AI reads as a new series. The gate already writes each row's engine as text
 // ("codex (gpt-6-luna)", "claude (claude-haiku-5-5; codex ran-out)"); the night keeps ONE word, the engine and model of the most used row, lower case ('codex-gpt-6-luna'), 'unknown' when no row names one.
-const MODEL = /^([a-z0-9][a-z0-9.-]*)(?: \(([a-z0-9][a-z0-9.-]*))?/;
-const wordOf = engine => { const found = MODEL.exec(String(engine ?? '').toLowerCase().split(' + ')[0].trim()); return !found ? null : (found[2] ? (found[2].startsWith(found[1]) ? found[2] : `${found[1]}-${found[2]}`) : found[1]).slice(0, 32); };
-export const engineOf = rows => { const seen = new Map(); for (const row of rows || []) { const word = wordOf(row?.engine); if (word) seen.set(word, (seen.get(word) || 0) + 1); } return [...seen].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? 'unknown'; };
+// A row's text is "engine", "engine (model)" or "engine (model; fell back from x)" ("claude (codex ran-out)" has no model: a model has no space); several answers join with " + ".
+const wordOf = part => {
+  const found = /^([a-z0-9][a-z0-9._-]*)(?=$| )(?: \(([^;)]*))?/.exec(part.trim()), model = found?.[2]?.trim();
+  if (!found) return null;
+  const clean = text => text.replace(/[^a-z0-9.]+/g, '-').replace(/^-+|-+$/g, '');
+  return clean(model && !/\s/.test(model) && !found[1].startsWith(model) ? (model.startsWith(found[1]) ? model : `${found[1]}-${model}`) : found[1]).slice(0, 32) || null;
+};
+export const engineOf = rows => {
+  const seen = new Map();
+  for (const row of rows || []) for (const part of String(row?.engine ?? '').toLowerCase().split(' + ')) { const word = wordOf(part); if (word && word !== 'n-a') seen.set(word, (seen.get(word) || 0) + 1); }
+  return [...seen].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? 'unknown';
+};
 const count = value => (Number.isInteger(value) && value >= 0 && value <= 1e7 ? value : null);
 // The press's step counters (tools/persona-search/gate.py row 'counters'): whole numbers or null; no counters object = nothing claimed (null), never zeros.
 const counters = raw => (raw && typeof raw === 'object' && !Array.isArray(raw) ? Object.fromEntries(COUNTERS.map(({key}) => [key, count(raw[key])])) : null);
@@ -53,7 +62,7 @@ const verdictCounts = (raw, keys, total) => {
 /** A verdict.json as CI uploads it -> the record kept for one night: {night, run, state, head, rows: [{persona, label, kind, why, local, found, seconds, ranOut, counters}]}, or {error}. Counts are whole numbers or null. */
 export function clean(verdict, {night, run = null} = {}, now = new Date()) {
   if (!verdict || typeof verdict !== 'object' || Array.isArray(verdict)) return {error: 'the verdict is an object'};
-  if (!DAY.test(night || '') || Number.isNaN(Date.parse(night))) return {error: 'night is YYYY-MM-DD'};
+  if (!DAY.test(night || '') || Number.isNaN(Date.parse(night)) || new Date(Date.parse(night)).toISOString().slice(0, 10) !== night) return {error: 'night is YYYY-MM-DD'};   // the round trip refuses 2026-02-30, which Date.parse reads as 2 Mar
   if (night > new Date(now.getTime() + 86400000).toISOString().slice(0, 10)) return {error: 'night is not in the future'};   // Why (6 Nov 2026, review): a night dated 2099 would sort newest for 30 nights and every real night after it would be "not the newest", so no alert
   if (run != null && !RUN.test(run)) return {error: 'run is the number of the workflow run'};
   const rows = verdict.rows;
@@ -161,7 +170,9 @@ export async function ingestRoute(request, env, now = new Date(), fetcher = fetc
   let verdict;
   try { verdict = JSON.parse(body); } catch { return answer(400, {ok: false, error: 'the body is not JSON'}); }
   const query = new URL(request.url).searchParams;
+  const flag = query.get('by_hand');
+  if (flag !== null && flag !== '1') return answer(400, {ok: false, error: 'by_hand is 1 or absent'});   // Why (10 Nov 2026, review): a mistyped flag (true, byhand=1) must never fall through to the night path, which replaces the real night of that date
   const meta = {night: query.get('night') || now.toISOString().slice(0, 10), run: query.get('run') || null};
-  const result = query.get('by_hand') === '1' ? await ingestHand(env, verdict, meta, now) : await ingest(env, verdict, meta, now, fetcher);
+  const result = flag === '1' ? await ingestHand(env, verdict, meta, now) : await ingest(env, verdict, meta, now, fetcher);
   return answer(result.status, result.body);
 }

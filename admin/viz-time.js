@@ -30,7 +30,7 @@ const MARK_ROOM = 14;   // the strip above the plot that holds the marks (only w
 function marksOf(days, {x0, slot, top, bottom}) {
   return days.map((day, index) => {
     if (!day.mark) return '';
-    const label = day.mark.label ?? (day.mark.count > 99 ? '99+' : String(day.mark.count)), width = 10 + 6 * label.length, x = x0 + slot * index;
+    const text = day.mark.label ?? (day.mark.count > 99 ? '99+' : String(day.mark.count)), label = esc(text), width = 10 + 6 * text.length, x = x0 + slot * index;
     return `<g${tipOf(day.mark.tip)} class="vz-mark"><line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${top}" y2="${bottom}" stroke="var(--s6)" stroke-width="1" stroke-dasharray="3 3" opacity=".7"/>`
       + `<rect x="${(x - width / 2).toFixed(1)}" y="0" width="${width}" height="${MARK_ROOM - 2}" rx="4" fill="var(--s6)"/><text x="${x.toFixed(1)}" y="${MARK_ROOM - 4}" text-anchor="middle" class="vz-mark-n">${label}</text></g>`;
   }).join('');
@@ -84,7 +84,7 @@ export function line(points, {tone = 's1', percent = true, name = '', labelEvery
   });
   const strokes = runs.filter(run => run.dots.length > 1).map(run => `<polyline points="${run.dots.join(' ')}" fill="none" stroke="var(--${run.muted ? 'off' : tone})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`).join('');
   const dots = points.map((point, index) => `<g${tipOf(point.tip)}><rect x="${(x(index) - slot / 2).toFixed(1)}" y="${M.t}" width="${slot.toFixed(1)}" height="${ph}" fill="transparent"/>`
-    + (point.value == null ? '' : point.hand ? `<circle cx="${x(index).toFixed(1)}" cy="${y(point.value).toFixed(1)}" r="4.5" fill="var(--vz-card,#14181d)" stroke="var(--${tone})" stroke-width="2.5"/>`
+    + (point.value == null ? '' : point.hand ? `<circle cx="${x(index).toFixed(1)}" cy="${y(point.value).toFixed(1)}" r="4.5" fill="var(--vz-card,#14181d)" stroke="var(--${point.muted ? 'off' : tone})" stroke-width="2.5"/>`
       : `<circle cx="${x(index).toFixed(1)}" cy="${y(point.value).toFixed(1)}" r="3.5" fill="var(--${point.muted ? 'off' : tone})" stroke="var(--vz-card,#14181d)" stroke-width="2"/>`)
     + (index % labelEvery === 0 || index === points.length - 1 ? `<text x="${x(index).toFixed(1)}" y="${H + room - 6}" text-anchor="middle" class="vz-axis">${points[index].day.slice(5).replace('-', '/')}</text>` : '') + '</g>').join('');
   return `<svg class="vz-cols" viewBox="0 0 ${W} ${H + room}" role="img" aria-label="${esc(name)} per day">${grid}${strokes}${dots}${marksOf(points, {x0: M.l, slot, top: MARK_ROOM - 2, bottom: M.t + ph})}</svg>`;
