@@ -19,7 +19,8 @@ test('positive control: the lane rows of the Grey card are still drawn, with the
 
 test('no suite x reason table is drawn or told, even when an old snapshot still holds a ledger', () => {
   const old = {...base, greyJobs: legacy};
-  for (const text of [page(old, {now}), telegramText(weekly(old, now)), greyLines(greySummary(old, now)).join('\n')]) {
+  // Why (10 Nov 2026, public #3644): telegramText now returns a card ({text, …}); the words told are its text.
+  for (const text of [page(old, {now}), telegramText(weekly(old, now)).text, greyLines(greySummary(old, now)).join('\n')]) {
     assert.doesNotMatch(text, /Greys, last 7 days|suite × reason|No grey jobs recorded/);
   }
   assert.equal(greySummary(old, now).trend, undefined);
