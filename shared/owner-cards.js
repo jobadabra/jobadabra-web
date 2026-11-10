@@ -82,6 +82,10 @@ export const feedbackCard = facts => card({level: 'grey', headline: `New feedbac
 /** A form was reported: {cause, requests, who, time}. */
 export const formReportedCard = facts => card({level: 'orange', headline: `A form was reported: ${facts.cause}`, facts: [`📍 ${plural(Number(facts.requests) || 0, 'page response')} · install ${String(facts.who).slice(0, 8)} · ${facts.time} UTC`], link: {text: 'Open the reports', url: site('/admin/form-filling/reports')}});
 export const formsMoreCard = () => card({level: 'grey', headline: 'More forms were reported today', verdict: {text: 'No more messages until tomorrow.'}, link: {text: 'Open the reports', url: site('/admin/form-filling/reports')}});
+/** A report nobody fetched for `days` days: {days, day, cause, requests}, or {count, days} (summary). The fetch is by hand on the owner's Mac, so the card names the command. */
+export const reportWaitingCard = facts => card({level: 'orange', headline: facts.count ? `${plural(facts.count, 'reported form')} have waited ${facts.days} days or more` : `A reported form has waited ${facts.days} days`,
+  facts: facts.count ? [] : [`📍 ${facts.cause} · ${plural(Number(facts.requests) || 0, 'page response')} · sent ${facts.day}`], verdict: {text: 'Fetch on the Mac: node desktop/e2e/reports-fetch.mjs, then the offline replay.'},
+  link: {text: 'Open the reports', url: site('/admin/form-filling/reports')}});
 
 /** An account gave or changed its e-mail: {changed, install, total}. The address itself is on the Admin page. */
 export const emailCard = facts => card({level: 'green', headline: `${facts.changed ? 'User e-mail changed' : 'New user e-mail'} · install ${String(facts.install).slice(0, 8)}`, facts: facts.total ? [`📧 ${plural(facts.total, 'install')} ${facts.total === 1 ? 'has' : 'have'} an e-mail`] : [], link: {text: 'Open the people list', url: site('/admin/growth/email?tab=people')}});

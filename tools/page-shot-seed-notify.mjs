@@ -10,6 +10,14 @@ function fakeTelegram(url, init) {
   return answer(method === 'getMe' ? {username: demo.bot} : method === 'getChat' ? {title: demo.chat} : method === 'getUpdates' ? [{message: {chat: {id: -1001}}}] : {message_id: 1});
 }
 export const notifySeeds = {
+  // Admin → Form filling → Reports: made-up reports, one per status; the "cannot replay" row carries its reason word (a database without the column keeps it fetched: the page before 10 Nov 2026).
+  'form-reports': async ({env}) => {
+    const day = days => new Date(Date.now() - days * 86400e3).toISOString().slice(0, 10);
+    for (const [id, days, requests, cause, status] of [['demo-1', 0, 18, 'stalled', 'new'], ['demo-2', 3, 21, 'person', 'fetched'], ['demo-3', 6, 40, 'failed', 'fixed'], ['demo-4', 9, 12, 'unsure', 'fetched']]) {
+      await env.STATS.prepare('INSERT INTO form_reports (id, day, who, bytes, requests, cause, status) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, day(days), `demo${id}0000000000`, 250000, requests, cause, status).run();
+    }
+    await env.STATS.prepare("UPDATE form_reports SET status = 'unreplayable', why = 'no-page' WHERE id = 'demo-2'").run().catch(() => {});
+  },
   notifications: async ({env}) => {
     env.NOTIFY_SECRET = 'page-shot-vault';
     await (await import('./page-shot-seeds.mjs')).seeds.schedules({env});   // the Scheduled page needs jobs to hang its Notify column on

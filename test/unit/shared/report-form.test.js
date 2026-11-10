@@ -9,7 +9,7 @@ import {tokenFor} from '../../../shared/guard.js';
 
 function d1() {
   const db = new DatabaseSync(':memory:');
-  db.exec(readFileSync(new URL('../../../db/migrations/0071_form_reports.sql', import.meta.url), 'utf8'));
+  for (const file of ['0071_form_reports.sql', '0147_form_report_waiting.sql']) db.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8'));
   db.exec('CREATE TABLE revoked (who TEXT)');
   const statement = (sql, args = []) => ({bind: (...values) => statement(sql, values), run: async () => db.prepare(sql).run(...args),
     all: async () => ({results: db.prepare(sql).all(...args)}), first: async () => db.prepare(sql).get(...args)});

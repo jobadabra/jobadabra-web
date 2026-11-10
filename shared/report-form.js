@@ -5,13 +5,14 @@
 //   DELETE /api/report-form/<id>     the install that sent it (same token) deletes it
 //   GET    /api/report-form          the owner (Bearer = the scripts' key): the reports waiting, newest first
 //   GET    /api/report-form/<id>     the owner: the encrypted bundle, its wrapped key in X-Report-Key
-//   POST   /api/report-form/<id>?status=fetched   the owner marks it fetched
+//   POST   /api/report-form/<id>?status=fetched|fixed|unreplayable[&why=<word>]   the owner marks it (why: a plain reason word, e.g. no-page)
 // Limits: 8 MB per report, 3 per install per day, and 50 reports / 200 MB per UTC day across ALL installs (a minted install id gets a fresh per-install quota, so only the total holds; one D1 row a day). Without the bucket or the database: 503 "not configured" (nothing breaks). Guard: test/unit/shared/report-form.test.js.
 import {authorize, flag} from './guard.js';
 import {isOwner} from './auth.js';
 import {tellOwner} from './report-notify.js';
 
 export const MAX_BYTES = 8 * 1024 * 1024, PER_INSTALL_PER_DAY = 3, KEEP_DAYS = 30, ALL_REPORTS_PER_DAY = 50, ALL_BYTES_PER_DAY = 200 * 1024 * 1024;
+const OWNER_STATUSES = ['fetched', 'fixed', 'unreplayable'];
 const bad = (status, error) => Response.json({ok: false, error}, {status});
 const bearerOf = request => (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
 const dayOf = date => date.toISOString().slice(0, 10);
@@ -34,8 +35,9 @@ export async function reportForm(request, env, pathname, now = new Date(), fetch
     if (!blob || !wrapped) return bad(404, 'gone');
     return new Response(blob.body, {headers: {'Content-Type': 'application/octet-stream', 'X-Report-Key': await wrapped.text()}});
   }
-  if (request.method === 'POST' && new URL(request.url).searchParams.get('status') === 'fetched') {
-    await env.STATS.prepare("UPDATE form_reports SET status = 'fetched' WHERE id = ?").bind(id).run();
+  const params = new URL(request.url).searchParams, status = params.get('status'), why = /^[a-z0-9-]{1,40}$/.test(params.get('why') || '') ? params.get('why') : '';
+  if (request.method === 'POST' && OWNER_STATUSES.includes(status)) {   // fetched by reports-fetch.mjs; fixed or unreplayable by the owner, with a reason word (shared/report-waiting.js stops at any of them)
+    await env.STATS.prepare('UPDATE form_reports SET status = ?, why = ? WHERE id = ?').bind(status, why, id).run();
     return Response.json({ok: true});
   }
   return new Response('Method not allowed', {status: 405});
