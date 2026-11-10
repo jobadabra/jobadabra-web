@@ -34,6 +34,16 @@ export function ranOutOf(note) {
   return at < 0 ? [] : String(note).slice(at + RAN_OUT.length).split(';')[0].split(',').map(step => text(step, 40)).filter(Boolean).slice(0, 8);
 }
 
+// The blind judge's verdict per found job (jobadabra tools/persona-search/gate.py row `place` and `role`): counts only, in fixed words, no job text. `unjudged` = a row the judge left without a verdict (never counted as right).
+// Why (10 Nov 2026, owner: "How can I follow to understand if our search algoritm finds jobs out of the location", after a Dublin search listed 24 of 25 jobs in other countries and no screen said so): the night kept only
+// `local` (right role AND place together), so a wrong place could not be told from a wrong role. A record without the counts, or whose counts do not add up to `found`, claims nothing (null), never zeros.
+export const PLACE_VERDICTS = ['yes', 'no', 'remote', 'unknown', 'unjudged'], ROLE_VERDICTS = ['yes', 'no', 'unjudged'];
+const verdictCounts = (raw, keys, total) => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const pairs = keys.map(key => [key, count(raw[key])]);
+  return pairs.every(([, n]) => n != null) && pairs.reduce((sum, [, n]) => sum + n, 0) === count(total) ? Object.fromEntries(pairs) : null;
+};
+
 /** A verdict.json as CI uploads it -> the record kept for one night: {night, run, state, head, rows: [{persona, label, kind, why, local, found, seconds, ranOut, counters}]}, or {error}. Counts are whole numbers or null. */
 export function clean(verdict, {night, run = null} = {}, now = new Date()) {
   if (!verdict || typeof verdict !== 'object' || Array.isArray(verdict)) return {error: 'the verdict is an object'};
@@ -46,7 +56,8 @@ export function clean(verdict, {night, run = null} = {}, now = new Date()) {
   // against nights of the same kind only (admin/search-night-judge.js). A verdict without the word is from before the switch: EURES was on.
   return {night, run, eures: euresOf(verdict), state: text(verdict.state, 20), head: text(verdict.head, 300), rows: rows.map((row, index) => ({
     persona: Number.isInteger(row.persona) && row.persona > 0 && row.persona < 100 ? row.persona : index + 1, label: text(row.label, 80), kind: KINDS.includes(row.kind) ? row.kind : 'unknown', why: text(row.why, 120),
-    local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note), counters: counters(row.counters), stepYield: cleanStepYield(row.step_yield), relevantSources: relevantSources(row.relevant_sources, row.local)}))};
+    local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note), counters: counters(row.counters), stepYield: cleanStepYield(row.step_yield), relevantSources: relevantSources(row.relevant_sources, row.local),
+    place: verdictCounts(row.place, PLACE_VERDICTS, row.found), role: verdictCounts(row.role, ROLE_VERDICTS, row.found)}))};
 }
 
 /**
