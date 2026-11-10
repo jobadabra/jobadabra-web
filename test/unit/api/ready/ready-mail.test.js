@@ -13,7 +13,7 @@ import {tokenFor} from '../../../../shared/guard.js';
 
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 const FILES = ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0083_hosted.sql', '0085_mail_held.sql', '0089_ready.sql', '0090_ready_fill_at.sql',
-  '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0135_mail_on.sql', '0138_mail_rule.sql', '0139_mail_held_row.sql', '0142_ready_mailed.sql', '0143_ready_task.sql', '0144_ready_read_day.sql'];
+  '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0135_mail_on.sql', '0138_mail_rule.sql', '0139_mail_held_row.sql', '0142_ready_mailed.sql', '0143_ready_task.sql', '0144_ready_read_day.sql', '0145_ready_read_lanes.sql'];
 function d1() {
   resetRuleCache();
   const db = new DatabaseSync(':memory:');

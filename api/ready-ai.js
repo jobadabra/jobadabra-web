@@ -18,7 +18,7 @@ export function clean(given, env) {
     ...(given.output_config ? {output_config: given.output_config} : {})};
 }
 
-// row: the night's batch (already checked by its token); byok: the user's own key from the sealed batch, or ''. `charge(micro)` adds the cost to the night and says whether the cap was reached; `stopped()` marks the night's AI stopped.
+// row: the night's batch (already checked by its token); byok: the user's own key from the sealed batch, or ''. `charge(micro, answered)` adds the cost to the night and says whether the cap was reached; `stopped()` marks the night's AI stopped.
 // -> a Response.
 export async function relay(request, env, row, charge, {byok = '', stopped = async () => {}, now = new Date()} = {}) {
   const refuse = async (status, error) => { await stopped(); return Response.json({ok: false, error}, {status}); };
@@ -31,7 +31,7 @@ export async function relay(request, env, row, charge, {byok = '', stopped = asy
     const reply = await (env.fetchFn || fetch)('https://api.anthropic.com/v1/messages', {method: 'POST', headers: {'content-type': 'application/json', 'x-api-key': byok, 'anthropic-version': '2023-06-01'}, body: JSON.stringify(params)});
     const body = await reply.text();
     let usage = null; try { usage = JSON.parse(body).usage; } catch { /* an error body: no cost */ }
-    if (usage) await charge(costMicro(usage));
+    if (usage) await charge(costMicro(usage), reply.ok);   // answered: Anthropic accepted the key (an error body with usage is not an answer)
     if (reply.status === 401 || reply.status === 429) await stopped();   // the user's own key is wrong or out of limit: the morning says so
     return new Response(reply.ok ? body : JSON.stringify({ok: false, error: `model answered ${reply.status}`}), {status: reply.ok ? 200 : 502, headers: {'content-type': 'application/json'}});
   }

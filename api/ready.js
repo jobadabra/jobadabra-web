@@ -15,7 +15,7 @@ import {closeNight, morning, readyToken} from './ready-morning.js';
 import {dropKept, jobsWithKept, keptPut, keptKey, videoGet} from './ready-kept.js';
 import {mailNight} from './ready-mail.js';
 import {checkRead, keepRead, takeReads, taskOf} from './ready-read.js';
-import {MICRO_PER_SECOND, addMicro, chargeContainer, creditRefusal, publicHost, readerOf, reserveReads} from './ready-read-access.js';
+import {MICRO_PER_SECOND, addMicro, chargeContainer, claimedRefusal, creditRefusal, isPro, proofOf, publicHost, readerOf, reserveOwn, reserveReads, strictNow} from './ready-read-access.js';
 export {readyToken};
 
 export const readyOn = env => env.READY_TO_SEND === 'on' && !!env.HOSTED_STATE && !!env.READY_OWNER;
@@ -108,9 +108,11 @@ async function batch(request, env, now) {
   const good = job => typeof job?.id === 'string' && /^[\w.:-]{1,64}$/.test(job.id) && /^https:\/\/[^\s/]+/.test(String(job.url)) && String(job.url).length <= 2000;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(given?.night)) || !jobs.length || jobs.length > MAX_JOBS || !jobs.every(good) || new Set(jobs.map(job => job.id)).size !== jobs.length) return bad('bad batch');
   if (task === 'readiness' && !reader.owner && !jobs.every(job => publicHost(job.url))) return bad('bad batch');   // an Always on install's forms are public pages: never our container's own network (code review of 3/4)
-  if (task === 'readiness') {   // today's cap counts every read (the container seconds are ours, whatever key answers the questions); the AI credit is checked unless the person's own Claude key answers (it is not validated here, so it never lifts the cap)
-    const own = /^sk-ant-[\w-]{20,300}$/.test(String(given.ai?.key || ''));
-    const refused = (own ? null : await creditRefusal(env, install, now)) || await reserveReads(env, install, jobs.length, now);
+  let strict = 1;   // the daily cap can apply to this night (ready_batches.strict): not a Pro account's (api/ready-read-access.js, "Design")
+  if (task === 'readiness') {   // the lane follows who pays: a claimed own key is not trusted, only an answer from Anthropic proves it (aiCall); until then a trial's reads take the daily cap as their results arrive
+    const own = /^sk-ant-[\w-]{20,300}$/.test(String(given.ai?.key || '')), pro = await isPro(env, install);
+    strict = pro ? 0 : 1;
+    const refused = (own ? null : await creditRefusal(env, install, now)) || (own ? (pro ? null : await claimedRefusal(env, install, given.ai.key, now)) || await reserveOwn(env, install, jobs.length, now) : pro ? null : await reserveReads(env, install, jobs.length, now));
     if (refused) return json({ok: false, error: refused.error, ...(refused.limit ? {limit: refused.limit, used: refused.used} : {})}, refused.status);
   }
   const old = await env.STATS.prepare('SELECT id FROM ready_batches WHERE install = ? AND night = ? AND task = ?').bind(install, given.night, task).first();
@@ -122,7 +124,7 @@ async function batch(request, env, now) {
   const ai = /^sk-ant-[\w-]{20,300}$/.test(String(given.ai?.key || '')) ? {key: given.ai.key} : undefined;   // the user's own Claude key (BYOK): sealed with the batch, never sent back, deleted with it
   await writeBlob(env, install, id, {ai, contact: reading ? {} : given.contact || {}, readyBy: reading ? '' : String(given.readyBy || '').slice(0, 5), facts, jobs: kept});
   const fillAt = Number.isFinite(Date.parse(given.fillAt)) ? new Date(given.fillAt).toISOString() : null;   // when the night should start filling (the cron starts it then); none: at the next tick
-  await env.STATS.batch([env.STATS.prepare('INSERT INTO ready_batches (id, install, night, created_at, fill_at, task) VALUES (?, ?, ?, ?, ?, ?)').bind(id, install, given.night, stamp(now), fillAt, task),
+  await env.STATS.batch([env.STATS.prepare('INSERT INTO ready_batches (id, install, night, created_at, fill_at, task, strict) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, install, given.night, stamp(now), fillAt, task, strict),
     ...kept.map(job => env.STATS.prepare('INSERT INTO ready_jobs (batch, job, host) VALUES (?, ?, ?)').bind(id, job.id, new URL(job.url).hostname))]);
   return json({ok: true, batch: id, queued: kept.length});
 }
@@ -151,8 +153,13 @@ async function result(request, env, now) {
   // A read within the person's AI credit (no own Claude key): its container seconds come out of the credit meter, and today's budget can end the night (api/ready-read-access.js).
   let spent = false;
   if (reading) {
-    if (!(await readBlob(env, row.install, row.id).catch(() => null))?.ai?.key) await chargeContainer(env, row.install, (num(given.ms) || 0) / 1000 * MICRO_PER_SECOND, now);   // their own key: their AI, but never our container for free
-    spent = await addMicro(env, row.install, micro, now);
+    const claimed = !!(await readBlob(env, row.install, row.id).catch(() => null))?.ai?.key;
+    if (!(claimed && row.own_ok)) await chargeContainer(env, row.install, (num(given.ms) || 0) / 1000 * MICRO_PER_SECOND, now);   // our container is paid from their credit until Anthropic has answered their own key (a made-up key must not read free)
+    // a Pro whose credit ran out after its batch was queued is on the Free rules again (Gitar on #510)
+    if (await strictNow(env, row) && !(claimed && row.own_ok)) {   // our AI on a non-Pro account (or a key Anthropic never answered): the daily cap; a claimed key's slot (and a Pro-turned-Free one's) is taken now, an unclaimed Free one's was taken at the batch
+      const refused = claimed || !row.strict ? await reserveReads(env, row.install, 1, now) : null;
+      spent = (await addMicro(env, row.install, micro, now)) || !!refused;
+    }
   }
   const total = row.cost_micro + micro, capped = total >= cap(env) || spent;
   if (reading && capped) await env.STATS.prepare(`UPDATE ready_jobs SET state = 'failed', wall = 'cap', at = ? WHERE batch = ? AND cleared_at IS NULL AND state IN ${LIVE}`).bind(stamp(now), row.id).run();   // a read the cap kept from starting is told to the app as a form it could not read, never left "reading"
@@ -171,9 +178,10 @@ async function aiCall(request, env, now) {
   if (!row) return deny();
   const byok = (await readBlob(env, row.install, row.id).catch(() => null))?.ai?.key || '';
   const stopped = () => env.STATS.prepare('UPDATE ready_batches SET ai_stopped = 1 WHERE id = ?').bind(row.id).run();
-  return relay(request, env, row, async micro => {
+  return relay(request, env, row, async (micro, answered = true) => {
     const total = (await env.STATS.prepare('SELECT cost_micro FROM ready_batches WHERE id = ?').bind(row.id).first()).cost_micro + micro;
-    const spent = row.task === 'readiness' && !byok ? await addMicro(env, row.install, micro, now) : false;   // the page-kind call counts against today's budget too
+    if (byok && answered) await env.STATS.prepare('UPDATE ready_batches SET own_ok = 1, own_proof = ? WHERE id = ? AND own_ok = 0').bind(await proofOf(byok), row.id).run();   // Anthropic answered with their key: the reads are theirs, not ours (a made-up key is refused by Anthropic, so `answered` is false)
+    const spent = row.task === 'readiness' && !byok && await strictNow(env, row) ? await addMicro(env, row.install, micro, now) : false;   // the page-kind call counts against today's budget too, on our AI and a non-Pro account (or a Pro whose credit ran out)
     const capped = total >= cap(env) || spent;
     await env.STATS.prepare('UPDATE ready_batches SET cost_micro = ?, state = ? WHERE id = ?').bind(total, capped ? 'capped' : row.state, row.id).run();
     if (capped) await reportNight(env, {...row, cost_micro: total}, now);
