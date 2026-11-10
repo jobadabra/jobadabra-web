@@ -16,6 +16,7 @@ import {digest} from '../shared/digest.js';
 import {BARS_CSS} from './day-bars.js';
 import {cachedJson, dropSnapshot, latestRuns, refreshLatest, slowCache} from './applying-store.js';
 import {topCauses} from './applying-cause.js';
+import {fillDropRow} from './applying-fill-drop.js';
 import {readReplays, replayCases} from './applying-replays.js';
 import {CASES_SCRIPT} from './applying-cases.js';
 import {LADDER_CSS, LADDER_SCRIPT} from './applying-ladder.js';
@@ -132,7 +133,7 @@ export async function data(db, now = new Date(), slow = (key, fn) => fn()) {
   const sites = Object.entries(byName('smoke')).map(([name, list]) => {
     const last = list.at(-1);
     return {name, at: last.at, host: last.host, runs: list.slice(-20).map(run => ({day: run.day, at: run.at, reached: run.reached, hold: isHold(run.note), cleanHold: isCleanHold(stateOf(run)), filled: run.filled, left: run.left_n, version: run.version, needsFix: runNeedsFix(run)})), reached: last.reached, filled: last.filled, left: last.left_n, day: last.day, version: last.version, note: last.note, hold: isHold(last.note), rung: last.rung ?? null, signal: last.signal ?? null,
-      regression: !!last.regression && ['fix', 'site'].includes(stateOf(last).state), short: shortOf(last.reached, last.filled, last.left_n, last.asked, last.unexplained), status: stateOf(last), states: list.slice(-10).map(stateOf), shares: list.slice(-10).map(run => shareOf(run.filled, run.left_n)), history: list.slice(-10).map(run => run.reached || 'none'), days: list.slice(-10).map(run => run.day)};
+      regression: !!last.regression && ['fix', 'site'].includes(stateOf(last).state), short: shortOf(last.reached, last.filled, last.left_n, last.asked, last.unexplained), status: stateOf(last), states: list.slice(-10).map(stateOf), shares: list.slice(-10).map(run => shareOf(run.filled, run.left_n)), fillDrop: fillDropRow(list), history: list.slice(-10).map(run => run.reached || 'none'), days: list.slice(-10).map(run => run.day)};
   }).sort((a, b) => Number(b.regression) - Number(a.regression) || STEPS.indexOf(a.reached) - STEPS.indexOf(b.reached));
   const replayRuns = await readReplays(db), cases = replayCases(replayRuns);   // CI on main's last runs, one row (admin/applying-replays.js)
   const nights = Object.entries(runs.filter(run => run.kind === 'smoke').reduce((out, run) => {   // one bar per day, split by each run's one status (admin/applying-status.js), not by the step it reached
@@ -158,6 +159,7 @@ export async function data(db, now = new Date(), slow = (key, fn) => fn()) {
       reachedForm: live.length ? Math.round((100 * live.filter(site => ['form', 'ready'].includes(site.reached)).length) / live.length) : null,
       needFix: needsFixOrder(pool, scorecard, STEPS).rows.length,   // the Needs a fix list's own count (the pool's rows, admin/applying-order.js), not the smoke sites'
       regressions: sites.filter(site => site.regression && site.status.state !== 'site').length, regressionsApart: sites.filter(site => site.regression && site.status.state === 'site').length,   // a regression on a closed or refusing site is not our build's
+      fillDrops: pool.filter(item => item.fillDrop && item.status.state !== 'site').length,   // the rows the Sites tab shows (retired names left out), on a site still open
       gone: sites.filter(site => site.status.state === 'site').length, held: sites.filter(site => site.status.state === 'held').length, dropped: dropped.length};
   return {
     tiles,
@@ -184,7 +186,7 @@ async function poolRows(db, sites, now) {
     const {flow, raw} = flowOf(row.signature, start);
     const step = row.signature?.match(/#([^#]+)$/)?.[1] || null, reached = site?.reached ?? step;
     return {name: displayName(name, start), shape: name, version: site?.version ?? null, runs: site?.runs ?? [], platform: platformLabel(end, start), flow, raw, start, end, reached, day: site?.day ?? null, at: site?.at ?? null, running: running.has(name), note: site?.note ?? null, hold: !!site?.hold, status: site?.status ?? rowStatus({reached}), states: site?.states ?? (step ? [{...rowStatus({reached: step}), step}] : []), rung: site?.rung ?? null, signal: site?.signal ?? null,
-      stageData: row.stage || null, stageWhy: row.stage_why || null, regression: !!site?.regression, filled: site?.filled ?? null, left: site?.left ?? null, short: site?.short ?? null, shares: site?.shares ?? [], history: site?.history ?? (step ? [step] : []), days: site?.days ?? []};
+      stageData: row.stage || null, stageWhy: row.stage_why || null, regression: !!site?.regression, filled: site?.filled ?? null, left: site?.left ?? null, short: site?.short ?? null, shares: site?.shares ?? [], fillDrop: site?.fillDrop ?? null, history: site?.history ?? (step ? [step] : []), days: site?.days ?? []};
   }).sort((a, b) => Number(b.running) - Number(a.running) || a.platform.localeCompare(b.platform) || a.name.localeCompare(b.name));
 }
 
@@ -269,7 +271,7 @@ ${RESOLUTION_SCRIPT}${FIDELITY_SCRIPT}
   app.append(el('div', {className: 'tiles'}, resolutionTile(d.resolution),
     tile(t.reachedForm == null ? '–' : t.reachedForm + '%', 'Reached the form', T.reached, 'Of live sites', 'Share of live sites that reached the application form. ' + R.reached),
     tile(t.needFix, 'Sites needing a fix', T.needFix, 'The Needs a fix list', 'The same sites as the Needs a fix list: stopped early, unexplained fields, or a regression. ' + R.needFix),
-    tile(t.regressions, 'Open regressions', T.regressions, t.regressionsApart ? 'Not ours: ' + t.regressionsApart + ' on a closed or refusing site' : 'Reached less than before', 'Sites that reached less than their last run, on a site that is still open: ours to fix. ' + (t.regressionsApart ? t.regressionsApart + ' more on a posting that is gone or a site that refused us are not counted. ' : '') + R.regressions),
+    tile(t.regressions, 'Open regressions', T.regressions, (t.regressionsApart ? 'Not ours: ' + t.regressionsApart + ' on a closed or refusing site' : 'Reached less than before') + (t.fillDrops ? ' · ' + t.fillDrops + ' fill less than their best' : ''), 'Sites that reached less than their last run, on a site that is still open: ours to fix. ' + (t.regressionsApart ? t.regressionsApart + ' more on a posting that is gone or a site that refused us are not counted. ' : '') + (t.fillDrops ? t.fillDrops + ' reached the form but filled at least 2 fields fewer than their best run (a report, not counted in the colour; the row says how many). ' : '') + R.regressions),
     awaitingTile, confirmedTile,
     tile(fids.total ? fids.recorded + ' / ' + fids.total : '–', 'Replayable offline', '', fids.total ? (fids.total - fids.recorded) + ' with no network copy' : 'No replay data yet', 'Pool sites with a network copy that an offline replay can use (the Replay vs live table). A count, not good or bad: no colour.')));
 ${PAGETABS_SCRIPT}${WATCH_SCRIPT}  const resolutionBox = el('section', {className: 'resolution'}); panels.outcomes.append(resolutionBox); const fidelityBox = el('section', {className: 'fidelity'}); panels.replays.append(fidelityBox);   // the headline under the tiles, filled below once the table helpers exist (admin/applying-resolution.js)
@@ -298,7 +300,7 @@ ${NIGHTS_SCRIPT}${LADDER_SCRIPT}  // A status's meaning, as its pill's hover (ow
     el('option', {value: '', textContent: all}), ...list.map(item => el('option', {value: item.name, textContent: (item.label || item.name) + ' · ' + item.sites + ' ' + unit + (item.sites === 1 ? '' : 's') + (key === 'platform' ? ' · ' + item.flows + (item.flows === 1 ? ' flow' : ' flows') : '')})), ), {}));
   const count = el('span', {className: 'muted count'}), pager = el('div', {className: 'pager'}), clear = el('button', {className: 'chip', type: 'button', textContent: 'Clear', hidden: true, onclick: () => { chosen.platform = chosen.flow = chosen.stage = endingPick = null; chosen.query = ''; chosen.page = 0; filters.querySelectorAll('select').forEach(node => { node.value = ''; }); resetChips(filters); search.value = ''; draw(); }});
   // Search (owner, 11 Oct 2026): words in any order, all must match the site's name, platform, host, flow, last result, note or its "blocked at N" / regression text; it combines with the two filters.
-  /*search*/ const poolText = s => [s.name, s.platform, s.start, s.end, flowText(s), s.reached ? STAGE[s.reached] || s.reached : 'not run yet', d.stateWords[s.status.state], s.status.rule, s.short ? shortText(s) : '', s.regression ? 'regression' : '', blocked(s) ? 'blocked at ' + s.rung : '', s.note, s.cause && s.cause.cause].filter(Boolean).join(' ').toLowerCase();
+  /*search*/ const poolText = s => [s.name, s.platform, s.start, s.end, flowText(s), s.reached ? STAGE[s.reached] || s.reached : 'not run yet', d.stateWords[s.status.state], s.status.rule, s.short ? shortText(s) : '', s.regression ? 'regression' : '', s.fillDrop ? 'fill regression' : '', blocked(s) ? 'blocked at ' + s.rung : '', s.note, s.cause && s.cause.cause].filter(Boolean).join(' ').toLowerCase();
   const wordsIn = (text, query) => String(query || '').toLowerCase().split(/\\s+/).filter(Boolean).every(word => text.includes(word));   // every word, in any order
   const poolMatches = (s, query) => wordsIn(poolText(s), query);
   const caseMatches = (c, query) => wordsIn([c.name, c.ok ? 'passed' : 'failed', c.note, c.rung != null ? 'rung ' + c.rung : ''].filter(Boolean).join(' ').toLowerCase(), query); /*end search*/
@@ -333,7 +335,7 @@ const reportedTag = s => (/^reported-/.test(s.shape || s.name || '') ? el('span'
     s.status.next ? el('span', {className: 'stack muted', textContent: 'Next: ' + s.status.next}) : null,
     s.reached ? el('span', {className: 'stack muted', textContent: STAGE[s.reached] || s.reached}) : null,
     s.short ? el('span', {className: 'stack bad', title: 'reached the form, with fields left that we should have known or suggested', textContent: shortText(s)}) : null,
-    s.regression ? el('span', {className: 'stack bad', textContent: 'regression'}) : null, s.note && !s.status.next ? el('span', {className: s.status.state === 'held' ? 'stack hold' : 'stack muted', title: s.status.state === 'held' ? 'Held on purpose: the run stopped here by a rule, not a fix' : '', textContent: s.note}) : null].filter(Boolean);
+    s.regression ? el('span', {className: 'stack bad', textContent: 'regression'}) : null, s.fillDrop ? el('span', {className: 'stack bad', title: s.fillDrop.title, textContent: 'fill regression · ' + s.fillDrop.text}) : null, s.note && !s.status.next ? el('span', {className: s.status.state === 'held' ? 'stack hold' : 'stack muted', title: s.status.state === 'held' ? 'Held on purpose: the run stopped here by a rule, not a fix' : '', textContent: s.note}) : null].filter(Boolean);
   const copy = text => el('button', {className: 'copy', type: 'button', title: 'Copy', 'aria-label': 'Copy ' + text, textContent: '⧉', onclick: event => { event.stopPropagation(); try { navigator.clipboard.writeText(text); } catch (error) { /* a copy is only a convenience */ } }});
   const route = s => el('div', {}, el('h4', {textContent: 'Route'}), el('dl', {}, el('dt', {textContent: 'Start'}), el('dd', {}, s.start || '…', s.start ? copy(s.start) : null), ...(s.end && s.end !== s.start ? [el('dt', {textContent: 'End'}), el('dd', {}, s.end, copy(s.end))] : [])));
   const lastRun = s => el('div', {}, el('h4', {textContent: s.at ? 'Last completed run · ' + new Date(s.at).toUTCString().slice(5, 22) + ' UTC' : 'Last completed run'}),

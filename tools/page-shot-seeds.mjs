@@ -43,7 +43,10 @@ export const seeds = {...notifySeeds,
       await env.STATS.prepare(`INSERT INTO ${table} (day, at, visitor, page, source, country, device${cols}) VALUES (?, ?, ?, ?, ?, ?, ?${extra})`).bind(day, `${day}T12:00:00Z`, visitor, page, source, country, device).run();
     }
   },
-  'lab-form-filling': async ({env}) => {   // made-up recorded sites on the usual form platforms, a week of smoke runs: fills, a left field, a bot check, a regression (26 Oct 2026, admin on a phone)
+  'lab-form-filling': async ({env}) => {
+    // Each demo form keeps its size with one field of noise; on the last day site 3 fills 4 fewer fields and site 10's form grows by 6 (the fill regressions, brief lr 10 Nov 2026).
+    const demoFill = (n, back) => { const total = 9 + n % 6 + (n === 9 && back === 0 ? 6 : 0), missed = (n + back) % 4 === 0 ? 1 : 0, drop = n === 2 && back === 0 ? 4 : 0;
+      return {filled: total - 1 - missed - drop - (n === 9 && back === 0 ? 6 : 0), left: 1 + missed + drop + (n === 9 && back === 0 ? 6 : 0)}; };   // made-up recorded sites on the usual form platforms, a week of smoke runs: fills, a left field, a bot check, a regression (26 Oct 2026, admin on a phone)
     const {ingest} = await import('../admin/applying.js');
     const hosts = ['job-boards.greenhouse.io', 'jobs.lever.co', 'demo.wd5.myworkdayjobs.com', 'jobs.ashbyhq.com', 'apply.workable.com', 'career5.successfactors.eu', 'jobs.smartrecruiters.com', 'careers.demo-company.example'];
     const sites = hosts.flatMap((host, i) => [0, 1].map(j => ({name: `Demo site ${i * 2 + j + 1}`, start_host: host, signature: `posting>form@${host}#${j ? 'form' : 'ready'}`})));
@@ -52,7 +55,7 @@ export const seeds = {...notifySeeds,
     for (let back = 6; back >= 0; back--) {
       const at = new Date(today.getTime() - back * 86400000), day = at.toISOString().slice(0, 10);
       await ingest(env.STATS, {kind: 'smoke', day, version: `0.9.${190 + 6 - back}`, rows: sites.map((site, n) => ({name: site.name, host: site.start_host,
-        reached: n % 7 === 3 ? 'code/bot' : n % 5 === 4 ? 'form' : 'ready', filled: 6 + (n * 3 + back) % 9, left: (n + back) % 4 === 0 ? 1 : 0, regression: back === 0 && n === 5}))}, at);
+        reached: n % 7 === 3 ? 'code/bot' : n % 5 === 4 ? 'form' : 'ready', ...demoFill(n, back), regression: back === 0 && n === 5}))}, at);
     }
   },
   'ai-section': async ({env}) => {   // the AI section of /admin (3 Nov 2026): the real shape of tools/ci-agents-stats.mjs's upload (agents and steps as read on 3 Nov 2026), Sentry's PR counts made up, and a fake broker /health for Engines
