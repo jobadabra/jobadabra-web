@@ -14,6 +14,9 @@ COPY desktop/lib/form-address.js desktop/lib/triage-reader.js desktop/lib/triage
 # Why (10 Nov 2026, cs 2/4): the Full automation night's one Submit gate is a .js file (the *.mjs copy above does not take it) with the Mac's shared proof and eligibility checks; cs 3/4 imports it from the night.
 COPY desktop/ready-fill/submit-gate.js ./
 COPY desktop/lib/submit-proof.js desktop/lib/apply-eligibility.js /desktop/lib/
+# The judges the auto night asks, as the Mac does: the form judge (ready, which step, the sending control) and the confirmation judge after its one press. Why (10 Nov 2026, cs 2/4): copied once they are on main and before a night file imports them (cs 3/4).
+COPY desktop/lib/form-judge.js desktop/lib/page-kind.js desktop/lib/account-judge.js desktop/lib/confirmation-judge.js /desktop/lib/
+COPY desktop/lib/ladder/value-class.js /desktop/lib/ladder/
 COPY desktop/lib/ladder/rung1-kept.js desktop/lib/ladder/rung2-sketch.js desktop/lib/ladder/rung3-digest.js /desktop/lib/ladder/
 COPY desktop/lib/ai/models.js /desktop/lib/ai/models.js
 # desktop/shared/alias-schema.js is generated in the app by scripts/stage.mjs from this file, so the image takes it from its source.
