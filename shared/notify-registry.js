@@ -35,6 +35,8 @@ export const ALERTS = [
   a('record-sites', '📼 Record sites / watch list: new failures', 'main', 'daily', 'engineering', {wired: true, on: false, modes: ['every', 'daily'], jobs: ['record-sites.yml', 'watch-live.yml']}),
   // Why (10 Nov 2026, owner: "Abuse-only ceiling"): a person's own AI key has no daily cap on cloud readiness, only a ceiling (about 500 reads) that catches a broken loop; the owner is told once a day (api/ready-read-access.js).
   a('ready-read-ceiling', '☁️ A cloud readiness install hit its abuse ceiling', 'ai', 'daily', 'engineering', {wired: true}),
+  // Why (10 Nov 2026, owner: "~500/day + alert (Recommended)"): cloud Full automation has no daily limit, only a ceiling of about 500 submits per install that catches a broken loop; the owner is told once a day (api/ready-auto.js).
+  a('ready-submit-ceiling', '☁️ A cloud Full automation install hit its abuse ceiling', 'ai', 'daily', 'engineering', {wired: true}),
   a('ai-fixer-round', '🔧 AI fixer: PR ready / red / conflict', 'ai', 'every', 'engineering', {wired: true, jobs: ['ai-fixer.yml', 'ai-fixer-follow.yml']}),
   a('ai-persona-night', '🧑‍💻 AI persona night report', 'ai', 'problems', 'engineering', {status: 'new', modes: ['every', 'problems'], jobs: ['ai-user-agents.yml']}),
   a('ai-credit', '🪫 AI credit ran out / AI refused a job / AI step skipped', 'ai', 'daily', 'engineering', {wired: true, modes: ['every', 'daily']}),

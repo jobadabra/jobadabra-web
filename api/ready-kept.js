@@ -11,6 +11,7 @@ export const KINDS = {
   video: {ext: 'webm', type: 'video/webm', max: 25 * 1024 * 1024, keepMs: 7 * DAY},
   handoff: {ext: 'json', type: 'application/json', max: 2 * 1024 * 1024, keepMs: DAY},
   read: {ext: 'json', type: 'application/json', max: 64 * 1024, keepMs: DAY},   // a readiness night's read (api/ready-read.js): not a route of this file, sealed and dropped with the others
+  submit: {ext: 'json', type: 'application/json', max: 8 * 1024, keepMs: DAY},   // a Full automation night's outcome and the page's proof (api/ready-auto.js): sealed and dropped like a read
 };
 export const VIDEO_MAX_SECS = 180;
 export const keptPrefix = (install, kind, batch) => `ready/${install}/${kind}/${batch}/`;
