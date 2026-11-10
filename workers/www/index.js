@@ -19,7 +19,6 @@ import {verifyIngest} from '../../admin/applying-verify.js';
 import {endingsIngest} from '../../admin/applying-resolution.js';
 import {ciRowsIngest} from '../../admin/applying-ci-rows.js';
 import {view as searchLabView} from '../../admin/search-lab-page.js';
-import {ingestRoute as searchLabIngest} from '../../admin/search-lab-store.js';
 import {ingestRoute as searchLabDrawIngest} from '../../admin/search-lab-draws.js';
 import {realGaps as searchLabRealGaps} from '../../admin/search-lab-real-gaps.js';
 import {ingestRoute as sessionChecksIngest} from '../../admin/session-checks.js';
@@ -253,7 +252,6 @@ async function route(request, env, ctx) {
   if (pathname === '/search-lab/session-checks' && request.method === 'PUT') return sessionChecksIngest(request, env);   // a session's local search check (Bearer SESSION_CHECKS_KEY, admin/session-checks.js)
   if (pathname === '/search-check/night' && request.method === 'PUT') return searchNightIngest(request, env);   // the nightly Search check's verdict (Bearer REPLAYS_PUBLISH_KEY, admin/search-night.js); public lists it with 2/2
   if (pathname === '/search-check/reference' && request.method === 'PUT') return searchReferenceIngest(request, env);   // the weekly reference: right jobs that exist per candidate, counts only (Bearer REPLAYS_PUBLISH_KEY, admin/search-reference.js); public lists it with 5/5
-  if (pathname === '/search-lab/rows' && request.method === 'PUT') return searchLabIngest(request, env);   // a replayed search per candidate, main only (Bearer REPLAYS_PUBLISH_KEY, admin/search-lab-store.js)
   if (pathname === '/applying/discovery-input' && request.method === 'GET') return discoveryInput(request, env);   // the daily discovery batch's input (Bearer REPLAYS_PUBLISH_KEY, shared/discovery-candidates.js)
   if (pathname === '/applying/endings' && request.method === 'PUT') return endingsIngest(request, env);
   if (pathname === '/applying/video' && request.method === 'PUT') return videoIngest(request, env);   // CI's pool run: one fill video per row (Bearer REPLAYS_PUBLISH_KEY, admin/lab-video.js)

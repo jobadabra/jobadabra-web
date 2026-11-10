@@ -83,7 +83,7 @@ test('a cron is said in words and its next and previous start are found, in Zuri
 test('areas, state and missed runs', () => {
   assert.deepEqual(['ui-findings.yml', 'sentry-fix.yml', 'record-sites.yml'].map(areaOf), ['testing', 'testing', 'testing']);
   assert.deepEqual(['central-scout.yml', 'random-draw.yml', 'daily-digest.yml'].map(areaOf), ['search', 'search', 'search']);
-  assert.deepEqual(['search-lab.yml', 'scout-canary.yml'].map(areaOf), ['testing', 'testing'], 'the search lab and its canary are tests (owner, 1 Nov 2026)');
+  assert.equal(areaOf('scout-canary.yml'), 'testing', 'the scout canary is a test (owner, 1 Nov 2026)');
   assert.equal(areaOf('desktop.yml'), 'testing');
   assert.equal(areaOf('ops-overview.yml'), 'other');
   const ok = {crons: ['17 * * * *'], recent: [{at: '2026-10-20T17:18:00Z', conclusion: 'success'}]};
@@ -172,7 +172,7 @@ test('the Area filter narrows the page; Testing shows its start-time graph; the 
 });
 
 test('Billed min / week is a lower bound, with the repo named, when a private repo was not read (1 Nov 2026: a confident 0 while jobadabra-lab was unreadable)', () => {
-  const job = {repo: 'jobadabra/jobadabra-web', file: 'search-lab.yml', name: 'Search lab', about: '', crons: ['15 */6 * * *'], billedMin: 90, recent: []};
+  const job = {repo: 'jobadabra/jobadabra-web', file: 'scout-canary.yml', name: 'Scout canary', about: '', crons: ['15 */6 * * *'], billedMin: 90, recent: []};
   const tileOf = html => html.match(/<section class="card tile ([^"]*)"><span class="muted">Billed min \/ week<\/span><b>([^<]*)<\/b><span class="muted">([^<]*)<\/span>/).slice(1);
   const read = [{name: 'jobadabra/jobadabra', private: false, ok: true}, {name: 'jobadabra/jobadabra-lab', private: true, ok: true}];
   assert.deepEqual(tileOf(page({at: '2026-10-20T17:00:00Z', repos: read, jobs: [job]}, {now})), ['', '90', 'Mac ×10, Windows ×2; public repos are free'], 'every repo read: the plain number');

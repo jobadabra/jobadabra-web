@@ -242,10 +242,10 @@ test('the tab: the newest night per persona as chips, the head, what ran out of 
 
 test('the Job search page has the tab: linked in the tab row and drawn when chosen', () => {
   const six = judgeAll([clean(real('2026-11-06'), {night: '2026-11-06'})]);
-  const html = page([], [], 'night', [], null, [], six);
+  const html = page([], 'night', [], null, [], six);
   assert.match(html, /<a href="\?tab=night" class="on">Night search<\/a>/);
   assert.match(html, /measured 2 of 6/);
-  assert.doesNotMatch(page([], [], 'draws', [], null, [], six), /measured 2 of 6/, 'only on its own tab');
+  assert.doesNotMatch(page([], 'draws', [], null, [], six), /measured 2 of 6/, 'only on its own tab');
 });
 
 test('a night dated in the future is refused: it would sort newest and silence every real night after it (review, 6 Nov 2026)', async () => {
@@ -262,5 +262,5 @@ test('a store that cannot be read says "could not be read", never "No night uplo
   const html = nightSection(null);
   assert.match(html, /could not be read/);
   assert.doesNotMatch(html, /No night uploaded yet|0 of 6|NaN|undefined/);
-  assert.match(page([], [], 'night', [], null, [], null), /could not be read/);
+  assert.match(page([], 'night', [], null, [], null), /could not be read/);
 });
