@@ -76,7 +76,7 @@ test('a night round-trips as slim rows: the head, one row per persona with count
   assert.deepEqual([night.night, night.run, night.state, night.rows.length], ['2026-11-06', '42133678718', 'success', 6]);
   assert.match(night.head, /measured 2 of 6/);
   assert.deepEqual(night.rows[0], {persona: 1, label: 'p1 Truck Driver (Class CE), Sofia', kind: 'measured', why: '', local: 9, found: 36, seconds: 154,
-    ranOut: ['employer sites', 'job boards', 'free job APIs', 'descriptions', "scoring the job boards' jobs"], counters: null, stepYield: null});   // counters, stepYield: null = the verdict of 5 and 6 Nov holds none (per-step counters 6 Nov 2026, step yield 8 Nov): nothing is claimed
+    ranOut: ['employer sites', 'job boards', 'free job APIs', 'descriptions', "scoring the job boards' jobs"], counters: null, stepYield: null, relevantSources: null});   // counters, stepYield: null = the verdict of 5 and 6 Nov holds none (per-step counters 6 Nov 2026, step yield 8 Nov): nothing is claimed
   assert.deepEqual(night.rows.map(item => item.kind), ['measured', 'nothing', 'none-right', 'none-right', 'measured', 'nothing']);
   assert.deepEqual(Object.keys(night).sort(), ['at', 'head', 'night', 'rows', 'run', 'state'], 'the engine, the cost, the main history and the notes are not kept');
   assert.equal(night.at, NOW.toISOString());
@@ -263,4 +263,20 @@ test('a store that cannot be read says "could not be read", never "No night uplo
   assert.match(html, /could not be read/);
   assert.doesNotMatch(html, /No night uploaded yet|0 of 6|NaN|undefined/);
   assert.match(page([], 'night', [], null, [], null), /could not be read/);
+});
+
+test('source counts keep only fixed categories, never employer text or inconsistent totals', () => {
+  // Guard: privacy — employer/source names must not be saved in the central night store.
+  const verdict = {rows: [{persona: 1, local: 3, relevant_sources: {eures: 1, other: 2, unknown: 0, 'Private employer': 9}}]};
+  const saved = clean(verdict, {night: '2026-11-01'});
+  assert.deepEqual(saved.rows[0].relevantSources, {eures: 1, other: 2, unknown: 0});
+  assert.ok(!JSON.stringify(saved).includes('Private employer'));
+  const html = nightSection(judgeAll([saved]));
+  assert.match(html, /From EURES: 1/);
+  assert.match(html, /From other sources: 2/);
+  assert.doesNotMatch(html, /Private employer/);
+  verdict.rows[0].local = 4;
+  assert.equal(clean(verdict, {night: '2026-11-01'}).rows[0].relevantSources, null);
+  delete verdict.rows[0].relevant_sources;
+  assert.equal(clean(verdict, {night: '2026-11-01'}).rows[0].relevantSources, null);
 });

@@ -20,6 +20,13 @@ const count = value => (Number.isInteger(value) && value >= 0 && value <= 1e7 ? 
 // The press's step counters (tools/persona-search/gate.py row 'counters'): whole numbers or null; no counters object = nothing claimed (null), never zeros.
 const counters = raw => (raw && typeof raw === 'object' && !Array.isArray(raw) ? Object.fromEntries(COUNTERS.map(({key}) => [key, count(raw[key])])) : null);
 
+// Fixed source categories only: the engine may use employer names as sources, so raw source names never enter the central store.
+const relevantSources = (raw, total) => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const pairs = ['eures', 'other', 'unknown'].map(key => [key, count(raw[key])]);
+  return pairs.every(([, n]) => n != null) && pairs.reduce((sum, [, n]) => sum + n, 0) === count(total) ? Object.fromEntries(pairs) : null;
+};
+
 // The steps a press ran out of time for, from the gate's funnel note ("...; time ran out for: employer sites, job boards"): the gate writes the note's last part from a list, so a comma splits it.
 // Why (6 Nov 2026): the verdict carries only this note, not the list; the real notes of 5 and 6 Nov are pinned in the test, so a wording change in the gate fails here instead of silently ending the alert.
 export function ranOutOf(note) {
@@ -37,7 +44,7 @@ export function clean(verdict, {night, run = null} = {}, now = new Date()) {
   if (!Array.isArray(rows) || !rows.length || rows.length > MAX_ROWS || !rows.every(row => row && typeof row === 'object' && !Array.isArray(row))) return {error: `rows are 1 to ${MAX_ROWS} personas`};
   return {night, run, state: text(verdict.state, 20), head: text(verdict.head, 300), rows: rows.map((row, index) => ({
     persona: Number.isInteger(row.persona) && row.persona > 0 && row.persona < 100 ? row.persona : index + 1, label: text(row.label, 80), kind: KINDS.includes(row.kind) ? row.kind : 'unknown', why: text(row.why, 120),
-    local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note), counters: counters(row.counters), stepYield: cleanStepYield(row.step_yield)}))};
+    local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note), counters: counters(row.counters), stepYield: cleanStepYield(row.step_yield), relevantSources: relevantSources(row.relevant_sources, row.local)}))};
 }
 
 /**
