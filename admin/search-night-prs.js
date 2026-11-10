@@ -73,6 +73,7 @@ export async function searchCommits(env, tip, since, fetcher = fetch, paths = SE
       cursors[i] = page?.pageInfo?.endCursor || null;
     }
   }
+  if (done.includes(false)) throw new Error('a search path has over 600 commits since the oldest build: not marked rather than marked with PRs missing');
   return [...found.values()];
 }
 

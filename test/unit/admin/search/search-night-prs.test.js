@@ -136,7 +136,7 @@ test('the upload fills the marks after it has stored the night; a GitHub failure
   console.error = line => logged.push(line);
   try {
     const first = await ingest(env, verdict, {night: '2026-11-08', run: '903'}, new Date('2026-11-08T06:00:00Z'), github().fetcher);
-    assert.equal(first.body.marked, 1, 'the first stored night is filled: it has nothing to compare with, so prs is null');
+    assert.equal(first.body.marked, 0, 'no night got PRs: the first one has nothing to compare with, so its prs is null, not []');
     assert.equal((await nights(env))[0].prs, null);
     const NOW = new Date('2026-11-09T06:00:00Z'), failed = await ingest(env, verdict, {night: '2026-11-09', run: '904'}, NOW, github({fail: 502}).fetcher);
     assert.equal(failed.status, 200, 'the upload still succeeds');
@@ -147,4 +147,34 @@ test('the upload fills the marks after it has stored the night; a GitHub failure
     assert.equal(retry.body.marked, 1);
     assert.deepEqual((await nights(env)).find(night => night.night === '2026-11-09').prs, [{n: 3650, title: 'Judge: stricter place <b>x</b>'}], 'only what came after the 11/08 build');
   } finally { console.error = log; }
+});
+
+test('an upload that lands while GitHub answers is not lost: the marks are merged into a fresh read, never the list the call started from', async () => {
+  const env = {STATS: store(), ...ENV, REPLAYS_PUBLISH_KEY: 'k'};
+  await ingest(env, verdict, {night: '2026-11-08', run: '903'}, new Date('2026-11-08T06:00:00Z'), github().fetcher);
+  const slowGithub = github(), answer = slowGithub.fetcher;
+  const fetcher = async (url, init) => {
+    if (url.includes('/graphql') && !env.landed) { env.landed = true; await ingest({...env, GITHUB_TOKEN: ''}, verdict, {night: '2026-11-10', run: '905'}, new Date('2026-11-10T06:00:00Z'), answer); }   // a second upload, mid-fill
+    return answer(url, init);
+  };
+  const result = await ingest(env, verdict, {night: '2026-11-09', run: '904'}, new Date('2026-11-09T06:00:00Z'), fetcher);
+  assert.equal(result.body.marked, 1);
+  const kept = await nights(env);
+  assert.deepEqual(kept.map(night => night.night), ['2026-11-10', '2026-11-09', '2026-11-08'], 'the night that landed meanwhile is still there');
+  assert.deepEqual(kept[1].prs, [{n: 3650, title: 'Judge: stricter place <b>x</b>'}]);
+  assert.equal(kept[0].prs, undefined, 'and still to be filled by the next upload');
+});
+
+test('a GitHub that does not answer holds the upload for the budget only; the night stays stored and unmarked', async () => {
+  const env = {STATS: store(), ...ENV, REPLAYS_PUBLISH_KEY: 'k'};
+  const started = Date.now(), result = await ingest(env, verdict, {night: '2026-11-08', run: '903'}, new Date('2026-11-08T06:00:00Z'), () => new Promise(() => {}), 40);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.marked, 'slow');
+  assert.ok(Date.now() - started < 2000);
+  assert.equal((await nights(env))[0].prs, undefined);
+});
+
+test('a path with more commits than the paging reads is named, not marked with PRs missing', async () => {
+  const bulk = Array.from({length: 700}, (_, i) => ({...commit('9', '2026-11-08T05:00:00Z', `bulk ${i} (#${5000 + i})`, ['src/press/rank.py'], null), oid: String(i).padStart(40, '0')}));
+  await assert.rejects(searchCommits(ENV, sha('d'), '2026-11-06T00:00:00Z', github({commits: bulk}).fetcher), /over 600 commits/);
 });
