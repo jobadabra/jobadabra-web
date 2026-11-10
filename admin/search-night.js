@@ -10,12 +10,27 @@ import {COUNTERS} from './search-night-counters.js';
 import {cleanStepYield} from './search-night-yield.js';
 import {alertText, euresOf, judgeAll} from './search-night-judge.js';
 import {markNights} from './search-night-prs.js';
+import {HAND_KEY, KEEP_HAND, handRuns} from './search-night-hand.js';
 
 export const STATE_KEY = 'search-nights', KEEP_NIGHTS = 30, MAX_BYTES = 65536, MAX_ROWS = 40;   // Why (6 Nov 2026): 18 fixed personas a night (owner: "6 personas is too narrow"); the cap was 12 and would have refused the first 18-persona verdict with a 400, silent again. 40 leaves room; 18 rows are about 20 KB of the 64 KB
 // The row kinds of the gate (tools/persona-search/gate.py row_verdict): 🟢 measured, ⚪ none-right (scored, none right role and place), ⚪ nothing (no job scored), unmeasured (errored, refused or too slow), fault.
 export const KINDS = ['measured', 'none-right', 'nothing', 'unmeasured', 'fault'];
 const DAY = /^\d{4}-\d\d-\d\d$/, RUN = /^\d{1,20}$/, RAN_OUT = 'time ran out for: ';
 const text = (value, max) => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+// Why (10 Nov 2026, [sa]: "store `engine` as a fixed word from now"): the Scoreboard says which AI a night ran on, so a change of AI reads as a new series. The gate already writes each row's engine as text
+// ("codex (gpt-6-luna)", "claude (claude-haiku-5-5; codex ran-out)"); the night keeps ONE word, the engine and model of the most used row, lower case ('codex-gpt-6-luna'), 'unknown' when no row names one.
+// A row's text is "engine", "engine (model)" or "engine (model; fell back from x)" ("claude (codex ran-out)" has no model: a model has no space); several answers join with " + ".
+const wordOf = part => {
+  const found = /^([a-z0-9][a-z0-9._-]*)(?=$| )(?: \(([^;)]*))?/.exec(part.trim()), model = found?.[2]?.trim();
+  if (!found) return null;
+  const clean = text => text.replace(/[^a-z0-9.]+/g, '-').replace(/^-+|-+$/g, '');
+  return clean(model && !/\s/.test(model) && !found[1].startsWith(model) ? (model.startsWith(found[1]) ? model : `${found[1]}-${model}`) : found[1]).slice(0, 32) || null;
+};
+export const engineOf = rows => {
+  const seen = new Map();
+  for (const row of rows || []) for (const part of String(row?.engine ?? '').toLowerCase().split(' + ')) { const word = wordOf(part); if (word && word !== 'n-a') seen.set(word, (seen.get(word) || 0) + 1); }
+  return [...seen].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? 'unknown';
+};
 const count = value => (Number.isInteger(value) && value >= 0 && value <= 1e7 ? value : null);
 // The press's step counters (tools/persona-search/gate.py row 'counters'): whole numbers or null; no counters object = nothing claimed (null), never zeros.
 const counters = raw => (raw && typeof raw === 'object' && !Array.isArray(raw) ? Object.fromEntries(COUNTERS.map(({key}) => [key, count(raw[key])])) : null);
@@ -47,14 +62,14 @@ const verdictCounts = (raw, keys, total) => {
 /** A verdict.json as CI uploads it -> the record kept for one night: {night, run, state, head, rows: [{persona, label, kind, why, local, found, seconds, ranOut, counters}]}, or {error}. Counts are whole numbers or null. */
 export function clean(verdict, {night, run = null} = {}, now = new Date()) {
   if (!verdict || typeof verdict !== 'object' || Array.isArray(verdict)) return {error: 'the verdict is an object'};
-  if (!DAY.test(night || '') || Number.isNaN(Date.parse(night))) return {error: 'night is YYYY-MM-DD'};
+  if (!DAY.test(night || '') || Number.isNaN(Date.parse(night)) || new Date(Date.parse(night)).toISOString().slice(0, 10) !== night) return {error: 'night is YYYY-MM-DD'};   // the round trip refuses 2026-02-30, which Date.parse reads as 2 Mar
   if (night > new Date(now.getTime() + 86400000).toISOString().slice(0, 10)) return {error: 'night is not in the future'};   // Why (6 Nov 2026, review): a night dated 2099 would sort newest for 30 nights and every real night after it would be "not the newest", so no alert
   if (run != null && !RUN.test(run)) return {error: 'run is the number of the workflow run'};
   const rows = verdict.rows;
   if (!Array.isArray(rows) || !rows.length || rows.length > MAX_ROWS || !rows.every(row => row && typeof row === 'object' && !Array.isArray(row))) return {error: `rows are 1 to ${MAX_ROWS} personas`};
   // Why (10 Nov 2026, owner: "we should make sure that our algorim/search can be as good as EURES, without using EURES"): CI's night runs with EURES off from jobadabra [oe] 1/3; a night says which, so it is judged
   // against nights of the same kind only (admin/search-night-judge.js). A verdict without the word is from before the switch: EURES was on.
-  return {night, run, eures: euresOf(verdict), state: text(verdict.state, 20), head: text(verdict.head, 300), rows: rows.map((row, index) => ({
+  return {night, run, eures: euresOf(verdict), engine: engineOf(rows), state: text(verdict.state, 20), head: text(verdict.head, 300), rows: rows.map((row, index) => ({
     persona: Number.isInteger(row.persona) && row.persona > 0 && row.persona < 100 ? row.persona : index + 1, label: text(row.label, 80), kind: KINDS.includes(row.kind) ? row.kind : 'unknown', why: text(row.why, 120),
     local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note), counters: counters(row.counters), stepYield: cleanStepYield(row.step_yield), relevantSources: relevantSources(row.relevant_sources, row.local),
     place: verdictCounts(row.place, PLACE_VERDICTS, row.found), role: verdictCounts(row.role, ROLE_VERDICTS, row.found)}))};
@@ -134,7 +149,19 @@ export async function ingest(env, verdict, {night, run}, now = new Date(), fetch
   return {status: 200, body: {ok: true, night, measured: judged.measured, total: judged.total, dropped: judged.dropped, reasons: judged.reasons, alert, marked}};
 }
 
-/** PUT /search-check/night?night=YYYY-MM-DD&run=<workflow run>: the verdict as the body (Bearer REPLAYS_PUBLISH_KEY). A wrong or missing key and a missing store are a plain 404; the night defaults to today (UTC). */
+/**
+ * Stores one by-hand full run apart from the nights (key 'search-byhand'): no judging, no alert, no PR marks, and it never replaces a night of the same date. An upload of the same workflow run replaces that run.
+ * Why (10 Nov 2026, owner: "We should trigger manually, to understand right away the direction"): the Scoreboard shows it as a hollow point; a by-hand run is not a night, so the judge's usual and the alert never read it.
+ */
+export async function ingestHand(env, verdict, {night, run}, now = new Date()) {
+  const record = clean(verdict, {night, run}, now);
+  if (record.error) return {status: 400, body: {ok: false, error: record.error}};
+  const kept = [{...record, day: record.night, at: now.toISOString()}, ...(await handRuns(env)).filter(item => !run || item.run !== run)].sort((a, b) => b.at.localeCompare(a.at)).slice(0, KEEP_HAND);
+  await writeState(env, HAND_KEY, {runs: kept}, now);
+  return {status: 200, body: {ok: true, byHand: true, day: record.night, stored: kept.length}};
+}
+
+/** PUT /search-check/night?night=YYYY-MM-DD&run=<workflow run>[&by_hand=1]: the verdict as the body (Bearer REPLAYS_PUBLISH_KEY). A wrong or missing key and a missing store are a plain 404; the night defaults to today (UTC). */
 export async function ingestRoute(request, env, now = new Date(), fetcher = fetch) {
   const given = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   if (!(env.REPLAYS_PUBLISH_KEY && equal(given, env.REPLAYS_PUBLISH_KEY)) || !env.STATS) return new Response('Not found', {status: 404});
@@ -143,6 +170,9 @@ export async function ingestRoute(request, env, now = new Date(), fetcher = fetc
   let verdict;
   try { verdict = JSON.parse(body); } catch { return answer(400, {ok: false, error: 'the body is not JSON'}); }
   const query = new URL(request.url).searchParams;
-  const result = await ingest(env, verdict, {night: query.get('night') || now.toISOString().slice(0, 10), run: query.get('run') || null}, now, fetcher);
+  const flag = query.get('by_hand');
+  if (flag !== null && flag !== '1') return answer(400, {ok: false, error: 'by_hand is 1 or absent'});   // Why (10 Nov 2026, review): a mistyped flag (true, byhand=1) must never fall through to the night path, which replaces the real night of that date
+  const meta = {night: query.get('night') || now.toISOString().slice(0, 10), run: query.get('run') || null};
+  const result = flag === '1' ? await ingestHand(env, verdict, meta, now) : await ingest(env, verdict, meta, now, fetcher);
   return answer(result.status, result.body);
 }
