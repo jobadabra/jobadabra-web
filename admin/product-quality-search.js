@@ -2,7 +2,7 @@
 // seekers the nightly search check could measure, an average over the last 7 nights. The red chip is the SAME verdict as the "Night search" tab and the alert (admin/search-night-judge.js judgeNight),
 // so the three cannot disagree. Pure: admin/product-quality-data.js reads the stored nights (admin/search-night.js), this file judges them. Guard: test/unit/admin/report/product-quality.test.js.
 import {judge, median, notMeasured, pooled, round, toneOf, deltaText, WORDS, WEEK} from './product-quality.js';
-import {judgeAll, reasonWords} from './search-night-judge.js';
+import {euresOf, judgeAll, reasonWords} from './search-night-judge.js';
 
 const isNum = value => typeof value === 'number' && Number.isFinite(value);
 
@@ -17,7 +17,8 @@ export function search({days, searchNights}) {
   const judged = judgeAll([...searchNights].sort((a, b) => b.night.localeCompare(a.night))).filter(item => days.includes(item.night));   // each night against the ones before it, in or out of the 30 days
   if (!judged.length) return notMeasured(base, 'no nightly search stored in the last 30 days');   // no night yet is "not measured", never 0
   // Why (6 Nov 2026, review): only nights with the newest night's persona count are one series, as in the judge: an average of 6-persona and 18-persona nights would read "better" just because the set tripled.
-  const newest = judged[0], nights = judged.filter(item => item.total === newest.total), byNight = new Map(nights.map(item => [item.night, item]));
+  // Why (10 Nov 2026, jobadabra [oe] 1/3): nights without EURES are their own series too: the switch alone lowers the jobs found, it is no "worse".
+  const newest = judged[0], nights = judged.filter(item => item.total === newest.total && euresOf(item) === euresOf(newest)), byNight = new Map(nights.map(item => [item.night, item]));
   if (!days.slice(-2 * WEEK).includes(newest.night)) return notMeasured(base, 'no nightly search in the last 14 days');   // a stopped job is the news, not an old number
   const series = days.map(day => (byNight.has(day) ? {day, value: byNight.get(day).measured, n: 1} : {day, value: null}));
   const now = pooled(series.slice(-WEEK)), before = pooled(series.slice(-2 * WEEK, -WEEK));
