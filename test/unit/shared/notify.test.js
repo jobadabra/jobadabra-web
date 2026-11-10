@@ -206,3 +206,13 @@ test('release-failed: a registered, switched-on Engineering alert that sends eve
   assert.deepEqual([sent.status, sent.body.sent], [200, true]);
   assert.equal((await notify(e, {event: 'release-failed', text: 'again', html: true}, {fetcher: tg.fetcher, now: NOW})).body.sent, true, 'every failure, not once a day');
 });
+
+test('search-night: the Find jobs night check tells Engineering on a change only, from search-personas.yml (owner, 10 Nov 2026: "We should have alerts · on the Engineering channel")', async () => {
+  const alert = alertOf('search-night');
+  assert.deepEqual([alert.on, alert.mode, alert.channel, alert.group, alert.wired], [true, 'changes', 'engineering', 'main', true]);
+  assert.ok(alertsForJob('search-personas.yml').some(item => item.id === 'search-night'));
+  const e = env(), tg = await withBot(e);
+  const lost = {event: 'search-night', text: 'Find jobs · employer sites lost', level: 'problem', state: 'red:abc:2026-11-10'};
+  assert.equal((await notify(e, lost, {fetcher: tg.fetcher, now: NOW})).body.sent, true);
+  assert.equal((await notify(e, lost, {fetcher: tg.fetcher, now: NOW})).body.sent, false, 'the same lost source the same day is told once');
+});
