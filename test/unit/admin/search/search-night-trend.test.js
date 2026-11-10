@@ -114,3 +114,11 @@ test('every PR is listed in text under the charts with its number linked and its
   assert.match(html, /mk-swatch/, 'the card says what a mark is');
   assert.match(TREND_STYLE, /#tip\{white-space:pre-line\}/, 'the tooltip keeps one PR a line');
 });
+
+test('nights without EURES are their own chart pair: our own sources are never drawn on one line with EURES (jobadabra [oe] 1/3, 10 Nov 2026)', () => {
+  const off = (day, ...rest) => ({...night(day, ...rest), eures: 'off'});
+  const all = groups(judgeAll([off('2026-11-09', 18, 10, 0, 1), off('2026-11-08', 18, 10, 0, 1), ...stored]));
+  assert.deepEqual(all.map(item => [item.total, item.eures, item.current, item.days.filter(day => day.night).length]), [[18, 'off', true, 2], [18, 'on', false, 4], [6, 'on', false, 2]]);
+  const html = trendSection(judgeAll([off('2026-11-09', 18, 10, 0, 1), ...stored]));
+  assert.match(html, /18 candidates · EURES off/);
+});

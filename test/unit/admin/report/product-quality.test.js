@@ -264,3 +264,10 @@ test('charts: a line per day for a rate (a day with no data is a gap and says so
   assert.equal(chartOf({...bar && aiQuality({nightly: {jobs: [{id: 'quality-ai', value: '96%', sub: '', series: days.map(day => ({day, value: 0.9})), bar: {value: 0.8}}]}}), series: days.map(day => ({day, value: null}))}), '', 'every day empty: no frame around a table of no data');
   assert.equal(empty.series.length, 0);
 });
+
+test('Search: nights without EURES are their own series: the switch reads as a first week, never "worse" (jobadabra [oe] 1/3, 10 Nov 2026)', () => {
+  const off = (back, measured, extra) => ({...night(back, measured, extra), eures: 'off'});
+  const switched = search({days, searchNights: [off(0, 4, {local: 1}), off(1, 4, {local: 1}), off(2, 4, {local: 1}), ...nightsOf(13, 3, 6)]});
+  assert.deepEqual([switched.trend, switched.tone], ['new', 'good'], 'three EURES-off nights after eleven EURES-on nights: no earlier week of their kind');
+  assert.match(switched.subs[1], /Relevant local jobs: median 6 a night \(last 7 nights\)/, 'the median holds only the EURES-off nights');
+});

@@ -67,6 +67,17 @@ export async function searchNightYield({env}, seeds) {
   await writeState(env, STATE_KEY, {nights: kept}, new Date());
 }
 
+// The Night search tab on a night without EURES (10 Nov 2026, [oe]; owner: "as good as EURES, without using EURES"): the 18-candidate seed, its newest night marked EURES off and its EURES rows moved to other sources,
+// so the tab shows the "EURES off" chip and "Ours N of EURES X" beside the reference. Nothing here is a real person or a real count.
+/** @param {{env: object}} context the seed context; `seeds` the seed table */
+export async function searchNightEuresOff({env}, seeds) {
+  await searchNight18({env}, seeds);
+  const kept = await nights(env), [last] = kept;
+  last.eures = 'off';
+  last.rows = last.rows.map(item => (item.relevantSources ? {...item, relevantSources: {...item.relevantSources, eures: 0, other: item.relevantSources.other + item.relevantSources.eures}} : item));
+  await writeState(env, STATE_KEY, {nights: kept}, new Date());
+}
+
 // The Night search chart with the merged search PRs as marks (10 Nov 2026, [pm]): the day-by-day seed, and on seven of its 18-candidate nights MADE-UP PR numbers and titles (1 to 20 PRs, one night with the
 // stored cap and "and more", one real "no PR" night, the first night "nothing to compare"). Nothing here is a real PR.
 /** @param {{env: object}} context the seed context; `seeds` the seed table */

@@ -8,7 +8,7 @@ import {alertOwner} from '../shared/notify-send.js';
 import {writeState} from './ci-state.js';
 import {COUNTERS} from './search-night-counters.js';
 import {cleanStepYield} from './search-night-yield.js';
-import {alertText, judgeAll} from './search-night-judge.js';
+import {alertText, euresOf, judgeAll} from './search-night-judge.js';
 import {markNights} from './search-night-prs.js';
 
 export const STATE_KEY = 'search-nights', KEEP_NIGHTS = 30, MAX_BYTES = 65536, MAX_ROWS = 40;   // Why (6 Nov 2026): 18 fixed personas a night (owner: "6 personas is too narrow"); the cap was 12 and would have refused the first 18-persona verdict with a 400, silent again. 40 leaves room; 18 rows are about 20 KB of the 64 KB
@@ -42,7 +42,9 @@ export function clean(verdict, {night, run = null} = {}, now = new Date()) {
   if (run != null && !RUN.test(run)) return {error: 'run is the number of the workflow run'};
   const rows = verdict.rows;
   if (!Array.isArray(rows) || !rows.length || rows.length > MAX_ROWS || !rows.every(row => row && typeof row === 'object' && !Array.isArray(row))) return {error: `rows are 1 to ${MAX_ROWS} personas`};
-  return {night, run, state: text(verdict.state, 20), head: text(verdict.head, 300), rows: rows.map((row, index) => ({
+  // Why (10 Nov 2026, owner: "we should make sure that our algorim/search can be as good as EURES, without using EURES"): CI's night runs with EURES off from jobadabra [oe] 1/3; a night says which, so it is judged
+  // against nights of the same kind only (admin/search-night-judge.js). A verdict without the word is from before the switch: EURES was on.
+  return {night, run, eures: euresOf(verdict), state: text(verdict.state, 20), head: text(verdict.head, 300), rows: rows.map((row, index) => ({
     persona: Number.isInteger(row.persona) && row.persona > 0 && row.persona < 100 ? row.persona : index + 1, label: text(row.label, 80), kind: KINDS.includes(row.kind) ? row.kind : 'unknown', why: text(row.why, 120),
     local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note), counters: counters(row.counters), stepYield: cleanStepYield(row.step_yield), relevantSources: relevantSources(row.relevant_sources, row.local)}))};
 }

@@ -78,7 +78,8 @@ test('a night round-trips as slim rows: the head, one row per persona with count
   assert.deepEqual(night.rows[0], {persona: 1, label: 'p1 Truck Driver (Class CE), Sofia', kind: 'measured', why: '', local: 9, found: 36, seconds: 154,
     ranOut: ['employer sites', 'job boards', 'free job APIs', 'descriptions', "scoring the job boards' jobs"], counters: null, stepYield: null, relevantSources: null});   // counters, stepYield: null = the verdict of 5 and 6 Nov holds none (per-step counters 6 Nov 2026, step yield 8 Nov): nothing is claimed
   assert.deepEqual(night.rows.map(item => item.kind), ['measured', 'nothing', 'none-right', 'none-right', 'measured', 'nothing']);
-  assert.deepEqual(Object.keys(night).sort(), ['at', 'head', 'night', 'rows', 'run', 'state'], 'the engine, the cost, the main history and the notes are not kept');
+  assert.deepEqual(Object.keys(night).sort(), ['at', 'eures', 'head', 'night', 'rows', 'run', 'state'], 'the engine, the cost, the main history and the notes are not kept');
+  assert.equal(night.eures, 'on', 'the real night of 6 Nov ran with EURES on');
   assert.equal(night.at, NOW.toISOString());
 });
 
@@ -279,4 +280,21 @@ test('source counts keep only fixed categories, never employer text or inconsist
   assert.equal(clean(verdict, {night: '2026-11-01'}).rows[0].relevantSources, null);
   delete verdict.rows[0].relevant_sources;
   assert.equal(clean(verdict, {night: '2026-11-01'}).rows[0].relevantSources, null);
+});
+
+test('a night with EURES off is judged only against EURES-off nights: the switch is no drop; the tab says "ours of EURES" (owner, 10 Nov 2026)', () => {
+  // Owner, 10 Nov 2026: "we should make sure that our algorim/search can be as good as EURES, without using EURES"; CI runs without EURES from jobadabra [oe] 1/3.
+  const off = spec => ({...stored('2026-10-27', spec), eures: 'off'});
+  assert.equal(clean({...verdict(), eures: 'off'}, {night: '2026-10-27'}).eures, 'off');
+  assert.equal(clean(verdict(), {night: '2026-10-27'}).eures, 'on', 'a verdict from before the switch had EURES on');
+  assert.equal(clean({...verdict(), eures: '<b>'}, {night: '2026-10-27'}).eures, 'on', 'only the fixed words');
+  const first = judgeNight(off({locals: [1, 0, 0, 0, 0, 0]}), sums(USUAL));
+  assert.deepEqual([first.reasons, first.usual, first.floor], [[], null, null], 'seven EURES-on nights are no baseline for the first EURES-off night');
+  const offHistory = USUAL.map((n, i) => ({...stored(`2026-10-${String(20 + i).padStart(2, '0')}`, {locals: [n, 0, 0, 0, 0, 0]}), eures: 'off'})).reverse();
+  assert.deepEqual(judgeNight(off({locals: [8, 0, 0, 0, 0, 0]}), offHistory).reasons, ['local'], 'seven EURES-off nights are its baseline');
+  assert.deepEqual(judgeNight(stored('2026-10-27', {locals: [1, 0, 0, 0, 0, 0]}), offHistory).floor, null, 'and an EURES-on night is not judged against them');
+  const html = nightSection(judgeAll([off({locals: [3, 0, 0, 0, 0, 0]})]), {1: {total: 6, reachable: 6, eures: 6}});
+  assert.match(html, /EURES off: our own sources only/);
+  assert.match(html, /Ours 3 of EURES 6/);
+  assert.doesNotMatch(nightSection(judgeAll([stored('2026-10-27', {})]), {1: {total: 6, reachable: 6, eures: 6}}), /Ours \d/, 'with EURES on, our total includes EURES: no "ours of" line');
 });

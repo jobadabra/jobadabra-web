@@ -18,6 +18,8 @@ export const EMPLOYER_SITES = 'employer sites';
 /** Two thirds of the night's personas, rounded up: the fewest that must be measured, and the fewest whose employer sites running out of time is a drop (6 -> 4, 18 -> 12). */
 export const twoThirds = total => Math.ceil((2 * total) / 3);
 const isNum = value => typeof value === 'number' && Number.isFinite(value);
+/** Whether a stored night ran with EURES: 'off' or 'on' (a night stored before jobadabra [oe] 1/3 had EURES on). The one reading of the word: the judge, the trend and Report only all use it. */
+export const euresOf = night => (night?.eures === 'off' ? 'off' : 'on');
 
 // The six personas' right local jobs added up; null when no row has a count (never a 0 that looks measured).
 function pooledLocal(rows) {
@@ -34,7 +36,8 @@ function pooledLocal(rows) {
 export function judgeNight(night, earlier = []) {
   const rows = night.rows || [], total = rows.length, measured = rows.filter(row => row.kind === 'measured').length, local = pooledLocal(rows);
   const out = rows.filter(row => (row.ranOut || []).includes(EMPLOYER_SITES)).length, need = twoThirds(total);
-  const same = earlier.filter(item => (item.rows || []).length === total).slice(0, HISTORY);   // only nights of the same persona count are a baseline
+  // Only nights of the same persona count AND the same EURES switch are a baseline: a night without EURES finds fewer jobs by design, never a drop (owner, 10 Nov 2026, jobadabra [oe] 1/3).
+  const same = earlier.filter(item => (item.rows || []).length === total && euresOf(item) === euresOf(night)).slice(0, HISTORY);
   const history = same.map(item => pooledLocal(item.rows || [])).filter(isNum);
   const usual = history.length >= HISTORY ? median(history) : null, floor = usual > 0 ? usual - SPREADS * spreadOf(history) : null;
   const mineOf = row => same.map(item => (item.rows || []).find(other => other.persona === row.persona));
