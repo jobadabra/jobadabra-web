@@ -8,10 +8,11 @@ import {COUNTERS} from './search-night-counters.js';
 import {EMPLOYER_SITES, HISTORY, SPREADS, euresOf, reasonWords} from './search-night-judge.js';
 import {stepYieldSection} from './search-night-yield.js';
 import {PLACE_STYLE, placeSection} from './search-night-place.js';
+import {SCOREBOARD_STYLE, scoreboardSection} from './search-night-scoreboard.js';
 import {TREND_STYLE, trendSection} from './search-night-trend.js';
 import {VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 
-export const NIGHT_CSS = `${CHIP_STYLE}${BAND_STYLE}${VIZ_STYLE}${TREND_STYLE}${PLACE_STYLE}
+export const NIGHT_CSS = `${CHIP_STYLE}${BAND_STYLE}${VIZ_STYLE}${TREND_STYLE}${PLACE_STYLE}${SCOREBOARD_STYLE}
 .nstrip{display:flex;align-items:flex-end;gap:3px;height:56px}.nstrip i{display:block;flex:1;background:#5fb3ff;opacity:.75;border-radius:2px 2px 0 0}.nstrip i.weak{background:#ff8a80;opacity:1}
 .nwrap{display:flex;flex-direction:column;gap:6px}.nsteps{display:flex;gap:4px;flex-wrap:wrap}`;
 
@@ -53,9 +54,10 @@ const nightRow = night => `<tr><td>${esc(night.night)}${night.run ? ` <a class="
  * The tab's body.
  * @param {object[]|null} judged the stored nights (null = the store could not be read), newest first, each judged (admin/search-night-judge.js judgeAll)
  * @param {object} [refs] the latest weekly reference per persona id, {<persona>: {total, reachable, eures, google}}; {} until the weekly job has run
+ * @param {object[]} [hand] the by-hand full runs (admin/search-night-hand.js), [] when none
  * @returns {string} HTML; with no night, a card that says nothing was uploaded yet (never a row of zeros)
  */
-export function nightSection(judged, refs = {}) {
+export function nightSection(judged, refs = {}, hand = []) {
   if (!judged) return '<section class="card"><h2>The nights could not be read</h2><p class="muted">The store of the nightly Search check did not answer, so this tab cannot say whether a night dropped. Reload in a minute; the Worker log names the cause.</p></section>';
   if (!judged.length) return '<section class="card"><h2>No night uploaded yet</h2><p class="muted">The nightly Search check (<code>search-personas.yml</code>, the fixed set of fictional candidates) uploads its verdict here when it ends. Until it does, nothing is measured: no row below stands in for it.</p></section>';
   const [last] = judged, shown = judged.slice(0, 14);
@@ -63,6 +65,7 @@ export function nightSection(judged, refs = {}) {
     chips: [...(euresOf(last) === 'off' ? [{label: 'EURES off: our own sources only', tone: 'off', title: 'this night ran without EURES; it is compared with EURES-off nights only'}] : []), ...(last.dropped ? reasonWords(last).map(label => ({label, tone: 'bad'})) : [{label: 'nothing dropped', tone: 'good'}]), ...last.notes.map(label => ({label, tone: 'warn', title: 'a step counter fell beyond its own spread: report only, the night is not dropped for it'}))],
     note: last.head.replace(/^[\p{Extended_Pictographic}‍️\s]+/u, '') || 'the check\'s own line was empty'});
   return `${band}
+${scoreboardSection(judged, hand)}
 <section class="card"><h2>The ${last.total} candidates, night ${esc(last.night)}</h2><div class="scroll"><table><tr><th>Candidate</th><th>Result</th><th class="num">Relevant local · found</th><th class="num">Separate reference</th><th class="num">Press</th><th>Time ran out for</th></tr>${last.rows.map(row => personaRow(row, refs, euresOf(last))).join('')}</table></div>
 <p class="muted">${last.out ? `On this night time ran out for employer sites in ${last.out} of ${last.total} personas.` : 'On this night employer sites were read in every persona.'}</p></section>
 ${placeSection(judged)}${stepYieldSection(last.rows, last.night)}${trendSection(judged)}
