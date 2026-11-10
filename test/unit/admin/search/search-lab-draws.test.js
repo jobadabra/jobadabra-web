@@ -54,13 +54,13 @@ test('the upload needs the key and a run on main', async () => {
 });
 
 test('the tab shows the draws with CI on each and the Lab tab stays the default', () => {
-  const html = page([], [draw(2, {in_places: 3}), draw(1)], 'draws');
+  const html = page([draw(2, {in_places: 3}), draw(1)], 'draws');
   assert.match(html, /Random draws/);
   assert.match(html, />CI</);
   assert.match(html, /Weak/);
   assert.match(html, /only 3 jobs in the places/);
-  assert.match(page([], [draw(1)]), /Each candidate's newest search/);
-  assert.doesNotMatch(page([], [draw(1)]), /Each daily draw/);
+  assert.match(page([draw(1)]), /No real search reported yet/, 'the default tab is Real installs');
+  assert.doesNotMatch(page([draw(1)]), /Each daily draw/);
 });
 
 test('rowFromDraw reads the harness numbers; a crash is FAILED, never thin numbers', () => {
@@ -90,9 +90,9 @@ test('a wide draw (search robot) keeps its role, place, path, engine, AI dollars
 test('the tab names a wide draw by its role, place, path and funnel', () => {
   const row = draw(3, {family: 'other', role: 'First Officer', place_kind: 'region', place: 'Europe', city: 'Milan', country: 'Italy', path: 'field-change', engine: 'api', ai_usd: 0.93,
     funnel: JSON.stringify({kinds: ['finance_admin'], employers_picked: 1025, boards_read: 1, web_searches: 0, looked: 81070}), fit70: 0});
-  const html = page([], [row], 'draws');
+  const html = page([row], 'draws');
   assert.match(html, /<b>First Officer<\/b> <span class="muted">other<\/span> · Europe \(from Milan\)/);
   assert.match(html, /field change, 2nd search/);
   assert.match(html, /kind finance_admin · 1,025 employers · 1 boards · 0 web searches · 81,070 jobs listed · AI \$0\.93/);
-  assert.match(page([], [draw(1)], 'draws'), /<b>nurse<\/b> · Lyon, France/, 'an old draw reads as before');
+  assert.match(page([draw(1)], 'draws'), /<b>nurse<\/b> · Lyon, France/, 'an old draw reads as before');
 });

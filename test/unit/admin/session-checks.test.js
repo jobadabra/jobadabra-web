@@ -53,11 +53,11 @@ test('checks are kept newest first, up to KEEP_CHECKS', async () => {
 });
 
 test('the tab shows each check with its boards, what broke and the conclusion', () => {
-  const html = page([], [], 'checks', [], null, [{...check(), boards: check().boards}]);
+  const html = page([], 'checks', [], null, [{...check(), boards: check().boards}]);
   assert.match(html, /Session checks/);
   assert.match(html, /Nurse, Zagreb/);
   assert.match(html, /Posao\.hr/);
   assert.match(html, /What broke/);
   assert.match(html, /Conclusion/);
-  assert.match(page([], [], 'checks'), /No session check yet/);
+  assert.match(page([], 'checks'), /No session check yet/);
 });
