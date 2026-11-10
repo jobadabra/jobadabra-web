@@ -269,7 +269,7 @@ test('with no other engine to pass on to, Codex used up and Claude at 95% is ref
 test('/health says each lane\'s lines: the Codex week per lane, the day caps, the Claude week line and its state', async t => {
   const {broker, storage} = await setup(t, {hold: false});
   const {lines} = await json(await broker.health());
-  assert.deepEqual(lines.week, {pr: 100, byhand: 100, scheduled: 100, bench: 100, drift: 100}); assert.deepEqual(lines.daily, {drift: 24, byhand: 800}); assert.equal(lines.claude, 90); assert.deepEqual(lines.claudeWeek, {usedPercent: null, resetsAt: null});
+  assert.deepEqual(lines.week, {pr: 100, byhand: 100, scheduled: 100, bench: 100, drift: 100}); assert.deepEqual(lines.daily, {drift: 24}); assert.equal(lines.claude, 90); assert.deepEqual(lines.claudeWeek, {usedPercent: null, resetsAt: null});
   await storage.put('claude:state', {limits: {status: 'allowed', sevenDay: {utilization: 0.62, resetsAt: day / 1000 + 3600}}});
   assert.deepEqual((await json(await broker.health())).lines.claudeWeek, {usedPercent: 62, resetsAt: day / 1000 + 3600});
 });
