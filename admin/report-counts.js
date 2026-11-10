@@ -6,11 +6,11 @@ export async function reportCounts(db) {
   try {
     const {results} = await db.prepare('SELECT status, COUNT(*) AS n FROM form_reports GROUP BY status').all();
     const by = Object.fromEntries((results || []).map(row => [row.status, row.n]));
-    const waiting = by.new || 0, fetched = by.fetched || 0, fixed = by.fixed || 0;
-    return {received: waiting + fetched + fixed, waiting, fetched, fixed};
+    const waiting = by.new || 0, fetched = by.fetched || 0, fixed = by.fixed || 0, unreplayable = by.unreplayable || 0;
+    return {received: waiting + fetched + fixed + unreplayable, waiting, fetched, fixed, unreplayable};
   } catch { return null; }
 }
 
 export const reportsSection = counts => (!counts?.received ? '' : `<section class="card"><h2>🚩 Reported by a person</h2><small class="muted">Stuck forms people sent with "Report this form": encrypted on their Mac, readable only by the owner. Counts only; the rows themselves are on Lab Form Filling, tagged "Reported by a person".</small>
-<div class="wrap"><table><tr><th>Received (last 30 days)</th><th class="n">Waiting</th><th class="n">In the offline loop</th><th class="n">Fixed</th></tr>
-<tr><td>${esc(String(counts.received))}</td><td class="n">${counts.waiting}</td><td class="n">${counts.fetched}</td><td class="n">${counts.fixed}</td></tr></table></div></section>`);
+<div class="wrap"><table><tr><th>Received (last 30 days)</th><th class="n">Waiting</th><th class="n">In the offline loop</th><th class="n">Fixed</th><th class="n">Cannot replay</th></tr>
+<tr><td>${esc(String(counts.received))}</td><td class="n">${counts.waiting}</td><td class="n">${counts.fetched}</td><td class="n">${counts.fixed}</td><td class="n">${counts.unreplayable || 0}</td></tr></table></div></section>`);

@@ -17,7 +17,7 @@ test('counts by status, and a section only when something was received', async (
   assert.equal(reportsSection(await reportCounts(e)), '', 'nothing received: no section');
   for (const [id, status] of [['a', 'new'], ['b', 'new'], ['c', 'fetched'], ['d', 'fixed']]) e.db.prepare('INSERT INTO form_reports (id, day, who, bytes, requests, status) VALUES (?, ?, ?, 1, 1, ?)').run(id, '2026-10-15', 'w', status);
   const counts = await reportCounts(e);
-  assert.deepEqual(counts, {received: 4, waiting: 2, fetched: 1, fixed: 1});
+  assert.deepEqual(counts, {received: 4, waiting: 2, fetched: 1, fixed: 1, unreplayable: 0});
   const html = reportsSection(counts);
   assert.match(html, /Reported by a person/); assert.ok(!/https?:|install|who/i.test(html.replace(/<[^>]+>/g, ' ').replace(/Reported by a person/g, '')), 'no host or install in the section');
   assert.equal(await reportCounts({prepare: () => ({all: async () => { throw new Error('no such table'); }})}), null, 'a database without the table shows nothing');
