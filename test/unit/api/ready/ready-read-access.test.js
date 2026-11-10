@@ -57,12 +57,15 @@ test('an Always on install starts, stops and takes its own readiness night with 
   for (const route of ['state', 'report', 'live', 'link', 'again', 'done']) assert.equal((await call(e, 'POST', route, {job: 'j0'}, await member())).status, 401, route);
 });
 
-test('only an Always on install that is on: a stranger, a paused schedule, or the site with Always on off is refused', async () => {
-  assert.equal((await call(always(), 'POST', 'batch', readBatch(), await member('someone-else-9'))).status, 401);
-  assert.equal((await call(always({}, 'paused'), 'POST', 'batch', readBatch(), await member())).status, 401);
-  assert.equal((await call(always({HOSTED_ALWAYS_ON: 'off'}), 'POST', 'batch', readBatch(), await member())).status, 401);
-  assert.equal((await call(always(), 'POST', 'batch', readBatch(), {})).status, 401, 'no key');
-  assert.equal((await call(always(), 'POST', 'reads', {}, await member('someone-else-9'))).status, 401);
+test("any install with a valid key of its own may read, whether its Always on runs on its GitHub or on our servers (the owner: \"it doesn't care\"); no key, a wrong token or the switch off is refused", async () => {
+  const e = env();   // no hosted schedule at all, HOSTED_ALWAYS_ON unset: a GitHub Always on install
+  assert.equal((await call(e, 'POST', 'batch', readBatch(1), await member('github-only-7'))).status, 200);
+  assert.equal((await call(e, 'POST', 'reads', {}, await member('github-only-7'))).status, 200);
+  assert.equal((await call(e, 'POST', 'batch', readBatch(1), {})).status, 401, 'no key');
+  assert.equal((await call(e, 'POST', 'batch', readBatch(1), {'x-api-key': 'JPF1.github-only-7.not-its-token'})).status, 401, 'a wrong token');
+  assert.equal((await call(env({READY_READ_OPEN: 'off'}), 'POST', 'batch', readBatch(1), await member())).status, 401, 'the kill switch');
+  assert.equal((await call(always(), 'POST', 'reads', {}, await member('someone-else-9'))).status, 200, 'its own reads only: none');
+  assert.deepEqual((await (await call(always(), 'POST', 'reads', {}, await member('someone-else-9'))).json()).reads, []);
 });
 
 test('the day cap: 30 forms an install and day, counted even when a night is posted again to dodge it', async () => {
@@ -112,7 +115,7 @@ test("their own Claude key skips the credit check, but today's cap still counts 
 
 test('an Always on install queues public pages only: an IP, localhost or an internal name never reaches the container', async () => {
   const e = always();
-  for (const url of ['https://127.0.0.1/x', 'https://localhost/x', 'https://10.0.0.5/jobs', 'https://[::1]/x', 'https://intranet.corp/x', 'https://printer.local/x', 'https://2130706433/x', 'https://metadata/x'])
+  for (const url of ['https://127.0.0.1/x', 'https://localhost/x', 'https://10.0.0.5/jobs', 'https://[::1]/x', 'https://intranet.corp/x', 'https://printer.local/x', 'https://2130706433/x', 'https://metadata/x', 'https://localhost./x', 'https://127.0.0.1.nip.io/x', 'https://169.254.169.254/latest', 'https://printer.local./x'])
     assert.equal((await call(e, 'POST', 'batch', {task: 'readiness', night: '2026-11-09', jobs: [{id: 'a', url}]}, await member())).status, 400, url);
   assert.equal((await call(e, 'POST', 'batch', {task: 'readiness', night: '2026-11-09', jobs: [{id: 'a', url: 'https://jobs.example.org/p/1'}]}, await member())).status, 200);
 });

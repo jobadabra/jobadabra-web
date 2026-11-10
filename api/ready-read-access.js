@@ -3,7 +3,7 @@
 // "In the end, we care about AI credit": a read's whole cost (container seconds and the page-kind calls) comes out of the person's AI credit, the same meter as every other AI call.
 // Invariants: only the readiness task opens to an Always on install; Ready to send's own routes stay the owner's. A person with their own Claude key (BYOK) is unlimited here and spends none of our credit.
 // A read is never logged here. Guard: test/unit/api/ready/ready-read-access.test.js.
-import {hostedOn, installOf} from '../shared/hosted.js';
+import {installOf} from '../shared/hosted.js';
 import {chargeCall, proLane} from '../shared/pro-ai.js';
 import {count, installCap, keysOf, limitsOf, who} from '../shared/free-ai.js';
 import {tokenFor} from '../shared/guard.js';
@@ -15,27 +15,26 @@ export const dayReads = env => num(env.READY_READ_DAY_MAX) || DAY_READS;
 export const dayMicro = env => Math.round(num(env.READY_READ_DAY_USD) * 1e6) || DAY_MICRO;
 const dayOf = now => now.toISOString().slice(0, 10);
 
-/** A form an Always on install queues is a public https page: not a bare IP, localhost or an internal name (the container must never be a way into its own network). Pure. */
+/** A form an Always on install queues is a public https page: not a bare IP, localhost or an internal name (the container must never be a way into its own network). A name is judged by its text only: the Worker cannot resolve it, so a name an attacker's own DNS points at a private address is for the container's egress to refuse. Pure. */
 export function publicHost(url) {
   let host;
-  try { host = new URL(String(url)).hostname.toLowerCase(); } catch { return false; }
+  try { host = new URL(String(url)).hostname.toLowerCase().replace(/\.+$/, ''); } catch { return false; }   // "localhost." is localhost (Gitar on #508)
+  if (/(^|\.)(nip\.io|sslip\.io|xip\.io|localtest\.me|lvh\.me|traefik\.me)$/.test(host)) return false;   // wildcard DNS names that answer with the IP written in them
   if (host.startsWith('[') || /^\d+\.\d+\.\d+\.\d+$/.test(host) || /^\d+$/.test(host)) return false;   // an IP literal, v6 or v4 (decimal forms included)
   return host.includes('.') && !/(^|\.)(localhost|local|internal|lan|home|corp|intranet|localdomain)$/.test(host);
 }
 
-/** The install's Always on schedule is on (the same "Always on user" the hosted routes mean). */
-export async function memberOf(env, install) {
-  if (!env.STATS || !install) return false;
-  return !!(await env.STATS.prepare("SELECT 1 AS n FROM hosted_schedules WHERE install = ? AND state = 'on'").bind(install).first().catch(() => null));
-}
-
-/** -> {install, owner} for the owner (`ownerOf`, ready.js) or an Always on install's own key; null otherwise. */
+/**
+ * -> {install, owner} for the owner (`ownerOf`, ready.js) or any install with a valid key of its own; null otherwise. Owner, 9 Nov 2026 (asked via AskUserQuestion "Other", relayed by the coordinator): "The fact that they run on Github
+ * on our hosted CloudFlare server... it doesn't care." Whether the person's Always on runs on their own GitHub or on our servers, the site cannot tell and does not need to: the credit check and the day cap bound every install.
+ * READY_READ_OPEN = off closes it (a kill switch for the cost).
+ */
 export async function readerOf(request, env, ownerOf) {
   const owner = await ownerOf(request, env);
   if (owner) return {install: owner, owner: true};
-  if (!hostedOn(env)) return null;
+  if (env.READY_READ_OPEN === 'off') return null;
   const install = await installOf(request, env);
-  return install && (await memberOf(env, install)) ? {install, owner: false} : null;
+  return install ? {install, owner: false} : null;
 }
 
 /** Before a readiness night is queued: the person's AI credit must not be used up (Pro credit, a credit code, or Free's trial, month and day lines). -> null, or {status, error}. */
