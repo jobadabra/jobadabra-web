@@ -104,6 +104,19 @@ test('within their AI credit: a Free install past its trial, month or day line i
   assert.equal((await call(day, 'POST', 'batch', readBatch(), await member())).status, 402);
 });
 
+test("Free AI's own stops hold for a cloud read too: the kill switch, the global day line and the global month line refuse before anything is queued (Gitar on #508)", async () => {
+  const none = e => e.STATS.db.prepare('SELECT COUNT(*) AS n FROM ready_batches').get().n;
+  const off = always({WAITLIST: kv(), FREE_AI: 'off'});
+  assert.equal((await call(off, 'POST', 'batch', readBatch(), await member())).status, 503);
+  assert.equal(none(off), 0);
+  for (const prefix of ['freeai:usd:', 'freeai:usdm:']) {
+    const busy = always({WAITLIST: kv()});
+    busy.WAITLIST.get = async key => (key.startsWith(prefix) ? String(1e12) : null);
+    assert.equal((await call(busy, 'POST', 'batch', readBatch(), await member())).status, 503, prefix);
+    assert.equal(none(busy), 0, prefix);
+  }
+});
+
 test("their own Claude key skips the credit check, but today's cap still counts every read (a key is not validated here, so a made-up one cannot lift the cap)", async () => {
   const e = always({WAITLIST: kv()});
   e.WAITLIST.get = async key => (key.startsWith('freeai:life:') ? String(9_000_000) : null);   // the trial's credit is spent

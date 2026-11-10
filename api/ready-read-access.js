@@ -5,7 +5,7 @@
 // A read is never logged here. Guard: test/unit/api/ready/ready-read-access.test.js.
 import {installOf} from '../shared/hosted.js';
 import {chargeCall, proLane} from '../shared/pro-ai.js';
-import {count, installCap, keysOf, limitsOf, who} from '../shared/free-ai.js';
+import {allowanceOf, busyCap, count, installCap, keysOf, limitsOf, who} from '../shared/free-ai.js';
 import {tokenFor} from '../shared/guard.js';
 
 export const DAY_READS = 30, DAY_MICRO = 150_000;   // one install's reads and micro-USD per UTC day
@@ -41,12 +41,16 @@ export async function readerOf(request, env, ownerOf) {
 export async function creditRefusal(env, install, now = new Date()) {
   const lane = await proLane(env, install);
   if (lane?.blocked) return {status: 402, error: lane.blocked};
+  if (env.FREE_AI === 'off' && !lane) return {status: 503, error: 'Free AI is paused right now. You can add your own key in Settings → Connections → AI.'};   // the same kill switch as every Free AI call (Gitar on #508)
   if (lane || !env.WAITLIST) return null;
   const access = await who(`JPF1.${install}.${await tokenFor(install, env, 'ai')}`, env, now);
   if (!access) return null;
   const day = dayOf(now), keys = keysOf(access.who, day, day.slice(0, 7), now.toISOString().slice(0, 16));
-  const [life, installMonth, installDay, tokens] = await Promise.all([keys.life, keys.monthUsd, keys.dayUsd, keys.tokens].map(key => count(env.WAITLIST, key)));
-  const capped = installCap(limitsOf(env), access, {life, installMonth, installDay, tokens});
+  const [life, installMonth, installDay, tokens, microUsd, globalMonth] = await Promise.all([keys.life, keys.monthUsd, keys.dayUsd, keys.tokens, keys.usd, keys.globalMonth].map(key => count(env.WAITLIST, key)));
+  const lines = limitsOf(env);
+  const busy = busyCap(lines, {microUsd, globalMonth, seen: 0, allowance: allowanceOf(env)});   // Free AI's global day and month stops: every install waits, as it does for any Free AI call
+  if (busy) return {status: busy.status, error: busy.message};
+  const capped = installCap(lines, access, {life, installMonth, installDay, tokens});
   return capped ? {status: 402, error: capped.message} : null;
 }
 

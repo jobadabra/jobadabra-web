@@ -93,7 +93,7 @@ test('the whole night\'s Stop puts back every form waiting or filling; a form wi
   const night = tokenOf(e, 0);
   await call(e, 'POST', 'progress', {job: 'j1', step: 'opening'}, night);
   const stranger = {'x-ready-owner': 'owner-secret', 'x-api-key': await keyOf('someone-else-9')};
-  assert.equal((await call(e, 'POST', 'stop', {}, stranger)).status, 401, 'owner only');
+  assert.equal((await call(e, 'POST', 'stop', {}, stranger)).status, 404, "another install has no night of its own to stop (api/ready-read-access.js), and never the owner's");
   const stopped = await call(e, 'POST', 'stop', {}, await owner());
   assert.deepEqual(await stopped.json(), {ok: true, stopped: 2});
   assert.deepEqual(await rows(e), {j1: 'stopped', j2: 'stopped'});
