@@ -57,7 +57,7 @@ test('each persona has its own usual: the median of its right local jobs over th
   assert.equal(judged.reasons.includes('local'), false, 'one persona under its own usual does not drop the night on its own');
 });
 
-test('the tab shows all 18 candidates with their usual, the under-usual note and N of the weekly reference X; no reference says so, a stored X of 0 says "EURES lists none"', () => {
+test('the tab shows all 18 candidates with their usual, the under-usual note and a separate weekly reference; no reference says so, a stored X of 0 says "EURES lists none"', () => {
   const history = earlier(7, {total: 18, locals: Array.from({length: 18}, (_, i) => (i === 2 ? 10 : 2))});
   const judged = judgeAll([night(day(0), {total: 18, locals: Array.from({length: 18}, (_, i) => (i === 2 ? 4 : 2))}), ...history]);
   const refs = {1: {total: 20, reachable: 14, eures: 12, google: 8}, 2: {total: 0, reachable: 0, eures: 0}};
@@ -66,7 +66,7 @@ test('the tab shows all 18 candidates with their usual, the under-usual note and
   assert.equal((html.match(/<td><b>p\d+ Role/g) || []).length, 18);
   assert.match(html, /usual 10<\/span> <span[^>]*>↓ under its usual/);
   assert.equal((html.match(/↓ under its usual/g) || []).length, 1, 'only the persona under its own usual');
-  assert.match(html, /2 of 14 reachable<div class="why">of 20 total · EURES 12 · Google Jobs 8/);
+  assert.match(html, /Reference: 20<div class="why">14 reachable · EURES 12 · Google Jobs 8/);
   assert.match(html, /EURES lists none<\/span>/);
   assert.match(html, /no reference yet/);
   assert.match(nightSection(judgeAll(earlier(2, {total: 18}))), /usual: after 7 nights/);

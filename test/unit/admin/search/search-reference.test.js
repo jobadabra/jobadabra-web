@@ -37,15 +37,15 @@ test('the week is stored and read back as the tab reads it; a source that was no
   assert.deepEqual(await reference(e), {1: counts(31, 24, 20, 17), 3: counts(14, 14, 14, null)});
 });
 
-test('the tab shows the reference per candidate: "7 of 24 on EURES" when EURES alone was read (the owner\'s choice), the older "reachable" note when Google Jobs was too', async () => {
+test('the tab shows the reference per candidate: separate totals when EURES alone was read (the owner\'s choice), the older "reachable" note when Google Jobs was too', async () => {
   const e = env();
   await put(e, body());
   const night = cleanNight({state: 'success', head: '🟢 measured 2 of 2', rows: [{persona: 1, label: 'p1 A', kind: 'measured', local: 7, found: 9}, {persona: 3, label: 'p3 B', kind: 'measured', local: 5, found: 6}]}, {night: '2026-11-06'});
   const html = nightSection(judgeAll([night]), await reference(e));
-  assert.match(html, /7 of 24 reachable<div class="why">of 31 total · EURES 20 · Google Jobs 17</);
-  assert.match(html, /5 of 14 on EURES/);
-  assert.doesNotMatch(html.match(/5 of 14 on EURES[^<]*<\/td>/)[0], /Google|reachable/, 'no Google figure where Google was not read');
-  assert.match(nightSection(judgeAll([night]), {1: counts(31, 24, 20, 0)}), /7 of 24 reachable<div class="why">of 31 total · EURES 20 · Google Jobs 0</, 'a Google figure of 0 is a figure: the older note stays');
+  assert.match(html, /Reference: 31<div class="why">24 reachable · EURES 20 · Google Jobs 17</);
+  assert.match(html, /EURES reference: 14/);
+  assert.doesNotMatch(html.match(/EURES reference: 14[^<]*<\/td>/)[0], /Google|reachable/, 'no Google figure where Google was not read');
+  assert.match(nightSection(judgeAll([night]), {1: counts(31, 24, 20, 0)}), /Reference: 31<div class="why">24 reachable · EURES 20 · Google Jobs 0</, 'a Google figure of 0 is a figure: the older note stays');
 });
 
 test('a stored total of 0 reads "EURES lists none", not as a failed read; a candidate with no record stays "no reference yet" (owner/coordinator, 6 Nov 2026)', async () => {
@@ -59,7 +59,7 @@ test('a stored total of 0 reads "EURES lists none", not as a failed read; a cand
   assert.match(cell('p1'), /EURES lists none/);
   assert.doesNotMatch(cell('p1'), /no reference/);
   assert.match(cell('p2'), /no reference yet/, 'no record at all');
-  assert.match(cell('p3'), /4 of 14 on EURES/);
+  assert.match(cell('p3'), /EURES reference: 14/);
   assert.match(nightSection(judgeAll([night]), {1: counts(0, 0, null, 0)}), /p1 X<\/b>.*?no reference<\/span>/s, 'a total of 0 that is not EURES\'s own count claims nothing');
 });
 

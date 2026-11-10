@@ -76,11 +76,11 @@ test('counterNotes caps the personas named per line and says how many more', () 
   assert.deepEqual(counterNotes(rows), ['EU jobs: p1 100 → 0, p2 100 → 0, p3 100 → 0 (+3 more)']);
 });
 
-test('the tab: each persona shows its counters beside "N of X on EURES"; a dropped one is marked with its usual; the head carries the line; an older night without counters shows none', () => {
+test('the tab: each persona shows its counters beside the separate EURES reference; a dropped one is marked with its usual; the head carries the line; an older night without counters shows none', () => {
   const judged = judgeAll([night(0, i => (i === 2 ? {...wobble(0, i), eu: 0} : wobble(0, i))), ...history]);
   const html = nightSection(judged, {2: {total: 19, reachable: 19, eures: 19, google: null}});
   const cell = html.match(/<b>p2 Role, City<\/b>.*?<\/tr>/s)[0];
-  assert.match(cell, /3 of 19 on EURES/);
+  assert.match(cell, /EURES reference: 19/);
   assert.match(cell, /EU read[^<]*0/, 'our EU read listed 0');
   assert.match(cell, /usual \d+/, 'the dropped counter names its usual');
   assert.match(html.match(/<p class="vb-chips">.*?<\/p>/s)[0], /EU jobs: p2 \d+ → 0/);
