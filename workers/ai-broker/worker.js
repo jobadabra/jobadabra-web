@@ -13,7 +13,7 @@ import {modelOf, validEffort, weightOf, EFFORTS} from './lib/tiers.mjs';
 import {tokenShaped, fallbackToday, newNote, apiPrecheck, freeAiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
 import {codexMessage, kindOf} from './container/kinds.mjs';
 import {walk, answered, refused, unavailable, failed} from './lib/walk.mjs';
-import {chainOf, configured, recordOutcome, engineHealth, CHOICES} from './lib/engines.mjs';
+import {chainOf, configured, recordOutcome, engineHealth, CHOICES, SUBS} from './lib/engines.mjs';
 import {CLAUDE_MODELS} from './lib/tiers.mjs';
 import {demotedNow, recordPerf} from './lib/adapt.mjs';
 import {addCall, addJobCall, jobKey, recentDays, tokensOf, workflowKey, workflowOf} from './lib/tally.mjs';
@@ -161,9 +161,10 @@ export class CodexBroker extends Container {
     if (Object.hasOwn(body, 'engine') && !CHOICES.includes(body.engine)) return {refusal: json(400, {why: `engine must be ${CHOICES.slice(0, -1).join(', ')} or ${CHOICES.at(-1)}`})};
     if (Object.hasOwn(body, 'only') && typeof body.only !== 'boolean') return {refusal: json(400, {why: 'only must be a boolean'})};
     if (body.only && !Object.hasOwn(body, 'engine')) return {refusal: json(400, {why: 'only needs an engine: only this engine answers, or the call is refused'})};
+    if (Object.hasOwn(body, 'subs') && (typeof body.subs !== 'boolean' || (body.subs && (!SUBS.includes(body.engine) || body.only)))) return {refusal: json(400, {why: `subs needs an engine of ${SUBS.join(' or ')} and no only: the subscriptions answer, that one first, never Free AI`})};
     const model = modelOf(body.tier);
     if (!model) return {refusal: json(400, {why: `unknown tier "${String(body.tier).slice(0, 20)}" (small, mid or large)`})};
-    const env = this.brokerEnv, {chain: asked} = chainOf(env, body.engine, body.engine === undefined ? await demotedNow(this.ctx.storage, env) : [], body.only === true);   // an engine doing worse is moved back (lib/adapt.mjs) unless this call names its own   // body.engine = this one call's own first choice (e.g. one workflow trying claude); admission and caps stay the same
+    const env = this.brokerEnv, {chain: asked} = chainOf(env, body.engine, body.engine === undefined ? await demotedNow(this.ctx.storage, env) : [], body.only === true, body.subs === true);   // an engine doing worse is moved back (lib/adapt.mjs) unless this call names its own   // body.engine = this one call's own first choice (e.g. one workflow trying claude); admission and caps stay the same
     // Why (1 Nov 2026): with Codex first a refused login never counts toward the daily cap (as before the chain); with another engine first Codex's step checks it when reached.
     if (asked[0] === 'codex') { const refusal = await this.loginRefusal(); if (refusal) return {refusal}; }
     await this.weekReading();
@@ -244,6 +245,10 @@ export class CodexBroker extends Container {
       if (shut && door.first === 'claude') return json(429, {why: shut});
       if (door.first === 'free-ai') return apiFinish(door.env, note);   // Why (Gitar on #296): their own reasons stay: fallback:search-unsupported, fallback:unavailable, the 429 day cap
       return json(503, {why: `only-${door.first}: ${left.find(entry => entry.engine === door.first)?.why ?? (configured(door.first, door.env) ? 'unavailable' : 'not-configured')}`, engine: door.first, tried: left});   // strict call: nobody else answers, and the reason is named
+    }
+    if (body.subs === true) {   // neither subscription answered: each one's reason, never Free AI's, whose `budget:` CI reads as a grey skip
+      const why = SUBS.map(engine => `${engine} ${left.find(entry => entry.engine === engine)?.why ?? (engine === 'claude' && shut ? shut : configured(engine, door.env) ? 'unavailable' : 'not-configured')}`);
+      return json(503, {why: `subs: ${why.join(', ')}`, engine: door.first, tried: left});
     }
     if (shut && door.freeAiCannot) return json(429, {why: shut});   // Claude did not answer, its line is shut and Free AI takes neither a search nor an image
     return apiFinish(door.env, note);

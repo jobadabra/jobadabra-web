@@ -19,14 +19,18 @@ export const configured = (engine, env) => engine === 'codex' ? true : engine ==
 
 /**
  * The chain for this environment: `ENGINE` first, the others in ORDER. Unset = codex (today's behaviour). An unknown value is never guessed:
- * the chain stays the default and `warning` says so (shown in /health). `requested` is one call's own choice (body.engine, validated by the caller) and wins over ENGINE for that call.
+ * the chain stays the default and `warning` says so (shown in /health). `requested` is one call's own choice (body.engine, validated by the caller) and wins over ENGINE for that call;
+ * `only` keeps that engine alone, `subs` the two subscriptions (SUBS) with that one first.
  */
-export function chainOf(env, requested, demoted = [], only = false) {
+export function chainOf(env, requested, demoted = [], only = false, subs = false) {
   const wanted = String(requested ?? env.ENGINE ?? '').trim();
   if (!wanted) return {first: 'codex', chain: behind(ORDER, demoted, env), warning: null};
   if (!CHOICES.includes(wanted)) return {first: 'codex', chain: behind(ORDER, demoted, env), warning: `unknown ENGINE "${wanted.slice(0, 30)}" (codex, claude, free-ai); using codex`};
   // Why (1 Nov 2026, owner: "a CI workflow wants specifically to work with claude. Another one with codex"): `only` is that engine alone, no fallback; the caller gets a refusal naming the reason instead of another engine's answer (a Claude-vs-Codex comparison must not silently mix).
   if (only && requested !== undefined) return {first: wanted, chain: [wanted], warning: null};
+  // Why (10 Nov 2026, owner on jobadabra#3703: "Claude should be at any times a replacement. Free AI is good, except when we need higher intelligence models"): `subs` is the two
+  // subscriptions alone, the named one first: the night Search check goes on to Claude when Codex is out, and is refused (never answered by Free AI) when both are.
+  if (subs && SUBS.includes(wanted)) return {first: wanted, chain: [wanted, ...SUBS.filter(engine => engine !== wanted)], warning: null};
   return {first: wanted, chain: behind([wanted, ...ORDER.filter(engine => engine !== wanted)], demoted, env), warning: null};
 }
 

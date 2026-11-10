@@ -368,3 +368,39 @@ test('chainOf with only: the one engine alone; without a request only is ignored
   assert.deepEqual(chainOf({}, 'claude', [], true).chain, ['claude']);
   assert.deepEqual(chainOf({ENGINE: 'claude'}, undefined, [], true).chain, chainOf({ENGINE: 'claude'}).chain);
 });
+
+test('subs: true is the two subscriptions alone, the named one first: Claude answers when Codex fails, and when both fail the call is refused with each reason, never by Free AI', async t => {
+  assert.deepEqual(chainOf({}, 'codex', [], false, true).chain, ['codex', 'claude']);
+  assert.deepEqual(chainOf({}, 'claude', [], false, true).chain, ['claude', 'codex']);
+  const fails = world(t, 'codex', {...withToken, codex: () => containerError('codex-failed:1 boom')});
+  const claude = await (await fails.broker.call('pr', {...body, engine: 'codex', subs: true})).json();
+  assert.equal(claude.engine, 'claude'); assert.equal(claude.fellBack[0].engine, 'codex');
+  const both = world(t, 'codex', {...withToken, codex: () => containerError('codex-failed:1 boom'), claude: claudeFails('claude-failed:1 boom')});
+  const refused = await both.broker.call('pr', {...body, engine: 'codex', subs: true});
+  assert.equal(refused.status, 502, 'Codex\'s own failure stands (the first engine\'s words win), never Free AI\'s');
+  assert.doesNotMatch(JSON.stringify(await refused.json()), /budget:|fallback:/, 'CI reads `budget:` as a grey skip');
+  assert.equal(both.calls.free, 0);
+  const week = world(t, 'codex', {...withToken, claude: claudeFails('claude-failed:1 boom')});
+  await week.storage.put('limits', {usedPercent: 100, resetsAt: day / 1000 + 3600});
+  week.broker.limits = null;
+  const spent = await week.broker.call('pr', {...body, engine: 'codex', subs: true});
+  assert.equal(spent.status, 503); assert.equal((await spent.json()).why, 'subs: codex ran-out, claude failed');
+  assert.equal(week.calls.free, 0);
+  const noToken = world(t, 'codex');
+  await noToken.storage.put('limits', {usedPercent: 100, resetsAt: day / 1000 + 3600});
+  noToken.broker.limits = null;
+  const alone = await noToken.broker.call('pr', {...body, engine: 'codex', subs: true});
+  assert.equal(alone.status, 429); assert.match((await alone.json()).why, /^budget:week/, 'a used-up week with no Claude stays the door\'s control (unchanged): CI shows it as not run');
+  assert.equal(noToken.calls.free, 0);
+  const open = world(t, 'codex', {codex: () => containerError('codex-failed:1 boom')});
+  assert.equal(await answered(await open.broker.call('pr', {...body, engine: 'codex'})), 'free-ai', 'without subs the chain still ends at Free AI (unchanged)');
+});
+
+test('subs must be a boolean, with a subscription engine and without only: otherwise a 400 that says so', async t => {
+  const {broker} = world(t, 'codex', withToken);
+  for (const wrong of [{engine: 'codex', subs: 'yes'}, {subs: true}, {engine: 'free-ai', subs: true}, {engine: 'codex', only: true, subs: true}]) {
+    const response = await broker.call('pr', {...body, ...wrong});
+    assert.equal(response.status, 400, JSON.stringify(wrong)); assert.match((await response.json()).why, /^subs needs an engine of codex or claude/);
+  }
+  assert.equal((await broker.call('pr', {...body, engine: 'codex', subs: false})).status, 200);
+});
