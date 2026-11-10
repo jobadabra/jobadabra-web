@@ -19,7 +19,9 @@ export async function searchNight({env}, seeds) {
     const rows = healthy.rows.map((row, index) => ({...row, kind: index < 5 ? 'measured' : 'unmeasured', local: 3 + ((back + index) % 3), seconds: 70 + 10 * ((back + index) % 4), funnel_note: ''}));
     kept.push(clean({...healthy, rows}, {night: night(back), run: String(41000000000 + back)}));
   }
-  kept.push(clean(real('2026-11-05'), {night: night(1), run: '41938128120'}), clean(real('2026-11-06'), {night: night(0), run: '42133678718'}));
+  const newest = real('2026-11-06');   // p2 pressed twice (3/6, 10 Nov 2026): a MADE-UP first-try reason, so the table shows "measured on the 2nd try"
+  newest.rows = newest.rows.map((row, index) => (index === 1 ? {...row, kind: 'measured', again: 1, first_try: 'AI slow (a call took 25 s on average)'} : row));
+  kept.push(clean(real('2026-11-05'), {night: night(1), run: '41938128120'}), clean(newest, {night: night(0), run: '42133678718'}));
   await writeState(env, STATE_KEY, {nights: kept.reverse().map(item => ({...item, at: `${item.night}T04:00:00.000Z`}))}, now);
 }
 
