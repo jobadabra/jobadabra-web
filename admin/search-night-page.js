@@ -39,7 +39,7 @@ const counterLine = row => (!row.counters ? '' : `<div class="why">${COUNTERS.ma
   return (row.drops || []).includes(item.key) ? chip(esc(`${words} · usual ${num(row.counterUsual[item.key])}${item.unit || ''}`), 'warn') : esc(words);
 }).join(' · ')}</div>`);
 const sourceLine = row => row.relevantSources ? `<div class="why">From EURES: ${num(row.relevantSources.eures)} · From other sources: ${num(row.relevantSources.other)} · Unknown source: ${num(row.relevantSources.unknown)}</div>` : '<div class="why">Source breakdown not recorded</div>';
-const personaRow = (row, refs = {}, eures = 'on') => `<tr><td><b>${esc(row.label)}</b></td><td>${kindChip(row.kind)}${row.why ? `<div class="why">${esc(row.why)}</div>` : ''}</td><td class="num">${num(row.local)} · ${num(row.found)}${sourceLine(row)}<div>${sinceUsual(row)}</div></td>`
+const personaRow = (row, refs = {}, eures = 'on') => `<tr><td><b>${esc(row.label)}</b></td><td>${kindChip(row.kind)}${row.again ? ` ${chip('↻ measured on the 2nd try', 'warn')}` : ''}${row.why ? `<div class="why">${esc(row.why)}</div>` : ''}${row.again && row.firstTry ? `<div class="why">1st try: ${esc(row.firstTry)}</div>` : ''}</td><td class="num">${num(row.local)} · ${num(row.found)}${sourceLine(row)}<div>${sinceUsual(row)}</div></td>`
   + `<td class="num">${ours(row, refs[row.persona], eures)}${reference(row, refs[row.persona])}${counterLine(row)}</td><td class="num">${seconds(row.seconds)}</td>`
   + `<td><div class="nsteps">${row.ranOut.length ? row.ranOut.map(step => chip(esc(step), step === EMPLOYER_SITES ? 'bad' : 'off')).join('') : '<span class="muted">nothing</span>'}</div></td></tr>`;
 

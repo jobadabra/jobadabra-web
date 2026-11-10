@@ -76,7 +76,7 @@ test('a night round-trips as slim rows: the head, one row per persona with count
   assert.deepEqual([night.night, night.run, night.state, night.rows.length], ['2026-11-06', '42133678718', 'success', 6]);
   assert.match(night.head, /measured 2 of 6/);
   assert.deepEqual(night.rows[0], {persona: 1, label: 'p1 Truck Driver (Class CE), Sofia', kind: 'measured', why: '', local: 9, found: 36, seconds: 154,
-    ranOut: ['employer sites', 'job boards', 'free job APIs', 'descriptions', "scoring the job boards' jobs"], counters: null, inout: null, sources: null, stepYield: null, relevantSources: null, place: null, role: null});   // counters, stepYield: null = the verdict of 5 and 6 Nov holds none (per-step counters 6 Nov 2026, step yield 8 Nov): nothing is claimed
+    ranOut: ['employer sites', 'job boards', 'free job APIs', 'descriptions', "scoring the job boards' jobs"], again: 0, firstTry: '', counters: null, inout: null, sources: null, stepYield: null, relevantSources: null, place: null, role: null});   // counters, stepYield: null = the verdict of 5 and 6 Nov holds none (per-step counters 6 Nov 2026, step yield 8 Nov): nothing is claimed
   assert.deepEqual(night.rows.map(item => item.kind), ['measured', 'nothing', 'none-right', 'none-right', 'measured', 'nothing']);
   assert.deepEqual(Object.keys(night).sort(), ['at', 'engine', 'eures', 'head', 'night', 'rows', 'run', 'state'], 'the engine is kept as ONE word (Scoreboard, 10 Nov 2026); the cost, the main history and the notes are not');
   assert.equal(night.engine, 'codex-gpt-6-luna', "the row's \"codex (gpt-6-luna)\" is the night's one word");
