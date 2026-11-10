@@ -1,0 +1,83 @@
+// Cloud browser runner 3/4 (spec jobadabra docs/superpowers/specs/2026-11-08-cloud-browser-runner-design.md): who may start a readiness night, and what it may cost.
+// Owner, 8-9 Nov 2026 (via the coordinator, "asked via AskUserQuestion"): access "Any user, no matter Free or Pro. But within their AI credit."; "We should have a cap" = "30 reads, $0.15/day (Recommended)";
+// "In the end, we care about AI credit": a read's whole cost (container seconds and the page-kind calls) comes out of the person's AI credit, the same meter as every other AI call.
+// Invariants: only the readiness task opens to an Always on install; Ready to send's own routes stay the owner's. A person with their own Claude key (BYOK) is unlimited here and spends none of our credit.
+// A read is never logged here. Guard: test/unit/api/ready/ready-read-access.test.js.
+import {hostedOn, installOf} from '../shared/hosted.js';
+import {chargeCall, proLane} from '../shared/pro-ai.js';
+import {count, installCap, keysOf, limitsOf, who} from '../shared/free-ai.js';
+import {tokenFor} from '../shared/guard.js';
+
+export const DAY_READS = 30, DAY_MICRO = 150_000;   // one install's reads and micro-USD per UTC day
+export const MICRO_PER_SECOND = 12;   // what the night prices a container second at (desktop/ready-fill/night.mjs costMicro), the figure result.costMicro carries
+const num = value => (Number(value) > 0 ? Number(value) : 0);
+export const dayReads = env => num(env.READY_READ_DAY_MAX) || DAY_READS;
+export const dayMicro = env => Math.round(num(env.READY_READ_DAY_USD) * 1e6) || DAY_MICRO;
+const dayOf = now => now.toISOString().slice(0, 10);
+
+/** The install's Always on schedule is on (the same "Always on user" the hosted routes mean). */
+export async function memberOf(env, install) {
+  if (!env.STATS || !install) return false;
+  return !!(await env.STATS.prepare("SELECT 1 AS n FROM hosted_schedules WHERE install = ? AND state = 'on'").bind(install).first().catch(() => null));
+}
+
+/** -> {install, owner} for the owner (`ownerOf`, ready.js) or an Always on install's own key; null otherwise. */
+export async function readerOf(request, env, ownerOf) {
+  const owner = await ownerOf(request, env);
+  if (owner) return {install: owner, owner: true};
+  if (!hostedOn(env)) return null;
+  const install = await installOf(request, env);
+  return install && (await memberOf(env, install)) ? {install, owner: false} : null;
+}
+
+/** Before a readiness night is queued: the person's AI credit must not be used up (Pro credit, a credit code, or Free's trial, month and day lines). -> null, or {status, error}. */
+export async function creditRefusal(env, install, now = new Date()) {
+  const lane = await proLane(env, install);
+  if (lane?.blocked) return {status: 402, error: lane.blocked};
+  if (lane || !env.WAITLIST) return null;
+  const access = await who(`JPF1.${install}.${await tokenFor(install, env, 'ai')}`, env, now);
+  if (!access) return null;
+  const day = dayOf(now), keys = keysOf(access.who, day, day.slice(0, 7), now.toISOString().slice(0, 16));
+  const [life, installMonth, installDay, tokens] = await Promise.all([keys.life, keys.monthUsd, keys.dayUsd, keys.tokens].map(key => count(env.WAITLIST, key)));
+  const capped = installCap(limitsOf(env), access, {life, installMonth, installDay, tokens});
+  return capped ? {status: 402, error: capped.message} : null;
+}
+
+/** Takes `n` reads of today's cap in one statement (a second batch cannot slip in between a check and a write). -> null, or {status: 429, limit, used, error}. */
+export async function reserveReads(env, install, n, now = new Date()) {
+  const day = dayOf(now), max = dayReads(env), usd = dayMicro(env);
+  const changed = n <= max && await env.STATS.prepare(`INSERT INTO ready_read_days (install, day, reads) VALUES (?, ?, ?) ON CONFLICT (install, day) DO UPDATE SET reads = reads + excluded.reads
+    WHERE reads + excluded.reads <= ? AND micro < ?`).bind(install, day, n, max, usd).run();
+  if (changed?.meta?.changes) return null;
+  const row = await env.STATS.prepare('SELECT reads, micro FROM ready_read_days WHERE install = ? AND day = ?').bind(install, day).first();
+  const spent = (row?.micro || 0) >= usd;
+  return {status: 429, limit: max, used: row?.reads || 0, error: spent ? "Today's cloud checks used their budget. They start again tomorrow (00:00 UTC)." : `Today's cloud checks are used up (${row?.reads || 0} of ${max} forms). They start again tomorrow (00:00 UTC).`};
+}
+
+/** Adds what a read cost to today's counter. -> true when today's budget is now used up (the night stops). */
+export async function addMicro(env, install, micro, now = new Date()) {
+  const day = dayOf(now);
+  if (micro > 0) await env.STATS.prepare('INSERT INTO ready_read_days (install, day, micro) VALUES (?, ?, ?) ON CONFLICT (install, day) DO UPDATE SET micro = micro + excluded.micro').bind(install, day, Math.round(micro)).run();
+  const row = await env.STATS.prepare('SELECT micro FROM ready_read_days WHERE install = ? AND day = ?').bind(install, day).first();
+  return (row?.micro || 0) >= dayMicro(env);
+}
+
+/**
+ * Books the container's seconds of one read on the person's AI credit meter: a Pro account or credit code through chargeCall (shared/pro-ai.js), a Free install on its own lines (day, month, trial: the counters
+ * shared/free-ai.js enforces). The page-kind call is already booked by Free AI itself; only the container seconds are added here. Never throws: a meter that cannot be written must not lose the read.
+ */
+export async function chargeContainer(env, install, micro, now = new Date()) {
+  micro = Math.round(micro);
+  if (!(micro > 0)) return;
+  try {
+    const lane = await proLane(env, install);
+    if (lane && !lane.blocked) return void await chargeCall(env, lane, micro, 'ready-read', now);
+    if (lane || !env.WAITLIST) return;
+    const access = await who(`JPF1.${install}.${await tokenFor(install, env, 'ai')}`, env, now);
+    if (!access) return;
+    const day = dayOf(now), keys = keysOf(access.who, day, day.slice(0, 7), now.toISOString().slice(0, 16)), kv = env.WAITLIST;
+    const [installDay, installMonth, life, global] = await Promise.all([keys.dayUsd, keys.monthUsd, keys.life, keys.usd].map(key => count(kv, key)));
+    await Promise.all([kv.put(keys.dayUsd, String(installDay + micro), {expirationTtl: 2 * 86400}), kv.put(keys.monthUsd, String(installMonth + micro), {expirationTtl: 40 * 86400}),
+      kv.put(keys.life, String(life + micro)), kv.put(keys.usd, String(global + micro), {expirationTtl: 2 * 86400})]);
+  } catch { /* the meter is best effort: the night's own cost_micro and /admin/ai/costs still carry it */ }
+}

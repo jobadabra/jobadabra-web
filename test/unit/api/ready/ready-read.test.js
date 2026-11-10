@@ -12,7 +12,7 @@ import {tick} from '../../../../api/ready-tick.js';
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0089_ready.sql', '0090_ready_fill_at.sql', '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0142_ready_mailed.sql', '0143_ready_task.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0089_ready.sql', '0090_ready_fill_at.sql', '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0142_ready_mailed.sql', '0143_ready_task.sql', '0144_ready_read_day.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE IF NOT EXISTS revoked (who TEXT PRIMARY KEY, reason TEXT, at TEXT)');
   const statement = (text, args = []) => ({bind: (...v) => statement(text, v), run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
@@ -96,7 +96,7 @@ test('the cron starts a due readiness night with its task too, and the runner pa
 
 test('a read is sealed on the site, and the rows hold words and counts only', async () => {
   const {e, made, bearer} = await night();
-  const posted = await call(e, 'POST', 'result', {job: 'j1', task: 'readiness', state: 'read', read: READ, why: '', ms: 41000, costMicro: 500000}, bearer);
+  const posted = await call(e, 'POST', 'result', {job: 'j1', task: 'readiness', state: 'read', read: READ, why: '', ms: 41000, costMicro: 50000}, bearer);   // under today's $0.15 (api/ready-read-access.js)
   assert.equal(posted.status, 200);
   assert.deepEqual(await posted.json(), {ok: true, stop: false});
   const keys = [...e.HOSTED_STATE.m.keys()].filter(key => key.includes('/read/'));
@@ -105,7 +105,7 @@ test('a read is sealed on the site, and the rows hold words and counts only', as
   const row = e.STATS.db.prepare("SELECT * FROM ready_jobs WHERE job = 'j1'").get();
   assert.equal(row.state, 'read');
   assert.ok(!JSON.stringify(row).includes(QUESTION) && !JSON.stringify(row).includes('Work permit'));
-  assert.equal(e.STATS.db.prepare('SELECT cost_micro FROM ready_batches WHERE id = ?').get(made.batch).cost_micro, 500000);
+  assert.equal(e.STATS.db.prepare('SELECT cost_micro FROM ready_batches WHERE id = ?').get(made.batch).cost_micro, 50000);
 });
 
 test('the result of a readiness night is checked: only its outcomes, never a fill outcome; a bad or oversize read is stored as unreadable', async () => {
