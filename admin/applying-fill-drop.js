@@ -1,5 +1,6 @@
 // A pool site's fill regression on /admin/form-filling/lab: its last run filled fewer of the form's fields than its own best run's share would have.
 // A report beside the reach regression, never a gate: it does not enter Needs a fix (admin/applying-order.js). Guard: test/unit/admin/applying/applying-fill-drop.test.js.
+import {isHold} from './applying-status.js';
 
 // Why (10 Nov 2026, brief lr): measured on the pool's runs that day, two runs in a row filled the same count 59% of the time, one field apart 19%, two or more 22%;
 // on one build, 15 of 22 pairs the same and 5 one field apart. One field is the noise of a form, so a drop counts from one field past it.
@@ -8,7 +9,8 @@ export const NOISE_FIELDS = 1;
 const FORM = new Set(['form', 'ready']);
 const counts = run => {
   const filled = run?.filled, left = run?.left_n ?? run?.left;
-  return FORM.has(run?.reached) && Number.isInteger(filled) && Number.isInteger(left) && filled + left > 0 ? {filled, total: filled + left, share: filled / (filled + left), day: run.day} : null;
+  // Why (10 Nov 2026, lr review): a held run (an eligibility stop reaches 'form' before any field) has no fill share, as in admin/applying-fixed.js shareOf.
+  return FORM.has(run?.reached) && !run.hold && !isHold(run.note) && Number.isInteger(filled) && Number.isInteger(left) && filled + left > 0 ? {filled, total: filled + left, share: filled / (filled + left), day: run.day} : null;
 };
 const shown = item => ({filled: item.filled, total: item.total, share: Math.round(100 * item.share), day: item.day});
 

@@ -38,6 +38,13 @@ test('a form ready for the person\'s check counts as a form; a single run or a b
   assert.equal(fillDrop([]), null);
 });
 
+test('a held run (an eligibility stop at the form, an account-first stop) has no fill share: never the last run judged, never the best', () => {
+  const held = {...run('2026-11-02', 0, 12), note: 'eligibility stop: needs a work permit'};
+  assert.equal(fillDrop([run('2026-11-01', 10, 2), held]), null);
+  assert.equal(fillDrop([run('2026-11-01', 10, 2), {...run('2026-11-02', 0, 12), hold: true}]), null);   // the page's run objects carry hold, not the note
+  assert.equal(fillDrop([{...run('2026-11-01', 12, 0), note: 'eligibility stop: x'}, run('2026-11-02', 9, 3), run('2026-11-03', 9, 3)]), null);
+});
+
 function d1() {
   const db = new DatabaseSync(':memory:');
   for (const file of readdirSync(new URL('../../../../db/migrations/', import.meta.url)).filter(name => name.endsWith('.sql')).sort()) db.exec(readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8'));
