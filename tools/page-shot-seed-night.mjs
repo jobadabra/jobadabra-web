@@ -28,6 +28,15 @@ export async function searchNight({env}, seeds) {
 const LABELS = ['p7 Registered Nurse, Lyon', 'p8 Electrician, Gdansk', 'p9 Data Analyst, Lisbon', 'p10 Accountant, Vienna', 'p11 Software Engineer, Berlin', 'p12 Chef, Madrid', 'p13 Teacher, Prague',
   'p14 Warehouse Operator, Rotterdam', 'p15 Sales Representative, Milan', 'p16 Mechanic, Brno', 'p17 Social Worker, Dublin', 'p18 Pharmacist, Athens'];
 
+// MADE-UP blind-judge verdicts per found job (10 Nov 2026, [oe]): most candidates list jobs mostly in their place; p17 "Social Worker, Dublin" lists 25 jobs and the judge calls 1 in the right place on the newest night
+// (the owner's Dublin story, with made-up numbers). Each count set adds up to the jobs listed. Nothing here is a real person or a real count.
+const listed = i => (i === 16 ? 25 : 8 + (i % 5));
+const verdicts = (back, i) => {
+  const found = listed(i), remote = i % 4 === 0 ? 1 : 0, unknown = i % 5 === 1 ? 1 : 0, unjudged = back === 0 && i === 3 ? 2 : 0, rest = found - remote - unknown - unjudged;
+  const yes = Math.min(rest, i === 16 ? (back === 0 ? 1 : 10 + (back % 3)) : Math.round(found * (0.9 - ((i * 7 + back) % 5) * 0.08))), roleNo = i % 3;
+  return {place: {yes, no: rest - yes, remote, unknown, unjudged}, role: {yes: found - roleNo - unjudged, no: roleNo, unjudged}};
+};
+
 /** @param {{env: object}} context the seed context; `seeds` the seed table */
 export async function searchNight18({env}, seeds) {
   await withQuality(env, seeds);
@@ -35,7 +44,7 @@ export async function searchNight18({env}, seeds) {
   // Made-up step counters (6 Nov 2026): a healthy night wobbles around 140 EU jobs, 12 employer sites, 30 titles, 8 AI calls, 60 s to the first job; on the newest night (back 0, out 13) p1 and p10 read no EU jobs at all, p9's first job is late.
   const counters = (back, i, out) => ({eu: back === 0 && (i === 0 || i === 9) ? 0 : 140 + ((back + i) % 3) * 5, sites: back === 0 && i < out ? 0 : 12 + ((back + i) % 2), titles: 30 + ((back + i) % 3), ai: 8 + ((back + i) % 2), firstS: back === 0 && i === 8 ? 170 : 60 + ((back + i) % 4) * 3});
   const build = (back, measured, out) => clean({state: 'success', head: `measured ${measured} of 18 · every press ≤ 180 s`, rows: base.map((label, i) => ({persona: i + 1, label, kind: i < measured ? 'measured' : 'unmeasured', why: i < measured ? '' : 'time ran out',
-    relevant_sources: i < measured ? {eures: 1, other: 1 + ((back + i) % 4), unknown: 0} : null, local: i < measured ? 2 + ((back + i) % 4) : 0, found: 8 + (i % 5), seconds: 90 + 5 * ((back + i) % 6), funnel_note: `places worked out at 17 s; time ran out for: ${i < out ? 'employer sites, ' : ''}job boards`, counters: counters(back, i, out)}))}, {night: night(back), run: String(41000000000 + back)});
+    relevant_sources: i < measured ? {eures: 1, other: 1 + ((back + i) % 4), unknown: 0} : null, local: i < measured ? 2 + ((back + i) % 4) : 0, found: listed(i), ...verdicts(back, i), seconds: 90 + 5 * ((back + i) % 6), funnel_note: `places worked out at 17 s; time ran out for: ${i < out ? 'employer sites, ' : ''}job boards`, counters: counters(back, i, out)}))}, {night: night(back), run: String(41000000000 + back)});
   for (let back = 7; back >= 1; back--) kept.push(build(back, 15 + (back % 2), 0));
   kept.push(build(0, 8, 13));
   await writeState(env, STATE_KEY, {nights: kept.reverse().map(item => ({...item, at: `${item.night}T04:00:00.000Z`}))}, now);

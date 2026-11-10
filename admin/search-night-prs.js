@@ -7,16 +7,17 @@
 // changed between the two builds, or null when there is nothing to compare with (the oldest build; terminal). `undefined` is the only state that is still to be filled. A GitHub error throws and writes nothing, so the next upload tries again.
 const RUNS_READ = 100;   // the night's workflow runs read at once: a month of nights plus by-hand runs
 export const KEEP_PRS = 15;
+// Why (10 Nov 2026, review of this fix; jobadabra #3684 made `src` one search path): 548 commits touched `src` in the last 30 days, and the first upload after a deploy reads one window from the oldest of 30 unmarked nights, so 6 rounds (600) was near the edge; a night's own window is 1 round.
+const ROUNDS = 10;
 export const WORKFLOW = 'search-personas.yml';
 
 /**
  * What counts as search code: the files the nightly Search check runs or judges, as repo paths (GitHub's history takes a file or a folder, no pattern).
- * Why (10 Nov 2026): the Find jobs pipeline's own stage files (press-yardstick.yml `paths:`, the list the pipeline PRs are measured on), plus all of src/sources (every job source) and tools/persona-search (the press, the candidates and
+ * Why (10 Nov 2026; widened the same day when jobadabra #3684 made press-yardstick.yml `paths:` all of `src/**` minus a few `!` files): the Find jobs pipeline's own files (the list the pipeline PRs are measured on), plus tools/persona-search (the press, the candidates and
  * the blind judge: a change there moves the night's numbers without touching the engine). A test keeps every yardstick stage file inside this list (search-night-prs.test.js).
  */
 export const SEARCH_PATHS = [
-  'src/press', 'src/sources', 'src/time_budget.py', 'src/daily_search.py', 'src/daily_search_reporting.py', 'src/daily_search_scoring.py', 'src/first_jobs.py', 'src/employer_index.py', 'src/source_rank.py',
-  'src/ai/title_triage.py', 'src/ai/title_queue.py', 'src/ai/place_triage.py', 'src/ai/score.py', 'src/ai/slots.py', 'src/ai/batch_scope.py',
+  'src',   // GitHub's history takes a folder, not "all but these files": a PR that only touches an excluded file (apply_*, inbox_*, passwords...) is marked too, a small over-mark kept rather than a 200-file list that drifts
   'desktop/lib/search-steps.js', 'desktop/lib/pipeline-args.js', 'desktop/lib/pipeline-env.js',
   'tools/persona-search', `.github/workflows/${WORKFLOW}`,
 ];
@@ -58,7 +59,7 @@ export async function commitDates(env, shas, fetcher = fetch) {
  */
 export async function searchCommits(env, tip, since, fetcher = fetch, paths = SEARCH_PATHS) {
   const found = new Map(), cursors = paths.map(() => null), done = paths.map(() => false);
-  for (let round = 0; round < 6 && done.includes(false); round++) {
+  for (let round = 0; round < ROUNDS && done.includes(false); round++) {   // ROUNDS x 100 commits a path
     const open = paths.map((path, i) => [path, i]).filter(([, i]) => !done[i]);
     const history = ([path, i]) => `h${i}: history(path: ${JSON.stringify(path)}, since: ${JSON.stringify(since)}, first: 100${cursors[i] ? `, after: ${JSON.stringify(cursors[i])}` : ''}) { pageInfo { hasNextPage endCursor } nodes { oid committedDate messageHeadline associatedPullRequests(first: 1) { nodes { number title } } } }`;
     const repo = await graphql(env, `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { object(oid: "${tip}") { ... on Commit { ${open.map(history).join(' ')} } } } }`, fetcher);
@@ -73,7 +74,7 @@ export async function searchCommits(env, tip, since, fetcher = fetch, paths = SE
       cursors[i] = page?.pageInfo?.endCursor || null;
     }
   }
-  if (done.includes(false)) throw new Error('a search path has over 600 commits since the oldest build: not marked rather than marked with PRs missing');
+  if (done.includes(false)) throw new Error(`a search path has over ${ROUNDS * 100} commits since the oldest build: not marked rather than marked with PRs missing`);
   return [...found.values()];
 }
 
