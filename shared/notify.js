@@ -13,7 +13,7 @@ import {botName, chatTitle, lastChat, sendMessage} from './notify-telegram.js';
 import {alertOf, channelOf, effective} from './notify-registry.js';
 import {testCard} from './owner-cards.js';
 
-const KEEP_DAYS = 30, MAX_TEXT = 3500, MAX_HTML = 3750;   // Why (5 Nov 2026, code review): feedback HTML is ~3000 text + header + link, and escaping grows it; Telegram allows 4096 with the link
+const KEEP_DAYS = 30, MAX_TEXT = 3500, MAX_HTML = 3750, TELEGRAM_MAX = 4096;   // Why (5 Nov 2026, code review): feedback HTML is ~3000 text + header + link, and escaping grows it; Telegram allows 4096 with the link
 const answer = (status, body) => ({status, body});
 
 /** event -> {enabled, mode, channel} for every alert the owner changed (an unreadable table reads as none: the defaults apply). */
@@ -93,7 +93,8 @@ const sentSince = async (env, event, since) => Number((await env.STATS.prepare('
 /** The text as sent: an e-mail address replaced (an alert never carries personal data), cut to Telegram's size, the Admin link last. */
 export function words(text, link, html = false) {
   const scrub = value => String(value || '').replace(/[^\s@<>()]+@[^\s@<>()]+\.[A-Za-z]{2,}/g, '[e-mail]');
-  const cut = scrub(text).trim().slice(0, html ? MAX_HTML : MAX_TEXT), body = html ? cut.replace(/<[^>]*$/, '').replace(/&[#\w]*$/, '') : cut, url = String(link || '').replace(/[?#].*$/, rest => (/@|%40/i.test(rest) ? '' : rest));   // a link keeps its address; a query that carries an e-mail address is cut
+  // Why (10 Nov 2026, code review of web#509): an HTML message that fits Telegram's 4096 is sent whole; slicing it at 3750 could leave a <blockquote> or <a> open and Telegram answers 400. Cards are built under that (shared/owner-cards.js).
+  const whole = scrub(text).trim(), cut = html && whole.length <= TELEGRAM_MAX ? whole : whole.slice(0, html ? MAX_HTML : MAX_TEXT), body = html ? cut.replace(/<[^>]*$/, '').replace(/&[#\w]*$/, '') : cut, url = String(link || '').replace(/[?#].*$/, rest => (/@|%40/i.test(rest) ? '' : rest));   // a link keeps its address; a query that carries an e-mail address is cut
   return /^https:\/\/[^\s]{1,300}$/.test(url) ? `${body}\n${url}` : body;
 }
 /** One alert asked to go out. -> {status, body} as documented above; a send also carries `bot` (the bot that delivered it) for an in-process caller, never in the body the route returns. */

@@ -3,7 +3,7 @@
 // Why (10 Nov 2026): ~14 Worker files each built their own string (plain, HTML, emoji by taste); one file means a new alert cannot be a wall of text, and one test loops every builder
 // through checkCard (test/unit/shared/owner-cards.test.js). The link is inside the card, so senders pass no `link` to alertOwner.
 // Job: report health
-import {card, plural} from './tg-card.js';
+import {card, esc, plural} from './tg-card.js';
 
 const SITE = 'https://www.jobadabra.top';
 const site = (path, base = SITE) => `${base}${path}`;
@@ -53,13 +53,30 @@ export function employerCard(kind, facts = {}) {
 export function freeAiCard(kind, facts) {
   const link = {text: 'Open the AI costs', url: site('/admin/ai/costs')};
   if (kind === 'neurons') return card({level: 'orange', headline: `Free AI used 80% of today's allowance`, bar: {done: facts.used, total: facts.allowance, doneWord: 'neurons used', restWord: 'left'}, verdict: {ok: false, text: 'It stops at 100% until 00:00 UTC.'}, link});
-  const stop = Number(facts.stop);
-  return card({level: 'orange', headline: `Free AI spend ${kind === 'day' ? 'today' : 'this month'}: $${facts.usd}`, bar: stop ? {done: Math.min(Number(facts.usd), stop), total: stop, doneWord: 'USD spent', restWord: 'USD left'} : null,
+  const stop = Number(facts.stop), usd = Math.round(Number(facts.usd) * 100) / 100;
+  return card({level: 'orange', headline: `Free AI spend ${kind === 'day' ? 'today' : 'this month'}: $${usd}`, bar: stop ? {done: Math.min(usd, stop), total: stop, doneWord: 'USD spent', restWord: 'USD left'} : null,
     verdict: {ok: false, text: `It stops at $${facts.stop}.`}, link});
 }
 
-/** A feedback: facts = {version, platform, screen, install, text, attachments: ['Screenshot', ...], ref}. The person's words are a folded quote. */
-export const feedbackCard = facts => card({level: 'grey', headline: `New feedback · v${facts.version} · ${facts.platform}`, body: facts.text, bodyMax: 1500,
+/**
+ * The person's words cut so that their ESCAPED text (what Telegram counts: "<" is 4 characters) is at most `max`; never inside a surrogate pair. -> {text, cut}.
+ * Why (10 Nov 2026, code review of web#509): the sender cut at 3000 raw characters and the card at 1500, and a text heavy in < & > grew past the message limit and lost its whole body; one
+ * measure, the escaped length, decides what is shown and whether "Full text" is told.
+ */
+export function fitWords(text, max = 3000) {
+  const all = String(text ?? '');
+  if (esc(all).length <= max) return {text: all, cut: false};
+  let used = 0, end = 0;
+  for (const char of all) {
+    used += esc(char).length;
+    if (used > max - 1) break;
+    end += char.length;
+  }
+  return {text: `${all.slice(0, end).trimEnd()}…`, cut: true};
+}
+
+/** A feedback: facts = {version, platform, screen, install, text (already fitted by fitWords), attachments: ['Screenshot', ...], ref}. The person's words are a folded quote. */
+export const feedbackCard = facts => card({level: 'grey', headline: `New feedback · v${facts.version} · ${facts.platform}`, body: facts.text, bodyMax: Infinity,
   facts: [`📍 ${facts.screen ? `${facts.screen} · ` : ''}install ${String(facts.install).slice(0, 8)}`, ...(facts.attachments?.length ? [`📎 ${facts.attachments.join(' · ')}`] : [])], link: {text: 'Open in the inbox', url: site(`/admin/feedback/inbox#${facts.ref}`)}});
 
 /** A form was reported: {cause, requests, who, time}. */

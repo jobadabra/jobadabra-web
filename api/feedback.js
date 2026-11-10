@@ -7,7 +7,7 @@ import {escTags} from '../shared/html.js';
 import {TEXT_FILES} from '../shared/feedback.js';
 import {suggestImpact} from '../shared/feedback-impact.js';
 import {alertOwner} from '../shared/notify-send.js';
-import {feedbackCard} from '../shared/owner-cards.js';
+import {feedbackCard, fitWords} from '../shared/owner-cards.js';
 import {sendPhoto} from '../shared/notify-telegram.js';
 
 const PER_INSTALL_PER_DAY = 10;
@@ -17,7 +17,8 @@ const PER_INSTALL_PER_DAY = 10;
 export const FILES_PER_DAY = 100;
 // Why (4 Nov 2026, a tester: "The feedback box silently cuts text at about 2,000 characters… My last report lost its ending"): a report is kept up to MAX_TEXT characters
 // (the app says so with a counter); Telegram takes 4096 per message, so the owner's message carries the first TELEGRAM_TEXT and a link to the whole text on /admin.
-export const MAX_TEXT = 8000, TELEGRAM_TEXT = 3000;
+// Why (10 Nov 2026, code review of web#509): TELEGRAM_TEXT counts ESCAPED characters and equals the card renderer's own row limit (1500, desktop/e2e/lib/telegram-html.mjs), so what the card shows and what "Full text" says is cut are one measure.
+export const MAX_TEXT = 8000, TELEGRAM_TEXT = 1500;
 export const MAX_SHOT_BYTES = 2 * 1024 * 1024, MAX_LOGS_BYTES = TEXT_FILES.logs.max;
 const SHOT = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/;
 const clip = (value, max) => String(value ?? '').replace(/\s+$/g, '').slice(0, max);
@@ -36,10 +37,9 @@ async function tell(env, fetcher, row, shot) {
   const legacy = env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null;
   // Why (10 Nov 2026, owner: every message reads like the Central scout one): one card (shared/owner-cards.js feedbackCard): headline with version and platform, the person's words as a folded quote,
   // the screen and attachments as facts, one link. Why (5 Nov 2026, owner: an alert never carries a name or e-mail address): the reporter's optional address is read on /admin, not in Telegram.
-  const cut = row.text.length > TELEGRAM_TEXT;
+  const {text: shown, cut} = fitWords(row.text, TELEGRAM_TEXT);   // TELEGRAM_TEXT counts escaped characters: what Telegram counts
   const attachments = [cut && 'Full text', row.shot && 'Screenshot', row.logs && 'Logs', row.page && 'Screen data', row.profile && 'Profile', row.contact && 'Reply address'].filter(Boolean);
-  const message = feedbackCard({version: row.version, platform: row.platform, screen: row.screen, install: row.install, ref: row.ref, attachments,
-    text: cut ? `${row.text.slice(0, TELEGRAM_TEXT).replace(/[\uD800-\uDBFF]$/, '').trimEnd()}…` : row.text}).text;
+  const message = feedbackCard({version: row.version, platform: row.platform, screen: row.screen, install: row.install, ref: row.ref, attachments, text: shown}).text;
   // The switchboard (the owner's switch, channel) first; the Brain bot as before when it cannot deliver (shared/notify-send.js).
   const first = await alertOwner(env, 'feedback-received', {text: message, html: true, legacy, fetcher});
   if (first.via === 'none' && !first.sent) return first.why === 'no-bot' || first.why === 'channel-not-connected' ? 'off' : `failed: ${first.why}`.slice(0, 200);

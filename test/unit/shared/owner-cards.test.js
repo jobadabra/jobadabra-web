@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import * as cards from '../../../shared/owner-cards.js';
 import {checkCard} from '../../../shared/tg-card.js';
+import {words} from '../../../shared/notify.js';
+import {TELEGRAM_TEXT} from '../../../api/feedback.js';
 
 const item = {shortId: 'JOBADABRA-APP-7K', title: "TypeError: Cannot read properties of undefined (reading 'fields')", level: 'error', culprit: 'extension/flow.js in fillStep', count: '14', userCount: 3, firstSeen: '2026-11-09T14:02:11Z', permalink: 'https://job-pilotto.sentry.io/issues/7/'};
 const night = {measured: 11, total: 18, need: 12, reasons: ['measured', 'local', 'employer-sites'], local: 31, usual: 52.4, out: 6};
@@ -51,4 +53,33 @@ test('a person\'s words are a folded quote, escaped; their address and the marku
   const text = cards.feedbackCard({version: '1', platform: 'Mac', screen: '', install: 'abcdef123456', text: '<b>hi</b> & <a href="x">z</a>', attachments: [], ref: 'r1'}).text;
   assert.match(text, /<blockquote expandable>&lt;b&gt;hi&lt;\/b&gt; &amp; &lt;a href="x"&gt;z&lt;\/a&gt;<\/blockquote>/);
   assert.equal((text.match(/<a /g) || []).length, 1);
+});
+
+// The owner's scenarios from the code review of web#509 (10 Nov 2026): a report must reach the owner whole, or say "Full text", and never be refused by Telegram.
+const send = text => { const {text: shown, cut} = cards.fitWords(text, TELEGRAM_TEXT); const card = cards.feedbackCard({version: '1', platform: 'Mac', screen: 'Jobs', install: 'abcdef123456', text: shown, attachments: cut ? ['Full text'] : [], ref: 'r1'}).text; return {cut, card, out: words(card, '', true)}; };
+const balanced = html => ['blockquote', 'a', 'b'].every(tag => (html.match(new RegExp(`<${tag}[ >]`, 'g')) || []).length === (html.match(new RegExp(`</${tag}>`, 'g')) || []).length);
+
+test('a report that fits reaches the owner whole; one past the limit is cut once and always says "Full text" (never a silent cut)', () => {
+  const whole = send('word '.repeat(290));
+  assert.equal(whole.cut, false);
+  assert.ok(whole.out.includes('word '.repeat(289).trim()) && !whole.out.includes('Full text'), 'the whole text, no marker');
+  for (const length of [301, 400, 590, 1200]) {   // 1501 to 6000 characters: the range the review found cut without a marker
+    const long = send('word '.repeat(length));
+    assert.ok(long.cut && long.out.includes('Full text') && long.out.includes('…'), `${length * 5} characters`);
+  }
+});
+
+test('a long report is cut once, says "Full text", and the message stays under Telegram\'s limit with every tag closed', () => {
+  const {cut, out} = send('word '.repeat(1200));
+  assert.equal(cut, true);
+  assert.ok(out.includes('Full text') && out.endsWith('Open in the inbox</a>'), out.slice(-120));
+  assert.ok(out.length <= 4096 && balanced(out), `${out.length} characters`);
+});
+
+test('a report heavy in < & > keeps its words: the cut counts escaped characters, so the body is never dropped or a tag left open', () => {
+  const {out} = send('x<&> '.repeat(270));
+  assert.ok(out.includes('x&lt;&amp;&gt;'), 'the words are in the message');
+  assert.ok(out.length <= 4096 && balanced(out) && !/\+\d+ more<\/blockquote>/.test(out));
+  const worst = send('<'.repeat(8000));
+  assert.ok(worst.out.length <= 4096 && balanced(worst.out) && worst.cut, `${worst.out.length} characters`);
 });
