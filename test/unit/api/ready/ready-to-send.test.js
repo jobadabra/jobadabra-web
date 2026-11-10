@@ -43,7 +43,9 @@ test('off, or any install but the owner, reaches nothing: a class check over eve
   const stranger = {'x-ready-owner': 'owner-secret', 'x-api-key': await keyOf('someone-else-9')};
   for (const sub of subs) for (const method of ['GET', 'POST', 'DELETE']) {
     const response = await call(e, method, sub, method === 'POST' ? {job: 'j1'} : undefined, stranger);
-    assert.ok([401, 405].includes(response.status), `${method} ${sub} -> ${response.status}`);
+    // The readiness routes are open to any install with its own key (api/ready-read-access.js), and it only ever reaches its own: batch/run/reads/stop answer it as they answer anyone (never the owner's data; test/unit/api/ready/ready-read.test.js).
+    const own = ['batch', 'run', 'reads', 'stop'].includes(sub);
+    assert.ok(own ? [200, 400, 401, 404, 405].includes(response.status) : [401, 405].includes(response.status), `${method} ${sub} -> ${response.status}`);
   }
   assert.equal((await call(env({READY_OWNER: ''}), 'GET', 'state', undefined, await owner())).status, 404);   // no owner set: closed
 });

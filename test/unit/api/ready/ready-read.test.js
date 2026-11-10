@@ -53,7 +53,8 @@ test('a readiness night is its own night: a fill night of the same day is not re
   const token = {authorization: `Bearer ${await readyToken(e, again.batch)}`};
   assert.equal((await call(e, 'GET', 'batch', undefined, token)).status, 401);   // queued, not started: no token yet works
   for (const bad of ['auto', 'Fill', 7, {}]) assert.equal((await call(e, 'POST', 'batch', {...readBody(), task: bad}, await owner())).status, 400, `task ${JSON.stringify(bad)}`);
-  assert.equal((await call(e, 'POST', 'batch', readBody(), await stranger())).status, 401);
+  assert.equal((await call(e, 'POST', 'batch', readBody(), await stranger())).status, 200, 'another install with its own key reads its own night (api/ready-read-access.js); never this one');
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM ready_batches WHERE install = 'owner-install-1' AND task = 'readiness'").get().n, 1);
 });
 
 test('a readiness batch keeps only the pages to read: no contact, no facts, no kit, nothing of the person', async () => {
@@ -79,7 +80,7 @@ test('run starts the night of the task asked for, and the queue message carries 
   assert.equal(fill.status, 202);
   assert.deepEqual(e.READY_QUEUE.sent.map(message => message.task), ['readiness', 'fill']);
   assert.equal((await call(e, 'POST', 'run', {task: 'auto'}, await owner())).status, 400);
-  assert.equal((await call(e, 'POST', 'run', {task: 'readiness'}, await stranger())).status, 401);
+  assert.equal((await call(e, 'POST', 'run', {task: 'readiness'}, await stranger())).status, 404, 'another install has no night of its own queued: it cannot start the owner\'s');
 });
 
 test('the cron starts a due readiness night with its task too, and the runner passes the task to /run', async () => {
@@ -154,7 +155,7 @@ test('the app takes the reads once: they come back opened, then they are gone fr
   assert.deepEqual(await (await call(e, 'POST', 'reads', {}, await owner())).json(), {ok: true, reads: [], pending: 2});
   await call(e, 'POST', 'result', {job: 'j1', task: 'readiness', state: 'read', read: READ, why: '', ms: 41000, costMicro: 10}, bearer);
   await call(e, 'POST', 'result', {job: 'j2', task: 'readiness', state: 'unreadable', read: null, why: 'afterApply', ms: 30000, costMicro: 10}, bearer);
-  assert.equal((await call(e, 'POST', 'reads', {}, await stranger())).status, 401);
+  assert.deepEqual((await (await call(e, 'POST', 'reads', {}, await stranger())).json()).reads, [], "another install's reads are its own: none of the owner's");
   assert.equal((await call(e, 'POST', 'reads', {}, bearer)).status, 401);   // the night token does not read what the night wrote
   assert.equal((await call(e, 'GET', 'reads', undefined, await owner())).status, 405);   // taking removes: never a GET
   const taken = await (await call(e, 'POST', 'reads', {}, await owner())).json();
