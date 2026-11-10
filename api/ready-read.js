@@ -6,7 +6,7 @@ import {open, seal} from './hosted-state.js';
 import {keptKey} from './ready-kept.js';
 import {LIVE} from './ready-line.js';
 
-export const TASKS = ['fill', 'readiness'];   // the cloud runner's tasks; `auto` (Full automation, Submit) is not one until its own PR and gate (spec Safety line 2)
+export const TASKS = ['fill', 'readiness', 'auto'];   // the cloud runner's tasks; `auto` (Full automation, Submit) only for a Pro Always on install with each job's own item (api/ready-auto.js; cs 2/4, 10 Nov 2026)
 export const READ_OUTCOMES = ['read', 'unreadable', 'failed'];   // what a readiness night may report for a form; never a fill outcome, never "submitted"
 export const MAX_READ_BYTES = 32 * 1024;   // 30 labels of 300 characters fit in a third of it
 const MAX_TAKE = 100;

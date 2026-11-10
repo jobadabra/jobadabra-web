@@ -11,6 +11,7 @@ export const KINDS = {
   video: {ext: 'webm', type: 'video/webm', max: 25 * 1024 * 1024, keepMs: 7 * DAY},
   handoff: {ext: 'json', type: 'application/json', max: 2 * 1024 * 1024, keepMs: DAY},
   read: {ext: 'json', type: 'application/json', max: 64 * 1024, keepMs: DAY},   // a readiness night's read (api/ready-read.js): not a route of this file, sealed and dropped with the others
+  submit: {ext: 'json', type: 'application/json', max: 8 * 1024, keepMs: 30 * DAY},   // a Full automation night's outcome and the page's proof (api/ready-auto.js). Why (code review of cs 2/4): kept until the app takes it, whatever the Mac's time off (30 days, the counts' age), never a day: a press the app never hears of is the worst outcome
 };
 export const VIDEO_MAX_SECS = 180;
 export const keptPrefix = (install, kind, batch) => `ready/${install}/${kind}/${batch}/`;

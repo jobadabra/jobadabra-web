@@ -12,7 +12,7 @@ import {tick} from '../../../../api/ready-tick.js';
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
 function d1() {
   const db = new DatabaseSync(':memory:');
-  for (const file of ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0089_ready.sql', '0090_ready_fill_at.sql', '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0142_ready_mailed.sql', '0143_ready_task.sql', '0144_ready_read_day.sql', '0145_ready_read_lanes.sql']) db.exec(sql(file));
+  for (const file of ['0015_ai_calls.sql', '0021_ai_cost.sql', '0043_ai_cost_provider.sql', '0079_pro.sql', '0082_pro_trial.sql', '0083_hosted.sql', '0089_ready.sql', '0090_ready_fill_at.sql', '0091_ready_ai_stopped.sql', '0097_ready_line.sql', '0098_ready_turn.sql', '0142_ready_mailed.sql', '0143_ready_task.sql', '0144_ready_read_day.sql', '0145_ready_read_lanes.sql', '0146_ready_auto.sql']) db.exec(sql(file));
   db.exec('CREATE TABLE anomalies (day TEXT, kind TEXT, who TEXT, n INTEGER, detail TEXT, PRIMARY KEY (day, kind, who))');
   db.exec('CREATE TABLE IF NOT EXISTS revoked (who TEXT PRIMARY KEY, reason TEXT, at TEXT)');
   const statement = (text, args = []) => ({bind: (...v) => statement(text, v), run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
@@ -52,7 +52,8 @@ test('a readiness night is its own night: a fill night of the same day is not re
   assert.deepEqual(e.STATS.db.prepare('SELECT id, task FROM ready_batches ORDER BY task').all().map(row => ({...row})), [{id: fill.batch, task: 'fill'}, {id: again.batch, task: 'readiness'}]);
   const token = {authorization: `Bearer ${await readyToken(e, again.batch)}`};
   assert.equal((await call(e, 'GET', 'batch', undefined, token)).status, 401);   // queued, not started: no token yet works
-  for (const bad of ['auto', 'Fill', 7, {}]) assert.equal((await call(e, 'POST', 'batch', {...readBody(), task: bad}, await owner())).status, 400, `task ${JSON.stringify(bad)}`);
+  assert.equal((await call(e, 'POST', 'batch', {...readBody(), task: 'auto'}, await owner())).status, 404, 'auto is closed while READY_AUTO is off (api/ready-auto.js; its own test: ready-auto.test.js)');
+  for (const bad of ['Fill', 7, {}]) assert.equal((await call(e, 'POST', 'batch', {...readBody(), task: bad}, await owner())).status, 400, `task ${JSON.stringify(bad)}`);
   assert.equal((await call(e, 'POST', 'batch', readBody(), await stranger())).status, 200, 'another install with its own key reads its own night (api/ready-read-access.js); never this one');
   assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM ready_batches WHERE install = 'owner-install-1' AND task = 'readiness'").get().n, 1);
 });
@@ -79,7 +80,8 @@ test('run starts the night of the task asked for, and the queue message carries 
   const fill = await call(e, 'POST', 'run', {}, await owner());   // no task: the fill night, as before
   assert.equal(fill.status, 202);
   assert.deepEqual(e.READY_QUEUE.sent.map(message => message.task), ['readiness', 'fill']);
-  assert.equal((await call(e, 'POST', 'run', {task: 'auto'}, await owner())).status, 400);
+  assert.equal((await call(e, 'POST', 'run', {task: 'auto'}, await owner())).status, 404, 'auto is closed while READY_AUTO is off');
+  assert.equal((await call(e, 'POST', 'run', {task: 'Auto'}, await owner())).status, 400);
   assert.equal((await call(e, 'POST', 'run', {task: 'readiness'}, await stranger())).status, 404, 'another install has no night of its own queued: it cannot start the owner\'s');
 });
 
@@ -152,7 +154,7 @@ test('a store error while taking leaves the read for the next call; a stopped fo
 
 test('the app takes the reads once: they come back opened, then they are gone from the site', async () => {
   const {e, made, bearer} = await night();
-  assert.deepEqual(await (await call(e, 'POST', 'reads', {}, await owner())).json(), {ok: true, reads: [], pending: 2});
+  assert.deepEqual(await (await call(e, 'POST', 'reads', {}, await owner())).json(), {ok: true, reads: [], submits: [], pendingSubmits: 0, pending: 2});
   await call(e, 'POST', 'result', {job: 'j1', task: 'readiness', state: 'read', read: READ, why: '', ms: 41000, costMicro: 10}, bearer);
   await call(e, 'POST', 'result', {job: 'j2', task: 'readiness', state: 'unreadable', read: null, why: 'afterApply', ms: 30000, costMicro: 10}, bearer);
   assert.deepEqual((await (await call(e, 'POST', 'reads', {}, await stranger())).json()).reads, [], "another install's reads are its own: none of the owner's");
@@ -164,7 +166,7 @@ test('the app takes the reads once: they come back opened, then they are gone fr
   assert.deepEqual(taken.reads[0].read, READ);
   assert.equal(taken.reads[1].read, null);
   assert.deepEqual([...e.HOSTED_STATE.m.keys()].filter(key => key.includes('/read/')), [], 'nothing of the reads is left');
-  assert.deepEqual(await (await call(e, 'POST', 'reads', {}, await owner())).json(), {ok: true, reads: [], pending: 0});
+  assert.deepEqual(await (await call(e, 'POST', 'reads', {}, await owner())).json(), {ok: true, reads: [], submits: [], pendingSubmits: 0, pending: 0});
   assert.equal(e.STATS.db.prepare('SELECT state FROM ready_batches WHERE id = ?').get(made.batch).state, 'deleted', 'a night with nothing left is deleted');
   assert.ok(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM ready_jobs WHERE cleared_at IS NOT NULL').get().n === 2);
 });

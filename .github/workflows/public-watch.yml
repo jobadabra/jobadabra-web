@@ -39,7 +39,7 @@ jobs:
           PUBLIC_WATCH_STATE: ${{ github.workspace }}/.state
         run: |
           site=$(tools/public-watch.sh "$GITHUB_WORKSPACE" site app-core/src worker/src extension desktop/lib desktop/e2e/lib config)
-          ready=$(tools/public-watch.sh "$GITHUB_WORKSPACE" ready hosted/ready-fill desktop/ready-fill extension app-core/src worker/src desktop/lib/form-address.js desktop/lib/triage-reader.js desktop/lib/triage-read.js desktop/lib/session-tab.js desktop/lib/ladder/rung1-kept.js desktop/lib/ladder/rung2-sketch.js desktop/lib/ladder/rung3-digest.js desktop/lib/ai/models.js)
+          ready=$(tools/public-watch.sh "$GITHUB_WORKSPACE" ready hosted/ready-fill desktop/ready-fill extension app-core/src worker/src desktop/lib/form-address.js desktop/lib/triage-reader.js desktop/lib/triage-read.js desktop/lib/session-tab.js desktop/lib/submit-proof.js desktop/lib/apply-eligibility.js desktop/lib/form-judge.js desktop/lib/page-kind.js desktop/lib/account-judge.js desktop/lib/confirmation-judge.js desktop/lib/ladder/value-class.js desktop/lib/ladder/rung1-kept.js desktop/lib/ladder/rung2-sketch.js desktop/lib/ladder/rung3-digest.js desktop/lib/ai/models.js)
           echo "site=$site" >> "$GITHUB_OUTPUT"; echo "ready=$ready" >> "$GITHUB_OUTPUT"
           echo "public-watch: site $site, ready-to-send $ready"
       - name: Start the deploys that are behind, then record
