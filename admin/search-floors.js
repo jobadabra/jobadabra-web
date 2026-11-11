@@ -10,7 +10,7 @@ export const MAX_RED = 54, MAX_MERGES = 10, MAX_PERSONAS = 40;   // 3 numbers x 
 const line = (value, max) => String(typeof value === 'string' ? value : '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 const plain = value => value && typeof value === 'object' && !Array.isArray(value);
 const real = value => (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value < 1e7 ?   // every number here is a count, seconds or a share: never negative
-   Math.round(value * 1000) / 1000 : null);
+   Math.round(value * 10000) / 10000 : null);
 const whole = value => (Number.isInteger(value) && value >= 0 && value < 1e6 ? value : null);
 const persona = value => (Number.isInteger(value) && value > 0 && value < 100 ? value : null);
 

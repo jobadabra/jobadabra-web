@@ -74,3 +74,8 @@ test('code review of #527: a by-hand run never hides the night\'s red rows; gree
   assert.deepEqual([odd.series, odd.merges, odd.red[0].now, odd.red[0].below], ['', ['ok'], null, null], 'text is strings only; a negative number and a below of 0 are not sent');
   assert.match(finishSection(judgeAll([night('2026-11-18', {floors: {...checked, red: [{persona: 1, number: 'eures_inout', floor: 0.995, now: 0.9, spread: 0.01, below: 2}]}})]), []), /floor 99\.5%/, '0.995 is not rounded to 100%');
 });
+
+test('Gitar on #527: a share just under its floor is told apart from it (99.96% against 100%), not printed as 100% twice', () => {
+  const html = finishSection(judgeAll([night('2026-11-18', {floors: {...checked, red: [{persona: 1, number: 'eures_inout', floor: 1, now: 0.9996, spread: 0.01, below: 2}]}})]), []);
+  assert.match(html, /EURES in = out share 99\.96%, floor 100%/);
+});

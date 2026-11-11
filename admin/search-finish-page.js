@@ -82,13 +82,19 @@ const NUMBER_WORDS = {right: 'right jobs', eures_inout: 'EURES in = out share', 
 const CEILING = {first_s: true};   // lower is better: its "floor" is a ceiling
 const whoIn = (persona, labels) => who(persona, labels[persona]);
 const ordinal = n => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({1: 'st', 2: 'nd', 3: 'rd'}[n % 10] || 'th')}`;
-const value = (item, number) => (item == null ? '–' : number === 'eures_inout' ? `${Math.round(item * 1000) / 10}%` : String(item));   // eures_inout is a fraction 0-1 (cr): shown as a percent
+const percent = (item, places) => `${Math.round(item * 10 ** (places + 2)) / 10 ** places}%`;
+// eures_inout is a fraction 0-1 (cr): shown as a percent; `other` is the figure it is read against (now vs floor): when both would print the same, one more decimal tells them apart (Gitar on #527, 10 Nov 2026: 0.9996 against a floor of 1 read "100%" twice on a red row)
+const value = (item, number, other) => {
+  if (item == null) return '–';
+  if (number !== 'eures_inout') return String(item);
+  return other != null && item !== other && percent(item, 1) === percent(other, 1) ? percent(item, 2) : percent(item, 1);
+};
 
 // ---- Floors card (cr's G2, 10 Nov 2026; admin/search-floors.js keeps the fields, this draws them as sent and computes nothing) ----
 /** One red row in cr's words: "p3 · right jobs 0, floor 4 · 2nd night under" (the merges since the last green come once under the list). */
 function redRow(item, labels) {
   const word = CEILING[item.number] ? 'ceiling' : 'floor';
-  return `<li>${whoIn(item.persona, labels)} · ${esc(NUMBER_WORDS[item.number])} ${value(item.now, item.number)}, ${word} ${value(item.floor, item.number)} · ${item.below == null ? 'nights under not sent' : `${ordinal(item.below)} night under`}</li>`;
+  return `<li>${whoIn(item.persona, labels)} · ${esc(NUMBER_WORDS[item.number])} ${value(item.now, item.number, item.floor)}, ${word} ${value(item.floor, item.number, item.now)} · ${item.below == null ? 'nights under not sent' : `${ordinal(item.below)} night under`}</li>`;
 }
 
 /**
@@ -106,7 +112,7 @@ export function floorsCard(runs) {
   const persons = Object.keys(floors.levels).sort((a, b) => a - b), set = persons.reduce((total, key) => total + Object.values(floors.levels[key]).filter(item => item.floor != null).length, 0);
   const verdict = floors.red.length || floors.unreadable ? chip(`${floors.red.length + floors.unreadable} under the floor${floors.unreadable ? ` (${floors.unreadable} not readable here)` : ''}`, 'bad') : set ? chip('all above their floors', 'good') : chip('no floor to hold yet', 'off');
   const green = floors.last_green ? `last green run ${esc(floors.last_green.run)}${floors.last_green.sha ? ` (${esc(floors.last_green.sha.slice(0, 7))})` : ''}` : 'no green run known';
-  const table = persons.length ? `<details class="vz-more"><summary>All floors (${set} set)</summary><div class="scroll"><table><tr><th>Person</th>${Object.values(NUMBER_WORDS).map(word => `<th class="num">${esc(word)} · now / floor</th>`).join('')}</tr>${persons.map(key => `<tr><td>${whoIn(key, labels)}</td>${Object.keys(NUMBER_WORDS).map(number => { const item = floors.levels[key][number]; return `<td class="num">${item ? `${value(item.now, number)} / ${item.floor == null ? '<span class="muted">no floor yet</span>' : value(item.floor, number)}` : '–'}</td>`; }).join('')}</tr>`).join('')}</table></div></details>` : '';
+  const table = persons.length ? `<details class="vz-more"><summary>All floors (${set} set)</summary><div class="scroll"><table><tr><th>Person</th>${Object.values(NUMBER_WORDS).map(word => `<th class="num">${esc(word)} · now / floor</th>`).join('')}</tr>${persons.map(key => `<tr><td>${whoIn(key, labels)}</td>${Object.keys(NUMBER_WORDS).map(number => { const item = floors.levels[key][number]; return `<td class="num">${item ? `${value(item.now, number, item.floor)} / ${item.floor == null ? '<span class="muted">no floor yet</span>' : value(item.floor, number, item.now)}` : '–'}</td>`; }).join('')}</tr>`).join('')}</table></div></details>` : '';
   return `<section class="card vz" id="finish-floors">${head}${note}<p>${verdict} ${set ? chip(`${set} floors set`, 'off') : chip('no floor yet: it needs 3 measured nights', 'off')} ${where} <span class="muted small">· ${green}</span></p>
 ${floors.red.length ? `<ul>${floors.red.map(item => redRow(item, labels)).join('')}</ul>${floors.merges.length ? `<div class="small">Merges since the last green: ${floors.merges.map(esc).join('; ')}</div>` : ''}` : ''}${table}</section>`;
 }
