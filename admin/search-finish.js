@@ -36,20 +36,25 @@ export const BLIND = ['unmeasured', 'fault', 'unknown', 'not-run'];   // Why (11
 export const OWN = ['employer_sites', 'job_boards', 'free_job_apis', 'web_search'];
 
 /**
- * The headline of one run: right jobs from our own sources, summed over the people the run measured, and how many people have at least one. A person whose row sent no own-source number is not counted (never 0); a blind person is counted apart.
- * @param {object} run a stored night or by-hand run ({rows: [{kind, sources}]})
- * @returns {{right: number, people: number, sent: number, blind: number, total: number}|null} null when no row sent a number of an own source
+ * The headline of one run (owner, 11 Nov 2026, via sa: "unique(LinkedIn Jobs + Web Search + Employer Careers + Jobs Feed APIs...)", a job two sources found is ONE job): on a night that ran with EURES off, the right jobs in our list,
+ * `local` summed over the measured people, each job once; people = those with at least one. `split` = the sum of the own sources' `right` (a job two sources found counts for both), `shared` = split - right (found by more than one
+ * source), `holes` = people whose `local` is larger than their own-source sum (a right job no source row claims: shown, never clamped). A run with EURES on is null: its `local` holds EURES's jobs too, never a mixed number.
+ * @param {object} run a stored night or by-hand run ({eures, rows: [{kind, local, sources}]})
+ * @returns {{right: number, people: number, sent: number, blind: number, total: number, split: number|null, shared: number|null, holes: number}|null}
  */
 export function ownOf(run) {
-  let right = 0, people = 0, sent = 0, blind = 0;
+  if (run.eures !== 'off') return null;
+  let right = 0, people = 0, sent = 0, blind = 0, split = 0, shared = 0, holes = 0, withSources = 0;
   for (const row of run.rows || []) {
     if (BLIND.includes(row.kind)) { blind += 1; continue; }
+    if (row.local == null) continue;
+    sent += 1; right += row.local; if (row.local > 0) people += 1;
     const counts = OWN.map(source => row.sources?.[source]?.right).filter(value => value != null);
     if (!counts.length) continue;
     const sum = counts.reduce((a, b) => a + b, 0);
-    sent += 1; right += sum; if (sum > 0) people += 1;
+    withSources += 1; split += sum; shared += Math.max(0, sum - row.local); if (row.local > sum) holes += 1;   // per person: a hole in one person is not paid for by a shared job in another
   }
-  return sent ? {right, people, sent, blind, total: (run.rows || []).length} : null;
+  return sent ? {right, people, sent, blind, total: (run.rows || []).length, split: withSources ? split : null, shared: withSources ? shared : null, holes} : null;
 }
 
 /** The side check: of the right jobs EURES shows for the people the run measured, how many our list keeps (in = out summed), or null when no person has a reference. */

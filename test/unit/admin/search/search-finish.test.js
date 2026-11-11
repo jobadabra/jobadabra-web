@@ -61,11 +61,11 @@ test('sources: right jobs, share, "only it" stays null until sent, people served
 
 test('the tab: band, weakest, chart, per-person bars, sources; empty says so; by-hand runs are hollow; another candidate set is left out', () => {
   const six = night('2026-11-10', [row(1)].concat(Array.from({length: 5}, (_, i) => row(i + 2))));
-  const full = n => night('2026-11-1' + n, Array.from({length: 18}, (_, i) => row(i + 1, {inout: i < 12 ? io(10, i < 8 ? 10 : 6, i < 8 ? {} : {after_kept: 4}) : null, sources: {eures: {right: 3, seconds: 40}, job_boards: {right: 2, seconds: 60}}})));
+  const full = (n, extra = {eures: 'off'}) => night('2026-11-1' + n, Array.from({length: 18}, (_, i) => row(i + 1, {inout: i < 12 ? io(10, i < 8 ? 10 : 6, i < 8 ? {} : {after_kept: 4}) : null, sources: {eures: {right: 3, seconds: 40}, job_boards: {right: 2, seconds: 60}}})), extra);
   const html = finishSection(judgeAll([full(8), full(7), six]), [{day: '2026-11-18', at: '2026-11-18T14:20:00.000Z', engine: 'unknown', eures: 'on', rows: full(9).rows}]);
   for (const id of ['finish-band', 'finish-weakest', 'finish-side', 'finish-over', 'finish-inout', 'finish-lost', 'finish-sources', 'finish-reached']) assert.match(html, new RegExp(`id="${id}"`));
-  assert.match(html, /36 <small>right jobs<\/small>[\s\S]*for <b>18 of 18<\/b> people/, 'the headline counts our own sources: 18 people x 2 right jobs, EURES is not in it');
-  assert.match(html, /EURES on: not in this number/);
+  assert.match(html, /54 <small>right jobs<\/small>[\s\S]*each job once, for <b>18 of 18<\/b> people/, 'the headline: 18 people x 3 right jobs in our list on a EURES-off night, EURES is not in it');
+  assert.match(html, /split by source: 36 right jobs in all[\s\S]*<b>18<\/b> people have right jobs no source row claims/, 'the split by source sits under it; local 3 against 2 claimed is a hole, shown');
   assert.match(html, /SIDE CHECK<\/span> with EURES on, our list keeps <b>104 of 120<\/b>/, 'EURES in = out is the small side check');
   assert.match(html, /unexplained/, 'after_kept has its own words');
   assert.match(html, /nobody on it/, 'no Moves: line is read yet');
@@ -87,12 +87,13 @@ test('the stacked chart: a column per run, states add up under the top, a dashed
 });
 
 // The headline on our own sources (owner, 11 Nov 2026): EURES is never in it, a person who sent no own-source number is not counted (never 0), a blind person is counted apart.
-test('ownOf: right jobs and people from our own sources only; unsent is not 0; blind apart; EURES and LinkedIn are out', () => {
+test('ownOf (each job once): local summed on a EURES-off run; the split by source, shared jobs and holes beside it; EURES on = no headline; blind apart', () => {
   assert.deepEqual(OWN, ['employer_sites', 'job_boards', 'free_job_apis', 'web_search']);
-  const run = {rows: [row(1, {sources: {eures: {right: 9}, employer_sites: {right: 3}, job_boards: {right: 2}, linkedin: {right: 7}}}), row(2, {sources: {job_boards: {right: 0}}}), row(3, {sources: {eures: {right: 5}}}), row(4), row(5, {kind: 'unmeasured', sources: {job_boards: {right: 4}}})]};
-  assert.deepEqual(ownOf(run), {right: 5, people: 1, sent: 2, blind: 1, total: 5}, 'p3 sent only EURES and p4 nothing: not counted; p5 is blind');
-  assert.equal(ownOf({rows: [row(1, {sources: {eures: {right: 9}}})]}), null, 'EURES alone is no headline');
-  assert.match(finishSection(judgeAll([night('2026-11-18', [row(1, {sources: {eures: {right: 9}}})])]), []), /no run has sent per-source counts yet/);
+  const rows = [row(1, {local: 3, sources: {eures: {right: 9}, employer_sites: {right: 3}, job_boards: {right: 2}, linkedin: {right: 7}}}), row(2, {local: 4, sources: {job_boards: {right: 1}}}), row(3, {local: 0}), row(4, {local: 2, sources: {eures: {right: 5}}}), row(5, {kind: 'unmeasured', local: 6, sources: {job_boards: {right: 4}}})];
+  assert.deepEqual(ownOf({eures: 'off', rows}), {right: 9, people: 3, sent: 4, blind: 1, total: 5, split: 6, shared: 2, holes: 1}, 'right = local, each job once (3 + 4 + 0 + 2); p1: 5 source claims for 3 jobs = 2 shared; p2: 1 claim for 4 jobs = a hole, not clamped and not paid by p1; p5 is blind');
+  assert.equal(ownOf({eures: 'on', rows}), null, 'a EURES-on run holds EURES jobs in `local`: no headline, never a mixed number');
+  assert.equal(ownOf({eures: 'off', rows: [row(1, {local: null})]}), null, 'no number sent is not 0');
+  assert.match(finishSection(judgeAll([night('2026-11-18', [row(1, {local: 3})])]), []), /no night has run with EURES off yet/);
 });
 
 test('the side check: in = out summed over the people with a reference, and where the missing jobs were lost, all people together', () => {
@@ -113,7 +114,8 @@ test('the Sources table and the Market card default to the EURES-off nights; EUR
 });
 
 test('review of 1/5: a not-run row is blind; the side check reads the newest run WITH a reference, not a newer one where every in is 0', () => {
-  assert.equal(ownOf({rows: [row(1, {kind: 'not-run', sources: {job_boards: {right: 4}}})]}), null, 'a not-run row is not counted');
+  assert.equal(ownOf({eures: 'off', rows: [row(1, {kind: 'not-run', local: 4})]}), null, 'a not-run row is not counted (positive control: the same row as measured is)');
+  assert.equal(ownOf({eures: 'off', rows: [row(1, {local: 4})]}).right, 4);
   const older = night('2026-11-17', [row(1, {inout: io(10, 8)})]), newer = night('2026-11-18', [row(1, {inout: io(0, 0)})]);
   assert.match(finishSection(judgeAll([newer, older]), []), /our list keeps <b>8 of 10<\/b>/);
 });

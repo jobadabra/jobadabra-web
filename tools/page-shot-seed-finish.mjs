@@ -40,5 +40,5 @@ export async function searchFinish({env}) {
     job_boards: i % 5 === 4 ? {status: 'none (no board)'} : {status: 'counted', read: 15 + i, right: 4 + (i % 5), only: 1}, free_job_apis: {status: 'none (no query)'}, web_search: {status: 'not counted: no key'}, linkedin: {status: 'by hand'}}}]));
   await writeState(env, REFERENCE_KEY, {week: '2026-W46', run: null, personas: personas, at: new Date().toISOString()}, new Date());
   const hand = await readState(env, HAND_KEY, {runs: []});
-  await writeState(env, HAND_KEY, {runs: hand.runs.map((run, h) => ({...run, rows: run.rows.map((row, i) => ({...row, inout: cleanInout(inoutOf(i, n - 1 - h, n))}))}))}, new Date());
+  await writeState(env, HAND_KEY, {runs: hand.runs.map((run, h) => ({...run, eures: 'on', rows: run.rows.map((row, i) => ({...row, inout: cleanInout(inoutOf(i, n - 1 - h, n))}))}))}, new Date());
 }
