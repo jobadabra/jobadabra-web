@@ -6,7 +6,7 @@ import {aiPersona} from './page-shot-seed-ai-persona.mjs';
 import {bugBundle} from './page-shot-seed-bug-bundle.mjs';
 import {aiCostFull} from './page-shot-seed-ai-cost.mjs';
 import {healFull, testingFull} from './page-shot-seed-testing.mjs';
-import {searchFinish, searchFinishWeek} from './page-shot-seed-finish.mjs'; import {searchScoreboard} from './page-shot-seed-scoreboard.mjs'; import {qualityBoard} from './page-shot-seed-quality.mjs'; import {searchNight, searchNight18, searchNightEuresOff, searchNightNotRun, searchNightYield, searchTrend, searchTrendPrs} from './page-shot-seed-night.mjs'; import {finderSilence} from './page-shot-seed-finders.mjs'; import {methodsCost} from './page-shot-seed-methods-cost.mjs';
+import {searchFinish, searchFinishRead, searchFinishWeek} from './page-shot-seed-finish.mjs'; import {searchScoreboard} from './page-shot-seed-scoreboard.mjs'; import {qualityBoard} from './page-shot-seed-quality.mjs'; import {searchNight, searchNight18, searchNightEuresOff, searchNightNotRun, searchNightYield, searchTrend, searchTrendPrs} from './page-shot-seed-night.mjs'; import {finderSilence} from './page-shot-seed-finders.mjs'; import {methodsCost} from './page-shot-seed-methods-cost.mjs';
 import {redMainRows, stateFields, stateRows} from './page-shot-seed-state.mjs'; import {notifySeeds} from './page-shot-seed-notify.mjs';
 const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields)});
 
@@ -502,6 +502,7 @@ export const seeds = {...notifySeeds,
     }
   },
   'search-finish-week': context => searchFinishWeek(context),   // the same tab with a MADE-UP week of 5 runs (11 Nov 2026, [oe])
+  'search-finish-read': context => searchFinishRead(context),   // the same tab with MADE-UP "what a search read" numbers (11 Nov 2026, [wr])
   'search-finish': context => searchFinish(context),   // the Night search Finish line tab (10 Nov 2026, [oe])
   'search-scoreboard': context => searchScoreboard(context),   // the Night search Scoreboard card (10 Nov 2026, [oe])
   'ai-persona': aiPersona,

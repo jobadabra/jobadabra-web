@@ -20,14 +20,14 @@ export function countTicks(max, want = 4) {
 }
 
 const W = 720, H = 220, BOX = {l: 44, r: 6, t: 10, b: 24};
-const MARK_ROOM = 14;   // the strip above the plot that holds the marks (only when a chart has one)
+export const MARK_ROOM = 14;   // the strip above the plot that holds the marks (only when a chart has one)
 
 /**
  * The marks of a time chart: a dashed line at the left edge of each marked day's slot (the change happened between the day before and this one) and a pill with the count on it; hovering or focusing the pill gives `tip`.
  * days: [{mark?: {count | label, tip}}] in the chart's order (`label` is words on the pill, e.g. 'EURES off', when a count does not say it); `x0`/`slot`/`top`/`bottom` are the plot's geometry. '' when no day is marked.
  * Why (10 Nov 2026, owner: merged search PRs as marks on the Night search chart): the one form a "what changed here" event takes in the admin's charts, so the next page that wants one does not draw its own.
  */
-function marksOf(days, {x0, slot, top, bottom}) {
+export function marksOf(days, {x0, slot, top, bottom}) {
   return days.map((day, index) => {
     if (!day.mark) return '';
     const text = day.mark.label ?? (day.mark.count > 99 ? '99+' : String(day.mark.count)), label = esc(text), width = 10 + 6 * text.length, x = x0 + slot * index;

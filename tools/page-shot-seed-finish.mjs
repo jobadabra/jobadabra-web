@@ -3,7 +3,7 @@ import {readState, writeState} from '../admin/ci-state.js';
 import {REFERENCE_KEY, STATE_KEY} from '../admin/search-night.js';
 import {HAND_KEY} from '../admin/search-night-hand.js';
 import {searchScoreboard} from './page-shot-seed-scoreboard.mjs';
-import {cleanInout, cleanRuns, cleanSources} from '../admin/search-finish.js';
+import {cleanInout, cleanRead, cleanRuns, cleanSources} from '../admin/search-finish.js';
 import {cleanFloors} from '../admin/search-floors.js';
 import {cleanScout} from '../admin/search-finish-scout.js';
 import {cleanStepYield} from '../admin/search-night-yield.js';
@@ -68,4 +68,20 @@ export async function searchFinishWeek({env}) {
   }), measured = rows.filter(row => !['unmeasured', 'fault', 'unknown', 'not-run'].includes(row.kind));
   const byRun = cleanByRun([0, 1, 2, 3, 4].map(k => ({run: k + 1, measured: measured.length, people_new: measured.filter(row => row.runs[k].newRight > 0).length, new_right: measured.reduce((sum, row) => sum + row.runs[k].newRight, 0)})));
   await writeState(env, WEEK_KEY, {weeks: [{...newest, week: '2026-11-12', at: new Date().toISOString(), run: null, byHand: false, byRun, rows}]}, new Date());
+}
+
+/**
+ * The same tab with MADE-UP "what a search read" numbers (11 Nov 2026, [wr]): on the 18-person nights the search reads more and more, as after a merge that widens the read (jobs listed ~50 -> ~230, employer sites ~15 -> ~135 of 141, titles judged ~150 -> ~800 per person, one step up); the two oldest nights had EURES on, the by-hand run reads like the newest night; one person sent no `read` on any run. Nothing here is a real person or a real count.
+ * @param {{env: object}} context the seed context
+ */
+export async function searchFinishRead({env}) {
+  await searchFinish({env});
+  const state = await readState(env, STATE_KEY, {nights: []}), eighteen = state.nights.filter(night => night.rows.length === 18).reverse(), n = eighteen.length;
+  const step = n - 4, climb = (t, low, high, i, wobble) => Math.round((t < step ? low : high) * (0.85 + ((i * 7) % 5) / 16) + ((i * 11 + t * 5) % wobble));   // a merge between two nights: the read steps up
+  const rowsOf = (t, rows) => rows.map((row, i) => ({...row, counters: {...(row.counters || {}), sites: Math.min(141 - (i % 4), climb(t, 14, 136, i, 6)), titles: climb(t, 150, 800, i, 40)},
+    read: i === 17 ? null : cleanRead({listed: climb(t, 48, 240, i, 12), employers: 141 - (i % 4)})}));
+  const nights = state.nights.map(night => { const t = eighteen.indexOf(night); return t < 0 ? night : {...night, eures: t < 2 ? 'on' : 'off', rows: rowsOf(t, night.rows), prs: t === step ? [{n: 3709, title: 'Read the employer pages in one pass'}, {n: 3712, title: 'Raise the AI call cap'}] : t === 3 ? [{n: 3688, title: 'Ask the AI about fewer titles'}] : []}; });   // MADE-UP merges: the step up has 2 PRs, one earlier night has 1
+  await writeState(env, STATE_KEY, {nights}, new Date());
+  const hand = await readState(env, HAND_KEY, {runs: []});
+  await writeState(env, HAND_KEY, {runs: hand.runs.map(run => ({...run, eures: 'off', rows: rowsOf(n - 1, run.rows)}))}, new Date());
 }

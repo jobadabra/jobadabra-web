@@ -41,6 +41,13 @@ export function cleanRuns(raw) {
   return out.length ? out : null;
 }
 
+/** A verdict row's `read` (the people's own search, 11 Nov 2026) -> {listed, employers}: jobs listed in the person's places (the press's local_jobs) and employers in their places, each whole or null ("not sent yet"); null when the row sent none. */
+export function cleanRead(raw) {
+  if (!plain(raw)) return null;
+  const out = {listed: whole(raw.listed), employers: whole(raw.employers)};
+  return out.listed == null && out.employers == null ? null : out;
+}
+
 export const BLIND = ['unmeasured', 'fault', 'unknown', 'not-run'];   // Why (11 Nov 2026, review of 1/5): a not-run row is a person the night could not measure, as admin/search-market.js reads it   // as admin/search-night-scoreboard.js: the check could not measure the person
 
 /** The sources that make our own result (owner, 11 Nov 2026: "just relying on EURES is cheating... other 3rd parties should be just bonuses, not our core"): EURES is never in the headline, LinkedIn is typed by hand. */
