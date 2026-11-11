@@ -6,7 +6,7 @@
 | | |
 |---|---|
 | URL | `https://jobadabra-ai-broker.jobpilotto.workers.dev` |
-| Who may call | GitHub Actions jobs of `jobadabra/jobadabra`, `jobadabra-web` and `jobadabra-lab` (OIDC run token) |
+| Who may call | GitHub Actions jobs of the repositories in the `REPOSITORY` var (`jobadabra/*` and the `GarryOne/*` originals of `jobadabra`, `jobadabra-web`, `jobadabra-lab`), OIDC run token |
 | Engines | `codex` → `claude` → `free-ai` (first one set by `ENGINE`, default `codex`) |
 | Where it runs | Cloudflare Worker + one Durable Object (`CodexBroker`) + one container (1 vCPU, 3 GiB) |
 | Status | `GET /health` (public, counts and states only, no secret) |
