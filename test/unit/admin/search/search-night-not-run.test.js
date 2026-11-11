@@ -6,6 +6,7 @@ import {KINDS, NOT_MEASURED, clean} from '../../../../admin/search-night.js';
 import {judgeAll, notRunOf} from '../../../../admin/search-night-judge.js';
 import {nightSection} from '../../../../admin/search-night-page.js';
 import {groupHtml, groups} from '../../../../admin/search-night-trend.js';
+import {search} from '../../../../admin/product-quality-search.js';
 import {scoreOf, scoreboardSection, series} from '../../../../admin/search-night-scoreboard.js';
 
 const NOW = new Date('2026-11-19T09:00:00Z');
@@ -42,4 +43,22 @@ test('a chart never draws a not-run night as zero: the Day by day card and the S
   assert.doesNotMatch(html, /found 0 of 18/);
   assert.equal(series(nights, []).span.length, 2, 'the Scoreboard span ends at the last night that ran');
   assert.match(scoreboardSection(nights, []), /id="night-scoreboard"/);
+});
+
+// Gitar retro of #523 (11 Nov 2026): the newest night decides, an older pass never stands in for a not-run night.
+test('the Report "Search" area says the newest night did not run instead of showing an older pass', () => {
+  const days = Array.from({length: 30}, (_, i) => { const day = new Date(Date.UTC(2026, 10, 19) - (29 - i) * 864e5); return day.toISOString().slice(0, 10); });
+  const stored = [night('2026-11-19', eighteen(refused), 'not-run'), night('2026-11-18', eighteen(ok)), night('2026-11-17', eighteen(ok))];
+  const area = search({days, searchNights: stored});
+  assert.deepEqual([area.value, area.tone, area.word], [null, 'none', 'not measured']);
+  assert.match(area.note || area.subs.join(' ') || JSON.stringify(area), /newest night \(2026-11-19\) did not run/, 'names the night; no "Newest night" line of the older pass');
+  assert.equal(search({days, searchNights: stored.slice(1)}).tone, 'good', 'control: without the not-run night the older pass is the newest and reads green');
+});
+
+test('the Scoreboard takes its row count from the newest night that ran, not from a short not-run verdict on top', () => {
+  const short = night('2026-11-19', Array.from({length: 3}, (_, i) => refused(i + 1)), 'not-run');
+  const nights = judgeAll([short, night('2026-11-18', eighteen(ok)), night('2026-11-17', eighteen(ok))]);
+  const out = series(nights, []);
+  assert.equal(out.total, 18);
+  assert.equal(out.span.length, 2, 'both real nights stay; before the fix every one was filtered out');
 });
