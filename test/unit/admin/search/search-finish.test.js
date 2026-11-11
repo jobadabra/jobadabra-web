@@ -125,6 +125,8 @@ test('2/5 right jobs per person and source: a number where a source brought one,
   const html = finishSection(judgeAll([night('2026-11-18', rows, {eures: 'off'})]), []), at = html.slice(html.indexOf('id="finish-per-person"'), html.indexOf('id="finish-floors"'));
   assert.match(at, /p1<\/b> Role, Place<\/td><td class="num"><b>3<\/b><\/td><td class="num"><b>0<\/b><\/td><td class="num"><span class="chip off">not sent yet<\/span><\/td><td class="num"><span class="chip off">not sent yet<\/span><\/td>/, 'a sent 0 is a 0; an unsent source is "not sent yet"');
   assert.match(at, /p2<\/b> Role, Place<\/td><td class="num"><span class="chip warn">time was up before its turn<\/span><\/td><td class="num"><span class="chip warn">time was up before its turn<\/span><\/td>/, 'the gate said it ran out of time for those steps');
+  const scoring = finishSection(judgeAll([night('2026-11-18', [row(1, {local: 1, funnel_note: "time ran out for: descriptions, scoring the job boards' jobs", sources: {employer_sites: {right: 1}}})], {eures: 'off'})]), []);
+  assert.doesNotMatch(scoring.slice(scoring.indexOf('id="finish-per-person"')), /time was up before its turn/, "the scoring step of the job boards is not the job boards step (Gitar on #549)");
   assert.match(at, /p3<\/b> Role, Place<\/td>(<td class="num"><span class="chip off">not measured<\/span><\/td>){4}/, 'a blind person is not measured in every source');
   assert.equal((at.match(/by hand/g) || []).length, 3 + 1, 'LinkedIn is by hand on every row (+ the note)');
   assert.doesNotMatch(finishSection(judgeAll([night('2026-11-18', rows)]), []), /id="finish-per-person"/, 'a EURES-on run draws no own-source table');

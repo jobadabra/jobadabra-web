@@ -78,7 +78,8 @@ function sourceCell(row, source) {
   const item = row.sources?.[source];
   if (item && item.right != null) return `<b>${item.right}</b>`;
   if (BLIND.includes(row.kind)) return chip('not measured', 'off');
-  if ((row.ranOut || []).some(step => String(step).toLowerCase().includes(RAN_OUT_STEP[source]))) return chip('time was up before its turn', 'warn');
+  // Why (Gitar on #549, 11 Nov 2026): the gate also lists "scoring the job boards' jobs"; a substring match flagged job boards for it, so the whole step is compared
+  if ((row.ranOut || []).some(step => String(step).trim().toLowerCase() === RAN_OUT_STEP[source])) return chip('time was up before its turn', 'warn');
   return chip('not sent yet', 'off');
 }
 function perSource(runs) {
