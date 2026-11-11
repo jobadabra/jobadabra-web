@@ -90,6 +90,18 @@ function perSource(runs) {
 <div class="scroll"><table><tr><th>Person</th>${OWN.map(source => `<th class="num">${esc(name(source))}</th>`).join('')}<th class="num">LinkedIn</th><th class="num">Run 1</th><th class="num">Run 2</th></tr>${body}</table></div></section>`;
 }
 
+// ---- Right jobs per night, by source group (3/5, owner's picture 11 Nov 2026): the nights that ran with EURES off, our own sources stacked; the split, a job two sources found shows in both ----
+function overNights(runs) {
+  const shown = runs.filter(run => ownOf(run) && run.rows.some(row => row.sources)).slice(0, 14).reverse();
+  if (!shown.length) return '';
+  const tones = ['s1', 's3', 's2', 's4'], days = shown.map(run => {
+    const values = OWN.map(source => run.rows.reduce((sum, row) => sum + (BLIND.includes(row.kind) || row.local == null ? 0 : row.sources?.[source]?.right ?? 0), 0));   // Why (Gitar on #551, 11 Nov 2026): the same people as the headline (ownOf): a person the night could not measure is out of the chart too
+    return {day: run.night, hand: run.hand, values, tip: `${run.night}${run.hand ? ' · by hand' : ''} · ${OWN.map((source, i) => `${name(source)} ${values[i]}`).join(' · ')} · each job counted once per source that found it`};
+  }), top = Math.max(3, ...days.map(day => day.values.reduce((a, b) => a + b, 0)));
+  return `<section class="card vz" id="finish-nights"><h2>📈 Right jobs per night, by source group</h2><div class="muted small">Our own sources only, nights with EURES off · a job two sources found shows in both groups · a hollow night was by hand · 2 runs a night (Run 1 / Run 2) arrive with the two-run night</div>
+${figure({chart: stacked(days, OWN.map((source, i) => ({name: name(source), tone: tones[i]})), {top})})}</section>`;
+}
+
 // "Where the missing jobs were lost, all people" (owner, 11 Nov 2026): one bar per stage, summed over the people with a reference; the bar is the share of in, the numbers are right jobs.
 function lostBlock(run) {
   const t = lostTotals(run);
@@ -181,5 +193,5 @@ const reachedCard = () => '<section class="card vz" id="finish-reached" style="b
 export function finishSection(judged, hand = [], ref = {}) {
   if (!judged) return '<section class="card"><h2>The nights could not be read</h2><p class="muted">The store of the nightly Search check did not answer, so this tab cannot draw the finish line.</p></section>';
   const runs = runsOf(judged, hand);
-  return `${band(runs)}${perSource(runs)}${floorsCard(runs)}${weakCard(runs)}${sideCheck(runs)}${sourcesCard(runs)}${marketCard(runs, ref)}${reachedCard()}${VIZ_TOOLTIP}`;
+  return `${band(runs)}${perSource(runs)}${overNights(runs)}${floorsCard(runs)}${weakCard(runs)}${sideCheck(runs)}${sourcesCard(runs)}${marketCard(runs, ref)}${reachedCard()}${VIZ_TOOLTIP}`;
 }
