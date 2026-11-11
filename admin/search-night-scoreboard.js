@@ -36,7 +36,8 @@ const words = score => `${score.day} · ${score.right} of ${score.total} people 
  * @param {object[]} hand the by-hand runs (any order)
  */
 export function series(judged, hand = []) {
-  const total = judged[0]?.rows?.length, kept = judged.filter(night => night.rows.length === total && !night.notRun).map(scoreOf);
+  // Why (11 Nov 2026, Gitar retro of #523): the row count is the newest night THAT RAN; a short not-run verdict on top would filter every real night out and blank the card.
+  const total = judged.find(night => !night.notRun)?.rows?.length ?? judged[0]?.rows?.length, kept = judged.filter(night => night.rows.length === total && !night.notRun).map(scoreOf);
   if (!kept.length) return {total, span: []};
   const oldest = kept.map(score => score.day).sort()[0];   // Why (10 Nov 2026, review): a by-hand run older than the stored nights would stretch the span to years of empty days; it stays in the store, not on the chart
   const handed = hand.filter(run => run?.rows?.length === total && (run.day || '') >= oldest).map(scoreOf);

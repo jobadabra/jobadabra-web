@@ -89,6 +89,16 @@ export async function searchNightEuresOff({env}, seeds) {
   await writeState(env, STATE_KEY, {nights: kept}, new Date());
 }
 
+// A newest night where no AI answered (11 Nov 2026, [oe], Gitar retro of #523): the 18-candidate seed without its dropped newest night, so the night before it passed (15-16 of 18 measured), and today a refused night
+// (every person not-run: codex 429, claude 529). Report's Search area must say "not measured", not show the older pass. MADE-UP counts only.
+/** @param {{env: object}} context the seed context; `seeds` the seed table */
+export async function searchNightNotRun({env}, seeds) {
+  await searchNight18({env}, seeds);
+  const [, ...healthy] = await nights(env), today = new Date().toISOString().slice(0, 10);
+  const refused = clean({state: 'not-run', head: '⚪ not run: codex 429, claude 529', rows: healthy[0].rows.map(row => ({persona: row.persona, label: row.label, kind: 'not-run', why: 'not run: subs: codex 429, claude 529', local: null, found: null, seconds: null}))}, {night: today, run: '42000000000'});
+  await writeState(env, STATE_KEY, {nights: [{...refused, at: `${today}T04:00:00.000Z`}, ...healthy]}, new Date());
+}
+
 // The Night search chart with the merged search PRs as marks (10 Nov 2026, [pm]): the day-by-day seed, and on seven of its 18-candidate nights MADE-UP PR numbers and titles (1 to 20 PRs, one night with the
 // stored cap and "and more", one real "no PR" night, the first night "nothing to compare"). Nothing here is a real PR.
 /** @param {{env: object}} context the seed context; `seeds` the seed table */

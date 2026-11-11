@@ -18,7 +18,8 @@ export function search({days, searchNights}) {
   if (!judged.length) return notMeasured(base, 'no nightly search stored in the last 30 days');   // no night yet is "not measured", never 0
   // Why (6 Nov 2026, review): only nights with the newest night's persona count are one series, as in the judge: an average of 6-persona and 18-persona nights would read "better" just because the set tripled.
   // Why (10 Nov 2026, jobadabra [oe] 1/3): nights without EURES are their own series too: the switch alone lowers the jobs found, it is no "worse".
-  if (!judged.some(item => !item.notRun)) return notMeasured(base, 'the last nights did not run (no AI answered): not a zero');   // Why (10 Nov 2026, cr 2/6)
+  // Why (11 Nov 2026, Gitar retro of #523): the NEWEST night decides. Falling back to an older pass showed a green "Newest night" and let the 14-day guard read the older night while nothing had been measured for days. The alert for a not-run night is not this file's (cr's G6, event search-night).
+  if (judged[0].notRun) return notMeasured(base, judged.every(item => item.notRun) ? 'the last nights did not run (no AI answered): not a zero' : `the newest night (${judged[0].night}) did not run (no AI answered): not a zero`);   // Why (10 Nov 2026, cr 2/6): the all-not-run wording is kept
   const ran = judged.filter(item => !item.notRun), newest = ran[0], nights = ran.filter(item => item.total === newest.total && euresOf(item) === euresOf(newest)), byNight = new Map(nights.map(item => [item.night, item]));
   if (!days.slice(-2 * WEEK).includes(newest.night)) return notMeasured(base, 'no nightly search in the last 14 days');   // a stopped job is the news, not an old number
   const series = days.map(day => (byNight.has(day) ? {day, value: byNight.get(day).measured, n: 1} : {day, value: null}));
