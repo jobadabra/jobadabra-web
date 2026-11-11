@@ -20,9 +20,11 @@ function d1() {
   return {prepare: sql => statement(sql), batch: async statements => { for (const item of statements) await item.run(); }};
 }
 const seen = html => html.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, '');   // what the owner reads
+const hourOf = row => row.hours?.[0] ?? 12;
 const tick = (minute, hour = 12) => new Date(Date.UTC(2026, 10, 1, hour, minute));
 const PAGES = {'e2e-intel.yml': {path: '/admin/testing/e2e', html: e2ePage}, 'integration-intel.yml': {path: '/admin/testing/integrations', html: integrationPage},
-  'schedules-snapshot.yml': {path: '/admin/operations/scheduled', html: schedulesPage}, 'daily-digest.yml': {path: '/admin/agents/build-log', html: (rows, options) => buildLogPage(rows || [], options)}};   // every collector in INTEL_COLLECTORS has a page that draws the line (Why, 1 Nov 2026: the Worker started the snapshot too, #263)
+  'schedules-snapshot.yml': {path: '/admin/operations/scheduled', html: schedulesPage}, 'daily-digest.yml': {path: '/admin/agents/build-log', html: (rows, options) => buildLogPage(rows || [], options)},
+  'central-scout.yml': {path: '/admin/operations/scheduled', html: schedulesPage}};   // 11 Nov 2026: the scout's refusal shows on the Scheduled page, which lists its schedule   // every collector in INTEL_COLLECTORS has a page that draws the line (Why, 1 Nov 2026: the Worker started the snapshot too, #263)
 
 test('a refused start draws "collector not starting: <reason>" on that collector\'s page only, and the next good start clears it', async () => {
   const db = d1();
@@ -55,14 +57,17 @@ test('the owner\'s case end to end: the Worker tick with no token -> the page of
   console.error = () => {};
   try {
     const env = {STATS, STATS_KEY: 'k3y', STATS_SALT: 'salt', GITHUB_REPO: 'GarryOne/jobadabra', GITHUB_TOKEN: 'site-token', ASSETS: {fetch: () => new Response('asset')}};
-    const run = async (minute, withEnv) => { const tasks = []; await worker.scheduled({cron: '*/5 * * * *', scheduledTime: tick(minute).getTime()}, withEnv, {waitUntil: task => tasks.push(task)}); await Promise.allSettled(tasks); };
+    const run = async (minute, withEnv, hour = 12) => { const tasks = []; await worker.scheduled({cron: '*/5 * * * *', scheduledTime: tick(minute, hour).getTime()}, withEnv, {waitUntil: task => tasks.push(task)}); await Promise.allSettled(tasks); };
     const show = async path => (await (await worker.fetch(new Request(`https://www.example.test${path}`, {headers: {Cookie: 'jp_stats=k3y'}}), env, {waitUntil() {}})).text());
-    for (const {workflow, minute, home} of INTEL_COLLECTORS) {
+    for (const row of INTEL_COLLECTORS) {
+      const {workflow, minute, home} = row, hour = hourOf(row);
       // Why (2 Nov 2026, owner: the collectors moved to the public repo, jobadabra#2989): a public collector is started with TIMERS_REPO + TIMERS_GITHUB_TOKEN, one here with E2E_INTEL_*; the line names the token that is missing.
-      const [tokenName, withToken] = home === 'public' ? ['TIMERS_GITHUB_TOKEN', {TIMERS_GITHUB_TOKEN: 'timers-token', TIMERS_REPO: 'jobadabra/jobadabra'}] : ['E2E_INTEL_GITHUB_TOKEN', {E2E_INTEL_GITHUB_TOKEN: 'own-token'}];
-      await run(minute, {...env, TIMERS_REPO: 'jobadabra/jobadabra'});
-      assert.match(seen(await show(PAGES[workflow].path)), new RegExp(`collector not starting: ${tokenName} is not set`), `${workflow}: no token`);
-      await run(minute, {...env, ...withToken});
+      // The lab's central scout: BRAIN_GITHUB_TOKEN, and the Scheduled page names the workflow because that page is not the scout's own.
+      const [tokenName, withToken] = {public: ['TIMERS_GITHUB_TOKEN', {TIMERS_GITHUB_TOKEN: 'timers-token', TIMERS_REPO: 'jobadabra/jobadabra'}], web: ['E2E_INTEL_GITHUB_TOKEN', {E2E_INTEL_GITHUB_TOKEN: 'own-token'}], lab: ['BRAIN_GITHUB_TOKEN', {BRAIN_GITHUB_TOKEN: 'brain-token'}]}[home];
+      const named = home === 'lab' ? 'central-scout.yml: ' : '';
+      await run(minute, {...env, TIMERS_REPO: 'jobadabra/jobadabra'}, hour);
+      assert.match(seen(await show(PAGES[workflow].path)), new RegExp(`collector not starting: ${named}${tokenName} is not set`), `${workflow}: no token`);
+      await run(minute, {...env, ...withToken}, hour);
       assert.doesNotMatch(seen(await show(PAGES[workflow].path)), /collector not starting/, `${workflow}: the token is set, the next tick clears the line`);
     }
     await run(35, env);

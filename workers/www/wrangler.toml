@@ -54,7 +54,7 @@ E2E_INTEL_REPO = "jobadabra/jobadabra-web"
 # Why (2 Nov 2026, owner: "Timers to site Worker, delete bot"): www starts the old bot Worker's on-time workflows (shared/timers.js): the */5 trigger stands for the nightly hours, the ten-minute sweeps and the night passes, the 47 trigger for the three-a-day e2e. They go into TIMERS_REPO with the secret TIMERS_GITHUB_TOKEN (repo and token travel together); TIMERS off = dormant. The bot's crons were removed first (the account allows 5 triggers).
 TIMERS = "on"
 TIMERS_REPO = "jobadabra/jobadabra"
-# The repo whose product-brain.yml a Telegram button tap starts (api/brain.js), with the secret BRAIN_GITHUB_TOKEN. Why (2 Nov 2026, owner: "jobadabra should have no web, no worker"): the brain runs in jobadabra-lab now; the public copy is deleted (jobadabra#2962), so GITHUB_REPO has no product-brain.yml to start.
+# The repo whose product-brain.yml a Telegram button tap starts (api/brain.js), with the secret BRAIN_GITHUB_TOKEN. Why (2 Nov 2026, owner: "jobadabra should have no web, no worker"): the brain runs in jobadabra-lab now; the public copy is deleted (jobadabra#2962), so GITHUB_REPO has no product-brain.yml to start. Also the pair that starts the lab's central-scout.yml on time at :25 of 4, 10, 16 and 22 UTC (shared/intel-start.js, home 'lab'; 11 Nov 2026, owner: GitHub's schedule ran it 2-3 times a day, 1-2 h late).
 BRAIN_REPO = "jobadabra/jobadabra-lab"
 # Sentry errors to the separate "Job Pilotto Sentry" Telegram bot (admin/sentry-alert.js); needs the secrets SENTRY_TELEGRAM_TOKEN and SENTRY_TELEGRAM_CHAT. "off" = kill switch.
 SENTRY_TELEGRAM = "on"
@@ -172,7 +172,7 @@ migrations_dir = "../../db/migrations"   # Why (2 Nov 2026, layout 2/3): the pat
 # Daily at 05:30 UTC: app reports (shared/telemetry.js) older than 90 days are dropped, and the top problems of the last
 # day are queued (D1 triage_queue) for the private repo's triage to pull (one issue per problem).
 [triggers]
-crons = ["30 5 * * *", "*/5 * * * *", "47 21,23,1 * * *"]   # daily, and every 5 minutes for the Sentry alerts (admin/sentry-alert.js). The :05, :20, :35 and :50 ticks also run the synthetic probe round (shared/synthetic.js, report only). The :40 and :15 ticks of the every-5-minutes trigger also start e2e-intel.yml and integration-intel.yml on time (shared/intel-start.js; GitHub's own hourly schedule ran every ~4.5 h or not at all). The learning judges also run when fill data arrives (workers/www/index.js judgeSoon): the account has no cron triggers left
+crons = ["30 5 * * *", "*/5 * * * *", "47 21,23,1 * * *"]   # daily, and every 5 minutes for the Sentry alerts (admin/sentry-alert.js). The :05, :20, :35 and :50 ticks also run the synthetic probe round (shared/synthetic.js, report only). The :25 tick of 4, 10, 16 and 22 UTC starts the lab's central-scout.yml. The :40 and :15 ticks of the every-5-minutes trigger also start e2e-intel.yml and integration-intel.yml on time (shared/intel-start.js; GitHub's own hourly schedule ran every ~4.5 h or not at all). The learning judges also run when fill data arrives (workers/www/index.js judgeSoon): the account has no cron triggers left
 
 # Workers Logs (11 Oct 2026: the D1 limit was hit and nothing recorded who called what): one invocation log per request, every request (about 5k a day).
 # Kept here so a deploy never switches them off; workers/www/index.js adds one JSON line per D1-touching request with its rows (workers/www/d1-meter.js).
