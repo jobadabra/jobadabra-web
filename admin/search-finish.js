@@ -30,6 +30,17 @@ export function cleanSources(raw) {
   return Object.keys(out).length ? out : null;
 }
 
+/**
+ * A verdict row's `runs` (cr's two-run night, 11 Nov 2026) -> [{run, new_listed, new_right, right_after, seconds}] in run order, at most 5, each count whole or null; null when the row sent none.
+ * new_right = right jobs that run listed FIRST (each job once), right_after = right jobs of runs 1..n (cumulative); a measured 0 is 0, never "not run". Counts only, no title or link.
+ */
+export function cleanRuns(raw) {
+  if (!Array.isArray(raw)) return null;
+  const out = raw.filter(item => plain(item) && Number.isInteger(item.run) && item.run >= 1 && item.run <= 9).slice(0, 5)
+    .map(item => ({run: item.run, new_listed: whole(item.new_listed), new_right: whole(item.new_right), right_after: whole(item.right_after), seconds: whole(item.seconds)}));
+  return out.length ? out : null;
+}
+
 export const BLIND = ['unmeasured', 'fault', 'unknown', 'not-run'];   // Why (11 Nov 2026, review of 1/5): a not-run row is a person the night could not measure, as admin/search-market.js reads it   // as admin/search-night-scoreboard.js: the check could not measure the person
 
 /** The sources that make our own result (owner, 11 Nov 2026: "just relying on EURES is cheating... other 3rd parties should be just bonuses, not our core"): EURES is never in the headline, LinkedIn is typed by hand. */

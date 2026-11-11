@@ -82,11 +82,18 @@ function sourceCell(row, source) {
   if ((row.ranOut || []).some(step => String(step).trim().toLowerCase() === RAN_OUT_STEP[source])) return chip('time was up before its turn', 'warn');
   return chip('not sent yet', 'off');
 }
+// Run 1 / Run 2 (5/5): new right jobs each run of the night listed first; a measured 0 is +0, a person without the field is "not sent yet", never a 0
+function runCell(row, n) {
+  const item = (row.runs || []).find(run => run.run === n);
+  if (item && item.new_right != null) return `<b>+${item.new_right}</b>`;
+  if (BLIND.includes(row.kind)) return chip('not measured', 'off');
+  return chip(row.runs && n > 1 ? 'one run only' : 'not sent yet', 'off');
+}
 function perSource(runs) {
   const last = runs.find(run => ownOf(run));
   if (!last) return '';
-  const body = last.rows.map(row => `<tr><td>${who(row.persona, row.label)}</td>${OWN.map(source => `<td class="num">${sourceCell(row, source)}</td>`).join('')}<td class="num">${chip('by hand', 'off')}</td><td class="num">${chip('not sent yet', 'off')}</td><td class="num">${chip('not sent yet', 'off')}</td></tr>`).join('');
-  return `<section class="card vz" id="finish-per-person"><h2>🧩 Right jobs per person and source (our own sources)</h2><div class="muted small">A source that read nothing says why · a source's number is what it brought, so a job two sources found shows in both · LinkedIn is typed by hand, not read · Run 1 / Run 2 = new right jobs each run of the night found, not sent yet · ${last.hand ? 'by-hand run' : 'night'} ${esc(last.night)}</div>
+  const body = last.rows.map(row => `<tr><td>${who(row.persona, row.label)}</td>${OWN.map(source => `<td class="num">${sourceCell(row, source)}</td>`).join('')}<td class="num">${chip('by hand', 'off')}</td><td class="num">${runCell(row, 1)}</td><td class="num">${runCell(row, 2)}</td></tr>`).join('');
+  return `<section class="card vz" id="finish-per-person"><h2>🧩 Right jobs per person and source (our own sources)</h2><div class="muted small">A source that read nothing says why · a source's number is what it brought, so a job two sources found shows in both · LinkedIn is typed by hand, not read · Run 1 / Run 2 = new right jobs each run of the night listed first (a job once) · ${last.hand ? 'by-hand run' : 'night'} ${esc(last.night)}</div>
 <div class="scroll"><table><tr><th>Person</th>${OWN.map(source => `<th class="num">${esc(name(source))}</th>`).join('')}<th class="num">LinkedIn</th><th class="num">Run 1</th><th class="num">Run 2</th></tr>${body}</table></div></section>`;
 }
 

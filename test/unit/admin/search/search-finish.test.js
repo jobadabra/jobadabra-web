@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {clean} from '../../../../admin/search-night.js';
-import {OWN, SOURCES, STAGES, cleanInout, cleanSources, lostTotals, ownOf, peopleOf, sideOf, sourcesOf, tally, weakest} from '../../../../admin/search-finish.js';
+import {OWN, SOURCES, STAGES, cleanInout, cleanRuns, cleanSources, lostTotals, ownOf, peopleOf, sideOf, sourcesOf, tally, weakest} from '../../../../admin/search-finish.js';
 import {finishSection} from '../../../../admin/search-finish-page.js';
 import {judgeAll} from '../../../../admin/search-night-judge.js';
 import {page} from '../../../../admin/search-lab-page.js';
@@ -151,4 +151,19 @@ test('4/5 Weakest now reads our own sources: EURES rows are not in it, "not sent
   const floors = series => ({checked: true, series, red: [], unreadable: 0, last_green: null, merges: [], levels: {1: {right: {floor: 4, now: 4, spread: 1, below: 0}}}});
   const off = night('2026-11-18', [row(1)], {eures: 'off', measure: 'aaaaaaaaaaaa', floors: floors('aaaaaaaaaaaa|codex|eures-off')}), on = night('2026-11-19', [row(1)], {measure: 'bbbbbbbbbbbb', floors: floors('bbbbbbbbbbbb|codex|eures-on')});
   assert.match(finishSection(judgeAll([on, off]), []), /night 2026-11-18 · measure aaaaaaaaaaaa/, 'the newer EURES-on night does not decide; the EURES-off series does');
+});
+
+test('5/5 Run 1 / Run 2: cleanRuns keeps whole counts per run (a 0 stays 0), the table shows +n per run, one run only, not sent yet, not measured', () => {
+  assert.deepEqual(cleanRuns([{run: 1, new_listed: 12, new_right: 3, right_after: 3, seconds: 90}, {run: 2, new_listed: 4, new_right: 0, right_after: 3, seconds: null}, {run: 'x', new_right: 9}, {run: 3, new_right: 1.5}]),
+    [{run: 1, new_listed: 12, new_right: 3, right_after: 3, seconds: 90}, {run: 2, new_listed: 4, new_right: 0, right_after: 3, seconds: null}, {run: 3, new_listed: null, new_right: null, right_after: null, seconds: null}], 'a bad run id is dropped, a fraction is null, a measured 0 stays 0');
+  assert.equal(cleanRuns('x'), null);
+  assert.equal(cleanRuns([]), null);
+  const two = [{run: 1, new_listed: 5, new_right: 3, right_after: 3, seconds: 80}, {run: 2, new_listed: 2, new_right: 0, right_after: 3, seconds: 60}];
+  const rows = [row(1, {local: 3, sources: {employer_sites: {right: 3}}, runs: two}), row(2, {local: 1, sources: {employer_sites: {right: 1}}, runs: [two[0]]}), row(3, {local: 1, sources: {employer_sites: {right: 1}}}), row(4, {kind: 'unmeasured', local: null})];
+  const html = finishSection(judgeAll([night('2026-11-18', rows, {eures: 'off'})]), []), at = html.slice(html.indexOf('id="finish-per-person"'), html.indexOf('</section>', html.indexOf('id="finish-per-person"')));
+  assert.match(at, /p1<\/b> Role, Place<\/td>(<td[^>]*>.*?<\/td>){5}<td class="num"><b>\+3<\/b><\/td><td class="num"><b>\+0<\/b><\/td>/, 'run 1 +3, run 2 a measured +0');
+  assert.match(at, /p2<\/b> Role, Place<\/td>(<td[^>]*>.*?<\/td>){5}<td class="num"><b>\+3<\/b><\/td><td class="num"><span class="chip off">one run only<\/span>/);
+  assert.match(at, /p3<\/b> Role, Place<\/td>(<td[^>]*>.*?<\/td>){5}<td class="num"><span class="chip off">not sent yet<\/span><\/td><td class="num"><span class="chip off">not sent yet<\/span>/);
+  assert.match(at, /p4<\/b> Role, Place<\/td>(<td[^>]*>.*?<\/td>){5}<td class="num"><span class="chip off">not measured<\/span><\/td><td class="num"><span class="chip off">not measured<\/span>/);
+  assert.equal(clean({state: 'success', head: 'x', rows: [{persona: 1, label: 'p1 A, B', kind: 'measured', runs: two}]}, {night: '2026-11-18'}, NOW).rows[0].runs.length, 2, 'a stored night keeps the row runs');
 });
