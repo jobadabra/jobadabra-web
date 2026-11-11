@@ -5,11 +5,12 @@
 // Same pattern as the public repo's app-core/src/scheduler.js (#2653). The Worker's account has no free cron trigger (5 of 5 used), so this shares the Worker's every-5-minutes trigger and
 // acts on one tick an hour per collector. A new collector is one row below plus the same `run-name` and `workflow_dispatch:` in its workflow; the test loops over this list. Guard: test/unit/shared/intel-start.test.js.
 
-import {WEB_REPO} from './repos.js';
+import {LAB_REPO, WEB_REPO} from './repos.js';
 
 /** Why (1 Nov 2026, owner "delegate" on the empty integrations page): ONE list, so a collector cannot be added to the workflows and forgotten here (integration-intel.yml was).
  *  minute: the 5-minute tick (UTC) that starts it; backup: the minute of the workflow's own GitHub `cron`, always after `minute`. The minutes differ so two starts never share a tick.
  *  home: 'public' = the workflow lives in the public repo (TIMERS_REPO, token TIMERS_GITHUB_TOKEN), 'web' = in this repo (E2E_INTEL_REPO, token E2E_INTEL_GITHUB_TOKEN).
+ *  home 'lab' = the workflow lives in jobadabra-lab (BRAIN_REPO, token BRAIN_GITHUB_TOKEN: the pair that already starts the lab's product-brain.yml, api/brain.js). hours: optional UTC hours it runs at (default: every hour).
  *  Why (2 Nov 2026, owner: the CI collectors move to the public repo, they read its CI): e2e-intel and integration-intel moved there (jobadabra#2989, tools/ci-intel); without this the tick kept starting the deleted copies. */
 export const INTEL_COLLECTORS = [
   {workflow: 'e2e-intel.yml', minute: 40, backup: 41, home: 'public'},
@@ -18,13 +19,23 @@ export const INTEL_COLLECTORS = [
   {workflow: 'schedules-snapshot.yml', minute: 0, backup: 3, home: 'web'},
   // Why (4 Nov 2026, owner chose "the Worker cron"): GitHub ran the "hourly" digest 32 times in 7 days, so a failed night waited until morning. Not a collector, but the same start and the same red line, on the Build log page.
   {workflow: 'daily-digest.yml', minute: 10, backup: 11, home: 'web'},
+  // Why (11 Nov 2026, owner, asked via AskUserQuestion: "Fix now in a new session (Recommended)"): GitHub's schedule ran the central scout 2-3 times a day instead of 4, 1-2 h late (11 Nov: 01:58Z, 11:56Z, the 16:20Z slot never fired), so the employer index the app reads went stale by hours.
+  // The Worker starts it at :25 of 4, 10, 16 and 22 UTC (:25 is on no other tick: collectors 0/10/15/40, probes 5/20/35/50, timers 0/5/30/40); the workflow's cron stays as the backup.
+  {workflow: 'central-scout.yml', minute: 25, backup: 26, home: 'lab', hours: [4, 10, 16, 22]},
 ];
 
-/** The collectors whose hourly tick is `date` (a 5-minute tick: at most one). */
-export const dueCollectors = date => INTEL_COLLECTORS.filter(collector => collector.minute === date.getUTCMinutes());
+/** The collectors due at `date` (a 5-minute tick): its minute, and its hour when the row lists `hours`. */
+export const dueCollectors = date => INTEL_COLLECTORS.filter(collector => collector.minute === date.getUTCMinutes() && (!collector.hours || collector.hours.includes(date.getUTCHours())));
+
+// Where each home's workflows live and the token that may start them: repo and token travel together, and a missing token is a named refusal, never another home's token.
+const TARGETS = {
+  public: env => ({repo: env.TIMERS_REPO, token: env.TIMERS_GITHUB_TOKEN, missing: 'TIMERS_GITHUB_TOKEN is not set (the site GITHUB_TOKEN is not sent to the public repo in its place)', noRepo: 'TIMERS_REPO is not set (the public repo as owner/name, a var in wrangler.toml)'}),
+  web: env => ({repo: env.E2E_INTEL_REPO || WEB_REPO, token: env.E2E_INTEL_GITHUB_TOKEN, missing: 'E2E_INTEL_GITHUB_TOKEN is not set (the site GITHUB_TOKEN covers the public repo, not this one)'}),
+  lab: env => ({repo: env.BRAIN_REPO || LAB_REPO, token: env.BRAIN_GITHUB_TOKEN, missing: 'BRAIN_GITHUB_TOKEN is not set (the lab repo\'s token; the site GITHUB_TOKEN is not sent there in its place)'}),
+};
 
 /**
- * Starts every collector due at `now` on main of the repo that holds its workflow (its `home`: the public repo or this one). `dispatch(env, inputs, workflow)` is the Worker's (workers/www/index.js).
+ * Starts every collector due at `now` on main of the repo that holds its workflow (its `home`: the public repo, this one or the lab). `dispatch(env, inputs, workflow)` is the Worker's (workers/www/index.js).
  * A 'web' collector: the repo is E2E_INTEL_REPO (default jobadabra/jobadabra-web) and the token MUST be E2E_INTEL_GITHUB_TOKEN (a fine-grained token on this repo, Actions: write). A 'public' one: TIMERS_REPO and TIMERS_GITHUB_TOKEN (the bot timers' pair):
  * repo and token travel together, as in api/brain.js. Why (31 Oct 2026, Gitar on #240): the site's GITHUB_TOKEN is the public repo's (index.js dispatch), so falling back to it would answer 403/404
  * every hour, only as a log line, while the page quietly went back to GitHub's late schedule. Without the token the start is refused out loud (GitHub's own schedule stays the backup).
@@ -33,9 +44,7 @@ export const dueCollectors = date => INTEL_COLLECTORS.filter(collector => collec
 export async function startIntelCollectors(env, now, dispatch) {
   return Promise.all(dueCollectors(now).map(async ({workflow, home}) => {
     try {
-      const target = home === 'public'
-        ? {repo: env.TIMERS_REPO, token: env.TIMERS_GITHUB_TOKEN, missing: 'TIMERS_GITHUB_TOKEN is not set (the site GITHUB_TOKEN is not sent to the public repo in its place)', noRepo: 'TIMERS_REPO is not set (the public repo as owner/name, a var in wrangler.toml)'}
-        : {repo: env.E2E_INTEL_REPO || WEB_REPO, token: env.E2E_INTEL_GITHUB_TOKEN, missing: 'E2E_INTEL_GITHUB_TOKEN is not set (the site GITHUB_TOKEN covers the public repo, not this one)'};
+      const target = TARGETS[home](env);
       if (!target.token) throw new Error(target.missing);
       if (!target.repo) throw new Error(target.noRepo);
       await dispatch({...env, GITHUB_REPO: target.repo, GITHUB_TOKEN: target.token}, undefined, workflow);

@@ -74,8 +74,15 @@ const CSS = `.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(17
 .dots{display:flex;gap:3px;margin-top:3px}.dots i{width:8px;height:8px;border-radius:50%;background:#3fb68b}.dots i.r{background:#e5484d}.dots i.x{background:#5b626a}.dots i.c{background:none;border:1px solid #5b626a}
 .chip{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:600;color:#0b0d10}.chip.g{background:#3fb68b}.chip.r{background:#e5484d}.chip.o{background:#8d949c}.chip.w{background:#e0a43a}.small{font-size:12px}`;
 
+/** The red line's data: the snapshot's start problem and the central scout's (11 Nov 2026, owner: the scout starts from the Worker too; its refusal must show on a page, like the other collectors'; Gitar on #560: both at once, or the second hides behind the first).
+ *  The scout's reason is named because this page is not its own. */
+async function startProblem(db) {
+  const own = await readStartProblem(db, 'schedules-snapshot.yml'), scout = await readStartProblem(db, 'central-scout.yml');
+  const named = scout && {...scout, reason: `central-scout.yml: ${scout.reason}`};
+  return own && named ? {...own, reason: `${own.reason}; ${named.reason}`} : own || named;
+}
 // notify = {settings, canEdit, back}: the owner's alert settings behind the Notify column (admin/notify-cells.js); without it the column shows the registry's defaults, read only.
-// problem: why the Worker could not start schedules-snapshot.yml on its last try (readStartProblem), drawn as the red "collector not starting" line the e2e and integrations pages show.
+// problem: why the Worker could not start schedules-snapshot.yml (or central-scout.yml, named in the line) on its last try (startProblem), drawn as the red "collector not starting" line the e2e and integrations pages show.
 export function page(snapshot, {repo = 'all', state = 'all', area = 'all', now = new Date(), problem = null, summary = null, notify = null} = {}) {
   const graphOn = area === 'testing';   // Why (5 Nov 2026): the Testing tab of this page went; its start-time graph shows when the Area filter is Testing
   const head = body => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Scheduled · Admin</title>
@@ -116,7 +123,7 @@ export async function view(request, env) {
   if (!who) return new Response('Not found', {status: 404});
   const url = new URL(request.url);
   if (url.searchParams.has('key')) return remember(url, env, request);
-  const state = STATE_IDS.includes(url.searchParams.get('state')) ? url.searchParams.get('state') : 'all', snapshot = await read(env), problem = await readStartProblem(env.STATS, 'schedules-snapshot.yml');
+  const state = STATE_IDS.includes(url.searchParams.get('state')) ? url.searchParams.get('state') : 'all', snapshot = await read(env), problem = await startProblem(env.STATS);
   const known = new Set((snapshot?.jobs || []).map(job => job.repo.split('/').pop())), repo = known.has(url.searchParams.get('repo')) ? url.searchParams.get('repo') : 'all';
   const area = AREAS.some(item => item.id === url.searchParams.get('area')) ? url.searchParams.get('area') : 'all';
   return new Response(page(snapshot, {repo, state, area, problem, summary: await loadNightlySummary(env), notify: {settings: await readSettings(env), canEdit: who.role === 'superadmin', back: `/admin/operations/scheduled${url.search && !url.searchParams.has('key') ? url.search : ''}`}}), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
