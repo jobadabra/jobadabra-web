@@ -5,7 +5,7 @@
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {coverage} from './search-market.js';
-import {LINE, peopleOf, sourcesOf, tally, weakest} from './search-finish.js';
+import {LINE, OWN, lostTotals, ownOf, peopleOf, sideOf, sourcesOf, tally, weakest} from './search-finish.js';
 import {stacked} from './viz-stack.js';
 import {VIZ_STYLE, VIZ_TOOLTIP, figure} from './viz.js';
 
@@ -24,20 +24,20 @@ export const FINISH_STYLE = `${CHIP_STYLE}${VIZ_STYLE}
 .fl-bar{position:relative;height:16px;background:#1b2027;border-radius:4px;display:flex}.fl-bar i{display:block;height:100%}.fl-bar i:first-child{border-radius:4px 0 0 4px}
 .fl-floor{position:absolute;top:-3px;bottom:-3px;border-left:2px dashed #fff;opacity:.85}
 .fl-blind{height:16px;border-radius:4px;background:repeating-linear-gradient(135deg,#1b2027 0 6px,#232a32 6px 12px)}
-.fl-share{display:inline-block;height:8px;border-radius:4px;background:var(--s1);vertical-align:middle;margin-left:6px}`;
+.fl-lost .fl-row{grid-template-columns:110px 1fr 340px}.fl-share{display:inline-block;height:8px;border-radius:4px;background:var(--s1);vertical-align:middle;margin-left:6px}`;
 
 // A run in the chart's order: nights and by-hand runs together, newest first. A by-hand run is marked (hollow in the chart, "by hand" in its tip).
 // Only the newest night's candidate set (a night of another set is another series, as the Scoreboard card).
 const runsOf = (judged, hand) => [...(judged || []).map(night => ({...night, hand: false})), ...(hand || []).map(run => ({...run, night: run.day, hand: true}))].filter((run, _, all) => run.rows.length === (judged || [])[0]?.rows.length).sort((a, b) => b.night.localeCompare(a.night) || String(b.at || '').localeCompare(String(a.at || '')));
 
+// The headline (owner, 11 Nov 2026, picture approved via AskUserQuestion: "Yes, build it"): right jobs from OUR OWN sources; EURES and other 3rd parties are bonuses, never in this number (they sit in the Side check card).
 function band(runs) {
-  const last = runs.find(run => tally(run).hasInout), t = last ? tally(last) : null, referenced = t ? t.atLine + t.some + t.none : 0;
-  let streak = 0;
-  for (const run of runs.filter(item => tally(item).hasInout)) { const x = tally(run); if (x.atLine === x.total) streak += 1; else break; }
-  const head = t ? `<div><div class="fl-big">${t.atLine} <small>of ${referenced}</small></div><div class="muted small">people with a reference at the line (${Math.round(LINE * 100)}%+ of EURES's right jobs)</div></div>
-<div><div class="fl-big">${Math.min(streak, 3)} <small>of 3</small></div><div class="muted small">runs in a row with all ${t.total} at the line = reached</div></div>`
-    : '<div><div class="fl-big">–</div><div class="muted small">no run has sent in = out yet (it starts with the next run that does)</div></div>';
-  return `<div class="card vz fl-band" id="finish-band">${head}<div style="flex:1;min-width:300px">${chip('market = EURES only (day one)', 'warn')} ${chip('LinkedIn not counted · coverage is without LinkedIn', 'off')} ${t && t.blind ? chip(`${t.blind} not measured`, 'off') : ''} ${t && t.noReference ? chip(`${t.noReference} without a reference`, 'off') : ''} ${last?.engine && last.engine !== 'unknown' ? chip(`AI ${esc(last.engine)}`, 'good') : ''}${last ? `<div class="muted small" style="margin-top:4px">last run: ${last.hand ? 'by hand' : 'night'} ${esc(last.night)}</div>` : ''}</div></div>`;
+  const last = runs.find(run => ownOf(run)), own = last ? ownOf(last) : null;
+  if (!own) return `<div class="card vz fl-band" id="finish-band"><div><div class="fl-big">–</div><div class="muted small">${chip('not sent yet', 'off')} no night has run with EURES off yet: the headline is our own result, each job once (a run with EURES on goes only to the Side check)</div></div></div>`;
+  const split = own.split == null ? '' : `<div class="muted small" style="flex-basis:100%">split by source: ${own.split} right jobs in all · a job two sources found counts for both${own.shared ? ` · ${own.shared} found by more than one source` : ''}${own.holes ? ` · <b>${own.holes}</b> ${own.holes === 1 ? 'person has' : 'people have'} right jobs no source row claims (a data hole)` : ''}</div>`;
+  return `<div class="card vz fl-band" id="finish-band"><div><div class="fl-big">${own.right} <small>right jobs</small></div><div class="muted small">in our list from our own sources, each job once, for <b>${own.sent} of ${own.total}</b> people (right role AND place, by the blind judge)</div></div>
+<div><div class="fl-big">${own.people} <small>of ${own.total}</small></div><div class="muted small">people with at least one right job</div></div>
+<div style="flex:1;min-width:300px">${chip('EURES off: our own sources only', 'good')} ${last.engine && last.engine !== 'unknown' ? chip(`AI ${esc(last.engine)}`, 'good') : ''} ${own.blind ? chip(`${own.blind} not measured`, 'off') : ''} ${chip('LinkedIn by hand', 'off')}<div class="muted small" style="margin-top:4px">last EURES-off run: ${last.hand ? 'by hand' : 'night'} ${esc(last.night)} · EURES and other 3rd parties are bonuses, never in this number</div></div>${split}</div>`;
 }
 
 function weakCard(runs) {
@@ -53,8 +53,8 @@ function overTime(runs) {
   const shown = runs.filter(run => tally(run).hasInout).slice(0, 14).reverse();
   if (!shown.length) return '';
   const days = shown.map(run => { const t = tally(run); return {day: run.night, hand: run.hand, values: [t.atLine, t.some, t.none, t.blind], tip: `${run.night}${run.hand ? ' · by hand' : ''} · ${t.atLine} at the line · ${t.some} below it · ${t.none} found none · ${t.blind} not measured · ${t.noReference} without a reference`}; });
-  return `<section class="card vz" id="finish-over"><h2>📈 People at the line, run by run</h2><div class="muted small">Of the ${shown[0] ? tally(shown[0]).total : 18} · grey = not measured, never a bad run · a hollow run was by hand · the top of the chart is the finish line</div>
-${figure({chart: stacked(days, [{name: 'At the line', tone: 's3'}, {name: 'Found some, below the line', tone: 's1'}, {name: 'Found none', tone: 's2'}, {name: 'Not measured', tone: 'off'}], {top: tally(shown[0]).total})})}</section>`;
+  return `<div id="finish-over"><h3>📈 People at the line, run by run</h3><div class="muted small">Of the ${shown[0] ? tally(shown[0]).total : 18} · grey = not measured, never a bad run · a hollow run was by hand · the top of the chart is the finish line</div>
+${figure({chart: stacked(days, [{name: 'At the line', tone: 's3'}, {name: 'Found some, below the line', tone: 's1'}, {name: 'Found none', tone: 's2'}, {name: 'Not measured', tone: 'off'}], {top: tally(shown[0]).total})})}</div>`;
 }
 
 function inout(runs) {
@@ -68,14 +68,33 @@ function inout(runs) {
     return `<div class="fl-row"><div class="small">${who(person.persona, person.label)}</div><div class="fl-bar" style="width:${(person.in / max) * 100}%">${seg(person.out, 'out', person.in)}${['never_asked', 'ai_no', 'placed_out', 'double', 'after_kept', 'not_read'].map(stage => seg(person.lost[stage] || 0, stage, person.in)).join('')}<span class="fl-floor" style="left:${LINE * 100}%"></span></div>`
       + `<div>${chip(`${person.out} of ${person.in} · ${person.atLine ? 'at the line' : 'under the floor'}`, person.atLine ? 'good' : 'bad')}${unexplained ? chip(`${unexplained} unexplained`, 'bad') : ''}</div></div>`;
   }).join('');
-  return `<section class="card vz" id="finish-inout"><h2>⇄ In = out, per person (EURES)</h2><div class="muted small">In = right jobs EURES shows for the person · out = how many are in our list after one search · every missing job is counted at the stage that lost it · dashed = the floor (${Math.round(LINE * 100)}% of in) · run of ${esc(last.night)}${last.hand ? ' (by hand)' : ''}</div>${rows}
-<div class="vz-legend">${['out', 'never_asked', 'ai_no', 'placed_out', 'double', 'after_kept', 'not_read'].map(key => `<span><i style="background:${COLORS[key]}"></i>${esc(key)}${key === 'after_kept' ? ' (unexplained)' : ''}</span>`).join('')}</div></section>`;
+  return `<div id="finish-inout"><h3>⇄ In = out, per person (EURES)</h3><div class="muted small">In = right jobs EURES shows for the person · out = how many are in our list after one search · every missing job is counted at the stage that lost it · dashed = the floor (${Math.round(LINE * 100)}% of in) · run of ${esc(last.night)}${last.hand ? ' (by hand)' : ''}</div>${rows}
+<div class="vz-legend">${['out', 'never_asked', 'ai_no', 'placed_out', 'double', 'after_kept', 'not_read'].map(key => `<span><i style="background:${COLORS[key]}"></i>${esc(key)}${key === 'after_kept' ? ' (unexplained)' : ''}</span>`).join('')}</div></div>`;
+}
+
+// "Where the missing jobs were lost, all people" (owner, 11 Nov 2026): one bar per stage, summed over the people with a reference; the bar is the share of in, the numbers are right jobs.
+function lostBlock(run) {
+  const t = lostTotals(run);
+  if (!t) return '';
+  const stages = ['never_asked', 'ai_no', 'placed_out', 'double', 'after_kept', 'not_read'].filter(stage => t.lost[stage] > 0), bar = (key, n) => `<div class="fl-row"><div class="small">${chip(esc(key), STAGE_TONE[key] || 'good')}</div><div class="fl-bar" style="width:${Math.max(1, (n / t.in) * 100)}%"><i style="width:100%;background:${COLORS[key]}"></i></div><div class="small"><b>${n}</b> of ${t.in}${STAGE_WORDS[key] ? ` · ${esc(STAGE_WORDS[key])}` : ''}</div></div>`;
+  return `<div id="finish-lost" class="fl-lost"><div class="muted small" style="margin-top:8px">Where the missing jobs were lost, all people together</div>${bar('out', t.out)}${stages.map(stage => bar(stage, t.lost[stage])).join('')}</div>`;
+}
+
+// The Side check (owner, 11 Nov 2026): what the old band, In = out and the chart said about EURES, now one small labelled card; nothing of them is dropped (the per-person bars and the run-by-run chart open under it).
+function sideCheck(runs) {
+  const last = runs.find(run => sideOf(run)), side = last ? sideOf(last) : null;   // Why (11 Nov 2026, review of 1/5): the newest run WITH a reference; a newer run where every `in` is 0 must not mask it
+  const head = '<h2>🔍 Side check · with EURES on</h2><div class="muted small">Not in the headline: a check that our list keeps what a public database lists</div>';
+  if (!side) return `<section class="card vz" id="finish-side">${head}<p>${chip('SIDE CHECK', 'warn')} <span class="muted small">no run has sent in = out yet (it starts with the next run that does)</span></p></section>`;
+  const pct = side.in > 0 ? Math.round((side.out / side.in) * 100) : null;
+  return `<section class="card vz" id="finish-side">${head}<p>${chip('SIDE CHECK', 'warn')} with EURES on, our list keeps <b>${side.out} of ${side.in}</b> of EURES's right jobs${pct == null ? '' : ` (${pct}%)`} · ${side.atLine} of ${side.referenced} people with a reference at the line (${Math.round(LINE * 100)}%+) · run of ${esc(last.night)}${last.hand ? ' (by hand)' : ''}</p>
+${lostBlock(last)}
+<details class="vz-more"><summary>Per person, and run by run</summary>${overTime(runs)}${inout(runs)}</details></section>`;
 }
 
 function sourcesCard(runs) {
   const {rows, night} = sourcesOf(runs);
-  const body = rows.map(row => `<tr><td><b>${esc(name(row.source))}</b></td><td class="num">${num(row.right)}</td><td class="num">${row.share == null ? '–' : `<b>${Math.round(row.share * 100)}%</b><span class="fl-share" style="width:${Math.max(2, Math.round(row.share * 90))}px"></span>`}</td><td class="num">${num(row.only)}</td><td class="num">${num(row.fit70)}</td><td class="num">${row.seconds == null ? '–' : `${row.seconds} s`}</td><td class="num">${row.people} of ${row.measured}</td><td class="num">${row.average == null ? '–' : `${row.average} <span class="muted small">(${row.runs} run${row.runs === 1 ? '' : 's'})</span>`}</td></tr>`).join('');
-  return `<section class="card vz" id="finish-sources"><h2>🧩 Sources · what each one is worth</h2><div class="muted small">Right jobs = role AND place, by the blind judge · the last run${night ? ` (${esc(night)})` : ''} and the average of up to 7 runs · a new source appears here by itself when its words are in a row · "not sent yet" is never a 0 · the 18 people never read LinkedIn (its share will come from real installs only, k of 3)</div>
+  const body = rows.map(row => `<tr><td><b>${esc(name(row.source))}</b>${OWN.includes(row.source) ? '' : ` ${chip('SIDE CHECK', 'warn')}`}</td><td class="num">${num(row.right)}</td><td class="num">${row.share == null ? '–' : `<b>${Math.round(row.share * 100)}%</b><span class="fl-share" style="width:${Math.max(2, Math.round(row.share * 90))}px"></span>`}</td><td class="num">${num(row.only)}</td><td class="num">${num(row.fit70)}</td><td class="num">${row.seconds == null ? '–' : `${row.seconds} s`}</td><td class="num">${row.people} of ${row.measured}</td><td class="num">${row.average == null ? '–' : `${row.average} <span class="muted small">(${row.runs} run${row.runs === 1 ? '' : 's'})</span>`}</td></tr>`).join('');
+  return `<section class="card vz" id="finish-sources"><h2>🧩 Sources · what each one is worth</h2><div class="muted small">Right jobs = role AND place, by the blind judge · the last run${night ? ` (${esc(night)})` : ''} and the average of up to 7 runs · the share is over our own sources only (EURES is a side check) · a new source appears here by itself when its words are in a row · "not sent yet" is never a 0 · the 18 people never read LinkedIn (its share will come from real installs only, k of 3)</div>
 ${rows.length ? `<table><tr><th>Source</th><th class="num">Right jobs</th><th class="num">Share</th><th class="num">Only it brought</th><th class="num">Fit 70+</th><th class="num">Seconds</th><th class="num">People served</th><th class="num">Average</th></tr>${body}</table>` : '<p class="muted">No run has sent per-source counts yet.</p>'}</section>`;
 }
 
@@ -123,14 +142,17 @@ const KIND_TONE = {counted: 'good', partial: 'warn', 'not-counted': 'off', none:
 const KIND_WORDS = {counted: 'counted', partial: 'partial', 'not-counted': 'not counted', none: 'none', 'by-hand': 'by hand'};
 const cell = value => (value == null ? '<span class="muted">–</span>' : Number(value).toLocaleString('en-US'));   // a source nobody counted has no number: a dash, never 0
 function marketCard(runs, ref) {
-  const run = runs[0] || null, c = coverage(ref, run);
+  const run = runs.find(item => item.eures === 'off') || runs[0] || null, c = coverage(ref, run);   // Why (11 Nov 2026, sa): our own result, the EURES-off nights, is the default
   const head = '<h2>🌍 Market coverage</h2><div class="muted small">Right jobs that exist for the people, counted once (the weekly reference), against our list after the newest run · per source: what it read and found there · "not counted" is never a 0 · LinkedIn is typed by hand (not yet)</div>';
   if (!c.people || !c.sources.length) return `<section class="card vz" id="finish-market">${head}<p>${chip('not sent yet', 'off')} <span class="muted small">the weekly reference has sent no per-source rows yet</span></p></section>`;
   const pct = c.ours != null && c.oursOf > 0 ? Math.round((c.ours / c.oursOf) * 100) : null;
-  const body = c.sources.map(row => `<tr><td><b>${esc(name(row.source))}</b></td><td>${Object.entries(row.kinds).map(([kind, n]) => chip(`${n} ${KIND_WORDS[kind]}`, KIND_TONE[kind])).join(' ')}</td><td class="num">${cell(row.read)}</td><td class="num">${cell(row.right)}</td><td class="num">${cell(row.only)}</td></tr>`).join('');
-  return `<section class="card vz" id="finish-market">${head}<p>${chip(`market ${c.market == null ? 'not counted' : Number(c.market).toLocaleString('en-US')} right jobs · ${c.counted} of ${c.people} people`, 'good')} ${pct == null ? chip('our share: no measured person in the reference', 'off') : chip(`our list holds ${c.ours} of ${c.oursOf} (${pct}%) · ${c.measured} measured ${c.measured === 1 ? 'person' : 'people'}`, pct >= 95 ? 'good' : 'warn')} ${c.countedOn ? `<span class="muted small">counted ${esc(c.countedOn)}</span>` : ''}</p>
+  const body = c.sources.map(row => `<tr><td><b>${esc(name(row.source))}</b>${OWN.includes(row.source) ? '' : ` ${chip('SIDE CHECK', 'warn')}`}</td><td>${Object.entries(row.kinds).map(([kind, n]) => chip(`${n} ${KIND_WORDS[kind]}`, KIND_TONE[kind])).join(' ')}</td><td class="num">${cell(row.read)}</td><td class="num">${cell(row.right)}</td><td class="num">${cell(row.only)}</td></tr>`).join('');
+  return `<section class="card vz" id="finish-market">${head}<p>${chip(`market ${c.market == null ? 'not counted' : Number(c.market).toLocaleString('en-US')} right jobs · ${c.counted} of ${c.people} people`, 'good')} ${pct == null ? chip('our share: no measured person in the reference', 'off') : chip(`our list holds ${c.ours} of ${c.oursOf} (${pct}%) · ${c.measured} measured ${c.measured === 1 ? 'person' : 'people'}`, pct >= 95 ? 'good' : 'warn')} ${c.countedOn ? `<span class="muted small">counted ${esc(c.countedOn)}</span>` : ''}${run && run.eures !== 'off' ? ` ${chip('this run had EURES on: our list includes its jobs', 'off')}` : ''}</p>
 <table><tr><th>Source</th><th>People</th><th class="num">Read</th><th class="num">Right</th><th class="num">Only it found</th></tr>${body}</table></section>`;
 }
+
+// Reached stays blank until the owner decides what counts (owner, 11 Nov 2026, via sa): not drawn as a number, so nothing reads as reached or not reached.
+const reachedCard = () => '<section class="card vz" id="finish-reached" style="border:2px dashed #5b6670"><h2>🏁 Reached</h2><p class="muted">Blank, to be decided by the owner: what counts as "reached" (all people? only people with a reference? with how many not measured?). Not drawn until then.</p></section>';
 
 /**
  * The tab's body.
@@ -141,5 +163,5 @@ function marketCard(runs, ref) {
 export function finishSection(judged, hand = [], ref = {}) {
   if (!judged) return '<section class="card"><h2>The nights could not be read</h2><p class="muted">The store of the nightly Search check did not answer, so this tab cannot draw the finish line.</p></section>';
   const runs = runsOf(judged, hand);
-  return `${band(runs)}${floorsCard(runs)}${weakCard(runs)}${overTime(runs)}${inout(runs)}${sourcesCard(runs)}${marketCard(runs, ref)}${VIZ_TOOLTIP}`;
+  return `${band(runs)}${floorsCard(runs)}${weakCard(runs)}${sideCheck(runs)}${sourcesCard(runs)}${marketCard(runs, ref)}${reachedCard()}${VIZ_TOOLTIP}`;
 }
