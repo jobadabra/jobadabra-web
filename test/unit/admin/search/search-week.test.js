@@ -35,6 +35,8 @@ test('a week is stored apart with what each run added; it never replaces or adds
   assert.equal((await weeks(env)).length, 1, 'the same week sent again replaces itself');
   for (let day = 1; day < 1 + KEEP_WEEKS + 2; day += 1) await put(env, week(), `week=2026-10-${String(day).padStart(2, '0')}&run=4300000${day}00`);   // past days: a night or week ahead of tomorrow is refused
   assert.equal((await weeks(env)).length, KEEP_WEEKS, 'the last weeks only');
+  const late = await (await put(env, week(), 'week=2026-09-01&run=43000000099')).json();
+  assert.deepEqual([late.stored, late.why], [false, `older than the last ${KEEP_WEEKS} weeks`], 'Gitar on #550: a week too old to keep is said so, never "stored"');
 });
 
 test('the week refuses what a night refuses: no key, a wrong shape, a mistyped flag; runs that are not 1..n say nothing', async () => {

@@ -39,6 +39,7 @@ export async function ingestWeek(env, verdict, {week, run, byHand}, now = new Da
   const {night, ...rest} = record;
   const kept = {...rest, week: night, at: now.toISOString(), byHand, byRun: cleanByRun(verdict.by_run), rows: rest.rows.map((row, index) => ({...row, runs: cleanRuns(verdict.rows[index].runs)}))};
   const stored = [kept, ...(await weeks(env)).filter(item => item.week !== night)].sort((a, b) => b.week.localeCompare(a.week)).slice(0, KEEP_WEEKS);
+  if (!stored.some(item => item.week === night)) return {status: 200, body: {ok: true, week: night, stored: false, why: `older than the last ${KEEP_WEEKS} weeks`}};   // Why (Gitar on #550): CI must tell a dropped week from a kept one, as the night's ingest does
   await writeState(env, WEEK_KEY, {weeks: stored}, now);
   return {status: 200, body: {ok: true, week: night, stored: stored.length}};
 }
