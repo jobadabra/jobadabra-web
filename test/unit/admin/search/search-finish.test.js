@@ -138,5 +138,7 @@ test('3/5 right jobs per night by source group: one column per EURES-off night, 
   assert.equal((at.match(/<g[ >]/g) || []).length, 2, 'two EURES-off nights; the EURES-on night is not a column');
   for (const word of ['Employer sites', 'Job boards', 'Free job APIs', 'Web search']) assert.ok(at.includes(word), word);
   assert.doesNotMatch(at, /EURES \d/, 'EURES is not a group');
+  const blind = night('2026-11-18', [row(1, {local: 3, sources: {employer_sites: {right: 3}}}), row(2, {kind: 'unmeasured', local: null, sources: {employer_sites: {right: 5}}})], {eures: 'off'});
+  assert.match(finishSection(judgeAll([blind]), []).slice(finishSection(judgeAll([blind]), []).indexOf('id="finish-nights"')), /Employer sites 3 ·/, 'a person the night could not measure is not in the column, as in the headline (Gitar on #551)');
   assert.doesNotMatch(finishSection(judgeAll([mk('2026-11-18')]), []), /id="finish-nights"/);
 });

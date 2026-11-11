@@ -95,7 +95,7 @@ function overNights(runs) {
   const shown = runs.filter(run => ownOf(run) && run.rows.some(row => row.sources)).slice(0, 14).reverse();
   if (!shown.length) return '';
   const tones = ['s1', 's3', 's2', 's4'], days = shown.map(run => {
-    const values = OWN.map(source => run.rows.reduce((sum, row) => sum + (row.sources?.[source]?.right ?? 0), 0));
+    const values = OWN.map(source => run.rows.reduce((sum, row) => sum + (BLIND.includes(row.kind) || row.local == null ? 0 : row.sources?.[source]?.right ?? 0), 0));   // Why (Gitar on #551, 11 Nov 2026): the same people as the headline (ownOf): a person the night could not measure is out of the chart too
     return {day: run.night, hand: run.hand, values, tip: `${run.night}${run.hand ? ' · by hand' : ''} · ${OWN.map((source, i) => `${name(source)} ${values[i]}`).join(' · ')} · each job counted once per source that found it`};
   }), top = Math.max(3, ...days.map(day => day.values.reduce((a, b) => a + b, 0)));
   return `<section class="card vz" id="finish-nights"><h2>📈 Right jobs per night, by source group</h2><div class="muted small">Our own sources only, nights with EURES off · a job two sources found shows in both groups · a hollow night was by hand · 2 runs a night (Run 1 / Run 2) arrive with the two-run night</div>
