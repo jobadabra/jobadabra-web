@@ -40,11 +40,11 @@ const median = values => {
   return sorted.length ? (sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2) : null;
 };
 
-/** The people of a run that sent a record, and the median gap over them: {people: [{persona, label, scout, blind}], measured, median, medianEmpty}. */
+/** The people of a run that sent a record, and the median gap over them: {people: [{persona, label, scout, blind}], measured, median, medianEmpty}; `measured` = the people with a gap (a person whose places hold only empty feeds has a record and no gap, Gitar on #556). */
 export function scoutOf(run) {
   const people = (run?.rows || []).map(row => ({persona: row.persona, label: row.label, scout: BLIND.includes(row.kind) ? null : row.scout ?? null, blind: BLIND.includes(row.kind)}));
-  const sent = people.filter(person => person.scout);
-  return {people, measured: sent.length, median: median(sent.map(person => gapOf(person.scout))), medianEmpty: median(sent.map(person => (person.scout.inPlaces ? person.scout.empty / person.scout.inPlaces : null)))};
+  const sent = people.filter(person => person.scout), gaps = sent.map(person => gapOf(person.scout)).filter(value => value != null);
+  return {people, measured: gaps.length, median: median(gaps), medianEmpty: median(sent.map(person => (person.scout.inPlaces ? person.scout.empty / person.scout.inPlaces : null)))};
 }
 
 function bar(scout) {

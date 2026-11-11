@@ -69,3 +69,11 @@ test('the card is on the Finish line tab', () => {
   const html = finishSection([run([row(1)], {state: 'success', head: ''})]);
   assert.match(html, /id="finish-scout"/);
 });
+
+test('"median of N people" counts the people with a gap: a person whose places hold only empty feeds has a record and no gap (Gitar on #556)', () => {
+  const onlyEmpty = cleanScout(raw({in_places: 363, empty_feeds: 363, no_kind_mix: 0, mix_only: 0, counted_per_country: 0}));
+  const view = scoutOf(run([row(1), row(2, onlyEmpty)]));
+  assert.equal(view.measured, 1);
+  assert.equal(view.median, 30 / 137);
+  assert.match(scoutCard([run([row(1), row(2, onlyEmpty)])]), /median of 1 people/);
+});
