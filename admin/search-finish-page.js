@@ -87,7 +87,8 @@ function runCell(row, n) {
   const item = (row.runs || []).find(run => run.run === n);
   if (item && item.new_right != null) return `<b>+${item.new_right}</b>`;
   if (BLIND.includes(row.kind)) return chip('not measured', 'off');
-  return chip(row.runs && n > 1 ? 'one run only' : 'not sent yet', 'off');
+  // Why (Gitar on #553, 11 Nov 2026): a run that was sent with an unusable count is not a missing run; "one run only" is for an absent run
+  return chip(row.runs && n > 1 && !item ? 'one run only' : 'not sent yet', 'off');
 }
 function perSource(runs) {
   const last = runs.find(run => ownOf(run));

@@ -159,11 +159,12 @@ test('5/5 Run 1 / Run 2: cleanRuns keeps whole counts per run (a 0 stays 0), the
   assert.equal(cleanRuns('x'), null);
   assert.equal(cleanRuns([]), null);
   const two = [{run: 1, new_listed: 5, new_right: 3, right_after: 3, seconds: 80}, {run: 2, new_listed: 2, new_right: 0, right_after: 3, seconds: 60}];
-  const rows = [row(1, {local: 3, sources: {employer_sites: {right: 3}}, runs: two}), row(2, {local: 1, sources: {employer_sites: {right: 1}}, runs: [two[0]]}), row(3, {local: 1, sources: {employer_sites: {right: 1}}}), row(4, {kind: 'unmeasured', local: null})];
+  const rows = [row(1, {local: 3, sources: {employer_sites: {right: 3}}, runs: two}), row(2, {local: 1, sources: {employer_sites: {right: 1}}, runs: [two[0]]}), row(3, {local: 1, sources: {employer_sites: {right: 1}}}), row(4, {kind: 'unmeasured', local: null}), row(5, {local: 1, sources: {employer_sites: {right: 1}}, runs: [two[0], {run: 2, new_listed: null, new_right: null, right_after: null, seconds: null}]})];
   const html = finishSection(judgeAll([night('2026-11-18', rows, {eures: 'off'})]), []), at = html.slice(html.indexOf('id="finish-per-person"'), html.indexOf('</section>', html.indexOf('id="finish-per-person"')));
   assert.match(at, /p1<\/b> Role, Place<\/td>(<td[^>]*>.*?<\/td>){5}<td class="num"><b>\+3<\/b><\/td><td class="num"><b>\+0<\/b><\/td>/, 'run 1 +3, run 2 a measured +0');
   assert.match(at, /p2<\/b> Role, Place<\/td>(<td[^>]*>.*?<\/td>){5}<td class="num"><b>\+3<\/b><\/td><td class="num"><span class="chip off">one run only<\/span>/);
   assert.match(at, /p3<\/b> Role, Place<\/td>(<td[^>]*>.*?<\/td>){5}<td class="num"><span class="chip off">not sent yet<\/span><\/td><td class="num"><span class="chip off">not sent yet<\/span>/);
   assert.match(at, /p4<\/b> Role, Place<\/td>(<td[^>]*>.*?<\/td>){5}<td class="num"><span class="chip off">not measured<\/span><\/td><td class="num"><span class="chip off">not measured<\/span>/);
+  assert.match(at, /p5<\/b> Role, Place<\/td>(<td[^>]*>.*?<\/td>){5}<td class="num"><b>\+3<\/b><\/td><td class="num"><span class="chip off">not sent yet<\/span>/, 'a run 2 sent with an unusable count is not "one run only" (Gitar on #553)');
   assert.equal(clean({state: 'success', head: 'x', rows: [{persona: 1, label: 'p1 A, B', kind: 'measured', runs: two}]}, {night: '2026-11-18'}, NOW).rows[0].runs.length, 2, 'a stored night keeps the row runs');
 });
