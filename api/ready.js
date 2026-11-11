@@ -15,6 +15,7 @@ import {closeNight, morning, readyToken} from './ready-morning.js';
 import {dropKept, jobsWithKept, keptPut, keptKey, videoGet} from './ready-kept.js';
 import {mailNight} from './ready-mail.js';
 import {checkRead, keepRead, takeReads, taskOf} from './ready-read.js';
+import {checkProbe, wordOf} from './ready-linkedin.js';
 import {autoRefusal, checkItem, checkSubmit, claimAttempt, keepSubmit, kitOf, reserve, takeSubmits} from './ready-auto.js';
 import {MICRO_PER_SECOND, addMicro, chargeContainer, claimedRefusal, creditRefusal, isPro, proofOf, publicHost, readerOf, reserveOwn, reserveReads, strictNow} from './ready-read-access.js';
 export {readyToken};
@@ -76,11 +77,17 @@ async function clear(env, install, id, jobs, now) {
   return changed.meta?.changes || 0;
 }
 
+// Removes the LinkedIn session from the batch's sealed blob (the other parts stay). A blob that cannot be read or written leaves the 24 h sweep (KEEP_HOURS) to delete it with the batch.
+async function scrubSession(env, row) {
+  const data = await readBlob(env, row.install, row.id).catch(() => null);
+  if (data?.linkedin) await writeBlob(env, row.install, row.id, {...data, linkedin: undefined}).catch(() => {});
+}
+
 // What the nightly run cost, on the owner's /admin/ai/costs beside the other scheduled jobs (job id 'ready-fill'; a readiness night's reads are 'ready-read', owner 9 Nov 2026: "we care about AI credit").
 export async function reportNight(env, row, now) {
   const usd = row.cost_micro / 1e6, calls = (await env.STATS.prepare('SELECT COUNT(*) AS n FROM ready_jobs WHERE batch = ?').bind(row.id).first()).n;
   await env.STATS.prepare(`INSERT INTO ai_cost_runs (job, run_id, day, at, usd, calls, repo, provider) VALUES (?, ?, ?, ?, ?, ?, '', 'anthropic')
-    ON CONFLICT (job, run_id) DO UPDATE SET day = excluded.day, at = excluded.at, usd = excluded.usd, calls = excluded.calls`).bind(row.task === 'readiness' ? 'ready-read' : row.task === 'auto' ? 'ready-auto' : 'ready-fill', row.id, stamp(now).slice(0, 10), stamp(now), usd, calls).run().catch(() => {});
+    ON CONFLICT (job, run_id) DO UPDATE SET day = excluded.day, at = excluded.at, usd = excluded.usd, calls = excluded.calls`).bind(row.task === 'readiness' || row.task === 'linkedin' ? 'ready-read' : row.task === 'auto' ? 'ready-auto' : 'ready-fill', row.id, stamp(now).slice(0, 10), stamp(now), usd, calls).run().catch(() => {});
 }
 
 // POST (the owner's install key): tonight's batch. GET (a night token): the container reads it decrypted.
@@ -91,7 +98,7 @@ async function batch(request, env, now) {
     const data = await readBlob(env, row.install, row.id);
     // Only the rows still queued: the whole night at first, one form after a Fill again (api/ready-again.js), so the others keep their results.
     const queued = new Map((await env.STATS.prepare("SELECT job, turn FROM ready_jobs WHERE batch = ? AND state = 'queued' AND cleared_at IS NULL").bind(row.id).all()).results.map(each => [each.job, each.turn]));   // turn: which press (the container fills each once)
-    return json({ok: true, line: true, task: row.task, sentAt: row.created_at, stop: row.state === 'capped' || !data, night: row.night, contact: data?.contact || {}, readyBy: data?.readyBy || '', facts: data?.facts || {}, jobs: (data?.jobs || []).filter(job => queued.has(job.id)).map(job => ({...job, turn: queued.get(job.id)}))});
+    return json({ok: true, line: true, task: row.task, sentAt: row.created_at, stop: row.state === 'capped' || !data, night: row.night, contact: data?.contact || {}, readyBy: data?.readyBy || '', facts: data?.facts || {}, ...(row.task === 'linkedin' && data?.linkedin ? {linkedin: data.linkedin} : {}), jobs: (data?.jobs || []).filter(job => queued.has(job.id)).map(job => ({...job, turn: queued.get(job.id)}))});
   }
   if (request.method !== 'POST') return json({ok: false, error: 'Use GET or POST'}, 405);
   const reader = await readerOf(request, env, ownerOf);   // the owner, or an Always on install (api/ready-read-access.js): the latter for the readiness and auto tasks only
@@ -104,7 +111,9 @@ async function batch(request, env, now) {
   try { given = JSON.parse(text); } catch { return bad('Send JSON'); }
   const task = taskOf(given?.task);   // fill (none named), readiness (api/ready-read.js) or auto (api/ready-auto.js); anything else is refused
   if (!task) return bad('bad task');
-  if (!reader.owner && task === 'fill') return deny();
+  if (!reader.owner && (task === 'fill' || task === 'linkedin')) return deny();   // linkedin: the owner's install only until the owner says more (api/ready-linkedin.js)
+  const probe = task === 'linkedin' ? checkProbe(given) : null;
+  if (probe?.error) return bad(probe.error);
   const autoNo = task === 'auto' ? await autoRefusal(env, install) : null;   // a Pro account, READY_AUTO on: the owner's install too, it gets no other way in
   if (autoNo) return json({ok: false, error: autoNo.error}, autoNo.status);
   const jobs = Array.isArray(given?.jobs) ? given.jobs : [];
@@ -113,7 +122,7 @@ async function batch(request, env, now) {
   if (task !== 'fill' && !reader.owner && !jobs.every(job => publicHost(job.url))) return bad('bad batch');   // an Always on install's forms are public pages: never our container's own network (code review of 3/4)
   const items = task === 'auto' ? jobs.map(job => checkItem(job)) : [];   // every job carries the Mac's own queued item; the site never makes one (spec "auto")
   if (items.some(item => !item)) return bad('bad item');
-  let strict = task === 'auto' ? 0 : 1;   // the daily cap can apply to this night (ready_batches.strict): not a Pro account's (api/ready-read-access.js, "Design") An auto night is Pro's: no daily cap, the ~500 ceiling is at /reserve.
+  let strict = task === 'auto' || task === 'linkedin' ? 0 : 1;   // the daily cap can apply to this night (ready_batches.strict): not a Pro account's (api/ready-read-access.js, "Design") An auto night is Pro's: no daily cap, the ~500 ceiling is at /reserve.
   if (task === 'readiness') {   // the lane follows who pays: a claimed own key is not trusted, only an answer from Anthropic proves it (aiCall); until then a trial's reads take the daily cap as their results arrive
     const own = /^sk-ant-[\w-]{20,300}$/.test(String(given.ai?.key || '')), pro = await isPro(env, install);
     strict = pro ? 0 : 1;
@@ -125,11 +134,11 @@ async function batch(request, env, now) {
   if (old && task === 'auto' && (old.state !== 'queued' || await env.STATS.prepare('SELECT 1 AS n FROM ready_jobs WHERE batch = ? AND attempt IS NOT NULL').bind(old.id).first())) return json({ok: false, error: 'this night already started'}, 409);
   if (old) { await clear(env, install, old.id, null, now); await env.STATS.batch([env.STATS.prepare('DELETE FROM ready_jobs WHERE batch = ?').bind(old.id), env.STATS.prepare('DELETE FROM ready_batches WHERE id = ?').bind(old.id)]); }
   const id = crypto.randomUUID();
-  const reading = task === 'readiness';   // a read needs the page only: no kit, letter, CV, contact or facts are sealed for it
+  const reading = task === 'readiness' || task === 'linkedin';   // a read needs the page only: no kit, letter, CV, contact or facts are sealed for it
   const kept = jobs.map((job, index) => ({id: job.id, url: job.url, title: String(job.title || '').slice(0, 200), company: String(job.company || '').slice(0, 200), fit: num(job.fit), kit: reading ? {} : job.kit || {}, letter: reading ? '' : String(job.letter || ''), cv: reading ? '' : String(job.cv || ''), letterPdf: reading ? '' : String(job.letterPdf || ''), ...(task === 'auto' ? {item: items[index], ...kitOf(job)} : {})}));
   const facts = Object.fromEntries(FACTS.map(name => [name, reading ? '' : String(given.facts?.[name] || '').slice(0, 40000)]));   // what the AI may answer from (profile, standard answers, ...): sealed with the batch, deleted with it
   const ai = /^sk-ant-[\w-]{20,300}$/.test(String(given.ai?.key || '')) ? {key: given.ai.key} : undefined;   // the user's own Claude key (BYOK): sealed with the batch, never sent back, deleted with it
-  await writeBlob(env, install, id, {ai, contact: reading ? {} : given.contact || {}, readyBy: reading ? '' : String(given.readyBy || '').slice(0, 5), facts, jobs: kept});
+  await writeBlob(env, install, id, {ai, ...(probe ? {linkedin: probe.session} : {}), contact: reading ? {} : given.contact || {}, readyBy: reading ? '' : String(given.readyBy || '').slice(0, 5), facts, jobs: kept});
   const fillAt = Number.isFinite(Date.parse(given.fillAt)) ? new Date(given.fillAt).toISOString() : null;   // when the night should start filling (the cron starts it then); none: at the next tick
   await env.STATS.batch([env.STATS.prepare('INSERT INTO ready_batches (id, install, night, created_at, fill_at, task, strict) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, install, given.night, stamp(now), fillAt, task, strict),
     ...kept.map(job => env.STATS.prepare('INSERT INTO ready_jobs (batch, job, host, session) VALUES (?, ?, ?, ?)').bind(id, job.id, new URL(job.url).hostname, job.item?.session ?? null))]);   // session: the auto item's, the key of its one attempt (api/ready-auto.js)
@@ -142,9 +151,12 @@ async function result(request, env, now) {
   const row = await batchOf(env, request.headers.get('authorization'), now);
   if (!row) return deny();
   const given = await request.json().catch(() => null);
-  const reading = row.task === 'readiness', auto = row.task === 'auto', cloud = reading || auto;   // cloud: a night that holds nothing for the morning (no mail, its container closes at its end)
+  const probe = row.task === 'linkedin';
+  if (probe) await scrubSession(env, row);   // the session goes the moment the night reports, whatever it reports (api/ready-linkedin.js)
+  const reading = row.task === 'readiness' || probe, auto = row.task === 'auto', cloud = reading || auto;   // cloud: a night that holds nothing for the morning (no mail, its container closes at its end)
   const checked = reading ? checkRead(given) : auto ? checkSubmit(given) : null;   // the batch's task decides what it may report, whatever the body says (api/ready-read.js, api/ready-auto.js)
   if (!given || (cloud ? !checked : !OUTCOMES.includes(given.state))) return bad('bad outcome');
+  if (probe && checked.state === 'read') checked.why = wordOf(given);   // the one word LinkedIn's answer comes to (ok, check, limited, ...): the row's `wall`, so the owner's measure is readable without opening the read
   if (((reading && checked.read) || auto) && !env.READY_KEK) return notSetUp();
   if (auto) await claimAttempt(env, row, String(given.job), checked);
   const live = reading && checked.read && await env.STATS.prepare(`SELECT 1 AS n FROM ready_jobs WHERE batch = ? AND job = ? AND cleared_at IS NULL AND state IN ${LIVE}`).bind(row.id, String(given.job)).first();   // Why (Gitar on #504): a repeated result for a form already read must not overwrite or delete its stored read
@@ -165,7 +177,7 @@ async function result(request, env, now) {
   // A read within the person's AI credit (no own Claude key): its container seconds come out of the credit meter, and today's budget can end the night (api/ready-read-access.js).
   let spent = false;
   if (auto) await chargeContainer(env, row.install, (num(given.ms) || 0) / 1000 * MICRO_PER_SECOND, now);   // a Pro night: its container seconds come out of its credit, like a read
-  if (reading) {
+  if (row.task === 'readiness') {
     const claimed = !!(await readBlob(env, row.install, row.id).catch(() => null))?.ai?.key;
     if (!(claimed && row.own_ok)) await chargeContainer(env, row.install, (num(given.ms) || 0) / 1000 * MICRO_PER_SECOND, now);   // our container is paid from their credit until Anthropic has answered their own key (a made-up key must not read free)
     // a Pro whose credit ran out after its batch was queued is on the Free rules again (Gitar on #510)
@@ -328,7 +340,7 @@ export async function ready(request, env, now = new Date()) {
     if (request.method !== 'POST') return json({ok: false, error: 'Use POST'}, 405);
     const task = taskOf((await request.json().catch(() => null))?.task);   // none named: the fill night, as before
     if (!task) return bad('bad task');
-    if (!reader.owner && task === 'fill') return deny();
+    if (!reader.owner && (task === 'fill' || task === 'linkedin')) return deny();
     const autoNo = task === 'auto' ? await autoRefusal(env, install) : null;
     if (autoNo) return json({ok: false, error: autoNo.error}, autoNo.status);
     const done = await runNow(env, install, now, task);

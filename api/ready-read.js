@@ -6,7 +6,7 @@ import {open, seal} from './hosted-state.js';
 import {keptKey} from './ready-kept.js';
 import {LIVE} from './ready-line.js';
 
-export const TASKS = ['fill', 'readiness', 'auto'];   // the cloud runner's tasks; `auto` (Full automation, Submit) only for a Pro Always on install with each job's own item (api/ready-auto.js; cs 2/4, 10 Nov 2026)
+export const TASKS = ['fill', 'readiness', 'auto', 'linkedin'];   // the cloud runner's tasks; `auto` (Full automation, Submit) only for a Pro Always on install with each job's own item (api/ready-auto.js; cs 2/4, 10 Nov 2026); `linkedin` (api/ready-linkedin.js, ap 1/6, 11 Nov 2026) only for the owner's install
 export const READ_OUTCOMES = ['read', 'unreadable', 'failed'];   // what a readiness night may report for a form; never a fill outcome, never "submitted"
 export const MAX_READ_BYTES = 32 * 1024;   // 30 labels of 300 characters fit in a third of it
 const MAX_TAKE = 100;
@@ -47,7 +47,7 @@ async function opened(env, install, batch, job) {
  */
 export async function takeReads(env, install, clear, now = new Date()) {
   const {results} = await env.STATS.prepare(`SELECT j.batch, j.job, j.state, j.wall, j.ms, b.night FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch
-    WHERE b.install = ? AND b.task = 'readiness' AND j.cleared_at IS NULL AND j.state IN ('read', 'unreadable', 'failed') ORDER BY b.created_at, j.job LIMIT ${MAX_TAKE}`).bind(install).all();
+    WHERE b.install = ? AND b.task IN ('readiness', 'linkedin') AND j.cleared_at IS NULL AND j.state IN ('read', 'unreadable', 'failed') ORDER BY b.created_at, j.job LIMIT ${MAX_TAKE}`).bind(install).all();
   const reads = [], taken = [];
   let retry = 0;
   for (const row of results) {
@@ -58,6 +58,6 @@ export async function takeReads(env, install, clear, now = new Date()) {
     taken.push(row);
   }
   for (const batch of new Set(taken.map(row => row.batch))) await clear(env, install, batch, taken.filter(row => row.batch === batch).map(row => row.job), now);
-  const pending = (await env.STATS.prepare(`SELECT COUNT(*) AS n FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch WHERE b.install = ? AND b.task = 'readiness' AND j.cleared_at IS NULL AND j.state IN ${LIVE}`).bind(install).first()).n;
+  const pending = (await env.STATS.prepare(`SELECT COUNT(*) AS n FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch WHERE b.install = ? AND b.task IN ('readiness', 'linkedin') AND j.cleared_at IS NULL AND j.state IN ${LIVE}`).bind(install).first()).n;
   return {ok: true, reads, pending: pending + retry};
 }
