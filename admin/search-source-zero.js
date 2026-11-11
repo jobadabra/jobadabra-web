@@ -10,17 +10,21 @@ import {BLIND, OWN, SOURCE_NAMES} from './search-finish.js';
 import {euresOf, notRunOf} from './search-night-judge.js';
 
 export const MIN_READ = 6, WINDOW = 14;   // WINDOW = the nights the chart draws (admin/search-source-trend.js): a source last counted before it is stale, not lost (Gitar on #559, 11 Nov 2026)
-export const WATCHED = [...OWN, 'eures'];
+// Why (11 Nov 2026, sa's decision on the fill-18 run 43088269080, where free job APIs and web search brought 0 right jobs to all 15 measured people): a source is WATCHED, so the LOST chip and the morning line judge it, only
+// when it is known to read: employer sites, job boards (their jobs include the free APIs' and the web search's) and EURES on its nights. Free job APIs and web search stay DRAWN (their zeros are shown) but unjudged,
+// because a LOST alarm on them would be false every morning. THEY JOIN `WATCHED` WHEN A RUN SHOWS THEM ABOVE 0 (a night with right jobs for them in the verdict): add the word here and a test line.
+export const WATCHED = ['employer_sites', 'job_boards', 'eures'];
+export const DRAWN = [...OWN, 'eures'];
 const isCount = value => Number.isInteger(value) && value >= 0;
 
 /**
  * One source on one night: {state: 'off'|'zero'|'some', readers, right}. `readers` = measured people with a sent count for the source (a person whose count was not sent is not a reader, never a 0).
  * @param {object} night a stored night (admin/search-night.js clean()): {eures, state, rows: [{kind, sources}]}
- * @param {string} source one of WATCHED (any other word, LinkedIn included, is always 'off')
+ * @param {string} source one of DRAWN (any other word, LinkedIn included, is always 'off'); an unwatched one still gets its state here, but statusOf and zeroNow never judge it
  */
 export function nightOf(night, source) {
   const off = {state: 'off', readers: 0, right: null};
-  if (!night || !WATCHED.includes(source) || notRunOf(night) || (source === 'eures' && euresOf(night) !== 'on')) return off;
+  if (!night || !DRAWN.includes(source) || notRunOf(night) || (source === 'eures' && euresOf(night) !== 'on')) return off;
   const counts = (night.rows || []).filter(row => !BLIND.includes(row.kind)).map(row => row.sources?.[source]?.right).filter(isCount);
   if (counts.length < MIN_READ) return off;
   const right = counts.reduce((sum, count) => sum + count, 0);
@@ -28,9 +32,9 @@ export function nightOf(night, source) {
 }
 
 /**
- * Where a source stands over the stored nights, newest first: {state: 'lost'|'reading'|'stale'|'unseen', run, since, dropped, latest}.
+ * Where a source stands over the stored nights, newest first: {state: 'lost'|'reading'|'stale'|'unwatched'|'unseen', run, since, dropped, latest}.
  * `run` = nights in a row at 0 counted from the newest night that was switched on (off nights skipped); `since` = the first night of that run; `dropped` = the run follows a night with right jobs
- * (the chart's "dropped to 0" mark); `latest` = the newest switched-on night {night, readers, right}; 'unseen' = no night was ever switched on for it; 'stale' = its latest switched-on night is WINDOW or more days older than the
+ * (the chart's "dropped to 0" mark); `latest` = the newest switched-on night {night, readers, right}; 'unseen' = no night was ever switched on for it; 'unwatched' = drawn but not judged (not in WATCHED); 'stale' = its latest switched-on night is WINDOW or more days older than the
  * newest stored night, so a source that stopped being sent weeks ago is not shown as lost with a run that never advances (Gitar on #559).
  */
 export function statusOf(nights, source) {
@@ -43,7 +47,8 @@ export function statusOf(nights, source) {
     run += 1; since = night.night;
   }
   const stale = latest && nights.length && (Date.parse(nights[0].night) - Date.parse(latest.night)) / 86400000 >= WINDOW;
-  return {state: !latest ? 'unseen' : stale ? 'stale' : run ? 'lost' : 'reading', run, since, dropped, latest};
+  const watched = WATCHED.includes(source);
+  return {state: !latest ? 'unseen' : stale ? 'stale' : !watched ? 'unwatched' : run ? 'lost' : 'reading', run: watched ? run : 0, since: watched ? since : null, dropped: watched && dropped, latest};
 }
 
 /**

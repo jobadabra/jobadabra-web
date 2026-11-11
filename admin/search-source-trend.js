@@ -7,12 +7,12 @@
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {BLIND, OWN, SOURCE_NAMES} from './search-finish.js';
-import {MIN_READ, WATCHED, WINDOW, nightOf, statusOf} from './search-source-zero.js';
+import {DRAWN, MIN_READ, WINDOW, nightOf, statusOf} from './search-source-zero.js';
 import {figure, tipOf} from './viz-core.js';
 
 export const TREND_STYLE = `${CHIP_STYLE}
 .st-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px}.st-panel{border:1px solid var(--vz-line,#262c33);border-radius:10px;padding:10px 12px;min-width:0}.st-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.st-head h3{margin:0;font-size:14.5px}
-.st-big{margin:2px 0 4px;font-size:13.5px}.st-svg{width:100%;height:auto;display:block}.st-bad{fill:#ff5a4f}.st-key{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 0}.st-key i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.st-big{margin:2px 0 4px;font-size:13.5px}.st-svg{width:100%;height:auto;display:block}.st-bad{fill:#ff5a4f}.st-quiet{fill:var(--off)}.st-key{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 0}.st-key i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 @media(max-width:900px){.st-grid{grid-template-columns:1fr}}`;
 
 const DAYS = WINDOW, FINDER_STEP = {employer_sites: 'employer_sites', job_boards: 'job_boards', free_job_apis: 'free_job_apis'};
@@ -51,6 +51,7 @@ const tipOfDay = (item, source) => {
 function svgOf(days, source, status) {
   const step = (W - L - R) / days.length, bw = step * 0.62, tone = `var(--${TONE[source] || 's1'})`;
   const top = Math.max(10, Math.ceil(Math.max(0, ...days.map(item => item.right || 0)) / 10) * 10), y0 = TOP + HR, ys = y0 + 26, H = ys + HS + 22;
+  const zc = status.state === 'unwatched' ? 'st-quiet' : 'st-bad';   // an unwatched source's 0 is drawn, never as an alarm
   const yOf = value => y0 - (HR * value) / top, finder = Boolean(FINDER_STEP[source]);
   const grid = [0, top / 2, top].map(value => `<line x1="${L}" x2="${W - R}" y1="${yOf(value).toFixed(1)}" y2="${yOf(value).toFixed(1)}" class="vz-grid"/><text x="${L - 6}" y="${(yOf(value) + 4).toFixed(1)}" text-anchor="end" class="vz-axis">${value}</text>`).join('');
   const total = Math.max(0, ...days.map(item => item.total || 0));
@@ -63,7 +64,7 @@ function svgOf(days, source, status) {
     let bar = '', read = '';
     if (item.gap) bar = `<rect x="${x.toFixed(1)}" y="${TOP}" width="${bw.toFixed(1)}" height="${HR}" rx="3" fill="none" stroke="var(--off)" stroke-dasharray="3 3" opacity=".6"/>`;
     else if (item.state === 'off') bar = `<rect x="${x.toFixed(1)}" y="${y0 - 3}" width="${bw.toFixed(1)}" height="3" rx="1.5" fill="none" stroke="var(--off)" stroke-dasharray="2 2"/>`;
-    else if (item.state === 'zero') bar = `<rect x="${x.toFixed(1)}" y="${y0 - 3}" width="${bw.toFixed(1)}" height="3" rx="1.5" class="st-bad"/><text x="${(x + bw / 2).toFixed(1)}" y="${y0 - 7}" font-size="9.5" font-weight="700" text-anchor="middle" class="st-bad">0</text>`;
+    else if (item.state === 'zero') bar = `<rect x="${x.toFixed(1)}" y="${y0 - 3}" width="${bw.toFixed(1)}" height="3" rx="1.5" class="${zc}"/><text x="${(x + bw / 2).toFixed(1)}" y="${y0 - 7}" font-size="9.5" font-weight="700" text-anchor="middle" class="${zc}">0</text>`;
     else bar = `<rect x="${x.toFixed(1)}" y="${yOf(item.right).toFixed(1)}" width="${bw.toFixed(1)}" height="${((HR * item.right) / top).toFixed(1)}" rx="2" fill="${tone}"/>`;
     if (finder && item.read != null) read = item.read === 0 ? `<rect x="${x.toFixed(1)}" y="${ys + HS - 3}" width="${bw.toFixed(1)}" height="3" rx="1.5" class="st-bad"/>` : `<rect x="${x.toFixed(1)}" y="${(ys + HS - (HS * item.read) / total).toFixed(1)}" width="${bw.toFixed(1)}" height="${((HS * item.read) / total).toFixed(1)}" rx="2" fill="${tone}" opacity=".55"/>`;
     const day = i % 2 === 0 || i === days.length - 1 ? `<text x="${(x + bw / 2).toFixed(1)}" y="${ys + HS + 15}" text-anchor="middle" class="vz-axis">${esc(item.day.slice(5).replace('-', '/'))}</text>` : '';
@@ -80,6 +81,7 @@ function svgOf(days, source, status) {
 function headOf(source, status) {
   if (status.state === 'unseen') return source === 'eures' ? chip('SIDE CHECK · not read on nights with EURES off', 'off') : chip('right jobs: not sent yet', 'off');
   if (status.state === 'stale') return chip(`not sent since ${esc(status.latest.night)}`, 'off');
+  if (status.state === 'unwatched') return chip(`not watched yet · ${status.latest.right} right jobs`, 'off');
   if (status.state === 'lost') return chip(`✖ LOST · 0 right jobs since ${esc(status.since)} · night ${status.run} in a row`, 'bad');
   return chip('✔ reading', 'good');
 }
@@ -99,7 +101,7 @@ const cellOf = item => (item.gap || item.state === 'off' ? '<span class="muted">
  */
 export function sourceTrendCard(runs) {
   const nights = (runs || []).filter(run => !run.hand), head = '<h2>📉 Each source, night after night</h2>';
-  const panels = WATCHED.map(source => ({source, days: daysOf(nights, source), status: statusOf(nights, source)}));
+  const panels = DRAWN.map(source => ({source, days: daysOf(nights, source), status: statusOf(nights, source)}));
   if (!panels.some(({days}) => days.some(item => !item.gap && (item.state !== 'off' || item.read != null)))) {
     return `<section class="card vz" id="finish-nights">${head}<p>${chip('not sent yet', 'off')} <span class="muted small">no night has sent a count per source yet: right jobs per source start with the next night, the people who read it (employer sites, job boards, free job APIs) with any night that sends the step yield</span></p></section>`;
   }
@@ -107,7 +109,7 @@ export function sourceTrendCard(runs) {
     const row = panels.map(({days}) => [...days].reverse()[i]);
     return `<tr><td>${esc(row[0].day)}</td>${row.map(item => `<td class="num">${cellOf(item)}</td>`).join('')}</tr>`;
   }).join('')}</table></div>`;
-  const grid = `<div class="muted small">Right jobs per night (bars, from 0) and the people who read it · a night with no upload is a dashed gap, a count not sent a dashed tick, never a flat line · a source at 0 is a red 0 and says LOST · own sources: ${OWN.map(name).join(', ')}; EURES is a side check, LinkedIn is typed by hand</div>
+  const grid = `<div class="muted small">Right jobs per night (bars, from 0) and the people who read it · a night with no upload is a dashed gap, a count not sent a dashed tick, never a flat line · a watched source (employer sites, job boards, EURES on its nights) at 0 is a red 0 and says LOST; free job APIs and web search are drawn but not judged until a run shows them above 0 · own sources: ${OWN.map(name).join(', ')}; EURES is a side check, LinkedIn is typed by hand</div>
 <div class="st-grid">${panels.map(({source, days, status}) => `<section class="st-panel" id="source-${source}"><div class="st-head"><h3>${esc(name(source))}</h3>${headOf(source, status)}</div><div class="st-big">${bigOf(status)}</div>${svgOf(days, source, status)}</section>`).join('')}</div>
 <div class="st-key small muted"><span><i style="background:${RED}"></i>0 right jobs</span><span><i style="border:1px dashed var(--off)"></i>no night stored / not sent</span><span><i style="background:var(--s1);opacity:.55"></i>people who read it</span></div>`;
   return `<section class="card vz" id="finish-nights">${head}${figure({chart: grid, table})}</section>`;
