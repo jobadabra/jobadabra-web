@@ -5,13 +5,13 @@
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {coverage} from './search-market.js';
-import {BLIND, LINE, OWN, lostTotals, ownOf, peopleOf, sideOf, sourcesOf, tally, weakest} from './search-finish.js';
+import {BLIND, LINE, OWN, SOURCE_NAMES, lostTotals, ownOf, peopleOf, sideOf, sourcesOf, tally, weakest} from './search-finish.js';
 import {stacked} from './viz-stack.js';
 import {WEEK_STYLE, weekCard} from './search-finish-week.js';
 import {SCOUT_STYLE, scoutCard} from './search-finish-scout.js';
+import {TREND_STYLE, sourceTrendCard} from './search-source-trend.js';
 import {VIZ_STYLE, VIZ_TOOLTIP, figure} from './viz.js';
 
-const SOURCE_NAMES = {eures: 'EURES', employer_sites: 'Employer sites', job_boards: 'Job boards', free_job_apis: 'Free job APIs', web_search: 'Web search', linkedin: 'LinkedIn Jobs', public_board: 'Public job boards'};
 const STAGE_WORDS = {not_read: 'never listed by our read', never_asked: 'read, ran out of time before it was asked', ai_no: 'asked, the AI said no', placed_out: 'placed in another country', double: 'dropped as a double', after_kept: 'kept by every filter, not in the list', listed: 'in the list'};
 const STAGE_TONE = {not_read: 'off', never_asked: 'warn', ai_no: 'warn', placed_out: 'warn', double: 'off', after_kept: 'bad'};   // after_kept is the unexplained loss: its own red (sa, 10 Nov 2026)
 const COLORS = {out: 'var(--s3)', never_asked: 'var(--s4)', ai_no: 'var(--s2)', placed_out: 'var(--s5)', double: 'var(--s6)', after_kept: '#ff5a4f', not_read: 'var(--off)'};
@@ -20,7 +20,7 @@ const num = value => (value == null ? '<span class="chip off">not sent yet</span
 const who = (persona, label) => `<b>p${esc(persona)}</b> ${esc(String(label || '').replace(/^p\d+ /, ''))}`;
 
 /** The card styles: the chips, the per-person bars and the floor line. */
-export const FINISH_STYLE = `${CHIP_STYLE}${WEEK_STYLE}${SCOUT_STYLE}${VIZ_STYLE}
+export const FINISH_STYLE = `${CHIP_STYLE}${WEEK_STYLE}${SCOUT_STYLE}${TREND_STYLE}${VIZ_STYLE}
 .fl-band{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.fl-big{font-size:34px;font-weight:700;line-height:1}.fl-big small{font-size:18px;color:var(--vz-muted,#8d949c);font-weight:500}
 .fl-row{display:grid;grid-template-columns:190px 1fr 220px;gap:10px;align-items:center;padding:3px 0}
 .fl-bar{position:relative;height:16px;background:#1b2027;border-radius:4px;display:flex}.fl-bar i{display:block;height:100%}.fl-bar i:first-child{border-radius:4px 0 0 4px}
@@ -98,18 +98,6 @@ function perSource(runs) {
   const body = last.rows.map(row => `<tr><td>${who(row.persona, row.label)}</td>${OWN.map(source => `<td class="num">${sourceCell(row, source)}</td>`).join('')}<td class="num">${chip('by hand', 'off')}</td><td class="num">${runCell(row, 1)}</td><td class="num">${runCell(row, 2)}</td></tr>`).join('');
   return `<section class="card vz" id="finish-per-person"><h2>🧩 Right jobs per person and source (our own sources)</h2><div class="muted small">A source that read nothing says why · a source's number is what it brought, so a job two sources found shows in both · LinkedIn is typed by hand, not read · Run 1 / Run 2 = new right jobs each run of the night listed first (a job once) · ${last.hand ? 'by-hand run' : 'night'} ${esc(last.night)}</div>
 <div class="scroll"><table><tr><th>Person</th>${OWN.map(source => `<th class="num">${esc(name(source))}</th>`).join('')}<th class="num">LinkedIn</th><th class="num">Run 1</th><th class="num">Run 2</th></tr>${body}</table></div></section>`;
-}
-
-// ---- Right jobs per night, by source group (3/5, owner's picture 11 Nov 2026): the nights that ran with EURES off, our own sources stacked; the split, a job two sources found shows in both ----
-function overNights(runs) {
-  const shown = runs.filter(run => ownOf(run) && run.rows.some(row => row.sources)).slice(0, 14).reverse();
-  if (!shown.length) return '';
-  const tones = ['s1', 's3', 's2', 's4'], days = shown.map(run => {
-    const values = OWN.map(source => run.rows.reduce((sum, row) => sum + (BLIND.includes(row.kind) || row.local == null ? 0 : row.sources?.[source]?.right ?? 0), 0));   // Why (Gitar on #551, 11 Nov 2026): the same people as the headline (ownOf): a person the night could not measure is out of the chart too
-    return {day: run.night, hand: run.hand, values, tip: `${run.night}${run.hand ? ' · by hand' : ''} · ${OWN.map((source, i) => `${name(source)} ${values[i]}`).join(' · ')} · each job counted once per source that found it`};
-  }), top = Math.max(3, ...days.map(day => day.values.reduce((a, b) => a + b, 0)));
-  return `<section class="card vz" id="finish-nights"><h2>📈 Right jobs per night, by source group</h2><div class="muted small">Our own sources only, nights with EURES off · a job two sources found shows in both groups · a hollow night was by hand · 2 runs a night (Run 1 / Run 2) arrive with the two-run night</div>
-${figure({chart: stacked(days, OWN.map((source, i) => ({name: name(source), tone: tones[i]})), {top})})}</section>`;
 }
 
 // "Where the missing jobs were lost, all people" (owner, 11 Nov 2026): one bar per stage, summed over the people with a reference; the bar is the share of in, the numbers are right jobs.
@@ -204,5 +192,5 @@ const reachedCard = () => '<section class="card vz" id="finish-reached" style="b
 export function finishSection(judged, hand = [], ref = {}, week = null) {
   if (!judged) return '<section class="card"><h2>The nights could not be read</h2><p class="muted">The store of the nightly Search check did not answer, so this tab cannot draw the finish line.</p></section>';
   const runs = runsOf(judged, hand);
-  return `${band(runs)}${perSource(runs)}${overNights(runs)}${weekCard(week)}${floorsCard(runs)}${weakCard(runs)}${sideCheck(runs)}${sourcesCard(runs)}${scoutCard(runs)}${marketCard(runs, ref)}${reachedCard()}${VIZ_TOOLTIP}`;
+  return `${band(runs)}${perSource(runs)}${sourceTrendCard(runs)}${weekCard(week)}${floorsCard(runs)}${weakCard(runs)}${sideCheck(runs)}${sourcesCard(runs)}${scoutCard(runs)}${marketCard(runs, ref)}${reachedCard()}${VIZ_TOOLTIP}`;
 }

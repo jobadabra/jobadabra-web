@@ -45,6 +45,7 @@ export const BLIND = ['unmeasured', 'fault', 'unknown', 'not-run'];   // Why (11
 
 /** The sources that make our own result (owner, 11 Nov 2026: "just relying on EURES is cheating... other 3rd parties should be just bonuses, not our core"): EURES is never in the headline, LinkedIn is typed by hand. */
 export const OWN = ['employer_sites', 'job_boards', 'free_job_apis', 'web_search'];
+export const SOURCE_NAMES = {eures: 'EURES', employer_sites: 'Employer sites', job_boards: 'Job boards', free_job_apis: 'Free job APIs', web_search: 'Web search', linkedin: 'LinkedIn Jobs', public_board: 'Public job boards'};   // the words of the tab and of the morning line (admin/search-source-zero.js)
 
 /**
  * The headline of one run (owner, 11 Nov 2026, via sa: "unique(LinkedIn Jobs + Web Search + Employer Careers + Jobs Feed APIs...)", a job two sources found is ONE job): on a night that ran with EURES off, the right jobs in our list,

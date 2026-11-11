@@ -72,7 +72,7 @@ test('the tab: band, weakest, chart, per-person bars, sources; empty says so; by
   assert.match(html, /stroke-dasharray="3 2"/, 'the by-hand run is hollow');
   assert.match(html, /not sent yet/);
   assert.equal((html.match(/id="finish-inout"/g) || []).length, 1);
-  assert.doesNotMatch(html, />2026-11-10</, 'the six-candidate night is another series and is not a run here');
+  assert.doesNotMatch(html, /2026-11-10 · \d/, 'the six-candidate night is another series and is not a run here (its day is a gap in the source chart)');
   assert.match(finishSection(judgeAll([night('2026-11-18', [row(1)])]), []), /no run has sent in = out yet/);
   assert.match(finishSection(null), /could not be read/);
   assert.match(page([], 'finish', [], null, [], judgeAll([full(8)]), {}, []), /Finish line/);
@@ -130,17 +130,6 @@ test('2/5 right jobs per person and source: a number where a source brought one,
   assert.match(at, /p3<\/b> Role, Place<\/td>(<td class="num"><span class="chip off">not measured<\/span><\/td>){4}/, 'a blind person is not measured in every source');
   assert.equal((at.match(/by hand/g) || []).length, 3 + 1, 'LinkedIn is by hand on every row (+ the note)');
   assert.doesNotMatch(finishSection(judgeAll([night('2026-11-18', rows)]), []), /id="finish-per-person"/, 'a EURES-on run draws no own-source table');
-});
-
-test('3/5 right jobs per night by source group: one column per EURES-off night, the four own sources stacked, no night = no card; a EURES-on night is not on it', () => {
-  const mk = (day, extra) => night(day, [row(1, {local: 3, sources: {eures: {right: 9}, employer_sites: {right: 3}, job_boards: {right: 2}}}), row(2, {local: 1, sources: {web_search: {right: 1}}})], extra);
-  const html = finishSection(judgeAll([mk('2026-11-18', {eures: 'off'}), mk('2026-11-17', {eures: 'off'}), mk('2026-11-16')]), []), at = html.slice(html.indexOf('id="finish-nights"'), html.indexOf('</section>', html.indexOf('id="finish-nights"')));
-  assert.equal((at.match(/<g[ >]/g) || []).length, 2, 'two EURES-off nights; the EURES-on night is not a column');
-  for (const word of ['Employer sites', 'Job boards', 'Free job APIs', 'Web search']) assert.ok(at.includes(word), word);
-  assert.doesNotMatch(at, /EURES \d/, 'EURES is not a group');
-  const blind = night('2026-11-18', [row(1, {local: 3, sources: {employer_sites: {right: 3}}}), row(2, {kind: 'unmeasured', local: null, sources: {employer_sites: {right: 5}}})], {eures: 'off'});
-  assert.match(finishSection(judgeAll([blind]), []).slice(finishSection(judgeAll([blind]), []).indexOf('id="finish-nights"')), /Employer sites 3 ·/, 'a person the night could not measure is not in the column, as in the headline (Gitar on #551)');
-  assert.doesNotMatch(finishSection(judgeAll([mk('2026-11-18')]), []), /id="finish-nights"/);
 });
 
 test('4/5 Weakest now reads our own sources: EURES rows are not in it, "not sent yet" until an own source sends in = out; Floors prefer the EURES-off series', () => {

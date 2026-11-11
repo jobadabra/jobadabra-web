@@ -6,6 +6,7 @@ import {searchScoreboard} from './page-shot-seed-scoreboard.mjs';
 import {cleanInout, cleanRuns, cleanSources} from '../admin/search-finish.js';
 import {cleanFloors} from '../admin/search-floors.js';
 import {cleanScout} from '../admin/search-finish-scout.js';
+import {cleanStepYield} from '../admin/search-night-yield.js';
 import {WEEK_KEY, cleanByRun, cleanRuns as cleanWeekRuns} from '../admin/search-week.js';
 
 // in (EURES right jobs) per person; 0 = EURES lists none; p6 and p15 are blind on the newest runs.
@@ -37,7 +38,8 @@ export async function searchFinish({env}) {
   const nights = state.nights.map(night => {
     const t = eighteen.indexOf(night);
     return t < 0 ? night : {...night, rows: night.rows.map((row, i) => ({...row, scout: cleanScout(scoutDemo(i, t, n)), inout: cleanInout(inoutOf(i, t, n)),
-      sources: cleanSources(Object.fromEntries(['eures', ...SOURCES].map((source, k) => [source, {right: Math.max(0, (source === 'eures' ? 6 : 3 - k) + ((i + t) % 3) - (i % 4 === 0 ? 3 : 0)), only: null, fit70: null, seconds: 40 + k * 12 + ((i + t) % 5) * 3}])))}))};
+      sources: cleanSources(Object.fromEntries(['eures', ...SOURCES].map((source, k) => [source, {right: source === 'job_boards' && t >= n - 3 ? 0 : Math.max(0, (source === 'eures' ? 6 : 3 - k) + ((i + t) % 3) - (i % 4 === 0 ? 3 : 0)), only: null, fit70: null, seconds: 40 + k * 12 + ((i + t) % 5) * 3}]))),
+      stepYield: cleanStepYield(SOURCES.map(step => ({step, seconds: 30, jobs: step === 'job_boards' && t >= n - 3 ? 0 : 5, local: 2, scored: 2, fit70: 1, local_fit70: 1})).filter(item => !(item.step === 'free_job_apis' && i % 6 === 5)))}))};   // MADE-UP: job boards bring 0 right jobs for everyone on the newest 3 nights (the case the source chart is for); a few people read no free job APIs
   });
   // MADE-UP floors on the newest 18-person night (cr's G2): p13 right jobs 0 against a floor of 4, the 2nd night under; the other floors held (first seconds to first job is a ceiling).
   const levels = Object.fromEntries(Array.from({length: 18}, (_, i) => [i + 1, {right: {floor: i % 5 === 4 ? null : 4, now: i === 12 ? 0 : 4 + (i % 3), spread: 1, below: i === 12 ? 2 : 0}, first_s: {floor: 60, now: 44 + i, spread: 5, below: 0}}]));
