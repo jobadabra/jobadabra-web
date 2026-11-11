@@ -5,7 +5,7 @@ import {test} from 'node:test';
 import {clean} from '../../../../admin/search-night.js';
 import {finishSection} from '../../../../admin/search-finish-page.js';
 import {judgeAll} from '../../../../admin/search-night-judge.js';
-import {MIN_READ, WATCHED, nightOf, statusOf, zeroNow} from '../../../../admin/search-source-zero.js';
+import {DRAWN, MIN_READ, WATCHED, nightOf, statusOf, zeroNow} from '../../../../admin/search-source-zero.js';
 import {daysOf, sourceTrendCard} from '../../../../admin/search-source-trend.js';
 
 const NOW = new Date('2026-12-31T09:00:00Z');
@@ -44,6 +44,21 @@ test('the run: nights in a row at 0 from the newest switched-on night; a blind n
   assert.equal(statusOf(nights, 'employer_sites').state, 'reading');
   assert.deepEqual(statusOf(nights, 'web_search'), {state: 'unseen', run: 0, since: null, dropped: false, latest: null});
   assert.equal(statusOf([make(day(0), {job_boards: 0})], 'job_boards').dropped, false, 'a source that never had a right job did not drop');
+});
+
+test('free job APIs and web search are drawn but not judged (sa, 11 Nov 2026, fill-18: both 0 for all 15 people): no LOST, no mark, no morning line; they join WATCHED when a run shows them above 0', () => {
+  assert.deepEqual(WATCHED, ['employer_sites', 'job_boards', 'eures']);
+  assert.deepEqual(DRAWN, ['employer_sites', 'job_boards', 'free_job_apis', 'web_search', 'eures']);
+  const nights = [make(day(1), {...OK, free_job_apis: 0, web_search: 0}), make(day(0), {...OK, free_job_apis: 4, web_search: 0})];
+  for (const source of ['free_job_apis', 'web_search']) {
+    assert.equal(nightOf(nights[0], source).state, 'zero', 'the count is still read');
+    assert.deepEqual([statusOf(nights, source).state, statusOf(nights, source).run, statusOf(nights, source).dropped], ['unwatched', 0, false]);
+  }
+  assert.deepEqual(zeroNow(nights, day(1)), [], 'nothing to tell: the two at 0 are not judged');
+  const html = sourceTrendCard(nights);
+  assert.doesNotMatch(html, /✖ LOST|dropped to 0/);
+  assert.match(html.slice(html.indexOf('id="source-web_search"'), html.indexOf('id="source-eures"')), /not watched yet · 0 right jobs/);
+  assert.match(html.slice(html.indexOf('id="source-web_search"'), html.indexOf('id="source-eures"')), /class="st-quiet"/, 'its zero is drawn muted, not as an alarm');
 });
 
 test('a source last counted weeks ago is stale, not lost: no LOST chip, no run that never advances (Gitar on #559)', () => {
@@ -105,7 +120,7 @@ test('what is not sent says so: web search and EURES "not sent yet" / side check
   const html = sourceTrendCard([make(day(0), {employer_sites: 4, job_boards: 2, free_job_apis: 1})]);
   assert.match(html.slice(html.indexOf('id="source-web_search"'), html.indexOf('id="source-eures"')), /right jobs: not sent yet[\s\S]*people who read it: not sent yet/);
   assert.match(html.slice(html.indexOf('id="source-eures"')), /SIDE CHECK · not read on nights with EURES off/);
-  assert.match(html.slice(html.indexOf('id="source-free_job_apis"'), html.indexOf('id="source-web_search"')), /✔ reading[\s\S]*<b>18<\/b> right jobs from <b>18<\/b> people/, 'a sent count is drawn as one');
+  assert.match(html.slice(html.indexOf('id="source-free_job_apis"'), html.indexOf('id="source-web_search"')), /not watched yet · 18 right jobs[\s\S]*<b>18<\/b> right jobs from <b>18<\/b> people/, 'a sent count is drawn as one, but free job APIs are not judged');
   const noSteps = sourceTrendCard([make(day(0), OK, {steps: false})]);
   assert.doesNotMatch(noSteps, /read by \d+ of/, 'no step_yield: no read count, never 0 read');
 });
