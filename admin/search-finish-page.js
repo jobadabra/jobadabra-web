@@ -45,8 +45,8 @@ function weakCard(runs) {
     const known = row.history.filter(value => value != null), trend = known.length >= 2 ? `${[...known, row.lost].join(' · ')}` : `${known.length + 1} run${known.length ? 's' : ''} (a trend needs 3)`;
     return `<tr><td>${who(row.persona, row.label)}</td><td>${esc(name(row.source))}</td><td>${chip(esc(row.stage), STAGE_TONE[row.stage] || 'off')} <span class="muted small">${esc(STAGE_WORDS[row.stage] || '')}</span></td><td class="num"><b>${row.lost}</b></td><td class="num">${row.in} → ${row.out}</td><td class="small">${trend}</td><td>${chip('nobody on it', 'off')}</td></tr>`;
   }).join('');
-  return `<section class="card vz" id="finish-weakest"><h2>🔻 Weakest now</h2><div class="muted small">The 5 worst person × source × stage rows of the last run${night ? ` (${esc(night)})` : ''}, by right jobs lost · a trend needs 3 runs · a PR counts only with a <code>Moves: p&lt;n&gt; …</code> line in its body</div>
-${rows.length ? `<table><tr><th>Person</th><th>Source</th><th>Lost at stage</th><th class="num">Lost</th><th class="num">In → out</th><th>Last runs</th><th>Who is on it</th></tr>${body}</table>` : '<p class="muted">Nothing lost, or no run has sent in = out yet.</p>'}</section>`;
+  return `<section class="card vz" id="finish-weakest"><h2>🔻 Weakest now</h2><div class="muted small">The 5 worst person × own source × stage rows of the last run that sent them${night ? ` (${esc(night)})` : ''}, by right jobs lost · a trend needs 3 runs · a PR counts only with a <code>Moves: p&lt;n&gt; …</code> line in its body</div>
+${rows.length ? `<table><tr><th>Person</th><th>Source</th><th>Lost at stage</th><th class="num">Lost</th><th class="num">In → out</th><th>Last runs</th><th>Who is on it</th></tr>${body}</table>` : `<p>${chip('not sent yet', 'off')} <span class="muted small">our own sources have sent no in = out yet: employer sites log no stages until sf's lanes 4/5, job boards and the others have no reference to count against (EURES's in = out is in the Side check)</span></p>`}</section>`;
 }
 
 function overTime(runs) {
@@ -152,7 +152,7 @@ function redRow(item, labels) {
  * @param {object[]} runs nights and by-hand runs, newest first (each may carry `floors` and `measure`)
  */
 export function floorsCard(runs) {
-  const run = runs.find(item => item.floors && !item.hand) || runs.find(item => item.floors), floors = run?.floors,   // Why (code review of #527, 10 Nov 2026): the last NIGHT decides; a by-hand run (never judged, never alerted) must not hide its red rows with "not checked"
+  const run = runs.find(item => item.floors && !item.hand && item.eures === 'off') || runs.find(item => item.floors && !item.hand) || runs.find(item => item.floors), floors = run?.floors,   // Why (code review of #527, 10 Nov 2026): the last NIGHT decides; a by-hand run (never judged, never alerted) must not hide its red rows with "not checked"
    labels = Object.fromEntries((run?.rows || []).map(row => [row.persona, row.label]));
   const head = '<h2>🧱 Floors that only rise</h2>';
   const note = `<div class="muted small">A floor is the best a person's number held for 3 measured nights; red = under it beyond the spread two nights in a row, on a scheduled night on the locked chain · for seconds to first job the line is a ceiling · the alert is the check's, not this card's</div>`;

@@ -103,13 +103,14 @@ export function tally(night, source = 'eures') {
  * The worst person x source x stage rows of the newest night that sent inout, by right jobs lost, with each row's earlier values (up to 6 nights back, oldest first) for a trend.
  * @param {object[]} nights stored nights, newest first
  * @param {number} [limit] how many rows
+ * @param {string[]} [sources] which sources count (default: our own, owner 11 Nov 2026: EURES is a side check, not our result)
  * @returns {{night: string|null, rows: {persona, label, source, stage, lost, in, out, history: number[]}[]}} rows [] when no night sent inout
  */
-export function weakest(nights, limit = 5) {
-  const sent = nights.filter(night => (night.rows || []).some(row => row.inout)), [last] = sent;
+export function weakest(nights, limit = 5, sources = OWN) {
+  const sent = nights.filter(night => (night.rows || []).some(row => Object.keys(row.inout || {}).some(source => sources.includes(source)))), [last] = sent;
   if (!last) return {night: null, rows: []};
   const rows = [];
-  for (const row of last.rows) for (const [source, item] of Object.entries(row.inout || {})) for (const [stage, lost] of Object.entries(item.lost)) {
+  for (const row of last.rows) for (const [source, item] of Object.entries(row.inout || {}).filter(([name]) => sources.includes(name))) for (const [stage, lost] of Object.entries(item.lost)) {
     if (lost > 0) rows.push({persona: row.persona, label: row.label, source, stage, lost, in: item.in, out: item.out,
       history: sent.slice(1, 7).reverse().map(night => { const before = night.rows.find(other => other.persona === row.persona)?.inout?.[source]; return before ? (before.lost[stage] ?? 0) : null; })});   // Why (self-review, 10 Nov 2026): a night that sent in = out with nothing lost at this stage is 0 lost, not "unknown"; only a night without the row is null
   }
