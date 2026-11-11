@@ -39,6 +39,16 @@ export function nightCard(verdict) {
   return card({level: 'orange', headline: `Night search: ${verdict.measured} of ${verdict.total} personas measured`, bar: {done: verdict.measured, total: verdict.total, doneWord: 'measured', restWord: 'missing'}, why,
     verdict: {ok: false, text: verdict.reasons.includes('measured') ? `It needs at least ${verdict.need} measured: the night run needs a look.` : 'The night run needs a look.'}, link: {text: 'Open the night search', url: site('/admin/job-search/lab?tab=night')}});
 }
+/**
+ * Sources that brought no right job on the night just uploaded (owner, 11 Nov 2026, asked via AskUserQuestion: "Morning message: a source at 0 (Recommended)"): one row per source, counts only.
+ * `lines` = [{label, readers, total, run}]: run is the night in a row at 0 (admin/search-source-zero.js zeroNow).
+ */
+export function sourceZeroCard(lines) {
+  const one = lines.length === 1;
+  return card({level: 'orange', headline: one ? `Night search: ${lines[0].label} brought no right job` : `Night search: ${lines.length} sources brought no right job`,
+    why: lines.map(line => ({icon: '🔻', text: `${line.label}: 0 right jobs for ${line.readers === line.total ? `all ${line.total}` : `the ${line.readers} who read it of ${line.total}`} people, night ${line.run} in a row`})), whyTitle: '',
+    verdict: {ok: false, text: 'A source that brings nothing is lost: its last run needs a look.'}, link: {text: 'Open the finish line', url: site('/admin/job-search/lab?tab=finish')}});
+}
 export const nightMissingCard = () => card({level: 'red', headline: 'Night search: no result last night', verdict: {ok: false, text: 'No night was filed by 06:30 UTC.'}, link: {text: 'Open the night search', url: site('/admin/job-search/lab?tab=night')}});
 
 /** The employer list: 'copy-failed' {day}, 'publish-refused' {why}, 'kinds-dropped' {withKinds, previousKinds}. */

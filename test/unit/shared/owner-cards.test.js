@@ -17,6 +17,7 @@ const SAMPLES = {
   'probe down and up': cards.probeCard([{label: 'Worker health', state: 'down', redSince: '2026-11-09T09:10:00Z', streak: 3, reason: 'HTTP 503 from /health'}, {label: 'Employer index', state: 'up', redSince: '2026-11-09T08:40:00Z'}]),
   'night dropped': cards.nightCard(night),
   'night missing': cards.nightMissingCard(),
+  'source at zero': cards.sourceZeroCard([{label: 'Job boards', readers: 18, total: 18, run: 3}, {label: 'Web search', readers: 9, total: 18, run: 1}]),
   'employers copy failed': cards.employerCard('copy-failed', {day: '2026-11-09'}),
   'employers refused': cards.employerCard('publish-refused', {why: '40% of the employers would be lost'}),
   'employers kinds dropped': cards.employerCard('kinds-dropped', {withKinds: 120, previousKinds: 840}),

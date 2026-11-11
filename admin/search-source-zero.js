@@ -5,7 +5,8 @@
 // public repo's CI) is this number's twin, kept as a second copy on purpose (no shared module across the repos); this one reads the stored nights across nights, lost.py reads one run's verdict, and this never reads lost.py's `open` list.
 // A night that is not switched on (no row for the source, fewer than MIN_READ readers, a night that did not run, EURES off for the EURES row) is "off": it neither fires nor counts and it does not break a run.
 // LinkedIn is never watched (typed by hand). Known limit: a row with 0 jobs cannot yet tell "read, found nothing" from "not read" (the night does not send sources[word].read, parked), so the line fires on both.
-import {BLIND, OWN} from './search-finish.js';
+import {sourceZeroCard} from '../shared/owner-cards.js';
+import {BLIND, OWN, SOURCE_NAMES} from './search-finish.js';
 import {euresOf, notRunOf} from './search-night-judge.js';
 
 export const MIN_READ = 6, WINDOW = 14;   // WINDOW = the nights the chart draws (admin/search-source-trend.js): a source last counted before it is stale, not lost (Gitar on #559, 11 Nov 2026)
@@ -57,4 +58,15 @@ export function zeroNow(nights, night) {
     const here = nightOf(nights[0], source);
     return here.state === 'zero' ? [{source, run: statusOf(nights, source).run, readers: here.readers, total: nights[0].rows.length}] : [];
   });
+}
+
+/**
+ * The morning line for the night just uploaded (one card, one row per source at 0, the count rising; sent also when the night is otherwise fine): {text, state, sources} or null when nothing is at 0.
+ * `state` carries the run counts, so a second upload of the same night is held and the next night (a higher count) is told again.
+ */
+export function zeroAlert(nights, night) {
+  const now = zeroNow(nights, night);
+  if (!now.length) return null;
+  return {text: sourceZeroCard(now.map(item => ({label: SOURCE_NAMES[item.source] || item.source, readers: item.readers, total: item.total, run: item.run}))).text,
+    state: `${night} ${now.map(item => `${item.source}:${item.run}`).join(',')}`.slice(0, 60), sources: now.map(item => ({source: item.source, run: item.run}))};
 }
