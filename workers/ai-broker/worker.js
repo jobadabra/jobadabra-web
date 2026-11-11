@@ -23,7 +23,8 @@ export {ContainerProxy} from '@cloudflare/containers';   // required by the outb
 
 // Why (11 Nov 2026, as; owner: "Let's increase the AI Broker's slot limit"): at 4 one Find jobs measure person already queued (after-1 run 43069240532: 55 of 303
 // calls waited over 5 s, p90 wait 7.9 s, all 4 busy 29% of the time). On the 1 vCPU / 3 GiB container (#554) 4 at once peaked at 1.27 GiB and 0.52 CPU per minute
-// (idle 0.53 GiB, so ~185 MiB a running call; Cloudflare container metrics, same window): 8 fits (~2.0 GiB); 12 (~2.75 GiB) leaves no room. PR 0 (28 Oct 2026) measured 4.
+// (idle 0.53 GiB, so ~185 MiB a running call; Cloudflare container metrics, same window): 8 fits (~2.0 GiB); 12 (~2.75 GiB) left no room in 3 GiB. PR 0 (28 Oct 2026) measured 4.
+// Since the resize to 2 vCPU / 6 GiB (11 Nov 2026) memory is no limit (8 calls = ~2.0 of 6 GiB); the number stays 8 until a run measures more at 2 vCPU.
 const PARALLEL = 8;
 const CLAUDE_PARALLEL = 3;   // Why (11 Nov 2026, as): kept at 3 though the container now has 3 GiB: more Claude calls at once were never measured on the subscription
 const CALLER_WAIT_MS = 180_000, CODEX_GUARD_MS = 100_000, START_MS = 10_000;   // the callers' own wait (desktop/e2e/lib/broker-client.mjs: AbortSignal.timeout(180000), an abort is not retried), the container's Codex guard (container/server.mjs), a cold start
