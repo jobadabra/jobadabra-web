@@ -3,10 +3,13 @@
 // "Runs to the line" is NOT drawn: the owner has not said when the line is reached (a chip says so). A missing week is an empty state, never a flat line; a count that was not whole is null and reads "not sent", never 0.
 // Guard: test/unit/admin/search/search-finish-week.test.js.
 import {esc} from '../shared/html.js';
-import {chip} from './chip.js';
+import {CHIP_STYLE, chip} from './chip.js';
 import {BLIND} from './search-finish.js';
 import {countTicks} from './viz-time.js';
 import {tipOf} from './viz-core.js';
+
+/** The card's style: its chips (the tab's chart and table styles come with the tab). Why (CI on #555, 11 Nov 2026): admin-chips.test.js wants every module that draws chip() in CHIP_PAGES with CHIP_STYLE in its own style. */
+export const WEEK_STYLE = `${CHIP_STYLE}`;
 
 const W = 720, H = 200, BOX = {l: 44, r: 8, t: 14, b: 26};
 const who = (persona, label) => `<b>p${esc(persona)}</b> ${esc(String(label || '').replace(/^p\d+ /, ''))}`;
