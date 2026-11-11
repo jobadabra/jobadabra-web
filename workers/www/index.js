@@ -23,6 +23,7 @@ import {ingestRoute as searchLabDrawIngest} from '../../admin/search-lab-draws.j
 import {realGaps as searchLabRealGaps} from '../../admin/search-lab-real-gaps.js';
 import {ingestRoute as sessionChecksIngest} from '../../admin/session-checks.js';
 import {ingestRoute as searchNightIngest} from '../../admin/search-night.js';
+import {weekRoute as searchWeekIngest} from '../../admin/search-week.js';
 import {ingestRoute as searchReferenceIngest} from '../../admin/search-reference.js';
 import {checkMissing as searchNightMissing, isCheckTick as isSearchNightTick} from '../../admin/search-night-missing.js';
 import {discoveryInput} from '../../shared/discovery-candidates.js';
@@ -252,6 +253,7 @@ async function route(request, env, ctx) {
   if (pathname === '/search-lab/real-gaps' && request.method === 'GET') return searchLabRealGaps(request, env);   // the search robot's real-installs alarm, k >= 3 (Bearer REPLAYS_PUBLISH_KEY, admin/search-lab-real-gaps.js)
   if (pathname === '/search-lab/session-checks' && request.method === 'PUT') return sessionChecksIngest(request, env);   // a session's local search check (Bearer SESSION_CHECKS_KEY, admin/session-checks.js)
   if (pathname === '/search-check/night' && request.method === 'PUT') return searchNightIngest(request, env);   // the nightly Search check's verdict (Bearer REPLAYS_PUBLISH_KEY, admin/search-night.js); public lists it with 2/2
+  if (pathname === '/search-check/weekly' && request.method === 'PUT') return searchWeekIngest(request, env);   // the Search check's week, 5 runs a person (admin/search-week.js); never a night
   if (pathname === '/search-check/reference' && request.method === 'PUT') return searchReferenceIngest(request, env);   // the weekly reference: right jobs that exist per candidate, counts only (Bearer REPLAYS_PUBLISH_KEY, admin/search-reference.js); public lists it with 5/5
   if (pathname === '/applying/discovery-input' && request.method === 'GET') return discoveryInput(request, env);   // the daily discovery batch's input (Bearer REPLAYS_PUBLISH_KEY, shared/discovery-candidates.js)
   if (pathname === '/applying/endings' && request.method === 'PUT') return endingsIngest(request, env);
