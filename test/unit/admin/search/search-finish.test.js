@@ -41,11 +41,11 @@ test('in = out per person: at the line from 95% of in; a blind person is neither
 test('weakest: the worst person x source x stage rows of the newest night that sent inout, by right jobs lost, with the earlier values', () => {
   const nights = [night('2026-11-18', [row(13, {inout: io(43, 23, {after_kept: 20})}), row(1, {inout: io(19, 14, {never_asked: 5})}), row(2, {inout: io(5, 5)})]),
     night('2026-11-17', [row(13, {inout: io(43, 25, {after_kept: 18})}), row(1), row(2)]), night('2026-11-16', [row(1)])];
-  const {night: at, rows} = weakest(nights);
+  const {night: at, rows} = weakest(nights, 5, ['eures']);
   assert.equal(at, '2026-11-18');
   assert.deepEqual(rows.map(item => [item.persona, item.stage, item.lost, item.history]), [[13, 'after_kept', 20, [18]], [1, 'never_asked', 5, [null]]], 'nothing lost = no row; a night that did not send inout is not a run');
-  assert.deepEqual(weakest([night('2026-11-18', [row(1)])]), {night: null, rows: []});
-  const zero = weakest([night('2026-11-18', [row(1, {inout: io(19, 14, {never_asked: 5})})]), night('2026-11-17', [row(1, {inout: io(19, 19)})])]);
+  assert.deepEqual(weakest([night('2026-11-18', [row(1)])], 5, ['eures']), {night: null, rows: []});
+  const zero = weakest([night('2026-11-18', [row(1, {inout: io(19, 14, {never_asked: 5})})]), night('2026-11-17', [row(1, {inout: io(19, 19)})])], 5, ['eures']);
   assert.deepEqual(zero.rows[0].history, [0], 'a night that sent in = out with nothing lost at the stage is 0, not unknown');
 });
 
@@ -68,7 +68,7 @@ test('the tab: band, weakest, chart, per-person bars, sources; empty says so; by
   assert.match(html, /split by source: 36 right jobs in all[\s\S]*<b>18<\/b> people have right jobs no source row claims/, 'the split by source sits under it; local 3 against 2 claimed is a hole, shown');
   assert.match(html, /SIDE CHECK<\/span> with EURES on, our list keeps <b>104 of 120<\/b>/, 'EURES in = out is the small side check');
   assert.match(html, /unexplained/, 'after_kept has its own words');
-  assert.match(html, /nobody on it/, 'no Moves: line is read yet');
+  assert.match(html, /our own sources have sent no in = out yet/, 'Weakest now reads our own sources; only EURES sent in = out here');
   assert.match(html, /stroke-dasharray="3 2"/, 'the by-hand run is hollow');
   assert.match(html, /not sent yet/);
   assert.equal((html.match(/id="finish-inout"/g) || []).length, 1);
@@ -141,4 +141,14 @@ test('3/5 right jobs per night by source group: one column per EURES-off night, 
   const blind = night('2026-11-18', [row(1, {local: 3, sources: {employer_sites: {right: 3}}}), row(2, {kind: 'unmeasured', local: null, sources: {employer_sites: {right: 5}}})], {eures: 'off'});
   assert.match(finishSection(judgeAll([blind]), []).slice(finishSection(judgeAll([blind]), []).indexOf('id="finish-nights"')), /Employer sites 3 ·/, 'a person the night could not measure is not in the column, as in the headline (Gitar on #551)');
   assert.doesNotMatch(finishSection(judgeAll([mk('2026-11-18')]), []), /id="finish-nights"/);
+});
+
+test('4/5 Weakest now reads our own sources: EURES rows are not in it, "not sent yet" until an own source sends in = out; Floors prefer the EURES-off series', () => {
+  const own = {employer_sites: {in: 10, out: 4, lost: {never_asked: 6}}}, eur = io(19, 14, {never_asked: 5});
+  assert.deepEqual(weakest([night('2026-11-18', [row(1, {inout: eur})])]), {night: null, rows: []}, 'EURES alone sends nothing for our own sources');
+  assert.deepEqual(weakest([night('2026-11-18', [row(1, {inout: {...eur, ...own}})])]).rows.map(item => [item.source, item.lost]), [['employer_sites', 6]], 'only the own source row, never the EURES one');
+  assert.match(finishSection(judgeAll([night('2026-11-18', [row(1, {inout: eur})])]), []), /id="finish-weakest"[\s\S]*our own sources have sent no in = out yet/);
+  const floors = series => ({checked: true, series, red: [], unreadable: 0, last_green: null, merges: [], levels: {1: {right: {floor: 4, now: 4, spread: 1, below: 0}}}});
+  const off = night('2026-11-18', [row(1)], {eures: 'off', measure: 'aaaaaaaaaaaa', floors: floors('aaaaaaaaaaaa|codex|eures-off')}), on = night('2026-11-19', [row(1)], {measure: 'bbbbbbbbbbbb', floors: floors('bbbbbbbbbbbb|codex|eures-on')});
+  assert.match(finishSection(judgeAll([on, off]), []), /night 2026-11-18 · measure aaaaaaaaaaaa/, 'the newer EURES-on night does not decide; the EURES-off series does');
 });
