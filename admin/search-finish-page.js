@@ -7,6 +7,7 @@ import {CHIP_STYLE, chip} from './chip.js';
 import {coverage} from './search-market.js';
 import {BLIND, LINE, OWN, lostTotals, ownOf, peopleOf, sideOf, sourcesOf, tally, weakest} from './search-finish.js';
 import {stacked} from './viz-stack.js';
+import {weekCard} from './search-finish-week.js';
 import {VIZ_STYLE, VIZ_TOOLTIP, figure} from './viz.js';
 
 const SOURCE_NAMES = {eures: 'EURES', employer_sites: 'Employer sites', job_boards: 'Job boards', free_job_apis: 'Free job APIs', web_search: 'Web search', linkedin: 'LinkedIn Jobs', public_board: 'Public job boards'};
@@ -197,9 +198,10 @@ const reachedCard = () => '<section class="card vz" id="finish-reached" style="b
  * @param {object[]|null} judged the stored nights, newest first (admin/search-night-judge.js judgeAll); null = unreadable
  * @param {object[]} [hand] the by-hand full runs (admin/search-night-hand.js)
  * @param {object} [ref] the weekly reference (reference() in admin/search-night.js)
+ * @param {object|null} [week] the newest stored week of 5 runs (admin/search-week.js weeks()[0]); none = "no week yet"
  */
-export function finishSection(judged, hand = [], ref = {}) {
+export function finishSection(judged, hand = [], ref = {}, week = null) {
   if (!judged) return '<section class="card"><h2>The nights could not be read</h2><p class="muted">The store of the nightly Search check did not answer, so this tab cannot draw the finish line.</p></section>';
   const runs = runsOf(judged, hand);
-  return `${band(runs)}${perSource(runs)}${overNights(runs)}${floorsCard(runs)}${weakCard(runs)}${sideCheck(runs)}${sourcesCard(runs)}${marketCard(runs, ref)}${reachedCard()}${VIZ_TOOLTIP}`;
+  return `${band(runs)}${perSource(runs)}${overNights(runs)}${weekCard(week)}${floorsCard(runs)}${weakCard(runs)}${sideCheck(runs)}${sourcesCard(runs)}${marketCard(runs, ref)}${reachedCard()}${VIZ_TOOLTIP}`;
 }
