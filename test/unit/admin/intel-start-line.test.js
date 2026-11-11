@@ -74,3 +74,12 @@ test('the owner\'s case end to end: the Worker tick with no token -> the page of
     assert.equal(await readStartProblem(STATS, 'e2e-intel.yml'), null, 'an off-tick writes nothing');
   } finally { globalThis.fetch = realFetch; console.error = realError; }
 });
+
+test('when the snapshot and the central scout are both refused, the Scheduled page names both reasons (Gitar on #560: the second must not hide behind the first)', async () => {
+  const STATS = d1(), env = {STATS, STATS_KEY: 'k3y', STATS_SALT: 'salt', ASSETS: {fetch: () => new Response('asset')}};
+  const show = async () => seen(await (await worker.fetch(new Request('https://www.example.test/admin/operations/scheduled', {headers: {Cookie: 'jp_stats=k3y'}}), env, {waitUntil() {}})).text());
+  await recordStarts(STATS, [{workflow: 'central-scout.yml', error: 'BRAIN_GITHUB_TOKEN is not set'}], tick(25, 4));
+  assert.match(await show(), /collector not starting: central-scout\.yml: BRAIN_GITHUB_TOKEN is not set/, 'the scout alone');
+  await recordStarts(STATS, [{workflow: 'schedules-snapshot.yml', error: 'E2E_INTEL_GITHUB_TOKEN is not set'}], tick(0));
+  assert.match(await show(), /collector not starting: E2E_INTEL_GITHUB_TOKEN is not set; central-scout\.yml: BRAIN_GITHUB_TOKEN is not set/, 'both, in one line');
+});
