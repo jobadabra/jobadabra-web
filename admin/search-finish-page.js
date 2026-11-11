@@ -7,6 +7,7 @@ import {CHIP_STYLE, chip} from './chip.js';
 import {coverage} from './search-market.js';
 import {BLIND, LINE, OWN, lostTotals, ownOf, peopleOf, sideOf, sourcesOf, tally, weakest} from './search-finish.js';
 import {stacked} from './viz-stack.js';
+import {WEEK_STYLE, weekCard} from './search-finish-week.js';
 import {VIZ_STYLE, VIZ_TOOLTIP, figure} from './viz.js';
 
 const SOURCE_NAMES = {eures: 'EURES', employer_sites: 'Employer sites', job_boards: 'Job boards', free_job_apis: 'Free job APIs', web_search: 'Web search', linkedin: 'LinkedIn Jobs', public_board: 'Public job boards'};
@@ -18,7 +19,7 @@ const num = value => (value == null ? '<span class="chip off">not sent yet</span
 const who = (persona, label) => `<b>p${esc(persona)}</b> ${esc(String(label || '').replace(/^p\d+ /, ''))}`;
 
 /** The card styles: the chips, the per-person bars and the floor line. */
-export const FINISH_STYLE = `${CHIP_STYLE}${VIZ_STYLE}
+export const FINISH_STYLE = `${CHIP_STYLE}${WEEK_STYLE}${VIZ_STYLE}
 .fl-band{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.fl-big{font-size:34px;font-weight:700;line-height:1}.fl-big small{font-size:18px;color:var(--vz-muted,#8d949c);font-weight:500}
 .fl-row{display:grid;grid-template-columns:190px 1fr 220px;gap:10px;align-items:center;padding:3px 0}
 .fl-bar{position:relative;height:16px;background:#1b2027;border-radius:4px;display:flex}.fl-bar i{display:block;height:100%}.fl-bar i:first-child{border-radius:4px 0 0 4px}
@@ -197,9 +198,10 @@ const reachedCard = () => '<section class="card vz" id="finish-reached" style="b
  * @param {object[]|null} judged the stored nights, newest first (admin/search-night-judge.js judgeAll); null = unreadable
  * @param {object[]} [hand] the by-hand full runs (admin/search-night-hand.js)
  * @param {object} [ref] the weekly reference (reference() in admin/search-night.js)
+ * @param {object|null} [week] the newest stored week of 5 runs (admin/search-week.js weeks()[0]); none = "no week yet"
  */
-export function finishSection(judged, hand = [], ref = {}) {
+export function finishSection(judged, hand = [], ref = {}, week = null) {
   if (!judged) return '<section class="card"><h2>The nights could not be read</h2><p class="muted">The store of the nightly Search check did not answer, so this tab cannot draw the finish line.</p></section>';
   const runs = runsOf(judged, hand);
-  return `${band(runs)}${perSource(runs)}${overNights(runs)}${floorsCard(runs)}${weakCard(runs)}${sideCheck(runs)}${sourcesCard(runs)}${marketCard(runs, ref)}${reachedCard()}${VIZ_TOOLTIP}`;
+  return `${band(runs)}${perSource(runs)}${overNights(runs)}${weekCard(week)}${floorsCard(runs)}${weakCard(runs)}${sideCheck(runs)}${sourcesCard(runs)}${marketCard(runs, ref)}${reachedCard()}${VIZ_TOOLTIP}`;
 }

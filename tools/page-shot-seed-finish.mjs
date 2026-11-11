@@ -5,6 +5,7 @@ import {HAND_KEY} from '../admin/search-night-hand.js';
 import {searchScoreboard} from './page-shot-seed-scoreboard.mjs';
 import {cleanInout, cleanRuns, cleanSources} from '../admin/search-finish.js';
 import {cleanFloors} from '../admin/search-floors.js';
+import {WEEK_KEY, cleanByRun, cleanRuns as cleanWeekRuns} from '../admin/search-week.js';
 
 // in (EURES right jobs) per person; 0 = EURES lists none; p6 and p15 are blind on the newest runs.
 const IN = [19, 1, 22, 6, 24, 0, 0, 18, 21, 15, 0, 17, 43, 25, 0, 0, 13, 0];
@@ -42,4 +43,17 @@ export async function searchFinish({env}) {
   await writeState(env, REFERENCE_KEY, {week: '2026-W46', run: null, personas: personas, at: new Date().toISOString()}, new Date());
   const hand = await readState(env, HAND_KEY, {runs: []});
   await writeState(env, HAND_KEY, {runs: hand.runs.map((run, h) => ({...run, eures: 'on', rows: run.rows.map((row, i) => ({...row, inout: cleanInout(inoutOf(i, n - 1 - h, n))}))}))}, new Date());
+}
+
+/** The same tab with MADE-UP weekly data: 5 runs in one install, each person's new right jobs per run (run 1 most, later runs fewer, run 5 none), from the newest 18-person night's rows. @param {{env: object}} context the seed context */
+export async function searchFinishWeek({env}) {
+  await searchFinish({env});
+  const newest = (await readState(env, STATE_KEY, {nights: []})).nights.find(night => night.rows.length === 18);
+  const rows = newest.rows.map((row, i) => {
+    const added = [4 + (i % 4), i % 3, i % 5 === 0 ? 1 : 0, i % 7 === 0 ? 1 : 0, 0];
+    let after = 0;
+    return {...row, runs: cleanWeekRuns(added.map((n, k) => ({run: k + 1, new_listed: n + 6 - k, new_right: n, right_after: (after += n), seconds: 70 + k * 15})))};
+  }), measured = rows.filter(row => !['unmeasured', 'fault', 'unknown', 'not-run'].includes(row.kind));
+  const byRun = cleanByRun([0, 1, 2, 3, 4].map(k => ({run: k + 1, measured: measured.length, people_new: measured.filter(row => row.runs[k].newRight > 0).length, new_right: measured.reduce((sum, row) => sum + row.runs[k].newRight, 0)})));
+  await writeState(env, WEEK_KEY, {weeks: [{...newest, week: '2026-11-12', at: new Date().toISOString(), run: null, byHand: false, byRun, rows}]}, new Date());
 }
