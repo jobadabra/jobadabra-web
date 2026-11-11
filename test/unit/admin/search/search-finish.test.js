@@ -111,3 +111,9 @@ test('the Sources table and the Market card default to the EURES-off nights; EUR
   assert.equal(sourcesOf([on]).night, '2026-11-18', 'with no EURES-off night the newest one is used');
   assert.match(finishSection(judgeAll([off]), []), /<b>EURES<\/b> <span class="chip warn">SIDE CHECK<\/span>/);
 });
+
+test('review of 1/5: a not-run row is blind; the side check reads the newest run WITH a reference, not a newer one where every in is 0', () => {
+  assert.equal(ownOf({rows: [row(1, {kind: 'not-run', sources: {job_boards: {right: 4}}})]}), null, 'a not-run row is not counted');
+  const older = night('2026-11-17', [row(1, {inout: io(10, 8)})]), newer = night('2026-11-18', [row(1, {inout: io(0, 0)})]);
+  assert.match(finishSection(judgeAll([newer, older]), []), /our list keeps <b>8 of 10<\/b>/);
+});

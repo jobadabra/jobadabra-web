@@ -35,7 +35,7 @@ function band(runs) {
   const last = runs.find(run => ownOf(run)), own = last ? ownOf(last) : null;
   if (!own) return '<div class="card vz fl-band" id="finish-band"><div><div class="fl-big">–</div><div class="muted small">no run has sent per-source counts yet (it starts with the next run that does)</div></div></div>';
   const off = last.eures === 'off';
-  return `<div class="card vz fl-band" id="finish-band"><div><div class="fl-big">${own.right} <small>right jobs</small></div><div class="muted small">from our own sources, for <b>${own.sent} of ${own.total}</b> people (right role AND place, by the blind judge)</div></div>
+  return `<div class="card vz fl-band" id="finish-band"><div><div class="fl-big">${own.right} <small>right jobs</small></div><div class="muted small">from our own sources, for <b>${own.sent} of ${own.total}</b> people (right role AND place, by the blind judge; a job two sources found counts once for each)</div></div>
 <div><div class="fl-big">${own.people} <small>of ${own.total}</small></div><div class="muted small">people with at least one right job</div></div>
 <div style="flex:1;min-width:300px">${off ? chip('EURES off: our own sources only', 'good') : chip('EURES on: not in this number', 'off')} ${last.engine && last.engine !== 'unknown' ? chip(`AI ${esc(last.engine)}`, 'good') : ''} ${own.blind ? chip(`${own.blind} not measured`, 'off') : ''} ${chip('LinkedIn by hand', 'off')}<div class="muted small" style="margin-top:4px">last run: ${last.hand ? 'by hand' : 'night'} ${esc(last.night)} · EURES and other 3rd parties are bonuses, never in this number</div></div></div>`;
 }
@@ -82,7 +82,7 @@ function lostBlock(run) {
 
 // The Side check (owner, 11 Nov 2026): what the old band, In = out and the chart said about EURES, now one small labelled card; nothing of them is dropped (the per-person bars and the run-by-run chart open under it).
 function sideCheck(runs) {
-  const last = runs.find(run => tally(run).hasInout), side = last ? sideOf(last) : null;
+  const last = runs.find(run => sideOf(run)), side = last ? sideOf(last) : null;   // Why (11 Nov 2026, review of 1/5): the newest run WITH a reference; a newer run where every `in` is 0 must not mask it
   const head = '<h2>🔍 Side check · with EURES on</h2><div class="muted small">Not in the headline: a check that our list keeps what a public database lists</div>';
   if (!side) return `<section class="card vz" id="finish-side">${head}<p>${chip('SIDE CHECK', 'warn')} <span class="muted small">no run has sent in = out yet (it starts with the next run that does)</span></p></section>`;
   const pct = side.in > 0 ? Math.round((side.out / side.in) * 100) : null;
@@ -147,7 +147,7 @@ function marketCard(runs, ref) {
   if (!c.people || !c.sources.length) return `<section class="card vz" id="finish-market">${head}<p>${chip('not sent yet', 'off')} <span class="muted small">the weekly reference has sent no per-source rows yet</span></p></section>`;
   const pct = c.ours != null && c.oursOf > 0 ? Math.round((c.ours / c.oursOf) * 100) : null;
   const body = c.sources.map(row => `<tr><td><b>${esc(name(row.source))}</b>${OWN.includes(row.source) ? '' : ` ${chip('SIDE CHECK', 'warn')}`}</td><td>${Object.entries(row.kinds).map(([kind, n]) => chip(`${n} ${KIND_WORDS[kind]}`, KIND_TONE[kind])).join(' ')}</td><td class="num">${cell(row.read)}</td><td class="num">${cell(row.right)}</td><td class="num">${cell(row.only)}</td></tr>`).join('');
-  return `<section class="card vz" id="finish-market">${head}<p>${chip(`market ${c.market == null ? 'not counted' : Number(c.market).toLocaleString('en-US')} right jobs · ${c.counted} of ${c.people} people`, 'good')} ${pct == null ? chip('our share: no measured person in the reference', 'off') : chip(`our list holds ${c.ours} of ${c.oursOf} (${pct}%) · ${c.measured} measured ${c.measured === 1 ? 'person' : 'people'}`, pct >= 95 ? 'good' : 'warn')} ${c.countedOn ? `<span class="muted small">counted ${esc(c.countedOn)}</span>` : ''}</p>
+  return `<section class="card vz" id="finish-market">${head}<p>${chip(`market ${c.market == null ? 'not counted' : Number(c.market).toLocaleString('en-US')} right jobs · ${c.counted} of ${c.people} people`, 'good')} ${pct == null ? chip('our share: no measured person in the reference', 'off') : chip(`our list holds ${c.ours} of ${c.oursOf} (${pct}%) · ${c.measured} measured ${c.measured === 1 ? 'person' : 'people'}`, pct >= 95 ? 'good' : 'warn')} ${c.countedOn ? `<span class="muted small">counted ${esc(c.countedOn)}</span>` : ''}${run && run.eures !== 'off' ? ` ${chip('this run had EURES on: our list includes its jobs', 'off')}` : ''}</p>
 <table><tr><th>Source</th><th>People</th><th class="num">Read</th><th class="num">Right</th><th class="num">Only it found</th></tr>${body}</table></section>`;
 }
 
