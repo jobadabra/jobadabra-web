@@ -21,8 +21,11 @@ import {countedOf, keyedLock, markGap, planOf, sessionKey, sessionKeyOf, settle}
 
 export {ContainerProxy} from '@cloudflare/containers';   // required by the outbound host list below: without it every start fails with "ctx.exports.ContainerProxy is undefined" (28 Oct 2026)
 
-const PARALLEL = 4;  // PR 0 (28 Oct 2026): 4 at once, 60 of 60 answered
-const CLAUDE_PARALLEL = 3;
+// Why (11 Nov 2026, as; owner: "Let's increase the AI Broker's slot limit"): at 4 one Find jobs measure person already queued (after-1 run 43069240532: 55 of 303
+// calls waited over 5 s, p90 wait 7.9 s, all 4 busy 29% of the time). On the 1 vCPU / 3 GiB container (#554) 4 at once peaked at 1.27 GiB and 0.52 CPU per minute
+// (idle 0.53 GiB, so ~185 MiB a running call; Cloudflare container metrics, same window): 8 fits (~2.0 GiB); 12 (~2.75 GiB) leaves no room. PR 0 (28 Oct 2026) measured 4.
+const PARALLEL = 8;
+const CLAUDE_PARALLEL = 3;   // Why (11 Nov 2026, as): kept at 3 though the container now has 3 GiB: more Claude calls at once were never measured on the subscription
 const CALLER_WAIT_MS = 180_000, CODEX_GUARD_MS = 100_000, START_MS = 10_000;   // the callers' own wait (desktop/e2e/lib/broker-client.mjs: AbortSignal.timeout(180000), an abort is not retried), the container's Codex guard (container/server.mjs), a cold start
 const DRAIN_WAIT_MS = CALLER_WAIT_MS - CODEX_GUARD_MS - START_MS;   // Why (8 Nov 2026, Gitar on #501): a call that waits for the next container must still have time to run in it before its caller gives up, or the hand-over only moves the loss; past this it is passed on like any start-up failure (Claude, Free AI) instead of answered to nobody. Calls the old container is still finishing are guarded at 100 s (Codex) and 150 s (Claude), so a drain longer than this wait costs the refused call its Codex turn, as every deploy did before
 const HOSTS = ['chatgpt.com', 'auth.openai.com', 'api.openai.com', 'api.anthropic.com'];   // the only hosts the container may reach (the reply is the only way out); api.anthropic.com is the Claude engine's (1 Nov 2026), measured: telemetry is off, so nothing else is needed
@@ -44,7 +47,7 @@ export class CodexBroker extends Container {
   allowedHosts = HOSTS;
   static outboundByHost = Object.fromEntries(HOSTS.map(h => [h, pass]));
   gate = slots(PARALLEL);
-  claudeGate = slots(CLAUDE_PARALLEL);   // Why (1 Nov 2026): one Claude CLI call peaks near 210 MB (measured) and the container has 1 GiB, so at most 3 at once, and each also holds one of the 4 shared slots
+  claudeGate = slots(CLAUDE_PARALLEL);   // Why (1 Nov 2026): one Claude CLI call peaks near 210 MB (measured), so at most CLAUDE_PARALLEL at once, and each also holds one of the PARALLEL shared slots
   turns = keyedLock();   // one turn at a time per Codex conversation (lib/sessions.mjs); other keys and plain calls never wait
   drainWaitMs = DRAIN_WAIT_MS; drainPollMs = 1000;   // how long a call waits for a stopping container to hand over (toContainer); a test shortens both
   busyMs = BUSY_MS;   // how long a call that may pass on waits for a Claude slot (lib/busy.mjs); a test shortens it
@@ -348,7 +351,7 @@ export class CodexBroker extends Container {
     const priority = queueOf(lane), waitStarted = Date.now();
     const releaseClaude = await this.claudeGate.acquire(priority, waitMs);
     if (!releaseClaude) return unavailable('busy');
-    const release = await this.gate.acquire(priority, waitMs === undefined ? undefined : Math.max(0, waitMs - (Date.now() - waitStarted)));   // the 4 shared slots count against the same deadline
+    const release = await this.gate.acquire(priority, waitMs === undefined ? undefined : Math.max(0, waitMs - (Date.now() - waitStarted)));   // the PARALLEL shared slots count against the same deadline
     if (!release) { releaseClaude(); return unavailable('busy'); }
     try {
       // Why (8 Nov 2026, code-review): the line was read when the call came in, and a call waits for a slot with no deadline (searches, the retry turn); a Claude call that finished meanwhile may have moved the week to 90%. Read it again with the slot in hand, so no call starts past the line.

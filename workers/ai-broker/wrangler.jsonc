@@ -1,5 +1,5 @@
 {
-  // The AI broker (see worker.js). One container (1 vCPU, 3 GiB, below): one `codex exec` at a time uses well under 1 GiB (measured 28 Oct 2026, throwaway check: codex 0.162.1 runs as uid 1001). max_instances 1 = ONE login, ONE refresher.
+  // The AI broker (see worker.js). One container (1 vCPU, 3 GiB, below): one `codex exec` at a time uses well under 1 GiB (measured 28 Oct 2026, throwaway check: codex 0.162.1 runs as uid 1001); ~185 MiB a running call, 0.53 GiB idle (11 Nov 2026), which sets worker.js PARALLEL. max_instances 1 = ONE login, ONE refresher.
   // Secret: BROKER_ADMIN_TOKEN (wrangler secret put; Keychain jobadabra.codex-broker.admin_token), only for the owner's one-time login upload.
   // Why (1 Nov 2026, owner: rename to ai-broker): this is the FINAL state after the Durable Object namespace moved here from the Worker `jobadabra-codex-broker` (which stays as a forwarder). Never deploy it before the transfer
   // has run (done 1 Nov 2026, its folder removed 2 Nov): a plain deploy of a new Worker name starts an EMPTY namespace and the Codex login is gone (seen on the throwaway proof, 1 Nov 2026). release-ai-broker.yml refuses unless /health says ready.
