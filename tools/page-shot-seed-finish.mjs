@@ -5,6 +5,7 @@ import {HAND_KEY} from '../admin/search-night-hand.js';
 import {searchScoreboard} from './page-shot-seed-scoreboard.mjs';
 import {cleanInout, cleanRuns, cleanSources} from '../admin/search-finish.js';
 import {cleanFloors} from '../admin/search-floors.js';
+import {cleanScout} from '../admin/search-finish-scout.js';
 import {WEEK_KEY, cleanByRun, cleanRuns as cleanWeekRuns} from '../admin/search-week.js';
 
 // in (EURES right jobs) per person; 0 = EURES lists none; p6 and p15 are blind on the newest runs.
@@ -20,13 +21,22 @@ function inoutOf(person, t, runs) {
   return {eures: {in: inn, out, lost: miss ? {[stage]: miss} : {}}};
 }
 
+// MADE-UP counts of the Central Scout's list per person (the shape of jobadabra's `scout` row): 363 empty feeds in every person's places, the gap (open jobs, no kind counted) 17-40% of the rest and falling night by night, most of
+// the others whole-mix only, a few counted per country. Not a real list, person or count.
+function scoutDemo(person, t, runs) {
+  const open = 90 + ((person * 53) % 700), empty = 363, gap = Math.round(open * Math.max(0.1, 0.17 + ((person * 7) % 24) / 100 - (0.04 * t) / Math.max(1, runs - 1))), counted = Math.round((open - gap) * 0.08), mixOnly = open - gap - counted;
+  const fits = Math.round((counted + mixOnly) * (0.04 + ((person * 3) % 9) / 100)), forRole = fits + (person % 3);
+  return {in_places: open + empty, empty_feeds: empty, no_kind_mix: gap, mix_only: mixOnly, counted_per_country: counted, for_role: forRole, fit_their_kind: fits, kind_not_theirs: counted + mixOnly - fits, kinds_known: person !== 5,
+    listed_from_list: 2 + (person % 6), right_from_list: person % 4, employers_right_from_list: person % 3};
+}
+
 /** @param {{env: object}} context the seed context */
 export async function searchFinish({env}) {
   await searchScoreboard({env});
   const state = await readState(env, STATE_KEY, {nights: []}), eighteen = state.nights.filter(night => night.rows.length === 18).reverse(), n = eighteen.length;
   const nights = state.nights.map(night => {
     const t = eighteen.indexOf(night);
-    return t < 0 ? night : {...night, rows: night.rows.map((row, i) => ({...row, inout: cleanInout(inoutOf(i, t, n)),
+    return t < 0 ? night : {...night, rows: night.rows.map((row, i) => ({...row, scout: cleanScout(scoutDemo(i, t, n)), inout: cleanInout(inoutOf(i, t, n)),
       sources: cleanSources(Object.fromEntries(['eures', ...SOURCES].map((source, k) => [source, {right: Math.max(0, (source === 'eures' ? 6 : 3 - k) + ((i + t) % 3) - (i % 4 === 0 ? 3 : 0)), only: null, fit70: null, seconds: 40 + k * 12 + ((i + t) % 5) * 3}])))}))};
   });
   // MADE-UP floors on the newest 18-person night (cr's G2): p13 right jobs 0 against a floor of 4, the 2nd night under; the other floors held (first seconds to first job is a ceiling).
