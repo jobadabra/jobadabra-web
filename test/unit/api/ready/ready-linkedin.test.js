@@ -123,6 +123,25 @@ test('a Stop, a night that never reports, and a never-started night all lose the
   assert.equal(queued.READY_QUEUE.sent.length, 0, 'the tick never starts a linkedin night by itself');
 });
 
+test('a linkedin night whose session was already removed tells the container to stop: it never reads LinkedIn without a session (Gitar on #547)', async () => {
+  const {e, bearer} = await probeNight();
+  await tick(e, later(11));   // the tick removed the session before the container asked
+  const batch = await (await call(e, 'GET', 'batch', undefined, bearer)).json();
+  assert.equal(batch.stop, true);
+  assert.equal(batch.linkedin, undefined);
+});
+
+test('the owner\'s Stop scrubs only that install\'s nights', async () => {
+  const e = env();
+  await call(e, 'POST', 'batch', probeBody(), await owner());
+  e.STATS.db.prepare("INSERT INTO ready_batches (id, install, night, created_at, task, state) VALUES ('other-batch', 'someone-else-9', '2026-11-11', ?, 'linkedin', 'queued')").run(evening.toISOString());
+  const scrubbed = [];
+  const real = e.HOSTED_STATE.get.bind(e.HOSTED_STATE);
+  e.HOSTED_STATE.get = async key => { scrubbed.push(key); return real(key); };
+  await call(e, 'POST', 'stop', {}, await owner());
+  assert.ok(scrubbed.length > 0 && scrubbed.every(key => !String(key).includes('someone-else-9')), 'no other install\'s blob was opened');
+});
+
 test('the readiness token never receives a session, and a second read is refused', async () => {
   const e = env();
   const read = await night(e);

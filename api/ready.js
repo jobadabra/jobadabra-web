@@ -84,8 +84,8 @@ export async function scrubSession(env, row) {
 }
 
 /** Removes the session from every `linkedin` batch older than `minutes` (default 10), whatever became of its night (stopped, timed out, never started, a refused dispatch); run on the tick (api/ready-tick.js). */
-export async function scrubOld(env, now = new Date(), minutes = 10) {
-  const {results} = await env.STATS.prepare("SELECT id, install FROM ready_batches WHERE task = 'linkedin' AND deleted_at IS NULL AND created_at <= ?").bind(stamp(new Date(now.getTime() - minutes * 60000))).all();
+export async function scrubOld(env, now = new Date(), minutes = 10, install = null) {   // `install`: the owner's Stop scrubs only that install's nights (Gitar on #547)
+  const {results} = await env.STATS.prepare(`SELECT id, install FROM ready_batches WHERE task = 'linkedin' AND deleted_at IS NULL AND created_at <= ?${install ? ' AND install = ?' : ''}`).bind(stamp(new Date(now.getTime() - minutes * 60000)), ...(install ? [install] : [])).all();
   for (const row of results) await scrubSession(env, row);
 }
 
@@ -104,7 +104,7 @@ async function batch(request, env, now) {
     const data = await readBlob(env, row.install, row.id);
     // Only the rows still queued: the whole night at first, one form after a Fill again (api/ready-again.js), so the others keep their results.
     const queued = new Map((await env.STATS.prepare("SELECT job, turn FROM ready_jobs WHERE batch = ? AND state = 'queued' AND cleared_at IS NULL").bind(row.id).all()).results.map(each => [each.job, each.turn]));   // turn: which press (the container fills each once)
-    return json({ok: true, line: true, task: row.task, sentAt: row.created_at, stop: row.state === 'capped' || !data, night: row.night, contact: data?.contact || {}, readyBy: data?.readyBy || '', facts: data?.facts || {}, ...(row.task === 'linkedin' && data?.linkedin ? {linkedin: data.linkedin} : {}), jobs: (data?.jobs || []).filter(job => queued.has(job.id)).map(job => ({...job, turn: queued.get(job.id)}))});
+    return json({ok: true, line: true, task: row.task, sentAt: row.created_at, stop: row.state === 'capped' || !data || (row.task === 'linkedin' && !data.linkedin), night: row.night, contact: data?.contact || {}, readyBy: data?.readyBy || '', facts: data?.facts || {}, ...(row.task === 'linkedin' && data?.linkedin ? {linkedin: data.linkedin} : {}), jobs: (data?.jobs || []).filter(job => queued.has(job.id)).map(job => ({...job, turn: queued.get(job.id)}))});
   }
   if (request.method !== 'POST') return json({ok: false, error: 'Use GET or POST'}, 405);
   const reader = await readerOf(request, env, ownerOf);   // the owner, or an Always on install (api/ready-read-access.js): the latter for the readiness and auto tasks only
@@ -343,7 +343,7 @@ export async function ready(request, env, now = new Date()) {
     const job = String((await request.json().catch(() => null))?.job || '');
     if (job && !/^[\w.:-]{1,64}$/.test(job)) return bad('bad job');
     const done = await stop(env, install, job, now, reader.owner ? null : ['readiness', 'auto']);
-    if (reader.owner) await scrubOld(env, now, 0).catch(() => {});   // a Stop ends the LinkedIn probe's session too, whatever its night does next
+    if (reader.owner) await scrubOld(env, now, 0, install).catch(() => {});   // a Stop ends the LinkedIn probe's session too, whatever its night does next
     return json(done.body, done.status);
   }
   if (sub === 'run') {   // the owner starts his queued night now (a manual test; the cron would start it at its fill time); an Always on install starts its readiness or auto night
