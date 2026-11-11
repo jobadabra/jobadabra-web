@@ -3,7 +3,7 @@
 // Nothing starts without the Queue binding (not created until the owner says so) or while READY_TO_SEND is off. Guard: test/unit/api/ready/ready-wiring.test.js.
 import {closeNight} from './ready-morning.js';
 import {ENDED, LIVE} from './ready-line.js';
-import {readyOn, reportNight, start} from './ready.js';
+import {readyOn, reportNight, scrubOld, start} from './ready.js';
 import {mailNight} from './ready-mail.js';
 
 export const SITE = 'https://www.jobadabra.top', MAX_STARTS = 3;
@@ -13,6 +13,7 @@ export async function tick(env, now = new Date()) {
   const out = {started: 0, finished: 0};
   if (!readyOn(env) || !env.STATS) return out;
   const stamp = now.toISOString();
+  await scrubOld(env, now).catch(() => {});   // the LinkedIn probe's session lives at most about 10 minutes, whatever became of its night (api/ready-linkedin.js)
   const {results: over} = await env.STATS.prepare("SELECT * FROM ready_batches WHERE state IN ('running', 'capped') AND expires_at < ?").bind(stamp).all();
   for (const row of over) {
     await env.STATS.prepare(`UPDATE ready_jobs SET state = ${ENDED}, wall = 'timeout', at = ?, step = NULL, step_n = NULL WHERE batch = ? AND state IN ${LIVE}`).bind(stamp, row.id).run();
