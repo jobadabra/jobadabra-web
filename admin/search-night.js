@@ -9,6 +9,7 @@ import {writeState} from './ci-state.js';
 import {COUNTERS} from './search-night-counters.js';
 import {cleanStepYield} from './search-night-yield.js';
 import {alertText, euresOf, judgeAll} from './search-night-judge.js';
+import {zeroAlert} from './search-source-zero.js';
 import {cleanInout, cleanRuns, cleanSources} from './search-finish.js';
 import {cleanScout} from './search-finish-scout.js';
 import {cleanFloors, cleanMeasure} from './search-floors.js';
@@ -152,8 +153,16 @@ export async function ingest(env, verdict, {night, run}, now = new Date(), fetch
       .catch(error => ({sent: false, via: 'none', why: `error: ${String(error?.message).slice(0, 80)}`}));
     alert = told.sent ? 'sent' : told.why || told.via;
   }
+  // Why (11 Nov 2026, owner via sa): a source at 0 is told on every night it lasts, also when the night is otherwise fine (the owner learned of job boards at 0 after two weeks); the rule is the chart's (search-source-zero.js)
+  const zero = zeroAlert(kept, night);
+  let sourceAlert = null;
+  if (zero) {
+    const told = await alertOwner(env, 'search-source-zero', {text: zero.text, html: true, level: 'problem', state: zero.state, fetcher, now})
+      .catch(error => ({sent: false, via: 'none', why: `error: ${String(error?.message).slice(0, 80)}`}));
+    sourceAlert = told.sent ? 'sent' : told.why || told.via;
+  }
   const marked = await marks(env, kept, now, fetcher, budgetMs);   // after the alert: GitHub's slowness never holds the owner's news
-  return {status: 200, body: {ok: true, night, measured: judged.measured, total: judged.total, dropped: judged.dropped, reasons: judged.reasons, alert, marked}};
+  return {status: 200, body: {ok: true, night, measured: judged.measured, total: judged.total, dropped: judged.dropped, reasons: judged.reasons, alert, zero: zero ? zero.sources : [], zeroAlert: sourceAlert, marked}};
 }
 
 /**
