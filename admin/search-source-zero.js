@@ -8,7 +8,7 @@
 import {BLIND, OWN} from './search-finish.js';
 import {euresOf, notRunOf} from './search-night-judge.js';
 
-export const MIN_READ = 6;
+export const MIN_READ = 6, WINDOW = 14;   // WINDOW = the nights the chart draws (admin/search-source-trend.js): a source last counted before it is stale, not lost (Gitar on #559, 11 Nov 2026)
 export const WATCHED = [...OWN, 'eures'];
 const isCount = value => Number.isInteger(value) && value >= 0;
 
@@ -27,9 +27,10 @@ export function nightOf(night, source) {
 }
 
 /**
- * Where a source stands over the stored nights, newest first: {state: 'lost'|'reading'|'unseen', run, since, dropped, latest}.
+ * Where a source stands over the stored nights, newest first: {state: 'lost'|'reading'|'stale'|'unseen', run, since, dropped, latest}.
  * `run` = nights in a row at 0 counted from the newest night that was switched on (off nights skipped); `since` = the first night of that run; `dropped` = the run follows a night with right jobs
- * (the chart's "dropped to 0" mark); `latest` = the newest switched-on night {night, readers, right}; 'unseen' = no night was ever switched on for it.
+ * (the chart's "dropped to 0" mark); `latest` = the newest switched-on night {night, readers, right}; 'unseen' = no night was ever switched on for it; 'stale' = its latest switched-on night is WINDOW or more days older than the
+ * newest stored night, so a source that stopped being sent weeks ago is not shown as lost with a run that never advances (Gitar on #559).
  */
 export function statusOf(nights, source) {
   let run = 0, since = null, dropped = false, latest = null;
@@ -40,7 +41,8 @@ export function statusOf(nights, source) {
     if (item.state === 'some') { dropped = run > 0; break; }
     run += 1; since = night.night;
   }
-  return {state: !latest ? 'unseen' : run ? 'lost' : 'reading', run, since, dropped, latest};
+  const stale = latest && nights.length && (Date.parse(nights[0].night) - Date.parse(latest.night)) / 86400000 >= WINDOW;
+  return {state: !latest ? 'unseen' : stale ? 'stale' : run ? 'lost' : 'reading', run, since, dropped, latest};
 }
 
 /**

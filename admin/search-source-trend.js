@@ -7,7 +7,7 @@
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {BLIND, OWN, SOURCE_NAMES} from './search-finish.js';
-import {MIN_READ, WATCHED, nightOf, statusOf} from './search-source-zero.js';
+import {MIN_READ, WATCHED, WINDOW, nightOf, statusOf} from './search-source-zero.js';
 import {figure, tipOf} from './viz-core.js';
 
 export const TREND_STYLE = `${CHIP_STYLE}
@@ -15,7 +15,7 @@ export const TREND_STYLE = `${CHIP_STYLE}
 .st-big{margin:2px 0 4px;font-size:13.5px}.st-svg{width:100%;height:auto;display:block}.st-bad{fill:#ff5a4f}.st-key{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 0}.st-key i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 @media(max-width:900px){.st-grid{grid-template-columns:1fr}}`;
 
-const DAYS = 14, FINDER_STEP = {employer_sites: 'employer_sites', job_boards: 'job_boards', free_job_apis: 'free_job_apis'};
+const DAYS = WINDOW, FINDER_STEP = {employer_sites: 'employer_sites', job_boards: 'job_boards', free_job_apis: 'free_job_apis'};
 const TONE = {employer_sites: 's1', job_boards: 's3', free_job_apis: 's4', web_search: 's5', eures: 'off'};
 const RED = '#ff5a4f', W = 640, TOP = 16, HR = 96, HS = 34, L = 34, R = 8;
 const name = source => (source === 'eures' ? 'EURES · side check' : SOURCE_NAMES[source] || source);
@@ -79,6 +79,7 @@ function svgOf(days, source, status) {
 
 function headOf(source, status) {
   if (status.state === 'unseen') return source === 'eures' ? chip('SIDE CHECK · not read on nights with EURES off', 'off') : chip('right jobs: not sent yet', 'off');
+  if (status.state === 'stale') return chip(`not sent since ${esc(status.latest.night)}`, 'off');
   if (status.state === 'lost') return chip(`✖ LOST · 0 right jobs since ${esc(status.since)} · night ${status.run} in a row`, 'bad');
   return chip('✔ reading', 'good');
 }
@@ -86,6 +87,7 @@ function headOf(source, status) {
 function bigOf(status) {
   if (status.state === 'unseen') return '<span class="muted">No night has sent a count for it yet; the bars fill from the night that does.</span>';
   const {latest} = status, zero = status.state === 'lost';
+  if (status.state === 'stale') return `<span class="muted">Last count ${esc(latest.night)}: ${latest.right} right jobs from ${latest.readers} people; nothing since, so it is not judged.</span>`;
   return `<b${zero ? ' class="st-bad"' : ''}>${latest.right}</b> right jobs from <b>${latest.readers}</b> people <span class="muted">· night ${esc(latest.night)}</span>`;
 }
 

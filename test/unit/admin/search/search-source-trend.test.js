@@ -46,6 +46,16 @@ test('the run: nights in a row at 0 from the newest switched-on night; a blind n
   assert.equal(statusOf([make(day(0), {job_boards: 0})], 'job_boards').dropped, false, 'a source that never had a right job did not drop');
 });
 
+test('a source last counted weeks ago is stale, not lost: no LOST chip, no run that never advances (Gitar on #559)', () => {
+  const nights = [make(day(30), {employer_sites: 4}), make(day(29), {employer_sites: 4}), make(day(10), {job_boards: 0}), make(day(9), {job_boards: 0})];
+  assert.deepEqual([statusOf(nights, 'job_boards').state, statusOf(nights, 'job_boards').latest.night], ['stale', day(10)]);
+  assert.equal(statusOf(nights, 'employer_sites').state, 'reading');
+  const html = sourceTrendCard(nights), boards = html.slice(html.indexOf('id="source-job_boards"'), html.indexOf('id="source-free_job_apis"'));
+  assert.match(boards, /class="chip off">not sent since /);
+  assert.doesNotMatch(boards, /LOST|dropped to 0/);
+  assert.deepEqual(zeroNow(nights, day(30)), [], 'and the morning line only reads the newest night');
+});
+
 test('the morning line reads the same rule: only the newest night, one entry per source at 0, also when the night is otherwise fine; EURES off and LinkedIn never', () => {
   const nights = [make(day(3), {...OK, job_boards: 0, eures: 0}), make(day(2), {...OK, job_boards: 0}), make(day(1), OK)];
   assert.deepEqual(zeroNow(nights, day(3)), [{source: 'job_boards', run: 2, readers: 18, total: 18}], 'job boards at 0 for the 2nd night; EURES is off; the rest bring jobs');
