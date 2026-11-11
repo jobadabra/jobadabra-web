@@ -11,6 +11,7 @@ import {cleanStepYield} from './search-night-yield.js';
 import {alertText, euresOf, judgeAll} from './search-night-judge.js';
 import {cleanInout, cleanSources} from './search-finish.js';
 import {cleanFloors, cleanMeasure} from './search-floors.js';
+import {cleanMarket} from './search-market.js';
 import {markNights} from './search-night-prs.js';
 import {HAND_KEY, KEEP_HAND, handRuns} from './search-night-hand.js';
 
@@ -100,7 +101,7 @@ export async function reference(env) {
   const row = await env.STATS.prepare('SELECT body FROM ci_state WHERE key = ?').bind(REFERENCE_KEY).first();
   const personas = row ? JSON.parse(row.body)?.personas : null;
   if (!personas || typeof personas !== 'object' || Array.isArray(personas)) return {};
-  return Object.fromEntries(Object.entries(personas).filter(([id]) => /^\d{1,3}$/.test(id)).map(([id, item]) => [Number(id), {total: count(item?.total), reachable: count(item?.reachable), eures: count(item?.eures), google: count(item?.google)}]));
+  return Object.fromEntries(Object.entries(personas).filter(([id]) => /^\d{1,3}$/.test(id)).map(([id, item]) => [Number(id), {total: count(item?.total), reachable: count(item?.reachable), eures: count(item?.eures), google: count(item?.google), ...cleanMarket(item)}]));
 }
 
 const answer = (status, body) => Response.json(body, {status, headers: {'Cache-Control': 'no-store'}});

@@ -19,7 +19,7 @@ function d1() {
   return {db, prepare: sql => statement(sql)};
 }
 const env = () => ({STATS: d1(), REPLAYS_PUBLISH_KEY: KEY});
-const counts = (total, reachable, eures, google) => ({total, reachable, eures, google});
+const counts = (total, reachable, eures, google) => ({total, reachable, eures, google, market: null, countedOn: '', sources: {}});   // the market fields (admin/search-market.js) of a record that sends none
 const body = (personas = {1: counts(31, 24, 20, 17), 3: counts(14, 14, 14, null)}) => ({personas});
 const put = (e, payload, {week = '2026-W45', key = KEY, at = NOW} = {}) => ingestRoute(new Request(`https://www.jobadabra.top/search-check/reference${week ? `?week=${week}` : ''}`, {method: 'PUT', headers: key ? {Authorization: `Bearer ${key}`} : {}, body: typeof payload === 'string' ? payload : JSON.stringify(payload)}), e, at);
 

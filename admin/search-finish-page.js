@@ -4,6 +4,7 @@
 // Guard: test/unit/admin/search/search-finish.test.js (the card: search-floors.test.js, the market card: search-market.test.js).
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
+import {coverage} from './search-market.js';
 import {LINE, peopleOf, sourcesOf, tally, weakest} from './search-finish.js';
 import {stacked} from './viz-stack.js';
 import {VIZ_STYLE, VIZ_TOOLTIP, figure} from './viz.js';
@@ -117,13 +118,28 @@ export function floorsCard(runs) {
 ${floors.red.length ? `<ul>${floors.red.map(item => redRow(item, labels)).join('')}</ul>${floors.merges.length ? `<div class="small">Merges since the last green: ${floors.merges.map(esc).join('; ')}</div>` : ''}` : ''}${table}</section>`;
 }
 
+// ---- Market coverage (mc's 5/5, 10 Nov 2026): the weekly reference's market count against the newest run, and what each source read there ----
+const KIND_TONE = {counted: 'good', partial: 'warn', 'not-counted': 'off', none: 'off', 'by-hand': 'off'};
+const KIND_WORDS = {counted: 'counted', partial: 'partial', 'not-counted': 'not counted', none: 'none', 'by-hand': 'by hand'};
+const cell = value => (value == null ? '<span class="muted">–</span>' : Number(value).toLocaleString('en-US'));   // a source nobody counted has no number: a dash, never 0
+function marketCard(runs, ref) {
+  const run = runs[0] || null, c = coverage(ref, run);
+  const head = '<h2>🌍 Market coverage</h2><div class="muted small">Right jobs that exist for the people, counted once (the weekly reference), against our list after the newest run · per source: what it read and found there · "not counted" is never a 0 · LinkedIn is typed by hand (not yet)</div>';
+  if (!c.people || !c.sources.length) return `<section class="card vz" id="finish-market">${head}<p>${chip('not sent yet', 'off')} <span class="muted small">the weekly reference has sent no per-source rows yet</span></p></section>`;
+  const pct = c.ours != null && c.oursOf > 0 ? Math.round((c.ours / c.oursOf) * 100) : null;
+  const body = c.sources.map(row => `<tr><td><b>${esc(name(row.source))}</b></td><td>${Object.entries(row.kinds).map(([kind, n]) => chip(`${n} ${KIND_WORDS[kind]}`, KIND_TONE[kind])).join(' ')}</td><td class="num">${cell(row.read)}</td><td class="num">${cell(row.right)}</td><td class="num">${cell(row.only)}</td></tr>`).join('');
+  return `<section class="card vz" id="finish-market">${head}<p>${chip(`market ${c.market == null ? 'not counted' : Number(c.market).toLocaleString('en-US')} right jobs · ${c.counted} of ${c.people} people`, 'good')} ${pct == null ? chip('our share: no measured person in the reference', 'off') : chip(`our list holds ${c.ours} of ${c.oursOf} (${pct}%) · ${c.measured} measured ${c.measured === 1 ? 'person' : 'people'}`, pct >= 95 ? 'good' : 'warn')} ${c.countedOn ? `<span class="muted small">counted ${esc(c.countedOn)}</span>` : ''}</p>
+<table><tr><th>Source</th><th>People</th><th class="num">Read</th><th class="num">Right</th><th class="num">Only it found</th></tr>${body}</table></section>`;
+}
+
 /**
  * The tab's body.
  * @param {object[]|null} judged the stored nights, newest first (admin/search-night-judge.js judgeAll); null = unreadable
  * @param {object[]} [hand] the by-hand full runs (admin/search-night-hand.js)
+ * @param {object} [ref] the weekly reference (reference() in admin/search-night.js)
  */
-export function finishSection(judged, hand = []) {
+export function finishSection(judged, hand = [], ref = {}) {
   if (!judged) return '<section class="card"><h2>The nights could not be read</h2><p class="muted">The store of the nightly Search check did not answer, so this tab cannot draw the finish line.</p></section>';
   const runs = runsOf(judged, hand);
-  return `${band(runs)}${floorsCard(runs)}${weakCard(runs)}${overTime(runs)}${inout(runs)}${sourcesCard(runs)}${VIZ_TOOLTIP}`;
+  return `${band(runs)}${floorsCard(runs)}${weakCard(runs)}${overTime(runs)}${inout(runs)}${sourcesCard(runs)}${marketCard(runs, ref)}${VIZ_TOOLTIP}`;
 }

@@ -5,8 +5,10 @@
 import {equal} from '../shared/guard.js';
 import {writeState} from './ci-state.js';
 import {REFERENCE_KEY} from './search-night.js';
+import {cleanMarket} from './search-market.js';
 
-export const MAX_BYTES = 16384, MAX_PERSONAS = 40;
+export const MAX_BYTES = 32768,   // Why (10 Nov 2026, mc 5/5): 18 people x 6 sources with a status line each; 16 KB was for four counts a person
+   MAX_PERSONAS = 40;
 const WEEK = /^(\d{4})-W(\d\d)$/, RUN = /^\d{1,20}$/;
 // A count is a whole number or null: null = that source was not read this week (no key, or it failed), never 0.
 const count = value => (value == null ? null : Number.isInteger(value) && value >= 0 && value <= 1e6 ? value : undefined);
@@ -40,7 +42,7 @@ export function clean(body, {week, run = null} = {}, now = new Date()) {
     if (Object.values(row).includes(undefined)) return {error: `persona ${id}: counts are whole numbers or null`};
     if (row.total == null || row.reachable == null) return {error: `persona ${id}: total and reachable are required`};   // Why (6 Nov 2026, review): the tab prints "N of X reachable"; with no X it would print "7 of –"
     if (row.reachable > row.total) return {error: `persona ${id}: reachable is part of total`};
-    personas[Number(id)] = row;
+    personas[Number(id)] = {...row, ...cleanMarket(item)};   // market, countedOn, sources (admin/search-market.js); a record from before 10 Nov has none
   }
   return {week, run, personas};
 }

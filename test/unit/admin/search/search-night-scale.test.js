@@ -106,7 +106,8 @@ test('reference(): the weekly record per persona id as counts; none, a bad id or
   const env = {STATS: d1()};
   assert.deepEqual(await reference(env), {}, 'no record yet');
   await writeState(env, REFERENCE_KEY, {week: '2026-11-16', personas: {1: {total: 20, reachable: 14, eures: 12, google: 8}, 2: {total: 'x', reachable: -1}, bad: {total: 1}, 3: null}}, new Date('2026-11-16T05:00:00Z'));
-  assert.deepEqual(await reference(env), {1: {total: 20, reachable: 14, eures: 12, google: 8}, 2: {total: null, reachable: null, eures: null, google: null}, 3: {total: null, reachable: null, eures: null, google: null}});
+  const noMarket = {market: null, countedOn: '', sources: {}};   // the market fields (admin/search-market.js) of a record that has none
+  assert.deepEqual(await reference(env), {1: {total: 20, reachable: 14, eures: 12, google: 8, ...noMarket}, 2: {total: null, reachable: null, eures: null, google: null, ...noMarket}, 3: {total: null, reachable: null, eures: null, google: null, ...noMarket}});
 });
 
 test('a night that never arrived alerts once at 06:30 UTC: no night for the UTC day tells, a night there is silent, the second send that day is held, the next day tells again', async () => {

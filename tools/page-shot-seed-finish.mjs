@@ -1,6 +1,6 @@
 // Demo data for the Night search Finish line tab (10 Nov 2026, [oe]): MADE-UP runs with in = out for EURES and per-source counts, over the Scoreboard seed's nights. Fixed dates. Nothing here is a real person or a real count.
 import {readState, writeState} from '../admin/ci-state.js';
-import {STATE_KEY} from '../admin/search-night.js';
+import {REFERENCE_KEY, STATE_KEY} from '../admin/search-night.js';
 import {HAND_KEY} from '../admin/search-night-hand.js';
 import {searchScoreboard} from './page-shot-seed-scoreboard.mjs';
 import {cleanInout, cleanSources} from '../admin/search-finish.js';
@@ -33,6 +33,11 @@ export async function searchFinish({env}) {
   const withFloors = nights.map(night => (night.rows.length === 18 && night.night === eighteen.at(-1).night ? {...night, measure: '3f9a1c07be52', floors: cleanFloors({checked: true, series: '3f9a1c07be52|codex-gpt-6-luna|eures-on|off', last_green: {run: '42897000000', sha: '83bf4626aabbccdd'},
     merges: ['Read the employer pages in one pass (#3709)', 'Raise the AI call cap (#3712)'], red: [{persona: 13, number: 'right', floor: 4, now: 0, spread: 1, below: 2}], levels})} : night));
   await writeState(env, STATE_KEY, {nights: withFloors}, new Date());
+  // MADE-UP weekly reference with mc's per-source rows (5/5): the market per person, and what each source read and found; LinkedIn by hand, free job APIs without a query, web search not counted.
+  const personas = Object.fromEntries(IN.map((inn, i) => [i + 1, {total: inn, reachable: Math.round(inn * 0.7), eures: inn, market: inn + 6 + (i % 4), counted_on: '2026-11-09', sources: {
+    eures: {status: 'counted', read: inn + 8, right: inn, only: inn > 2 ? 2 : 0}, employer_sites: {status: i % 6 === 5 ? 'partial: 2 feeds late' : 'counted', read: 10 + i, right: 3 + (i % 4), only: i % 3},
+    job_boards: i % 5 === 4 ? {status: 'none (no board)'} : {status: 'counted', read: 15 + i, right: 4 + (i % 5), only: 1}, free_job_apis: {status: 'none (no query)'}, web_search: {status: 'not counted: no key'}, linkedin: {status: 'by hand'}}}]));
+  await writeState(env, REFERENCE_KEY, {week: '2026-W46', run: null, personas: personas, at: new Date().toISOString()}, new Date());
   const hand = await readState(env, HAND_KEY, {runs: []});
   await writeState(env, HAND_KEY, {runs: hand.runs.map((run, h) => ({...run, rows: run.rows.map((row, i) => ({...row, inout: cleanInout(inoutOf(i, n - 1 - h, n))}))}))}, new Date());
 }
