@@ -30,7 +30,46 @@ export function cleanSources(raw) {
   return Object.keys(out).length ? out : null;
 }
 
-const BLIND = ['unmeasured', 'fault', 'unknown'];   // as admin/search-night-scoreboard.js: the check could not measure the person
+export const BLIND = ['unmeasured', 'fault', 'unknown'];   // as admin/search-night-scoreboard.js: the check could not measure the person
+
+/** The sources that make our own result (owner, 11 Nov 2026: "just relying on EURES is cheating... other 3rd parties should be just bonuses, not our core"): EURES is never in the headline, LinkedIn is typed by hand. */
+export const OWN = ['employer_sites', 'job_boards', 'free_job_apis', 'web_search'];
+
+/**
+ * The headline of one run: right jobs from our own sources, summed over the people the run measured, and how many people have at least one. A person whose row sent no own-source number is not counted (never 0); a blind person is counted apart.
+ * @param {object} run a stored night or by-hand run ({rows: [{kind, sources}]})
+ * @returns {{right: number, people: number, sent: number, blind: number, total: number}|null} null when no row sent a number of an own source
+ */
+export function ownOf(run) {
+  let right = 0, people = 0, sent = 0, blind = 0;
+  for (const row of run.rows || []) {
+    if (BLIND.includes(row.kind)) { blind += 1; continue; }
+    const counts = OWN.map(source => row.sources?.[source]?.right).filter(value => value != null);
+    if (!counts.length) continue;
+    const sum = counts.reduce((a, b) => a + b, 0);
+    sent += 1; right += sum; if (sum > 0) people += 1;
+  }
+  return sent ? {right, people, sent, blind, total: (run.rows || []).length} : null;
+}
+
+/** The side check: of the right jobs EURES shows for the people the run measured, how many our list keeps (in = out summed), or null when no person has a reference. */
+export function sideOf(run) {
+  const people = peopleOf(run).filter(person => !person.blind && person.in > 0);
+  if (!people.length) return null;
+  return {in: people.reduce((a, b) => a + b.in, 0), out: people.reduce((a, b) => a + (b.out ?? 0), 0), atLine: people.filter(person => person.atLine).length, referenced: people.length};
+}
+
+/**
+ * Where the missing jobs were lost, all people together (owner, 11 Nov 2026: "per person kept of in + where the missing jobs were lost"): the sums over the measured people with a reference of in, out and each stage's lost count.
+ * @returns {{in: number, out: number, lost: Object<string, number>}|null} null when no person has a reference
+ */
+export function lostTotals(run, source = 'eures') {
+  const people = peopleOf(run, source).filter(person => !person.blind && person.in > 0);
+  if (!people.length) return null;
+  const lost = {};
+  for (const person of people) for (const [stage, n] of Object.entries(person.lost)) lost[stage] = (lost[stage] || 0) + n;
+  return {in: people.reduce((a, b) => a + b.in, 0), out: people.reduce((a, b) => a + (b.out ?? 0), 0), lost};
+}
 
 /** The floor of "at the line": a person is at the line for a source when out is at least this share of in (sa's default, 10 Nov 2026; the owner may change it). */
 export const LINE = 0.95;
@@ -81,14 +120,14 @@ const sum = list => (list.some(value => value != null) ? list.reduce((total, val
  * @param {object[]} nights stored nights, newest first
  */
 export function sourcesOf(nights) {
-  const sent = nights.filter(night => (night.rows || []).some(row => row.sources)), [last] = sent;
+  const all = nights.filter(night => (night.rows || []).some(row => row.sources)), off = all.filter(night => night.eures === 'off'), sent = off.length ? off : all, [last] = sent;   // Why (11 Nov 2026, sa): the default is the EURES-off nights, our own result
   if (!last) return {night: null, rows: []};
   const names = [...new Set(sent.slice(0, 7).flatMap(night => night.rows.flatMap(row => Object.keys(row.sources || {}))))];
   const rightOf = (night, source) => sum(night.rows.map(row => row.sources?.[source]?.right ?? null));
-  const total = names.reduce((all, source) => all + (rightOf(last, source) ?? 0), 0);
+  const total = names.filter(source => OWN.includes(source)).reduce((all, source) => all + (rightOf(last, source) ?? 0), 0);   // Why (11 Nov 2026, sa): no table shows EURES as a share of our result
   const rows = names.map(source => {
     const items = last.rows.map(row => row.sources?.[source]).filter(Boolean), history = sent.slice(0, 7).map(night => rightOf(night, source)).filter(value => value != null);
-    return {source, right: sum(items.map(item => item.right)), share: total > 0 ? (sum(items.map(item => item.right)) ?? 0) / total : null, only: sum(items.map(item => item.only)), fit70: sum(items.map(item => item.fit70)),
+    return {source, right: sum(items.map(item => item.right)), share: OWN.includes(source) && total > 0 ? (sum(items.map(item => item.right)) ?? 0) / total : null, only: sum(items.map(item => item.only)), fit70: sum(items.map(item => item.fit70)),
       seconds: median(items.map(item => item.seconds)), people: items.filter(item => item.right > 0).length, measured: last.rows.length, average: history.length ? Math.round(history.reduce((a, b) => a + b, 0) / history.length) : null, runs: history.length};
   });
   return {night: last.night, rows: rows.sort((a, b) => (b.right ?? -1) - (a.right ?? -1))};
