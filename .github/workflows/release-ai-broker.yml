@@ -12,6 +12,7 @@ on:
     paths:   # the broker, and the four shared files it imports (a test-only or workflow-only change deploys nothing)
              # Gap (Gitar, 4 Nov 2026): free-ai-models.js and free-ai-translate.js only re-export the public repo's desktop/lib/; a change THERE does not trigger this, run it by hand
       - 'workers/ai-broker/**'
+      - '!workers/ai-broker/**/*.md'   # Why (11 Nov 2026): a README change redeploys nothing; a deploy leaves ~9 min with no container
       - 'shared/github-oidc.js'
       - 'shared/free-ai-models.js'
       - 'shared/free-ai-translate.js'
