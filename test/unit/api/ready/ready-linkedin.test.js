@@ -42,6 +42,7 @@ async function night(e = env(), body = readBody()) {
 }
 
 import {checkProbe, wordOf} from '../../../../api/ready-linkedin.js';
+import {open} from '../../../../api/hosted-state.js';
 
 const SECRET = 'AQEDAR-secret-li-at-value';
 const SEARCH = 'https://www.linkedin.com/jobs/search/?keywords=engineer&location=Switzerland';
@@ -69,8 +70,20 @@ test('only the owner starts a linkedin night; a stranger and an Always on instal
   assert.equal((await call(e, 'POST', 'batch', probeBody({jobs: []}), await owner())).status, 400);
 });
 
-test('the session is sealed with the batch, reaches only that night\'s token, and is gone once the night reports', async () => {
+
+// Opens every sealed object the site holds (as the site itself does) and says how many still carry a LinkedIn session: the real proof that it is gone, not a look at a refused request.
+async function sessionsHeld(e) {
+  let held = 0;
+  for (const bytes of e.HOSTED_STATE.m.values()) {
+    try { if (JSON.parse(new TextDecoder().decode(await open(e, 'ready:owner-install-1', bytes, 'READY_KEK'))).linkedin) held++; } catch { /* not a batch blob */ }
+  }
+  return held;
+}
+const later = minutes => new Date(evening.getTime() + minutes * 60000);
+
+test('the session is sealed with the batch, reaches only that night\'s token, and is gone from the store once the night reports', async () => {
   const {e, made, bearer} = await probeNight();
+  assert.equal(await sessionsHeld(e), 1, 'held sealed while the night runs');
   for (const bytes of e.HOSTED_STATE.m.values()) assert.ok(!new TextDecoder().decode(bytes).includes('secret'), 'sealed, not in the clear');
   const batch = await (await call(e, 'GET', 'batch', undefined, bearer)).json();
   assert.equal(batch.task, 'linkedin');
@@ -78,9 +91,7 @@ test('the session is sealed with the batch, reaches only that night\'s token, an
   assert.deepEqual(batch.jobs.map(job => job.id), ['probe']);
   const reported = await call(e, 'POST', 'result', {job: 'probe', task: 'linkedin', state: 'read', read: {status: 200, path: '/jobs/search/', cards: 7, go: true, word: 'ok'}, why: 'ok', ms: 31000, costMicro: 372}, bearer);
   assert.equal(reported.status, 200);
-  const after = await call(e, 'GET', 'batch', undefined, bearer);
-  const gone = after.status === 200 ? await after.json() : {};
-  assert.equal(gone.linkedin, undefined, 'no session after the result');
+  assert.equal(await sessionsHeld(e), 0, 'the blob no longer carries the session');
   assert.ok(!everything(e).includes('secret'));
   assert.equal(e.STATS.db.prepare("SELECT wall FROM ready_jobs WHERE job = 'probe'").get().wall, 'ok');
   assert.ok(made.batch);
@@ -89,11 +100,47 @@ test('the session is sealed with the batch, reaches only that night\'s token, an
 test('a failed night also removes the session, and the app takes the one read once', async () => {
   const {e, bearer} = await probeNight();
   await call(e, 'POST', 'result', {job: 'probe', task: 'linkedin', state: 'failed', read: null, why: 'the night could not start', ms: 0, costMicro: 0}, bearer);
-  const batch = await call(e, 'GET', 'batch', undefined, bearer);
-  assert.equal((batch.status === 200 ? await batch.json() : {}).linkedin, undefined);
+  assert.equal(await sessionsHeld(e), 0);
   const taken = await (await call(e, 'POST', 'reads', {}, await owner())).json();
   assert.deepEqual(taken.reads.map(read => [read.job, read.state]), [['probe', 'failed']]);
   assert.equal((await (await call(e, 'POST', 'reads', {}, await owner())).json()).reads.length, 0, 'taken once');
+});
+
+test('a Stop, a night that never reports, and a never-started night all lose the session (the tick removes it after 10 minutes)', async () => {
+  const stopped = await probeNight();
+  await call(stopped.e, 'POST', 'stop', {}, await owner());
+  assert.equal(await sessionsHeld(stopped.e), 0, 'Stop');
+  const silent = await probeNight();
+  await tick(silent.e, later(4));
+  assert.equal(await sessionsHeld(silent.e), 1, 'a running night keeps it for its first minutes');
+  await tick(silent.e, later(11));
+  assert.equal(await sessionsHeld(silent.e), 0, 'a night that never reports');
+  const queued = env();
+  await call(queued, 'POST', 'batch', probeBody(), await owner());   // posted, never run
+  assert.equal(await sessionsHeld(queued), 1);
+  await tick(queued, later(11));
+  assert.equal(await sessionsHeld(queued), 0, 'a never-started night');
+  assert.equal(queued.READY_QUEUE.sent.length, 0, 'the tick never starts a linkedin night by itself');
+});
+
+test('the readiness token never receives a session, and a second read is refused', async () => {
+  const e = env();
+  const read = await night(e);
+  const batch = await (await call(e, 'GET', 'batch', undefined, read.bearer)).json();
+  assert.equal(batch.linkedin, undefined);
+  const first = await probeNight(e);
+  await call(e, 'POST', 'result', {job: 'probe', task: 'linkedin', state: 'read', read: {status: 200, path: '/checkpoint', cards: 0, go: false, word: 'check'}, why: 'check', ms: 1, costMicro: 1}, first.bearer);
+  const again = await call(e, 'POST', 'batch', probeBody({night: '2026-11-12'}), await owner());
+  assert.equal(again.status, 409, 'a day that holds a LinkedIn answer takes no second one');
+  assert.equal(await sessionsHeld(e), 0);
+});
+
+test('a started linkedin night is never replaced by a second post, but an infrastructure error may be tried again', async () => {
+  const started = await probeNight();
+  assert.equal((await call(started.e, 'POST', 'batch', probeBody(), await owner())).status, 409);
+  const failed = await probeNight();
+  await call(failed.e, 'POST', 'result', {job: 'probe', task: 'linkedin', state: 'read', read: {status: 0, path: '', cards: 0, go: false, word: 'error'}, why: 'error', ms: 1, costMicro: 1}, failed.bearer);
+  assert.equal((await call(failed.e, 'POST', 'batch', probeBody({night: '2026-11-12'}), await owner())).status, 200);
 });
 
 test('a check page is reported as a no and taken once; the read holds no session', async () => {

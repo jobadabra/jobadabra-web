@@ -78,9 +78,15 @@ async function clear(env, install, id, jobs, now) {
 }
 
 // Removes the LinkedIn session from the batch's sealed blob (the other parts stay). A blob that cannot be read or written leaves the 24 h sweep (KEEP_HOURS) to delete it with the batch.
-async function scrubSession(env, row) {
+export async function scrubSession(env, row) {
   const data = await readBlob(env, row.install, row.id).catch(() => null);
   if (data?.linkedin) await writeBlob(env, row.install, row.id, {...data, linkedin: undefined}).catch(() => {});
+}
+
+/** Removes the session from every `linkedin` batch older than `minutes` (default 10), whatever became of its night (stopped, timed out, never started, a refused dispatch); run on the tick (api/ready-tick.js). */
+export async function scrubOld(env, now = new Date(), minutes = 10) {
+  const {results} = await env.STATS.prepare("SELECT id, install FROM ready_batches WHERE task = 'linkedin' AND deleted_at IS NULL AND created_at <= ?").bind(stamp(new Date(now.getTime() - minutes * 60000))).all();
+  for (const row of results) await scrubSession(env, row);
 }
 
 // What the nightly run cost, on the owner's /admin/ai/costs beside the other scheduled jobs (job id 'ready-fill'; a readiness night's reads are 'ready-read', owner 9 Nov 2026: "we care about AI credit").
@@ -130,6 +136,11 @@ async function batch(request, env, now) {
     if (refused) return json({ok: false, error: refused.error, ...(refused.limit ? {limit: refused.limit, used: refused.used} : {})}, refused.status);
   }
   const old = await env.STATS.prepare('SELECT id, state FROM ready_batches WHERE install = ? AND night = ? AND task = ?').bind(install, given.night, task).first();
+  if (task === 'linkedin') {   // ONE read: a started night is never replaced, and a day that already holds a LinkedIn answer takes no second one (an infrastructure `error` may be tried again)
+    if (old && old.state !== 'queued') return json({ok: false, error: 'this night already started'}, 409);
+    const answered = await env.STATS.prepare("SELECT 1 AS n FROM ready_batches b JOIN ready_jobs j ON j.batch = b.id WHERE b.install = ? AND b.task = 'linkedin' AND b.created_at > ? AND j.state = 'read' AND j.wall != 'error'").bind(install, stamp(new Date(now.getTime() - 24 * HOUR))).first();
+    if (answered) return json({ok: false, error: 'LinkedIn was already read from the cloud today'}, 409);
+  }
   // Why (code review of cs 2/4): replacing an auto night deleted its rows, so its attempts and sealed outcomes, and its container's token; a night that started or pressed is never replaced
   if (old && task === 'auto' && (old.state !== 'queued' || await env.STATS.prepare('SELECT 1 AS n FROM ready_jobs WHERE batch = ? AND attempt IS NOT NULL').bind(old.id).first())) return json({ok: false, error: 'this night already started'}, 409);
   if (old) { await clear(env, install, old.id, null, now); await env.STATS.batch([env.STATS.prepare('DELETE FROM ready_jobs WHERE batch = ?').bind(old.id), env.STATS.prepare('DELETE FROM ready_batches WHERE id = ?').bind(old.id)]); }
@@ -139,7 +150,7 @@ async function batch(request, env, now) {
   const facts = Object.fromEntries(FACTS.map(name => [name, reading ? '' : String(given.facts?.[name] || '').slice(0, 40000)]));   // what the AI may answer from (profile, standard answers, ...): sealed with the batch, deleted with it
   const ai = /^sk-ant-[\w-]{20,300}$/.test(String(given.ai?.key || '')) ? {key: given.ai.key} : undefined;   // the user's own Claude key (BYOK): sealed with the batch, never sent back, deleted with it
   await writeBlob(env, install, id, {ai, ...(probe ? {linkedin: probe.session} : {}), contact: reading ? {} : given.contact || {}, readyBy: reading ? '' : String(given.readyBy || '').slice(0, 5), facts, jobs: kept});
-  const fillAt = Number.isFinite(Date.parse(given.fillAt)) ? new Date(given.fillAt).toISOString() : null;   // when the night should start filling (the cron starts it then); none: at the next tick
+  const fillAt = task === 'linkedin' ? '9999-12-31T00:00:00.000Z' : Number.isFinite(Date.parse(given.fillAt)) ? new Date(given.fillAt).toISOString() : null;   // linkedin: never started by the tick, only by the owner's own /run   // when the night should start filling (the cron starts it then); none: at the next tick
   await env.STATS.batch([env.STATS.prepare('INSERT INTO ready_batches (id, install, night, created_at, fill_at, task, strict) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, install, given.night, stamp(now), fillAt, task, strict),
     ...kept.map(job => env.STATS.prepare('INSERT INTO ready_jobs (batch, job, host, session) VALUES (?, ?, ?, ?)').bind(id, job.id, new URL(job.url).hostname, job.item?.session ?? null))]);   // session: the auto item's, the key of its one attempt (api/ready-auto.js)
   return json({ok: true, batch: id, queued: kept.length});
@@ -332,6 +343,7 @@ export async function ready(request, env, now = new Date()) {
     const job = String((await request.json().catch(() => null))?.job || '');
     if (job && !/^[\w.:-]{1,64}$/.test(job)) return bad('bad job');
     const done = await stop(env, install, job, now, reader.owner ? null : ['readiness', 'auto']);
+    if (reader.owner) await scrubOld(env, now, 0).catch(() => {});   // a Stop ends the LinkedIn probe's session too, whatever its night does next
     return json(done.body, done.status);
   }
   if (sub === 'run') {   // the owner starts his queued night now (a manual test; the cron would start it at its fill time); an Always on install starts its readiness or auto night

@@ -58,6 +58,6 @@ export async function takeReads(env, install, clear, now = new Date()) {
     taken.push(row);
   }
   for (const batch of new Set(taken.map(row => row.batch))) await clear(env, install, batch, taken.filter(row => row.batch === batch).map(row => row.job), now);
-  const pending = (await env.STATS.prepare(`SELECT COUNT(*) AS n FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch WHERE b.install = ? AND b.task IN ('readiness', 'linkedin') AND j.cleared_at IS NULL AND j.state IN ${LIVE}`).bind(install).first()).n;
+  const pending = (await env.STATS.prepare(`SELECT COUNT(*) AS n FROM ready_jobs j JOIN ready_batches b ON b.id = j.batch WHERE b.install = ? AND b.task = 'readiness' AND j.cleared_at IS NULL AND j.state IN ${LIVE}`).bind(install).first()).n;
   return {ok: true, reads, pending: pending + retry};
 }
