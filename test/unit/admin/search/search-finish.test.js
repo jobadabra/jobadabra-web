@@ -119,3 +119,13 @@ test('review of 1/5: a not-run row is blind; the side check reads the newest run
   const older = night('2026-11-17', [row(1, {inout: io(10, 8)})]), newer = night('2026-11-18', [row(1, {inout: io(0, 0)})]);
   assert.match(finishSection(judgeAll([newer, older]), []), /our list keeps <b>8 of 10<\/b>/);
 });
+
+test('2/5 right jobs per person and source: a number where a source brought one, and a reason where it did not; never 0; Run 1 / Run 2 not sent yet', () => {
+  const rows = [row(1, {local: 3, sources: {employer_sites: {right: 3}, job_boards: {right: 0}}}), row(2, {local: 1, funnel_note: 'places worked out at 17 s; time ran out for: Employer sites, job boards', sources: {web_search: {right: 1}}}), row(3, {kind: 'unmeasured', local: null})];
+  const html = finishSection(judgeAll([night('2026-11-18', rows, {eures: 'off'})]), []), at = html.slice(html.indexOf('id="finish-per-person"'), html.indexOf('id="finish-floors"'));
+  assert.match(at, /p1<\/b> Role, Place<\/td><td class="num"><b>3<\/b><\/td><td class="num"><b>0<\/b><\/td><td class="num"><span class="chip off">not sent yet<\/span><\/td><td class="num"><span class="chip off">not sent yet<\/span><\/td>/, 'a sent 0 is a 0; an unsent source is "not sent yet"');
+  assert.match(at, /p2<\/b> Role, Place<\/td><td class="num"><span class="chip warn">time was up before its turn<\/span><\/td><td class="num"><span class="chip warn">time was up before its turn<\/span><\/td>/, 'the gate said it ran out of time for those steps');
+  assert.match(at, /p3<\/b> Role, Place<\/td>(<td class="num"><span class="chip off">not measured<\/span><\/td>){4}/, 'a blind person is not measured in every source');
+  assert.equal((at.match(/by hand/g) || []).length, 3 + 1, 'LinkedIn is by hand on every row (+ the note)');
+  assert.doesNotMatch(finishSection(judgeAll([night('2026-11-18', rows)]), []), /id="finish-per-person"/, 'a EURES-on run draws no own-source table');
+});
