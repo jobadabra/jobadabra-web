@@ -5,7 +5,7 @@
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {coverage} from './search-market.js';
-import {LINE, OWN, lostTotals, ownOf, peopleOf, sideOf, sourcesOf, tally, weakest} from './search-finish.js';
+import {BLIND, LINE, OWN, lostTotals, ownOf, peopleOf, sideOf, sourcesOf, tally, weakest} from './search-finish.js';
 import {stacked} from './viz-stack.js';
 import {VIZ_STYLE, VIZ_TOOLTIP, figure} from './viz.js';
 
@@ -70,6 +70,24 @@ function inout(runs) {
   }).join('');
   return `<div id="finish-inout"><h3>⇄ In = out, per person (EURES)</h3><div class="muted small">In = right jobs EURES shows for the person · out = how many are in our list after one search · every missing job is counted at the stage that lost it · dashed = the floor (${Math.round(LINE * 100)}% of in) · run of ${esc(last.night)}${last.hand ? ' (by hand)' : ''}</div>${rows}
 <div class="vz-legend">${['out', 'never_asked', 'ai_no', 'placed_out', 'double', 'after_kept', 'not_read'].map(key => `<span><i style="background:${COLORS[key]}"></i>${esc(key)}${key === 'after_kept' ? ' (unexplained)' : ''}</span>`).join('')}</div></div>`;
+}
+
+// ---- Right jobs per person and source (2/5, owner's picture 11 Nov 2026): what each own source brought for each person; an empty cell says why, never 0 ----
+const RAN_OUT_STEP = {employer_sites: 'employer sites', job_boards: 'job boards', free_job_apis: 'free job apis', web_search: 'web search'};   // the gate's words in `ranOut` (admin/search-night.js ranOutOf)
+function sourceCell(row, source) {
+  const item = row.sources?.[source];
+  if (item && item.right != null) return `<b>${item.right}</b>`;
+  if (BLIND.includes(row.kind)) return chip('not measured', 'off');
+  // Why (Gitar on #549, 11 Nov 2026): the gate also lists "scoring the job boards' jobs"; a substring match flagged job boards for it, so the whole step is compared
+  if ((row.ranOut || []).some(step => String(step).trim().toLowerCase() === RAN_OUT_STEP[source])) return chip('time was up before its turn', 'warn');
+  return chip('not sent yet', 'off');
+}
+function perSource(runs) {
+  const last = runs.find(run => ownOf(run));
+  if (!last) return '';
+  const body = last.rows.map(row => `<tr><td>${who(row.persona, row.label)}</td>${OWN.map(source => `<td class="num">${sourceCell(row, source)}</td>`).join('')}<td class="num">${chip('by hand', 'off')}</td><td class="num">${chip('not sent yet', 'off')}</td><td class="num">${chip('not sent yet', 'off')}</td></tr>`).join('');
+  return `<section class="card vz" id="finish-per-person"><h2>🧩 Right jobs per person and source (our own sources)</h2><div class="muted small">A source that read nothing says why · a source's number is what it brought, so a job two sources found shows in both · LinkedIn is typed by hand, not read · Run 1 / Run 2 = new right jobs each run of the night found, not sent yet · ${last.hand ? 'by-hand run' : 'night'} ${esc(last.night)}</div>
+<div class="scroll"><table><tr><th>Person</th>${OWN.map(source => `<th class="num">${esc(name(source))}</th>`).join('')}<th class="num">LinkedIn</th><th class="num">Run 1</th><th class="num">Run 2</th></tr>${body}</table></div></section>`;
 }
 
 // "Where the missing jobs were lost, all people" (owner, 11 Nov 2026): one bar per stage, summed over the people with a reference; the bar is the share of in, the numbers are right jobs.
@@ -163,5 +181,5 @@ const reachedCard = () => '<section class="card vz" id="finish-reached" style="b
 export function finishSection(judged, hand = [], ref = {}) {
   if (!judged) return '<section class="card"><h2>The nights could not be read</h2><p class="muted">The store of the nightly Search check did not answer, so this tab cannot draw the finish line.</p></section>';
   const runs = runsOf(judged, hand);
-  return `${band(runs)}${floorsCard(runs)}${weakCard(runs)}${sideCheck(runs)}${sourcesCard(runs)}${marketCard(runs, ref)}${reachedCard()}${VIZ_TOOLTIP}`;
+  return `${band(runs)}${perSource(runs)}${floorsCard(runs)}${weakCard(runs)}${sideCheck(runs)}${sourcesCard(runs)}${marketCard(runs, ref)}${reachedCard()}${VIZ_TOOLTIP}`;
 }
