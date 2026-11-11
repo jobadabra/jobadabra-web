@@ -1,5 +1,5 @@
 {
-  // The AI broker (see worker.js). basic (1 GiB): one `codex exec` at a time uses well under 1 GiB (measured 28 Oct 2026, throwaway check: codex 0.162.1 runs as uid 1001). max_instances 1 = ONE login, ONE refresher.
+  // The AI broker (see worker.js). One container (1 vCPU, 3 GiB, below): one `codex exec` at a time uses well under 1 GiB (measured 28 Oct 2026, throwaway check: codex 0.162.1 runs as uid 1001). max_instances 1 = ONE login, ONE refresher.
   // Secret: BROKER_ADMIN_TOKEN (wrangler secret put; Keychain jobadabra.codex-broker.admin_token), only for the owner's one-time login upload.
   // Why (1 Nov 2026, owner: rename to ai-broker): this is the FINAL state after the Durable Object namespace moved here from the Worker `jobadabra-codex-broker` (which stays as a forwarder). Never deploy it before the transfer
   // has run (done 1 Nov 2026, its folder removed 2 Nov): a plain deploy of a new Worker name starts an EMPTY namespace and the Codex login is gone (seen on the throwaway proof, 1 Nov 2026). release-ai-broker.yml refuses unless /health says ready.
@@ -11,8 +11,11 @@
   // Why (31 Oct 2026, owner: '$2/day'; paid Claude API removed 3 Nov 2026, owner: no API keys): Free AI is the only engine with a UTC-day cap; the two subscriptions have their own allowances.
   "vars": {"AUDIENCE": "jobadabra-ai-broker", "REPOSITORY": "GarryOne/jobadabra,GarryOne/jobadabra-web,GarryOne/jobadabra-lab,jobadabra/jobadabra,jobadabra/jobadabra-web,jobadabra/jobadabra-lab", "FALLBACK_FREE_AI_DAY_USD": "2", "ENGINE": "codex", "ENGINE_ADAPT": "on"},
   // Container application name `ai-broker` (not derived from the class), so the later class rename does not create a new application (proven 1 Nov 2026).
+  // Why (11 Nov 2026, as; owner asked via AskUserQuestion: "Yes, bigger container (Recommended)", about +$3-6 a month): on `basic` (1/4 vCPU) a small Codex call took 10.6 s, 6.0 s of it
+  // Codex starting up, and start-up grew with the calls running at once: 1.7 s alone, 3.2 s at 2, 6.6 s at 4, 8.5 s at 8, while the model's own turn stayed near 3.5 s (452 calls, the per-call
+  // timeline in this Worker's log, 10-11 Nov 22:15-01:15 UTC). 1 vCPU is the smallest custom size; 3 GiB is its minimum memory. CPU is billed by use, memory while the container is awake.
   "containers": [
-    {"name": "ai-broker", "image": "./container/Dockerfile", "image_build_context": ".", "instance_type": "basic", "max_instances": 1}
+    {"name": "ai-broker", "image": "./container/Dockerfile", "image_build_context": ".", "instance_type": {"vcpu": 1, "memory_mib": 3072, "disk_mb": 4000}, "max_instances": 1}
   ],
   // Owner sets BRAIN_BOT_TOKEN and BRAIN_CHAT_ID as Worker secrets (they must be set on this Worker too: secrets do not move with the namespace).
   "ai": {"binding": "AI"},
