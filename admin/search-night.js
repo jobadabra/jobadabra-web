@@ -9,7 +9,7 @@ import {writeState} from './ci-state.js';
 import {COUNTERS} from './search-night-counters.js';
 import {cleanStepYield} from './search-night-yield.js';
 import {alertText, euresOf, judgeAll} from './search-night-judge.js';
-import {cleanInout, cleanSources} from './search-finish.js';
+import {cleanInout, cleanRuns, cleanSources} from './search-finish.js';
 import {cleanFloors, cleanMeasure} from './search-floors.js';
 import {cleanMarket} from './search-market.js';
 import {markNights} from './search-night-prs.js';
@@ -77,7 +77,7 @@ export function clean(verdict, {night, run = null} = {}, now = new Date()) {
   return {night, run, eures: euresOf(verdict), engine: engineOf(rows), measure: cleanMeasure(verdict.measure), floors: cleanFloors(verdict.floors), state: text(verdict.state, 20), head: text(verdict.head, 300), rows: rows.map((row, index) => ({
     persona: Number.isInteger(row.persona) && row.persona > 0 && row.persona < 100 ? row.persona : index + 1, label: text(row.label, 80), kind: KINDS.includes(row.kind) ? row.kind : 'unknown', why: text(row.why, 120),
     again: row.again === 1 ? 1 : 0, firstTry: text(row.first_try, 160),   // Why (10 Nov 2026, sa): a person graded "AI slow"/"AI queue full" presses once more at the end of the night; the numbers are the 2nd try's and the page says so, never as the better of two
-    local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note), counters: counters(row.counters), inout: cleanInout(row.inout), sources: cleanSources(row.sources), stepYield: cleanStepYield(row.step_yield), relevantSources: relevantSources(row.relevant_sources, row.local),
+    local: count(row.local), found: count(row.found), seconds: count(row.seconds), ranOut: ranOutOf(row.funnel_note), counters: counters(row.counters), inout: cleanInout(row.inout), sources: cleanSources(row.sources), runs: cleanRuns(row.runs), stepYield: cleanStepYield(row.step_yield), relevantSources: relevantSources(row.relevant_sources, row.local),
     place: verdictCounts(row.place, PLACE_VERDICTS, row.found), role: verdictCounts(row.role, ROLE_VERDICTS, row.found)}))};
 }
 

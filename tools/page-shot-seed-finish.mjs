@@ -3,7 +3,7 @@ import {readState, writeState} from '../admin/ci-state.js';
 import {REFERENCE_KEY, STATE_KEY} from '../admin/search-night.js';
 import {HAND_KEY} from '../admin/search-night-hand.js';
 import {searchScoreboard} from './page-shot-seed-scoreboard.mjs';
-import {cleanInout, cleanSources} from '../admin/search-finish.js';
+import {cleanInout, cleanRuns, cleanSources} from '../admin/search-finish.js';
 import {cleanFloors} from '../admin/search-floors.js';
 
 // in (EURES right jobs) per person; 0 = EURES lists none; p6 and p15 are blind on the newest runs.
@@ -31,7 +31,8 @@ export async function searchFinish({env}) {
   // MADE-UP floors on the newest 18-person night (cr's G2): p13 right jobs 0 against a floor of 4, the 2nd night under; the other floors held (first seconds to first job is a ceiling).
   const levels = Object.fromEntries(Array.from({length: 18}, (_, i) => [i + 1, {right: {floor: i % 5 === 4 ? null : 4, now: i === 12 ? 0 : 4 + (i % 3), spread: 1, below: i === 12 ? 2 : 0}, first_s: {floor: 60, now: 44 + i, spread: 5, below: 0}}]));
   // The newest night runs with EURES off (11 Nov 2026): no EURES in = out on it (the side check reads the older runs and the by-hand run), floors of the eures-off series.
-  const withFloors = nights.map(night => (night.rows.length === 18 && night.night === eighteen.at(-1).night ? {...night, eures: 'off', rows: night.rows.map(row => ({...row, inout: null})), measure: '3f9a1c07be52', floors: cleanFloors({checked: true, series: '3f9a1c07be52|codex-gpt-6-luna|eures-off', last_green: {run: '42897000000', sha: '83bf4626aabbccdd'},
+  const withFloors = nights.map(night => (night.rows.length === 18 && night.night === eighteen.at(-1).night ? {...night, eures: 'off', rows: night.rows.map((row, i) => ({...row, inout: null, runs: cleanRuns(i === 3 ? [{run: 1, new_listed: 9, new_right: row.local ?? 0, right_after: row.local ?? 0, seconds: 80}] : [{run: 1, new_listed: 9 + i, new_right: row.local ?? 0, right_after: row.local ?? 0, seconds: 80}, {run: 2, new_listed: 2, new_right: i % 4 === 0 ? 1 : 0, right_after: (row.local ?? 0) + (i % 4 === 0 ? 1 : 0), seconds: 60}])})),   // MADE-UP two-run night (5/5, 11 Nov 2026): run 2 adds a right job for every 4th person; p4 had one run only
+    measure: '3f9a1c07be52', floors: cleanFloors({checked: true, series: '3f9a1c07be52|codex-gpt-6-luna|eures-off', last_green: {run: '42897000000', sha: '83bf4626aabbccdd'},
     merges: ['Read the employer pages in one pass (#3709)', 'Raise the AI call cap (#3712)'], red: [{persona: 13, number: 'right', floor: 4, now: 0, spread: 1, below: 2}], levels})} : night));
   await writeState(env, STATE_KEY, {nights: withFloors}, new Date());
   // MADE-UP weekly reference with mc's per-source rows (5/5): the market per person, and what each source read and found; LinkedIn by hand, free job APIs without a query, web search not counted.
