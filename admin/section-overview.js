@@ -6,6 +6,7 @@ import {esc} from '../shared/html.js';
 import {remember} from '../shared/auth.js';
 import {viewer} from '../shared/auth.js';
 import {HEADLINES} from './headlines.js';
+import {BAND_STYLE, verdictBand} from './verdict-band.js';
 
 export const STATUS = {good: 'g', warn: 'w', bad: 'b', none: 'n'};
 // The pages of a section that must declare headline numbers: every page of the group but its Overview and the super-admin Access page.
@@ -37,12 +38,23 @@ export async function sectionTiles(env, group, now = new Date()) {
 export const tilesHtml = tiles => `<style>${SECTION_STYLE}</style><div class="tiles">${tiles.map(draw).join('')}</div>`;
 
 // The Overview page of a section that has no page of its own (Form filling, Growth): its tiles under the menu's title and question (admin/admin.js adds the menu).
-export const overviewPage = (tiles, {title, icon}) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${esc(title)} · Admin</title>
-<link rel="icon" href="/favicon-32.png"></head><body><main><header><h1>${icon} ${esc(title)}</h1><span class="muted">each tile is one page's headline number: open the page for the detail</span></header>${tilesHtml(tiles)}</main></body></html>`;
-export const overviewView = (path, title) => async (request, env, now = new Date()) => {
+/**
+ * The band over a section's tiles: how many of its numbers are green, amber and red, counted from the tiles' own dots (never a rule of its own; a grey dot has no verdict).
+ * Why (12 Nov 2026, sketch decision 3, asked via AskUserQuestion: "Yes, both as sketched"): one band over Job search → Overview. Empty when no tile has a verdict.
+ */
+export function bandOf(tiles) {
+  const n = status => tiles.filter(tile => tile.status === status).length, good = n('good'), warn = n('warn'), bad = n('bad'), judged = good + warn + bad;
+  if (!judged) return '';
+  return verdictBand({icon: bad ? '🔴' : warn ? '🟠' : '🟢', headline: `${good} of ${judged} numbers green`,
+    chips: [...(bad ? [{label: `${bad} red`, tone: 'bad'}] : []), ...(warn ? [{label: `${warn} amber`, tone: 'warn'}] : []), ...(good ? [{label: `${good} green`, tone: 'good'}] : [])],
+    note: tiles.filter(tile => tile.status === 'bad').map(tile => `${tile.label}: ${tile.value}`).join(' · ')});
+}
+export const overviewPage = (tiles, {title, icon, band = false}) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${esc(title)} · Admin</title>
+<link rel="icon" href="/favicon-32.png">${band ? `<style>${BAND_STYLE}</style>` : ''}</head><body><main><header><h1>${icon} ${esc(title)}</h1><span class="muted">each tile is one page's headline number: open the page for the detail</span></header>${band ? bandOf(tiles) : ''}${tilesHtml(tiles)}</main></body></html>`;
+export const overviewView = (path, title, {band = false} = {}) => async (request, env, now = new Date()) => {
   if (!await viewer(request, env)) return new Response('Not found', {status: 404});
   const url = new URL(request.url);
   if (url.searchParams.has('key')) return remember(url, env, request);
   const page = PAGES.find(item => item.path === path);
-  return new Response(overviewPage(await sectionTiles(env, page.group, now), {title, icon: page.icon}), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'}});
+  return new Response(overviewPage(await sectionTiles(env, page.group, now), {title, icon: page.icon, band}), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'}});
 };

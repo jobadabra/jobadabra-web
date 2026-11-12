@@ -30,21 +30,22 @@ test('the route: owner only, the page is in the "Job search" group, the group is
   assert.equal(PAGES.find(item => item.path === '/admin/job-search/lab').group, 'Job search');
 });
 
-test('the Lab has five tabs, and the old replay\'s tabs are gone (owner, 10 Nov 2026: retire it)', () => {
-  assert.deepEqual(TABS.map(([, name]) => name), ['Real installs', 'Random draws', 'Night search', 'Finish line', 'Session checks']);
+test('the Lab has the Overview and five tabs, and the old replay\'s tabs are gone (owner, 10 Nov 2026: retire it)', () => {
+  assert.deepEqual(TABS.map(([, name]) => name), ['Overview', 'Real installs', 'Random draws', 'Night search', 'Finish line', 'Session checks']);
   const html = page();
-  assert.deepEqual([...html.matchAll(/<a href="\?tab=(\w+)"/g)].map(match => match[1]), ['real', 'draws', 'night', 'finish', 'checks']);
+  assert.deepEqual([...html.match(/<nav class="tabs">[\s\S]*?<\/nav>/)[0].matchAll(/<a href="\?tab=(\w+)"/g)].map(match => match[1]), ['overview', 'real', 'draws', 'night', 'finish', 'checks']);
   for (const gone of ['Replays', 'Needs a fix', 'Fixed', 'History', "Each candidate's newest search"]) assert.ok(!html.includes(gone), `${gone} is retired`);
 });
 
-test('a bookmark of a retired tab, and any unknown tab, opens Real installs', async () => {
+test('a bookmark of a retired tab, any unknown tab and no tab open the Overview (owner, 12 Nov 2026: "Open on Overview")', async () => {
   const e = env();
   for (const tab of ['lab', 'needs', 'fixed', 'history', 'nonsense', '']) {
     const html = await (await get(e, `?tab=${tab}`)).text();
-    assert.match(html, /<a href="\?tab=real" class="on">Real installs/, `?tab=${tab} is Real installs`);
+    assert.match(html, /<a href="\?tab=overview" class="on">Overview/, `?tab=${tab} is the Overview`);
     assert.doesNotMatch(html, /class="on">(Replays|Needs a fix|Fixed|History)/);
   }
-  assert.match(page([], 'lab'), /<a href="\?tab=real" class="on">/, 'the page itself falls back too');
+  assert.match(page([], 'lab'), /<a href="\?tab=overview" class="on">/, 'the page itself falls back too');
+  assert.match(await (await get(e, '?tab=real')).text(), /<a href="\?tab=real" class="on">Real installs/, 'a bookmark of Real installs still opens it');
   assert.match(await (await get(e, '?tab=draws')).text(), /<a href="\?tab=draws" class="on">Random draws/, 'a live tab still opens');
 });
 

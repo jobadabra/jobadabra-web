@@ -61,7 +61,7 @@ test('the tab shows the draws with CI on each and the Lab tab stays the default'
   assert.match(html, /Weak · under 10 jobs|Weak · only 3 jobs in the places/);
   assert.match(html, /only 3 jobs in the places/, 'every reason stays in the row\'s tooltip');
   assert.match(html, /2 of 2 draws reached a relevant \(70\+\) job/, 'the band counts draws with a 70+ job');
-  assert.match(page([draw(1)]), /No real search reported yet/, 'the default tab is Real installs');
+  assert.match(page([draw(1)]), /<a href="\?tab=overview" class="on">/, 'the default tab is the Overview (owner, 12 Nov 2026)');
   assert.doesNotMatch(page([draw(1)]), /Each daily draw/);
 });
 

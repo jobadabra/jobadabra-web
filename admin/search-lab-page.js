@@ -1,5 +1,5 @@
 // /admin/job-search/lab (owner, 18 Oct 2026; sketch https://claude.ai/artifact/FsAAKdxxXF2wXpD1nbHAuC): does a new user get relevant jobs fast, in any role and place, and did our last change make it
-// better or worse? Four tabs: Real installs (the default), Random draws, Night search, Session checks. The old 6-recording replay and its tabs (Replays, Needs a fix, Fixed, History) were retired
+// better or worse? Tabs: Overview (the default since 12 Nov 2026, owner: "Open on Overview"), Real installs, Random draws, Night search, Finish line, Session checks. The old 6-recording replay and its tabs (Replays, Needs a fix, Fixed, History) were retired
 // (owner, 10 Nov 2026: "retire it"): its stored rows stay in the database, nothing reads or writes them. Counts and seconds only: no job, company or CV text. Owner only (a 404 otherwise).
 // Guard: test/unit/admin/search/search-lab.test.js.
 import {viewer} from '../shared/auth.js';
@@ -17,19 +17,21 @@ import {NIGHT_CSS, nightSection} from './search-night-page.js';
 import {FINISH_STYLE, finishSection} from './search-finish-page.js';
 import {handRuns} from './search-night-hand.js';
 import {weeks} from './search-week.js';
+import {OVERVIEW_CSS, overviewSection} from './lab-overview.js';
+import {labData} from './lab-overview-data.js';
 
-export const TABS = [['real', 'Real installs'], ['draws', 'Random draws'], ['night', 'Night search'], ['finish', 'Finish line'], ['checks', 'Session checks']];
+export const TABS = [['overview', 'Overview'], ['real', 'Real installs'], ['draws', 'Random draws'], ['night', 'Night search'], ['finish', 'Finish line'], ['checks', 'Session checks']];
 const CSS = `.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}.tile b{display:block;font-size:28px;margin:4px 0}
 .scroll{overflow-x:auto}.state{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
 .state.good{background:#16341f;color:#6fdc8c}.state.bad{background:#40181a;color:#ff8a80}.state.wait{background:#262c33;color:#b9c0c7}
 .why{color:#8d949c;font-size:12px;margin-top:4px}.chip{display:inline-block;border:1px solid #2a2f37;border-radius:999px;padding:1px 9px;font-size:12px;color:#8d949c}
 .down{color:#ff8a80}h2{margin:0 0 8px}td.num span{font-size:11px}`;
 
-export function page(drawRows = [], tab = 'real', real = [], sending = null, sessionChecks = [], nightRows = [], nightRef = {}, hand = [], week = null) {
-  const shown = TABS.some(([key]) => key === tab) ? tab : 'real';
-  const sections = {night: () => nightSection(nightRows, nightRef, hand), finish: () => finishSection(nightRows, hand, nightRef, week), checks: () => checksSection(sessionChecks), draws: () => drawsSection(drawRows), real: () => realSection(real, sending)};
+export function page(drawRows = [], tab = 'overview', real = [], sending = null, sessionChecks = [], nightRows = [], nightRef = {}, hand = [], week = null, overview = {nights: [], hand: [], real: [], draws: [], checks: []}) {
+  const shown = TABS.some(([key]) => key === tab) ? tab : 'overview';
+  const sections = {overview: () => overviewSection(overview), night: () => nightSection(nightRows, nightRef, hand), finish: () => finishSection(nightRows, hand, nightRef, week), checks: () => checksSection(sessionChecks), draws: () => drawsSection(drawRows), real: () => realSection(real, sending)};
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Lab Job Search · Admin</title>
-<link rel="icon" href="/favicon-32.png"><style>${CHIP_STYLE}${CSS}${DRAWS_CSS}${CHECKS_CSS}${VISUALS_CSS}${NIGHT_CSS}${FINISH_STYLE}</style></head><body><main>
+<link rel="icon" href="/favicon-32.png"><style>${CHIP_STYLE}${CSS}${DRAWS_CSS}${CHECKS_CSS}${VISUALS_CSS}${NIGHT_CSS}${FINISH_STYLE}${OVERVIEW_CSS}</style></head><body><main>
 <header><h1>🔬 Lab Job Search</h1><span class="muted">fictional candidates and real installs · counts and seconds only</span></header>
 <nav class="tabs">${TABS.map(([key, name]) => `<a href="?tab=${key}" class="${shown === key ? 'on' : ''}">${name}</a>`).join('')}</nav>
 ${sections[shown]()}
@@ -40,7 +42,7 @@ export async function view(request, env) {
   if (!await viewer(request, env)) return new Response('Not found', {status: 404});
   const url = new URL(request.url);
   if (url.searchParams.has('key')) return remember(url, env, request);
-  const tab = TABS.some(([key]) => key === url.searchParams.get('tab')) ? url.searchParams.get('tab') : 'real';   // Why (10 Nov 2026, owner): a bookmark of a retired tab (lab, needs, fixed, history) or any unknown tab opens Real installs
+  const tab = TABS.some(([key]) => key === url.searchParams.get('tab')) ? url.searchParams.get('tab') : 'overview';   // Why (10 Nov 2026, owner; 12 Nov 2026, owner: "Open on Overview"): a bookmark of a retired tab (lab, needs, fixed, history) or any unknown tab opens the Overview
   let drawRows = [];
   try { drawRows = env.STATS && tab === 'draws' ? await draws(env.STATS) : []; } catch { drawRows = []; }
   let real = [];
@@ -56,5 +58,6 @@ export async function view(request, env) {
   try { week = env.STATS && tab === 'finish' ? (await weeks(env))[0] || null : null; } catch (error) { console.error(`search week: unreadable: ${error?.message || error}`); week = null; }   // Why (11 Nov 2026): an unreadable week is "no week yet", never a broken tab
   let sending = null;
   try { sending = env.STATS && tab === 'real' ? await canSend(env.STATS) : null; } catch { sending = null; }
-  return new Response(page(drawRows, tab, real, sending, sessionChecks, nightRows, nightRef, hand, week), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
+  const overview = tab === 'overview' ? await labData(env) : undefined;
+  return new Response(page(drawRows, tab, real, sending, sessionChecks, nightRows, nightRef, hand, week, overview), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
 }
