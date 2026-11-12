@@ -253,6 +253,8 @@ async function download(request, env, now = new Date()) {
 // LOCATED in that country (never worldwide remote); the url is a search template with {role} or the board's own section page (no placeholder). Stored in the same `sitefacts` table installs share boards in, one row per board and country
 // under the install id `central-scout-<cc>`, so agreedSites serves them as the same fact ({kind: 'board', relevant: [{country, family, installs: 1, in_places}]})
 // after one "install" (BOARDS_K) and installs rank them like their own. A fact not measured again within SCOUT_BOARD_DAYS leaves.
+// Why (12 Nov 2026, owner via sa: "Boards now, employers next (Recommended)"): `browser: true` (exactly true, nothing else) marks a board the plain reader
+// is refused on and the scout measured in CI's honest headless browser; it rides in the same fact's recipe, and installs read it in Jobadabra's own browser.
 export const SCOUT_BOARD_PREFIX = 'central-scout-', SCOUT_BOARD_DAYS = 30, MAX_SCOUT_BOARDS = 400, MIN_LOCAL_JOBS = 3;
 export function boardFactsOf(list) {
   const out = new Map();
@@ -267,7 +269,7 @@ export function boardFactsOf(list) {
     if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host) || !url.startsWith('https://') || url.length > 300 || urlHost !== host.replace(/^www\./, '')
       || (url.match(/\{(\w*)\}/g) || []).some(token => !['{role}', '{place}'].includes(token)) || !COUNTRIES.includes(country) || !families.length
       || !(jobs >= MIN_LOCAL_JOBS)) continue;
-    out.set(`${host}\n${country}`, {host, url, country, families, local_jobs: Math.min(jobs, 5000)});
+    out.set(`${host}\n${country}`, {host, url, country, families, local_jobs: Math.min(jobs, 5000), ...(item.browser === true ? {browser: true} : {})});
   }
   return [...out.values()].slice(0, MAX_SCOUT_BOARDS);
 }
@@ -276,7 +278,7 @@ async function storeBoardFacts(db, facts, date) {
   const statements = facts.map(fact => db.prepare(`INSERT INTO sitefacts (install, day, host, kind, url, body, in_places, fit70, countries, families) VALUES (?, ?, ?, 'board', ?, ?, ?, 0, ?, ?)
     ON CONFLICT(install, host, kind) DO UPDATE SET day = excluded.day, url = excluded.url, body = excluded.body, in_places = excluded.in_places, fit70 = 0,
     countries = excluded.countries, families = excluded.families`)
-    .bind(`${SCOUT_BOARD_PREFIX}${fact.country}`, date, fact.host, fact.url, JSON.stringify({countries: [fact.country]}), fact.local_jobs, fact.country, fact.families.join(',')));
+    .bind(`${SCOUT_BOARD_PREFIX}${fact.country}`, date, fact.host, fact.url, JSON.stringify({countries: [fact.country], ...(fact.browser ? {browser: true} : {})}), fact.local_jobs, fact.country, fact.families.join(',')));
   const cutoff = new Date(Date.parse(date) - SCOUT_BOARD_DAYS * 86400000).toISOString().slice(0, 10);
   statements.push(db.prepare(`DELETE FROM sitefacts WHERE install LIKE ? AND kind = 'board' AND day < ?`).bind(`${SCOUT_BOARD_PREFIX}%`, cutoff));
   if (db.batch) await db.batch(statements); else for (const statement of statements) await statement.run();

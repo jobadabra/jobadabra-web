@@ -356,20 +356,24 @@ test('the central scout\'s measured boards are served as the same board fact ins
     {...good, host: 'evil.example', url: 'https://other.example/?q={role}'},                      // address not on its own host
     {...good, host: 'plain.md', url: 'http://plain.md/?q={role}'},                                // not https
     {...good, host: 'tok.md', url: 'https://tok.md/?q={role}&t={token}'},                         // another placeholder
-    {...good, host: 'zz.md', country: 'zz'}, {...good, host: 'nofam.md', families: ['nonsense']}];
+    {...good, host: 'zz.md', country: 'zz'}, {...good, host: 'nofam.md', families: ['nonsense']},
+    {...good, host: 'needs.md', url: 'https://needs.md/?q={role}', browser: true},                // measured in the scout's browser: the flag rides in the recipe
+    {...good, host: 'truthy.md', url: 'https://truthy.md/?q={role}', browser: 'yes'}];            // anything but true is no flag
   const put = await (await call(e, 'PUT', auth, {feeds: [feed('a')], board_facts})).json();
-  assert.equal(put.board_facts, 3);
+  assert.equal(put.board_facts, 5);
   const {agreedSites} = await import('../../../api/employers.js');
   const facts = (await agreedSites(e)).filter(fact => fact.kind === 'board').sort((a, b) => a.host.localeCompare(b.host));
   assert.deepEqual(facts.map(f => [f.host, f.url, f.recipe, f.installs, f.relevant]), [
     ['delucru.md', good.url, {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0}]],
+    ['needs.md', 'https://needs.md/?q={role}', {countries: ['md'], browser: true}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0}]],
     ['rabota.md', 'https://rabota.md/jobs?q={role}&place={place}', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 22, fit70: 0}]],
-    ['section.md', 'https://section.md/jobs/it-software', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 9, fit70: 0}]]]);
+    ['section.md', 'https://section.md/jobs/it-software', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 9, fit70: 0}]],
+    ['truthy.md', 'https://truthy.md/?q={role}', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0}]]]);
   await call(e, 'PUT', auth, {feeds: [feed('a')]});   // a publish without the field keeps the facts
-  assert.equal((await agreedSites(e)).filter(fact => fact.kind === 'board').length, 3);
+  assert.equal((await agreedSites(e)).filter(fact => fact.kind === 'board').length, 5);
   e.STATS.db.prepare("UPDATE sitefacts SET day = '2000-01-01' WHERE host = 'rabota.md'").run();
   await call(e, 'PUT', auth, {feeds: [feed('a')], board_facts: [good]});   // one not measured again for 30 days leaves
-  assert.deepEqual((await agreedSites(e)).filter(fact => fact.kind === 'board').map(f => f.host).sort(), ['delucru.md', 'section.md'], 'the recent section stays, the 30-day-old rabota.md left');
+  assert.deepEqual((await agreedSites(e)).filter(fact => fact.kind === 'board').map(f => f.host).sort(), ['delucru.md', 'needs.md', 'section.md', 'truthy.md'], 'the recent section stays, the 30-day-old rabota.md left');
 });
 
 // 2 Nov 2026: the scout lost its cache and published 3,871 of 6,833 feeds, and no old copy existed to go back to (owner, 5 Nov 2026: "Find root cause, and preven this happening again").
