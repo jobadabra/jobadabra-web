@@ -3,9 +3,10 @@
 // site trigger stands for. Triggers: the */5 one stands for every CRONS entry that fires at its tick (nightly hours, ten-minute sweep, stats, night passes: all on :00/:05/:30/:40 minutes), and
 // OWN_CRON ('47 21,23,1 * * *', the three-a-day e2e) is a trigger of its own because :47 is on no 5-minute tick (a8, 1 Nov 2026: Option A, CRONS unchanged).
 // Dormant until env.TIMERS === 'on'; the dispatch token is TIMERS_GITHUB_TOKEN, the repo env.TIMERS_REPO (a var, so the org move is one edit, 1 Nov 2026): repo and token travel together (as shared/intel-start.js), the site GITHUB_TOKEN is never sent there.
-// A failed start fails the trigger after every job had its try; no Telegram any more (the bot is retired): the failure goes to the watchdog's GitHub issue and Cloudflare's cron history.
+// A failed start fails the trigger after every job had its try; the failure goes to the watchdog's GitHub issue, Cloudflare's cron history and, since 12 Nov 2026, the shared "Could not start" alert on Engineering (shared/job-alert.js, once per job per day).
 import {CRONS, runScheduled} from '../app-core/src/scheduler.js';
 import {LABEL, TITLE, fires} from '../app-core/src/watchdog.js';
+import {alertNotStarted} from './job-alert.js';
 
 export const TICK = '*/5 * * * *';
 export const OWN_CRON = '47 21,23,1 * * *';
@@ -28,10 +29,10 @@ export async function reportStart(env, text, fetcher = fetch) {
 }
 
 /**
- * Starts the workflows the event's crons are due for. `dispatch(env, inputs, workflow)` is the site Worker's; `report(text)` defaults to reportStart on the scoped env.
+ * Starts the workflows the event's crons are due for. `dispatch(env, inputs, workflow)` is the site Worker's; `report(text)` defaults to reportStart on the scoped env; `fetcher` is Telegram's side of the shared alert (tests).
  * Resolves to the workflows started ([] when dormant or nothing is due); throws, after every job had its try, when any start failed or the token is missing on a due tick.
  */
-export async function runTimers(event, env, {dispatch, report, now = new Date(event?.scheduledTime || Date.now())}) {
+export async function runTimers(event, env, {dispatch, report, fetcher = fetch, now = new Date(event?.scheduledTime || Date.now())}) {
   if (env.TIMERS !== 'on') return [];
   const crons = cronsAt(event);
   if (!crons.length) return [];
@@ -39,11 +40,15 @@ export async function runTimers(event, env, {dispatch, report, now = new Date(ev
   if (!env.TIMERS_REPO) throw new Error('TIMERS_REPO is not set (the public repo as owner/name, a var in wrangler.toml; never a literal in code)');
   const scoped = {...env, GITHUB_REPO: env.TIMERS_REPO, GITHUB_TOKEN: env.TIMERS_GITHUB_TOKEN};
   const tell = report || (text => reportStart(scoped, text));
+  // Why (12 Nov 2026, owner: "close the gap: the Worker can't start the run"; via mac-9a): a refused start reached the watchdog issue and the cron history, never Engineering, and the ten-minute sweeps are kept out of the issue (app-core/src/scheduler.js).
+  // The shared alert tells each refused job once per day, so the sweeps cost one message a day, not 144. Every refusal is seen here, whatever scheduler.js decides to report; a refusal that its legacy-name retry fixed is not one (LEGACY_NAMES has no timer job since 17 Oct 2026).
+  const refused = [], tracked = async (target, inputs, workflow) => { try { await dispatch(target, inputs, workflow); } catch (error) { refused.push({workflow, error: error.message}); throw error; } };
   const started = [], failed = [];
   for (const cron of crons) {
-    try { started.push(...await runScheduled({cron, scheduledTime: now.getTime()}, scoped, {dispatch, report: tell, now})); }
+    try { started.push(...await runScheduled({cron, scheduledTime: now.getTime()}, scoped, {dispatch: tracked, report: tell, now})); }
     catch (error) { failed.push(error.message); }
   }
+  await alertNotStarted(env, refused, {fetcher, now}).catch(() => {});
   if (failed.length) throw new Error(failed.join('; '));
   return started;
 }
