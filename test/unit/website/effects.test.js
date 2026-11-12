@@ -81,7 +81,7 @@ test('the whole journey: up to Submit, then after it, then back to the start; on
   }
   assert.match(panel, /<svg class="journey-loop" aria-hidden="true">[\s\S]*Again, for the next job/);
   assert.match(panel, /Looks like you\? Then send it\./);
-  assert.match(panel, /<ol class="levels"[\s\S]*In Chrome[\s\S]*In the background[\s\S]*Automatically/, 'the three levels, in the order of the app');
+  assert.match(panel, /<ol class="levels"[\s\S]*In Chrome[\s\S]*In the background[\s\S]*Full automation/, 'the three levels, in the order of the app');
   assert.match(html, /<script src="journey\.js" defer><\/script>/);
   assert.match(read('home.css'), /\.journey-detail\[hidden\] \{ display: none; \}/, 'a panel\'s display: grid must not undo hidden');
   // Phones (owner, 21 Oct 2026: "vertical list on phones"): the script and the stylesheet switch at the same width.
