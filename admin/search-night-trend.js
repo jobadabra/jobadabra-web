@@ -6,7 +6,7 @@
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {VIZ_TOOLTIP, columns, figure, line} from './viz.js';
-import {euresOf, reasonWords, seriesOf} from './search-night-judge.js';
+import {asAppOf, euresOf, reasonWords, seriesOf} from './search-night-judge.js';
 
 const DAY = 86400000;
 const isNum = value => typeof value === 'number' && Number.isFinite(value);
@@ -28,9 +28,9 @@ export function groups(judged) {
   // Why (10 Nov 2026, jobadabra [oe] 1/3): a night without EURES is another series as well (the judge compares it only with its own kind), so the switch is never one line falling.
   for (const night of judged || []) { const key = `${night.total} ${seriesOf(night)}`; by.set(key, [...(by.get(key) || []), night]); }
   return [...by].map(([, list], index) => {
-    const [total, eures] = [list[0].total, euresOf(list[0])];
+    const [total, eures, asApp] = [list[0].total, euresOf(list[0]), asAppOf(list[0])];
     const byDay = new Map(list.map(night => [night.night, night]), []), sorted = list.map(night => night.night).sort();
-    return {total, eures, current: index === 0, days: days(sorted[0], sorted.at(-1)).map(day => ({day, night: byDay.get(day)?.notRun ? null : byDay.get(day) || null, elsewhere: taken.has(day), notRun: !!byDay.get(day)?.notRun}))};
+    return {total, eures, asApp, current: index === 0, days: days(sorted[0], sorted.at(-1)).map(day => ({day, night: byDay.get(day)?.notRun ? null : byDay.get(day) || null, elsewhere: taken.has(day), notRun: !!byDay.get(day)?.notRun}))};
   });
 }
 
@@ -58,7 +58,7 @@ export function groupHtml(group) {
   const dropped = span.filter(item => item.night?.dropped);
   const found = columns(columnsOf, [{name: `Candidates found (of ${total})`, tone: 's1'}, {name: `Employer sites in time (of ${total})`, tone: 's3'}], {whole: true, gapLabel: 'no night with this number of candidates', labelEvery: Math.max(1, Math.ceil(span.length / 7))});
   const jobs = line(local, {tone: 's2', percent: false, whole: true, name: 'Relevant local jobs', labelEvery: Math.max(1, Math.ceil(span.length / 7))});
-  return `<h3 style="margin:14px 0 2px;font-size:14px">${total} candidates${group.eures === 'off' ? ' · EURES off' : ''} ${group.current ? chip('current set', 'good') : chip('an earlier set: not compared with the current one', 'off')}</h3>
+  return `<h3 style="margin:14px 0 2px;font-size:14px">${total} candidates${group.eures === 'off' ? ' · EURES off' : ''}${group.asApp === 'yes' ? ' · reads like the app' : ''} ${group.current ? chip('current set', 'good') : chip('an earlier set: not compared with the current one', 'off')}</h3>
 <p class="muted small" style="margin:0">Candidates found a right job for, and employer sites that finished in time</p>${figure({chart: found})}
 <p class="muted small" style="margin:8px 0 0">Right local jobs found, all candidates added up</p>${figure({chart: jobs})}
 <p class="small" style="margin:6px 0 0">${dropped.length ? `${chip('✕ dropped', 'bad')} ${dropped.map(item => `<span title="${esc(reasonWords(item.night).join('; '))}">${esc(item.day.slice(5).replace('-', '/'))}</span>`).join(' · ')}` : chip('✓ no night dropped', 'good')}</p>`;

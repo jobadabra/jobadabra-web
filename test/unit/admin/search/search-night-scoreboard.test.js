@@ -127,6 +127,9 @@ test('Gitar on #603: an as-app night is judged, trended and reported only agains
   assert.notEqual(seriesOf(before), seriesOf(after));
   const judged = judgeAll([after, before]);
   assert.equal(groups(judged).length, 2, 'two series, two trend lines');
+  assert.deepEqual(groups(judged).map(group => group.asApp), ['yes', 'no'], 'each line says its series');
+  const {groupHtml} = await import('../../../../admin/search-night-trend.js');
+  assert.match(groupHtml(groups(judged)[0]), /reads like the app/, 'and its heading names it (Gitar on #603)');
   const both = judgeAll([clean({...night('x'), eures: 'off', as_app: 'yes'}, {night: '2026-11-13'}, NOW), clean({...night('x')}, {night: '2026-11-12'}, NOW)]);
   assert.match(scoreboardSection(both), />EURES off · reads like the app</, 'one pill naming both breaks');
 });
