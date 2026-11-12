@@ -42,9 +42,17 @@ test('the map cell: 39 green + 2 red reads amber with its share in the tooltip',
   assert.match(cellHtml(cellOf(0, 1)), /title="Sat 31 Oct · 1 red run"/);
 });
 
-test('the share is shown with a decimal only where a whole number would blur the 98% / 80% line', () => {
-  assert.match(cellHtml(cellOf(197, 4)), /\(98\.0%\)/);   // 97.99 → would read "98%" and be amber
+test('the label always agrees with the colour: never 98 for a green day, never 100 while a run is red (Gitar, PR #583)', () => {
+  assert.match(cellHtml(cellOf(197, 4)), /\(98\.009%\)/);   // 98.0099% is green: two decimals would still read 98.00
+  assert.equal(cellOf(197, 4).state, 'green');
+  assert.match(cellHtml(cellOf(295, 6)), /\(98\.006%\)/);   // 295/301 = 98.0066% is green
+  assert.match(cellHtml(cellOf(196, 4)), /\(98%\)/);         // exactly 98% is amber
+  assert.equal(cellOf(196, 4).state, 'amber');
+  assert.match(cellHtml(cellOf(399, 1)), /\(99%\)/);         // 99.75% is not 100
   assert.match(cellHtml(cellOf(100, 1)), /\(99%\)/);
+  assert.match(cellHtml(cellOf(39, 2)), /\(95%\)/);
+  assert.match(cellHtml(cellOf(79, 21)), /\(79%\)/);         // red
+  assert.match(cellHtml(cellOf(80, 20)), /\(80%\)/);         // amber
 });
 
 test('a cancelled run is not a run: it changes neither state nor share', () => {

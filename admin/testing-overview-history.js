@@ -10,13 +10,14 @@ const DONE = {success: 'green', failure: 'red', timed_out: 'red'};
 /** The last `n` UTC days, oldest first. */
 export const daysTo = (now, n = MAP_DAYS) => Array.from({length: n}, (_, i) => new Date(now.getTime() - (n - 1 - i) * 86400000).toISOString().slice(0, 10));
 
-/** The one rule for a day's cell, used by every row: green above 98% green runs (exactly 98% is amber), amber from 80% to 98%, red below 80%; a day with one run keeps green/red; none without a run. `pct` is the share as a whole number, with one decimal (rounded down) only where the whole number would sit on a threshold (97.99 reads 97.9, not 98). Why (12 Nov 2026, owner: "why is always red in Admin", then "green only if bigger than 98%"): main runs e2e 25-110 times a day, so "any red run paints the day red" was red on all 14 days; the 80% amber bound is the coordinator's proposal, to be confirmed. */
+/** The one rule for a day's cell, used by every row: green above 98% green runs (exactly 98% is amber), amber from 80% to 98%, red below 80%; a day with one run keeps green/red; none without a run. `pct` is the share rounded DOWN to the fewest decimals (0-3) that never print "98" for a share that is not exactly 98, so a label always agrees with the colour (98.01 reads 98.01, 99.75 reads 99, never 100 while a run is red; PR #583, Gitar). Why (12 Nov 2026, owner: "why is always red in Admin", then "green only if bigger than 98%"): main runs e2e 25-110 times a day, so "any red run paints the day red" was red on all 14 days; the 80% amber bound was the coordinator's proposal, approved by the owner. */
 export function dayShare(greens, reds) {
   const total = greens + reds;
   if (!total) return {state: 'none', pct: null};
-  const share = 100 * greens / total, whole = Math.round(share);
-  const state = total === 1 ? (greens ? 'green' : 'red') : share > 98 ? 'green' : share >= 80 ? 'amber' : 'red';
-  return {state, pct: [80, 98].includes(whole) && share !== whole ? (Math.floor(share * 10) / 10).toFixed(1) : String(whole)};
+  const state = total === 1 ? (greens ? 'green' : 'red') : greens * 100 > 98 * total ? 'green' : greens * 100 >= 80 * total ? 'amber' : 'red';
+  let digits = 0;
+  while (digits < 3 && Math.floor(greens * 100 * 10 ** digits / total) === 98 * 10 ** digits && greens * 100 !== 98 * total) digits++;   // integer maths: no float edge on the line
+  return {state, pct: String(Math.floor(greens * 100 * 10 ** digits / total) / 10 ** digits)};
 }
 
 const dayOf = at => String(at || '').slice(0, 10);   // a snapshot's read day: later days are not stored yet ('' = unknown, treated as covered)
