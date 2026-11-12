@@ -49,7 +49,7 @@ test('Scouting lives in Job search next to the Lab, not in Growth, at the same a
   const group = path => PAGES.find(page => page.path === path)?.group;
   assert.equal(group('/admin/job-search/scouting'), 'Job search');
   const names = PAGES.filter(page => page.group === 'Job search').map(page => page.name);
-  assert.deepEqual(names.slice(0, 2), ['Lab', 'Scouting']);
+  assert.deepEqual(names.slice(0, 3), ['Overview', 'Lab', 'Scouting'], 'Overview first, as in every section that has one (owner, 12 Nov 2026)');
   const row = html => html.match(/<div class="admin-sub">.*?<\/div>/s)?.[0] || '';
   assert.ok(row(nav('/admin/job-search/scouting', {role: 'admin', name: 'Ann'})).includes('href="/admin/job-search/lab"'), 'Scouting opens the Job search row');
   assert.ok(!row(nav('/admin/growth/insights', {role: 'admin', name: 'Ann'})).includes('/admin/job-search/scouting'), 'the Growth row does not list it');

@@ -281,6 +281,15 @@ export const seeds = {...notifySeeds,
       if (target) await env.STATS.prepare('UPDATE session_checks SET target = ? WHERE id = ?').bind(target, `${id}@${at}`).run().catch(() => null);   // the old tree has no target column
     }
   },
+  'job-search-overview': async ({env, call}) => {   // Job search → Overview and the Lab's Overview tab (12 Nov 2026): 6 made-up nights of 18 people (the newest EURES off), made-up real searches, over the draws, checks, scouting and benchmark seeds
+    for (const name of ['random-draws', 'session-checks', 'scouting', 'benchmark-search']) await seeds[name]({env, call});
+    const day = back => new Date(Date.now() - back * 86400000).toISOString().slice(0, 10);
+    const nights = [5, 12, 11, 10, 3, 6].map((measured, back) => ({night: day(back + 1), run: 1000 + back, state: 'done', head: `${measured} of 18 measured`, at: `${day(back + 1)}T05:00:00Z`, build: 'abc1234', ...(back ? {} : {eures: 'off'}),
+      rows: Array.from({length: 18}, (_, i) => ({persona: i + 1, label: `Person ${i + 1}`, kind: i < measured ? 'measured' : 'none', local: i < measured ? 3 + (i % 4) : 0, found: 20, seconds: 150, ranOut: [], sources: {}}))}));
+    await env.STATS.prepare("INSERT INTO ci_state (key, body, at) VALUES ('search-nights', ?, ?)").bind(JSON.stringify({nights}), new Date().toISOString()).run();
+    for (let i = 0; i < 14; i++) await env.STATS.prepare("INSERT INTO telemetry (day, at, kind, install, version, platform, fingerprint, summary, data) VALUES (?, ?, 'search', ?, '0.9.12', 'mac', 'search', 'search', ?)")
+      .bind(day(i % 10), `${day(i % 10)}T10:00:00Z`, `demo-install-${i % 2}`, JSON.stringify({family: i % 3 ? 'finance_admin' : 'aviation_transport', first_s: 60 + (i * 7) % 60, tenth_s: 120, first_fit70_s: i % 4 ? null : 119, in_places: 2 + i % 3, fit70: i % 4 ? 0 : 1, result: 'finished'})).run();
+  },
   scouting: async ({env}) => {   // made-up employers over the European countries, one or two per kind and country, plus a few of the kinds split out of Other (26 Oct 2026)
     const kinds = ['software', 'sales_b2b', 'sales_retail', 'logistics', 'hospitality', 'healthcare', 'creative_media', 'finance_admin', 'education', 'trades',
       'engineering', 'business_ops', 'manufacturing', 'science', 'customer_service', 'legal', 'aviation_transport', 'public_security', 'other'];
