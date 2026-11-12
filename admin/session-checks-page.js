@@ -66,7 +66,7 @@ ${figure({chart, table: round.checks.map(detail).join(''), label: 'Boards, what 
 
 /** The whole tab: the freshness band, then one card per round, newest first. `now` decides "days ago". */
 export function checksSection(rows, now = new Date()) {
-  if (!rows.length) return '<section class="card"><h2>No session check yet</h2><p class="muted">After a local check, a session uploads it with <code>tools/persona-search/publish-session-check.py</code> (see the skill check-job-search-locally).</p></section>';
+  if (!rows.length) return '<section class="card"><h2>No session check yet</h2><p class="muted">After a local check, a session uploads it with <code>tools/persona-search/publish-session-check.py</code> of the jobadabra repo (see its skill check-job-search-locally).</p></section>';
   const all = rounds(rows), sessions = new Set(rows.map(row => row.session)).size, days = Math.floor((now - Date.parse(rows[0].run_at)) / DAY);
   const ago = days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
   const band = verdictBand({icon: days > QUIET_DAYS ? '🟠' : '🟢', headline: `${rows.length} checks by ${sessions} session${sessions === 1 ? '' : 's'}, the last ${ago}`,
