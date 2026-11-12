@@ -157,7 +157,7 @@ curl -s https://jobadabra-ai-broker.jobpilotto.workers.dev/health | jq '{state, 
    - **Free AI** has a $2 UTC-day cap and takes neither a search nor an image.
 4. **The reply** names the engine and model. A refusal names the first engine's own reason.
 
-At most 12 calls run in the container at once (`PARALLEL` in `worker.js`; at most 3 of them on Claude); PR calls wait ahead of the rest.
+At most 16 calls run in the container at once (`PARALLEL` in `worker.js`; at most 3 of them on Claude); PR calls wait ahead of the rest.
 
 <details>
 <summary>Kept conversations (sessions)</summary>

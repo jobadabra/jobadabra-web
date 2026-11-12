@@ -25,11 +25,12 @@ export {ContainerProxy} from '@cloudflare/containers';   // required by the outb
 // Why (11 Nov 2026, as; owner: "Let's increase the AI Broker's slot limit"): at 4 one Find jobs measure person already queued (after-1 run 43069240532: 55 of 303
 // calls waited over 5 s, p90 wait 7.9 s, all 4 busy 29% of the time). On the 1 vCPU / 3 GiB container (#554) 4 at once peaked at 1.27 GiB and 0.52 CPU per minute
 // (idle 0.53 GiB, so ~185 MiB a running call; Cloudflare container metrics, same window): 8 fits (~2.0 GiB); 12 (~2.75 GiB) left no room in 3 GiB. PR 0 (28 Oct 2026) measured 4.
-// Since the resize to 2 vCPU / 6 GiB (11 Nov 2026) memory is no limit (8 calls = ~2.0 of 6 GiB, 12 = ~2.75).
-// Why 12 (12 Nov 2026, sa; owner: "let's raise the slot count"): on 1 vCPU, 8 at once used the whole CPU (0.99 in the busiest minutes, web#558), so about 8 calls a vCPU; on 2 vCPU
-// 12 is ~1.5 vCPU and leaves headroom, 16 would be the whole CPU again. Not yet measured at 12: read the container's CPU per minute and the calls' waits on the first by-hand
-// Search check after the deploy, and go to 16 or back to 8 on that number, never on a guess.
-const PARALLEL = 12;
+// Since the resize to 2 vCPU / 6 GiB (11 Nov 2026) memory is no limit (8 calls = ~2.0 of 6 GiB, 12 = ~2.75; ~25-30 would fit): the CPU is, at ~8 calls a vCPU (web#558).
+// Why 16 (13 Nov 2026, as; owner: "Raise to 16 (Recommended)", asked via AskUserQuestion): measured at 12 (12 Nov 12:30Z-23:00Z, 10,267 calls): a call waits only when all
+// slots are full, and the waits came in bursts (15-16Z p90 23-31 s, scheduled lane 87% of all waiting) while the container's CPU stayed at most 0.46-0.60 (median 0.18-0.26)
+// and memory at most 2.1 of 6 GiB; hours that peaked at 0.93-0.96 CPU had no waits (slots not full, so more slots add no load there). Read the waits and CPU per minute on
+// the first by-hand Search check after this deploy: back to 12 if the CPU passes ~0.9 in minutes that still wait.
+const PARALLEL = 16;
 const CLAUDE_PARALLEL = 3;   // Why (11 Nov 2026, as): kept at 3 though the container now has 6 GiB: more Claude calls at once were never measured on the subscription
 const CALLER_WAIT_MS = 180_000, CODEX_GUARD_MS = 100_000, START_MS = 10_000;   // the callers' own wait (desktop/e2e/lib/broker-client.mjs: AbortSignal.timeout(180000), an abort is not retried), the container's Codex guard (container/server.mjs), a cold start
 const DRAIN_WAIT_MS = CALLER_WAIT_MS - CODEX_GUARD_MS - START_MS;   // Why (8 Nov 2026, Gitar on #501): a call that waits for the next container must still have time to run in it before its caller gives up, or the hand-over only moves the loss; past this it is passed on like any start-up failure (Claude, Free AI) instead of answered to nobody. Calls the old container is still finishing are guarded at 100 s (Codex) and 150 s (Claude), so a drain longer than this wait costs the refused call its Codex turn, as every deploy did before
