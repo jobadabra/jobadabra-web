@@ -6,6 +6,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import worker from '../../../workers/www/index.js';
 import {connect, saveSetting} from '../../../shared/notify.js';
+import {TICK, runTimers} from '../../../shared/timers.js';
 import {OWN_ALERT, alertJobs, jobKey, alertNotStarted, readMuted, setJobMuted} from '../../../shared/job-alert.js';
 
 function d1() {
@@ -143,4 +144,29 @@ test('a cancelled or skipped run decides nothing: red, cancelled, skipped stays 
   await alertJobs(e, {jobs: [{...snap('success', 5).jobs[0], recent: [run('success', 5), run('cancelled', 4)]}]}, {fetcher: tg.fetcher, now: hour(5)});
   assert.equal(tg.sends().length, 2);
   assert.match(tg.sends()[1], /works again/);
+});
+
+// The public repo's on-time starts (shared/timers.js: nightly, sweeps, e2e) go through the same alert (owner, 12 Nov 2026, via mac-9a: "close the gap: the Worker can't start the run").
+const TIMERS = {TIMERS: 'on', TIMERS_GITHUB_TOKEN: 't', TIMERS_REPO: 'jobadabra/jobadabra'}, at = (hour, minute, day = 12) => Date.UTC(2026, 10, day, hour, minute);
+const noReport = async () => {};
+test('a refused timer start tells Engineering once per job per day with GitHub\'s status; a start that worked tells nothing', async () => {
+  const {e, tg} = await setup(), env = {...e, ...TIMERS}, refuse = async (_env, _inputs, workflow) => { if (workflow === 'desktop.yml') throw new Error('GitHub dispatch failed: 403'); };
+  await assert.rejects(runTimers({cron: TICK, scheduledTime: at(3, 0)}, env, {dispatch: refuse, report: noReport, fetcher: tg.fetcher}), /desktop\.yml/, 'the trigger still fails loudly, as before');
+  assert.equal(tg.sends().length, 1, 'only desktop.yml was refused; pr-verdict.yml and pr-labels.yml started');
+  assert.match(tg.sends()[0], /Could not start /);
+  assert.match(tg.sends()[0], /GitHub answered 403/);
+  assert.match(tg.sends()[0], /jobadabra\b/);
+  await assert.rejects(runTimers({cron: TICK, scheduledTime: at(3, 0)}, env, {dispatch: refuse, report: noReport, fetcher: tg.fetcher}));
+  assert.equal(tg.sends().length, 1, 'the same job, the same day');
+  await assert.rejects(runTimers({cron: TICK, scheduledTime: at(3, 0, 13)}, env, {dispatch: refuse, report: noReport, fetcher: tg.fetcher}));
+  assert.equal(tg.sends().length, 2, 'the next day');
+  await runTimers({cron: TICK, scheduledTime: at(3, 0, 14)}, env, {dispatch: async () => {}, report: noReport, fetcher: tg.fetcher});
+  assert.equal(tg.sends().length, 2, 'every start worked: nothing');
+});
+
+test('a refused ten-minute sweep (pr-verdict) is told once a day, not 144 times, and the watchdog issue still hears nothing of it', async () => {
+  const {e, tg} = await setup(), env = {...e, ...TIMERS}, reports = [];
+  for (const minute of [10, 20, 30]) await assert.rejects(runTimers({cron: TICK, scheduledTime: at(10, minute)}, env, {dispatch: async () => { throw new Error('GitHub dispatch failed: 403'); }, report: async text => { reports.push(text); }, fetcher: tg.fetcher}));
+  assert.deepEqual(reports.filter(text => /pr-verdict/.test(text)), []);
+  assert.equal(tg.sends().filter(text => /pr-verdict/.test(text)).length, 1);
 });
