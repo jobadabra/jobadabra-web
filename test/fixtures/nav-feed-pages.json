@@ -1,0 +1,35 @@
+{
+  "_about": "Example answers in the shape of NAV's job vacancy feed (pam-stilling-feed, FeedService.kt Feed/FeedLine, read 12 Nov 2026). Example names and made-up ids only: never a real listing.",
+  "first": {
+    "version": "1.0",
+    "id": "00000000-0000-4000-8000-0000000000a1",
+    "next_id": "00000000-0000-4000-8000-0000000000a5",
+    "next_url": "/api/v1/feed/00000000-0000-4000-8000-0000000000a5",
+    "items": [
+      {"id": "00000000-0000-4000-8000-000000000001", "url": "/api/v1/feedentry/00000000-0000-4000-8000-000000000001", "title": "Sykepleier", "content_text": "Stillingsannonse", "date_modified": "2026-11-10T08:00:00+01:00",
+       "_feed_entry": {"uuid": "00000000-0000-4000-8000-000000000001", "status": "ACTIVE", "title": "Sykepleier", "businessName": "Eksempel Helse AS", "municipal": "OSLO", "sistEndret": "2026-11-10T08:00:00+01:00"}},
+      {"id": "00000000-0000-4000-8000-000000000002", "url": "/api/v1/feedentry/00000000-0000-4000-8000-000000000002", "title": "Butikkmedarbeider", "content_text": "Stillingsannonse", "date_modified": "2026-11-10T09:00:00+01:00",
+       "_feed_entry": {"uuid": "00000000-0000-4000-8000-000000000002", "status": "ACTIVE", "title": "Butikkmedarbeider", "businessName": "Eksempel Butikk AS", "municipal": "BERGEN", "sistEndret": "2026-11-10T09:00:00+01:00"}},
+      {"id": "00000000-0000-4000-8000-000000000003", "url": "/api/v1/feedentry/00000000-0000-4000-8000-000000000003", "title": "Sykepleier natt", "content_text": "Stillingsannonse", "date_modified": "2026-11-10T10:00:00+01:00",
+       "_feed_entry": {"uuid": "00000000-0000-4000-8000-000000000003", "status": "ACTIVE", "title": "Sykepleier natt", "businessName": "Eksempel Omsorg AS", "municipal": "HERØY", "sistEndret": "2026-11-10T10:00:00+01:00"}},
+      {"id": "not-a-uuid", "url": "/api/v1/feedentry/not-a-uuid", "title": "Broken", "content_text": "Stillingsannonse", "date_modified": "2026-11-10T10:30:00+01:00",
+       "_feed_entry": {"uuid": "not-a-uuid", "status": "ACTIVE", "title": "Broken", "businessName": "Eksempel AS", "municipal": "OSLO", "sistEndret": "2026-11-10T10:30:00+01:00"}},
+      {"id": "00000000-0000-4000-8000-000000000004", "url": "/api/v1/feedentry/00000000-0000-4000-8000-000000000004", "title": "Lagermedarbeider", "content_text": "Stillingsannonse", "date_modified": "2026-11-10T11:00:00+01:00",
+       "_feed_entry": {"uuid": "00000000-0000-4000-8000-000000000004", "status": "ACTIVE", "title": "Lagermedarbeider", "businessName": "Eksempel Lager AS", "municipal": "OSLO", "sistEndret": "2026-11-10T11:00:00+01:00"}},
+      {"id": "00000000-0000-4000-8000-0000000000a5", "url": "/api/v1/feedentry/00000000-0000-4000-8000-000000000005", "title": "Ærlig økonomimedarbeider", "content_text": "Stillingsannonse", "date_modified": "2026-11-10T12:00:00+01:00",
+       "_feed_entry": {"uuid": "00000000-0000-4000-8000-000000000005", "status": "ACTIVE", "title": "Ærlig økonomimedarbeider", "businessName": "Eksempel Regnskap AS", "municipal": "NORDRE FOLLO", "sistEndret": "2026-11-10T12:00:00+01:00"}}
+    ]
+  },
+  "last": {
+    "version": "1.0",
+    "id": "00000000-0000-4000-8000-0000000000a5",
+    "next_id": null,
+    "next_url": null,
+    "items": [
+      {"id": "00000000-0000-4000-8000-0000000000a5", "url": "/api/v1/feedentry/00000000-0000-4000-8000-000000000005", "title": "Ærlig økonomimedarbeider", "content_text": "Stillingsannonse", "date_modified": "2026-11-10T12:00:00+01:00",
+       "_feed_entry": {"uuid": "00000000-0000-4000-8000-000000000005", "status": "ACTIVE", "title": "Ærlig økonomimedarbeider", "businessName": "Eksempel Regnskap AS", "municipal": "NORDRE FOLLO", "sistEndret": "2026-11-10T12:00:00+01:00"}},
+      {"id": "00000000-0000-4000-8000-0000000000a6", "url": "/api/v1/feedentry/00000000-0000-4000-8000-000000000004", "title": "", "content_text": "Stillingsannonse", "date_modified": "2026-11-11T08:00:00+01:00",
+       "_feed_entry": {"uuid": "00000000-0000-4000-8000-000000000004", "status": "INACTIVE", "title": "", "businessName": "", "municipal": "", "sistEndret": "2026-11-11T08:00:00+01:00"}}
+    ]
+  }
+}

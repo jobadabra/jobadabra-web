@@ -109,6 +109,11 @@ LINKEDIN_CLIENT_ID = "77cda0c4oymws4"
 # Redirect URLs registered in the LinkedIn app: https://www.jobadabra.top/api/linkedin-import/callback and the workers.dev one.
 LINKEDIN_IMPORT_CLIENT_ID = "7718i0ua0yjuj6"
 
+# National public employment services read here with a key the app never holds (api/national-feed.js), searched by installs at /api/index/national
+# (api/national.js). The kill switch: a country listed is on ("<cc>:beta" = beta installs only), a country left out is off; a country without its key
+# is off whatever this says. Norway's key is the Worker secret NAV_FEED_TOKEN (Keychain jobadabra.site.nav_feed_token), set when NAV sends it.
+NATIONAL_FEEDS = "no"
+
 # INDEX_GATE: removed on 2 Oct 2026, so the token is enforced. During the rollout, INDEX_GATE = "soft" let installs without an index token keep
 # downloading (counted as index-open on /telemetry); set it back to "soft" only to re-open the list temporarily.
 # The central employer index (api/employers.js): GET /api/index for every app, PUT from the private central scout
