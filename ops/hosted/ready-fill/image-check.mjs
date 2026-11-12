@@ -45,8 +45,10 @@ let failed = '';
 async function readinessNight() {
   const base = `http://127.0.0.1:${BOX_PORT}`, body = task => JSON.stringify({site: `http://host.docker.internal:${SITE_PORT}`, token: 'check', task});
   if (!(await fetch(`${base}/close?t=check`, {method: 'POST'})).ok) return 'the fill night would not close';
-  const refused = await fetch(`${base}/run`, {method: 'POST', body: body('auto')});
-  if (refused.status !== 400) return `/run with the task "auto" answered ${refused.status}, not 400 (Full automation is not built)`;
+  // Why (12 Nov 2026, coordinator): "auto" became a task with cs 3/4 (jobadabra #3683, 10 Nov; the spec's safety lines the owner approved 8 Nov), so asking for it here started a real auto night
+  //   and red every deploy since; the check keeps what it guards: /run refuses a task the runner does not know (desktop/ready-fill/night.mjs TASKS) before any browser starts.
+  const refused = await fetch(`${base}/run`, {method: 'POST', body: body('no-such-task')});
+  if (refused.status !== 400) return `/run with an unknown task answered ${refused.status}, not 400`;
   phase = 'readiness';
   const cut = seen.length;   // what the site heard from here on is the readiness night's
   const run = await fetch(`${base}/run`, {method: 'POST', body: body('readiness')});
