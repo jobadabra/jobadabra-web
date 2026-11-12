@@ -126,7 +126,7 @@ test('the route: owner only, Overview is the first page of Testing, every other 
   assert.match(html, /<a href="\/admin\/testing\/overview" aria-current="page">🧭 Overview<\/a>/);
 });
 
-test('the map: one cell per day, red beats green on a day, a day before the stored runs is "not stored", never "no run"', () => {
+test('the map: one cell per day, a day is its share of green runs (1 green + 1 red = 50%, red), a day before the stored runs is "not stored", never "no run"', () => {
   const d = data({e2e: {...data().e2e, days: [{day: '2026-10-31', kind: 'nightly', runs: 2, greens: 1, reds: 1}, {day: '2026-10-30', kind: 'nightly', runs: 1, greens: 1, reds: 0}]}});
   assert.deepEqual(daysTo(now).slice(-2), ['2026-10-31', '2026-11-01']);
   const night = historyOf(d, [{label: 'Night', last: {e2e: ['nightly']}}]);
@@ -139,7 +139,7 @@ test('the map: one cell per day, red beats green on a day, a day before the stor
   assert.ok(historyOf(d, [{label: 'Gitar', last: {none: 'x'}}]).every(cell => cell.state === 'unknown'));
   const html = page(resolve(d), {now});
   assert.match(html, /Every method, day by day/);
-  assert.match(html, /title="Sat 31 Oct · 1 green run, 1 red run"/);
+  assert.match(html, /title="Sat 31 Oct · 1 green · 1 red \(50%\)"/);
   assert.match(html, /methods · by their last run/);
 });
 

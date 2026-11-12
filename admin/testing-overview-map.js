@@ -1,6 +1,6 @@
 // Testing → Overview's two pictures (owner, 1 Nov 2026: "a graph summarizing better visually everything"; the cards stay below): one bar of all methods by their last
 // run (green / red / no run / planned), and the health map: one row per method, grouped by ring, one cell per day for 14 days, then its last run and its bugs caught.
-// Status is never colour alone: a red cell carries ✕, a green one ✓, a day with no run is an empty outline, a day the data does not reach is hatched. Every cell has a tooltip.
+// Status is never colour alone: a red cell carries ✕, a green one ✓, an amber one !, a day with no run is an empty outline, a day the data does not reach is hatched. Every cell has a tooltip.
 import {esc} from '../shared/html.js';
 import {chip, CHIP_STYLE} from './chip.js';
 import {MAP_DAYS} from './testing-overview-history.js';
@@ -21,8 +21,8 @@ export function summaryBar(counts, text = {}) {
 }
 
 const cellTitle = cell => `${dayName(cell.day)} · ${cell.state === 'unknown' ? 'not stored (the snapshot keeps the newest runs only)' : cell.state === 'none' ? 'no run'
-  : cell.note || [cell.greens ? plural(cell.greens, 'green run') : '', cell.reds ? plural(cell.reds, 'red run') : ''].filter(Boolean).join(', ')}`;
-const GLYPH = {green: '✓', red: '✕', none: '', unknown: ''};
+  : cell.note || (cell.greens + cell.reds > 1 ? `${cell.greens} green · ${cell.reds} red (${cell.pct}%)` : cell.greens ? plural(cell.greens, 'green run') : plural(cell.reds, 'red run'))}`;
+const GLYPH = {green: '✓', amber: '!', red: '✕', none: '', unknown: ''};
 export const cellHtml = cell => {
   const inner = `<span class="c c-${cell.state}" title="${esc(cellTitle(cell))}" aria-label="${esc(cellTitle(cell))}">${GLYPH[cell.state]}</span>`;
   return `<td class="d">${cell.url ? `<a href="${esc(cell.url)}">${inner}</a>` : inner}</td>`;
@@ -43,7 +43,7 @@ export const dayHeads = days => days.map((day, i) => { const d = new Date(`${day
 export function healthMap(model, days) {
   const head = dayHeads(days);
   return `<section class="card hmap"><h2>Every method, day by day · last ${MAP_DAYS} days</h2>
-<div class="keys"><span><i class="c c-green">✓</i>green run</span><span><i class="c c-red">✕</i>red run</span><span><i class="c c-none"></i>no run that day</span><span><i class="c c-unknown"></i>not stored</span><span class="muted">a day with green and red runs counts red · click a cell for its run, a name for its card</span></div>
+<div class="keys"><span><i class="c c-green">✓</i>green above 98% of runs</span><span><i class="c c-amber">!</i>some red, 80–98%</span><span><i class="c c-red">✕</i>red below 80%</span><span><i class="c c-none"></i>no run that day</span><span><i class="c c-unknown"></i>not stored</span><span class="muted">a day is its share of green runs, cancelled runs not counted, one run is green or red · click a cell for its run (newest red, else newest), a name for its card</span></div>
 <div class="scroll"><table><thead><tr><th class="m">Method</th>${head}<th>Last run</th><th>Bugs caught</th></tr></thead>
 ${model.rings.map(ring => `<tbody><tr class="ring-row"><th colspan="${MAP_DAYS + 3}">${ring.icon} ${esc(ring.title)}</th></tr>${ring.cards.map(rowHtml).join('')}</tbody>`).join('')}</table></div></section>`;
 }
@@ -60,7 +60,7 @@ ${BAR_STYLE}
 .hmap tbody th{text-align:left;font-weight:500;white-space:nowrap;padding-right:10px}.hmap tbody th a{color:#f4efe3;text-decoration:none}.hmap tbody th a:hover{color:#f5b54a}
 .hmap .ring-row th{padding:14px 0 4px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8d949c}
 .hmap td.d{width:24px;text-align:center}.hmap td.d a{text-decoration:none}.c{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:4px;font-size:12px;font-weight:700;font-style:normal;line-height:1;box-sizing:border-box}
-.c-green{background:#3fb68b;color:#0b0d10}.c-red{background:#e5484d;color:#fff}.c-none{border:1px solid #232930;opacity:.6}.c-unknown{background:repeating-linear-gradient(135deg,#171b21 0 3px,#1f242b 3px 6px);opacity:.7}
+.c-green{background:#3fb68b;color:#0b0d10}.c-amber{background:#f5b54a;color:#0b0d10}.c-red{background:#e5484d;color:#fff}.c-none{border:1px solid #232930;opacity:.6}.c-unknown{background:repeating-linear-gradient(135deg,#171b21 0 3px,#1f242b 3px 6px);opacity:.7}
 .hmap td.d a:hover .c,.hmap td.d .c:hover{outline:2px solid #f4efe3;outline-offset:1px}
 .hmap tr.is-red th a{color:#ff8f84}.hmap td.planned-span span{display:block;border:1px dashed #3a4048;border-radius:4px;padding:2px 8px;color:#8d949c;font-size:12px;text-align:left}
 .hmap tr.planned th a{color:#8d949c}.hmap td.bugs-cell{white-space:nowrap;padding-left:10px}.hmap td{padding-left:4px}`;

@@ -5,6 +5,7 @@ import {LAB_REPO, PUBLIC_REPO, WEB_REPO, githubUrl} from '../shared/repos.js';
 import {aiPersona} from './page-shot-seed-ai-persona.mjs';
 import {bugBundle} from './page-shot-seed-bug-bundle.mjs';
 import {aiCostFull} from './page-shot-seed-ai-cost.mjs';
+import {dayShare} from './page-shot-seed-day-share.mjs';
 import {healFull, testingFull} from './page-shot-seed-testing.mjs';
 import {searchFinish, searchFinishRead, searchFinishWeek} from './page-shot-seed-finish.mjs'; import {searchScoreboard} from './page-shot-seed-scoreboard.mjs'; import {qualityBoard} from './page-shot-seed-quality.mjs'; import {searchNight, searchNight18, searchNightEuresOff, searchNightNotRun, searchNightYield, searchTrend, searchTrendPrs} from './page-shot-seed-night.mjs'; import {finderSilence} from './page-shot-seed-finders.mjs'; import {methodsCost} from './page-shot-seed-methods-cost.mjs';
 import {redMainRows, stateFields, stateRows} from './page-shot-seed-state.mjs'; import {notifySeeds} from './page-shot-seed-notify.mjs';
@@ -547,6 +548,7 @@ export const seeds = {...notifySeeds,
   'ai-persona': aiPersona,
   'bug-bundle': bugBundle,
   'ai-cost-full': context => aiCostFull(context, seeds),   // /admin/ai/costs with every section filled (5 Nov 2026, admin charts)
+  'day-share': context => dayShare(context, seeds),   // Testing Overview day cells at 100/99/98/95/85/70% and one-run days (12 Nov 2026, [27-pane-dg])
   'testing-full': context => testingFull(context),   // the three Testing pages with every section filled (5 Nov 2026, admin charts)
   'finder-silence': context => finderSilence(context, seeds), 'methods-cost': context => methodsCost(context, seeds), 'product-quality': context => qualityBoard(context, seeds), 'search-night': context => searchNight(context, seeds), 'search-night-18': context => searchNight18(context, seeds), 'search-night-yield': context => searchNightYield(context, seeds), 'search-night-eures-off': context => searchNightEuresOff(context, seeds), 'search-night-not-run': context => searchNightNotRun(context, seeds), 'search-trend': context => searchTrend(context, seeds), 'search-trend-prs': context => searchTrendPrs(context, seeds),   // Report only's product-quality board: 30 made-up days of fills, searches, probes and quality nights ([ri], 5 Nov 2026)
   'selfheal-full': context => healFull(context, seeds),   // Self-healing with the three periods and the resolution labels (5 Nov 2026, admin charts)

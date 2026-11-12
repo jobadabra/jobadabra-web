@@ -10,6 +10,15 @@ const DONE = {success: 'green', failure: 'red', timed_out: 'red'};
 /** The last `n` UTC days, oldest first. */
 export const daysTo = (now, n = MAP_DAYS) => Array.from({length: n}, (_, i) => new Date(now.getTime() - (n - 1 - i) * 86400000).toISOString().slice(0, 10));
 
+/** The one rule for a day's cell, used by every row: green above 98% green runs (exactly 98% is amber), amber from 80% to 98%, red below 80%; a day with one run keeps green/red; none without a run. `pct` is the share as a whole number, with one decimal (rounded down) only where the whole number would sit on a threshold (97.99 reads 97.9, not 98). Why (12 Nov 2026, owner: "why is always red in Admin", then "green only if bigger than 98%"): main runs e2e 25-110 times a day, so "any red run paints the day red" was red on all 14 days; the 80% amber bound is the coordinator's proposal, to be confirmed. */
+export function dayShare(greens, reds) {
+  const total = greens + reds;
+  if (!total) return {state: 'none', pct: null};
+  const share = 100 * greens / total, whole = Math.round(share);
+  const state = total === 1 ? (greens ? 'green' : 'red') : share > 98 ? 'green' : share >= 80 ? 'amber' : 'red';
+  return {state, pct: [80, 98].includes(whole) && share !== whole ? (Math.floor(share * 10) / 10).toFixed(1) : String(whole)};
+}
+
 const dayOf = at => String(at || '').slice(0, 10);   // a snapshot's read day: later days are not stored yet ('' = unknown, treated as covered)
 
 // One line's runs as [{day, state, url}], the first day its source covers ('' = the whole window) and the last (`to`: the day its snapshot was read; '' = unknown).
@@ -40,15 +49,15 @@ function runsOf(data, line) {
   return {from: recent.length >= RUN_DOTS ? oldest : '', to: dayOf(data.schedules.at), runs: recent.filter(run => DONE[run.conclusion]).map(run => ({day: String(run.at).slice(0, 10), state: DONE[run.conclusion], url: run.url || ''}))};
 }
 
-/** A card's days: [{day, state: green|red|none|unknown, greens, reds, url}] oldest first. A day is red when any run of any of its lines was red that day; unknown when no line's data reaches it (before its oldest stored run, or after its snapshot was read: PR #260, Gitar). */
+/** A card's days: [{day, state: green|amber|red|none|unknown, greens, reds, pct, url}] oldest first. A day's state is its share of green runs across all its lines (`dayShare`); unknown when no line's data reaches it (before its oldest stored run, or after its snapshot was read: PR #260, Gitar). */
 export function historyOf(data, lines, now = data.now) {
   const sources = lines.map(line => runsOf(data, line)).filter(Boolean);
   return daysTo(now).map(day => {
     const covered = sources.filter(source => (!source.from || day >= source.from) && (!source.to || day <= source.to));
     const runs = covered.flatMap(source => source.runs.filter(run => run.day === day));
     const reds = runs.filter(run => run.state === 'red').reduce((sum, run) => sum + (run.n || 1), 0), greens = runs.filter(run => run.state === 'green').reduce((sum, run) => sum + (run.n || 1), 0);
-    const state = !covered.length ? 'unknown' : reds ? 'red' : greens ? 'green' : 'none';
-    const pick = runs.find(run => run.state === state && run.url);
-    return {day, state, greens, reds, url: pick?.url || '', note: runs.find(run => run.state === state && run.note)?.note || ''};
+    const {state, pct} = covered.length ? dayShare(greens, reds) : {state: 'unknown', pct: null};
+    const pick = runs.find(run => run.state === 'red' && run.url) || runs.find(run => run.url);   // click a cell: the newest red run of the day, else the newest run
+    return {day, state, greens, reds, pct, url: pick?.url || '', note: runs.find(run => run.state === state && run.note)?.note || ''};
   });
 }
