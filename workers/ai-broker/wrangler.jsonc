@@ -16,7 +16,7 @@
   // timeline in this Worker's log, 10-11 Nov 22:15-01:15 UTC). 1 vCPU is the smallest custom size; 3 GiB is its minimum memory. CPU is billed by use, memory while the container is awake.
   // Why (11 Nov 2026, as; owner asked via AskUserQuestion, with the numbers "about +$6 to +$19 a month for 2 vCPU / 6 GiB... arithmetic on Cloudflare's listed rates... not a quote": "2 vCPU / 6 GiB, then measure 6 at once"; "Expected: all 18 in about 23 minutes; must be measured after the resize"):
   // 1 vCPU was the limit, not the 8 slots (CPU 0.99 in the busiest minutes at 2-3 people, web#558; start-up 1.7 s alone, 8.5 s at 8 calls). 2 vCPU needs at least 6 GiB (Cloudflare: 3 GiB a vCPU minimum). Memory is billed while awake ($0.009 a GiB-hour), CPU by use,
-  // so the extra is about +$0.027 an awake hour. max_instances stays 1 (one login, one refresher; several containers = untested two-refreshers design). PARALLEL stays 8: memory would allow far more, CPU (now 2) is what is unmeasured at more than 8.
+  // so the extra is about +$0.027 an awake hour. max_instances stays 1 (one login, one refresher; several containers = untested two-refreshers design). PARALLEL is 12 since 12 Nov 2026 (worker.js says why): memory would allow far more, CPU (now 2) is what is unmeasured at more than 12.
   "containers": [
     {"name": "ai-broker", "image": "./container/Dockerfile", "image_build_context": ".", "instance_type": {"vcpu": 2, "memory_mib": 6144, "disk_mb": 4000}, "max_instances": 1}
   ],
