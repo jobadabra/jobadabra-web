@@ -22,14 +22,17 @@ const picture = image => (image?.url ? `<p style="margin:12px 0 0"><img class="j
 const steps = (list, size) => (list?.length ? `<ol style="margin:6px 0 0;padding-left:22px;font:400 ${size}px/1.5 ${FONT}">${list.map(step => `<li style="margin:0 0 3px;padding-left:3px">${emphasis(step)}</li>`).join('')}</ol>` : '');
 const TOP = 3;
 
+/** The key a tick stores for a change: its kind and title (two kinds may share a title: admin/release-mail.js keeps one change per kind and title). */
+export const keyOf = section => `${kindOf(section)}|${section.title}`;
+
 /**
- * The changes a mail shows first, at most three. `chosen`: the titles the owner ticked on the review page (admin/release-mail-page.js); when none of them is still in the
+ * The changes a mail shows first, at most three. `chosen`: the keys (keyOf; a bare title from a draft saved before 12 Nov 2026 still matches) the owner ticked on the review page (admin/release-mail-page.js); when none of them is still in the
  * mail, the default: each version's first change, newest version first, New before Improved, never a fix.
  * Why (owner, 12 Nov 2026, design A: "Automatic, you can change them"): a changelog leads each version with its biggest change, so the first of each version is the best guess without AI.
  * `sections` arrive oldest version first (admin/release-mail.js stableWindow); a section without a version (an old saved mail) counts as one version.
  */
 export function highlightsOf(sections = [], chosen = []) {
-  const picked = sections.filter(section => chosen.includes(section.title));
+  const picked = sections.filter(section => chosen.includes(keyOf(section)) || chosen.includes(section.title));
   if (picked.length) return picked.slice(0, TOP);
   const versions = [...new Set(newestFirst(sections).map(section => section.version ?? ''))];
   const queues = versions.map(version => sections.filter(section => (section.version ?? '') === version && kindOf(section) !== 'fixes')

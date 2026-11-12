@@ -5,7 +5,7 @@ import {esc} from '../shared/html.js';
 import {compose, send, validAddress} from '../shared/mail.js';
 import {audienceRows} from './email-audience.js';
 import {sendAll, releaseData} from './release-mail.js';
-import {highlightsOf} from '../shared/mail-release.js';
+import {highlightsOf, keyOf} from '../shared/mail-release.js';
 
 const notFound = () => new Response('Not found', {status: 404});
 const HEAD = {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'};
@@ -67,7 +67,7 @@ ${!on ? '<p class="muted">Product news sending is switched off.</p>' : ''}
 const topForm = data => {
   const top = highlightsOf(data.sections, data.highlights || []);
   return `<form method="post"><input type="hidden" name="action" value="highlights"><fieldset><legend>Top changes (up to ${TOP_MAX}, shown first)</legend>`
-    + data.sections.map((section, at) => `<label class="top-pick" for="top-${at}"><input id="top-${at}" type="checkbox" name="top" value="${esc(section.title)}"${top.includes(section) ? ' checked' : ''}><span>${esc(section.emoji || '')} ${esc(section.title)}</span></label>`).join('')
+    + data.sections.map((section, at) => `<label class="top-pick" for="top-${at}"><input id="top-${at}" type="checkbox" name="top" value="${esc(keyOf(section))}"${top.includes(section) ? ' checked' : ''}><span>${esc(section.emoji || '')} ${esc(section.title)}</span></label>`).join('')
     + `</fieldset><button>Save top changes</button></form><p class="muted">None ticked: the first change of each version, newest first.</p>`;
 };
 const TOP_MAX = 3;
@@ -89,7 +89,7 @@ async function releasePost(request, env, url) {
   } else if (row && draft && action === 'highlights') {
     const data = JSON.parse(row.data); data.highlights = form.getAll('top').map(String).slice(0, TOP_MAX);
     await env.STATS.prepare('UPDATE release_mail SET data = ? WHERE version = ?').bind(JSON.stringify(data), version).run();
-    done = data.highlights.length ? `Top changes saved: ${data.highlights.join(', ')}.` : 'Top changes: back to the automatic pick.';
+    done = data.highlights.length ? `Top changes saved: ${data.highlights.map(key => key.slice(key.indexOf('|') + 1)).join(', ')}.` : 'Top changes: back to the automatic pick.';
   } else if (row && draft && action === 'send') {
     if (env.MARKETING_MAIL !== 'on') done = 'MARKETING_MAIL is off: nothing sent.';
     else { const result = await sendAll(env, version); done = result.sent !== undefined ? `Sent to ${result.sent}; ${result.skipped} skipped (stopped or refused).` : 'Not sent.'; }

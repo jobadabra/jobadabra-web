@@ -162,6 +162,9 @@ test('the release mail welcomes, shows the top changes first, then the rest grou
   assert.ok(text.indexOf('Also improved') < text.indexOf('Fixed') && text.trim().split('\n').includes('Thank you for using Jobadabra, and good luck with your applications this week!'));
   const chosen = compose('release', {version: '0.9.13', sections, highlights: ['Old fix']}).html;
   assert.ok(chosen.indexOf('Old fix') < chosen.indexOf('Open Jobadabra App') && chosen.indexOf('New feature') > chosen.indexOf('Open Jobadabra App'), 'the owner\'s ticks replace the automatic pick');
+  const twin = [change('0.9.13', 'features', 'Same title', '✨'), change('0.9.13', 'fixes', 'Same title')];
+  assert.deepEqual(highlightsOf(twin, ['fixes|Same title']).map(section => section.kind), ['fixes'], 'a tick names one change even when a feature and a fix share its title (Gitar on #567)');
+  assert.deepEqual(highlightsOf(sections, ['Old fix']).map(section => section.title), ['Old fix'], 'a bare title saved before ticks had kinds still matches');
   assert.deepEqual(highlightsOf(sections, ['Gone']).map(section => section.title), ['New feature', 'Old first', 'New improved'], 'a tick for a change no longer in the mail falls back to the automatic pick');
   const asked = compose('release', {version: '1', intro: 'A & B', sections: [{kind: 'fixes', title: 'Why not?', text: 'T', image: {url: 'https://x/i.png'}}]}).html;
   assert.ok(asked.includes('Why not?</strong>') && /Hi there 👋[^<]*<\/p><p[^>]*>A &amp; B<\/p>/.test(asked), 'a title keeps its own ending; the saved introduction is a paragraph under the greeting, escaped once');
