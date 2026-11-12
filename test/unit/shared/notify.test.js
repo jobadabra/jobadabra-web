@@ -42,7 +42,7 @@ test('the registry: unique ids, a default mode its alert allows, a known group a
     assert.ok(alert.jobs.every(file => /^(jobadabra-web\/)?[\w-]+\.yml$/.test(file)), alert.id);
     assert.ok(!/@/.test(alert.label), 'no address in a label');
   }
-  assert.deepEqual(ALERTS.filter(alert => !alert.on).map(alert => alert.id).sort(), ['daily-build-digest', 'record-sites'], 'the owner\'s defaults: the digest and the record-sites/watch list are off, the rest on');
+  assert.deepEqual(ALERTS.filter(alert => !alert.on).map(alert => alert.id).sort(), ['record-sites'], 'the owner\'s defaults: only the record-sites/watch list is off, the rest on (the build digest is on, once a day: owner, 12 Nov 2026, "Keep it, once a day")');
   assert.deepEqual(alertsForJob('e2e.yml').map(alert => alert.id), ['main-red', 'nightly-skipped']);
   assert.deepEqual(alertsForJob('schedules-snapshot.yml'), [], 'a job that sends nothing has no alert');
 });
