@@ -1,8 +1,6 @@
 // The release mail (admin/release-mail.js, shared/mail-release.js): a version is drafted once from its What's new entry, goes to every address not stopped (accounts and the waitlist),
 // never twice, never to an unsubscribed or bounced address, never before the owner sends it and MARKETING_MAIL is on; every promotional template carries the unsubscribe link. Fake sender and fake D1/KV; no real address.
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {dataFrom, draft, sendAll, audience, ingest, releaseData, releaseRoute} from '../../../admin/release-mail.js';
 import {resetRuleCache, setRule} from '../../../shared/mail-registry.js';
@@ -16,29 +14,7 @@ import {releaseView, reach} from '../../../admin/release-mail-page.js';
 import {audienceRows, audienceCard} from '../../../admin/email-audience.js';
 import {testSend} from '../../../admin/email-test-send.js';
 import {view as emailView} from '../../../admin/email.js';
-
-const sql = file => readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8');
-function d1() {
-  const db = new DatabaseSync(':memory:');
-  for (const file of ['0079_pro.sql', '0082_pro_trial.sql', '0083_mail.sql', '0093_changelog.sql', '0105_changelog_plain.sql', '0117_release_mail.sql', '0135_mail_on.sql']) db.exec(sql(file));
-  const statement = (text, args = []) => ({bind: (...values) => statement(text, values),
-    run: async () => { const r = db.prepare(text).run(...args); return {meta: {changes: Number(r.changes)}}; },
-    all: async () => ({results: db.prepare(text).all(...args)}), first: async () => db.prepare(text).get(...args) ?? null});
-  return {db, prepare: text => statement(text), batch: async list => { for (const item of list) await item.run(); }};
-}
-const meta = value => { try { return JSON.parse(value); } catch { return undefined; } };
-const kv = () => { const m = new Map(); return {m, get: async k => m.get(k) ?? null, put: async (k, v) => { m.set(k, v); },
-  list: async ({prefix}) => ({keys: [...m.keys()].filter(k => k.startsWith(prefix)).map(name => ({name, metadata: meta(m.get(name))})), list_complete: true})}; };   // the Worker puts the entry and its metadata together (workers/www/index.js)
-const now = new Date('2026-10-28T10:00:00Z');
-const WEB = JSON.stringify({source: 'web'});   // a signup from the website form (shared/mail-lists.js signupKind)
-const answered = async (e, ...emails) => { for (const email of emails) e.STATS.db.prepare("INSERT INTO mail_on (addr, list, via, at) VALUES (?, 'releases', 'card', 'x')").run(await addrOf(email)); };   // the person saved the card in the app
-const confirm = (e, ...emails) => e.STATS.db.prepare(`UPDATE pro_accounts SET email_confirmed_at = 'x' WHERE email IN (${emails.map(() => '?').join(',')})`).run(...emails);
-const groups = [{kind: 'features', items: [{lead: 'Faster jobs', text: 'Open a job and see why it fits.'}, {lead: 'Calendar', text: 'Interviews show on a calendar.'}]}, {kind: 'fixes', items: [{lead: 'A fix', text: 'Something works.'}]}];
-function setup(extra = {}) {
-  const sent = [], e = {MAIL: 'on', MARKETING_MAIL: 'on', STATS: d1(), WAITLIST: kv(), STATS_SALT: 'salt', SELFHEAL_PUBLISH_KEY: 'k', EMAIL: {send: async m => { sent.push(m); return {messageId: `m${sent.length}`}; }}, ...extra};
-  e.STATS.db.prepare('INSERT INTO changelog_entries (version, date, channel, hidden, body, at) VALUES (?, ?, ?, 0, ?, ?)').run('0.8.42', '2026-10-27', 'stable', JSON.stringify(groups), 'x');
-  return {e, sent};
-}
+import {sql, now, WEB, answered, confirm, groups, setup} from './release-mail-fixture.js';
 
 test('the draft comes from the changelog entry: keeps new, improved and fixed changes', () => {
   const data = dataFrom({version: '0.8.42', date: '2026-10-27', groups});
@@ -106,7 +82,7 @@ test('every promotional template carries the unsubscribe link in its html and te
 test('the release mail renders: emphasis, categorized changes, the stop link', () => {
   const mail = compose('release', SAMPLES.release, {stop: 'https://s/stop', settings: 'https://s/set'});
   assert.equal(mail.subject, `Jobadabra ${SAMPLES.release.version} · What's new`);
-  assert.ok(mail.html.includes('Improved') && mail.html.includes('Open Jobadabra App') && mail.html.includes('https://s/stop'));
+  assert.ok(mail.html.includes('Hi there') && mail.html.includes('Open Jobadabra App') && mail.html.includes('https://s/stop'));
   assert.match(mail.html, /<strong[^>]*>Jobs<\/strong>/);
   assert.ok(!mail.text.includes('*'));
 });
@@ -256,11 +232,12 @@ test('a saved old draft picks up the complete changelog in preview, test and bro
   await emailView(request({action: 'send'}), e);
   for (const mail of sent) {
     assert.match(mail.html, /version 0\.8\.42/i);
-    for (const label of ['New', 'Fixed', 'A fix', 'Calendar']) assert.ok(mail.html.includes(label));
-    assert.match(mail.text, /Fixed: A fix/);
+    for (const label of ['Faster jobs', 'Fixed', 'A fix', 'Calendar']) assert.ok(mail.html.includes(label));
+    assert.match(mail.text, /Fixed\n- A fix\. Something works\./);
   }
   assert.equal(sent.length, 2);
 });
+
 
 
 test('an interrupted broadcast is shown as sending rather than completed', async () => {
@@ -339,6 +316,7 @@ test('stable mail includes all intervening beta changes, excludes both boundarie
   }
 });
 
+
 test('a stable with no final-build notes still includes beta changes; a hidden previous stable is the boundary', async () => {
   const {e} = setup();
   e.STATS.db.exec('DELETE FROM changelog_entries');
@@ -398,7 +376,7 @@ test('the release template opens the newest real stable draft, while gallery and
   await emailView(new Request('https://www.jobadabra.top/admin/growth/email', {method: 'POST', headers, body: new URLSearchParams({template: 'release', mine: '1', to: 'reviewer@example.com', release: '0.9.10'})}), e);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].subject, "[TEST] Jobadabra 0.9.10 · What's new");
-  assert.match(sent[0].text, /Changes since version 0\.9\.8/);
+  assert.match(sent[0].text, /since version 0\.9\.8/);
   assert.match(sent[0].text, /Beta change/);
   assert.match(sent[0].html, /Latest stable change/);
   assert.doesNotMatch(sent[0].html, /Future beta|See why each job fits/);
@@ -444,7 +422,7 @@ test('latest stable without a draft shows its real changelog as pending instead 
   e.STATS.db.prepare("UPDATE changelog_entries SET hidden=1, body='[]' WHERE version='0.8.43'").run();
   const empty = await (await emailView(new Request('https://www.jobadabra.top/admin/growth/email?template=release', {headers: {Authorization: 'Bearer owner-key'}}), e)).text();
   assert.match(empty, /No user-visible changes since the previous stable/);
-  assert.match(empty, /November 2026/);
+  assert.match(empty, /Hi there/, 'the empty window still renders the real mail');
   assert.doesNotMatch(empty, /<form/);
 
 });

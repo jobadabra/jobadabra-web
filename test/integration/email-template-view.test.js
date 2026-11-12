@@ -64,16 +64,22 @@ test('the release title opens the live stable draft and its test sends that cont
     assert.match(await page.locator('h1').textContent(), /0\.9\.9/);
     const frame = page.frames().find(frame => frame !== page.mainFrame());
     const text = await frame.locator('body').textContent();
-    assert.match(text, /Changes since version 0\.9\.6/);
+    assert.match(text, /since version 0\.9\.6/);
     assert.match(text, /Faster location updates/);
     assert.doesNotMatch(text, /0\.8\.42|See why each job fits/);
     assert.equal(sent.length, 0, 'opening the draft never sends anything');
+    // The owner picks the top changes (owner, 12 Nov 2026: "Automatic, you can change them"): a fix ticked by its label shows before the button in the preview.
+    await page.getByRole('checkbox', {name: /Keep reply status/}).check();
+    await page.getByRole('button', {name: 'Save top changes', exact: true}).click();
+    await page.waitForURL(url => url.searchParams.has('done'));
+    const picked = await page.frames().find(frame => frame !== page.mainFrame()).locator('body').textContent();
+    assert.ok(picked.indexOf('Keep reply status') < picked.indexOf('Open Jobadabra App'), 'the ticked change is shown first');
     await page.locator('#release-test-address').fill('reviewer@example.com');
     await page.getByRole('button', {name: 'Send test · 0.9.9', exact: true}).click();
     await page.waitForURL(url => url.searchParams.has('done'));
     assert.equal(sent.length, 1);
     assert.match(sent[0].subject, /\[TEST\] Jobadabra 0\.9\.9/);
-    assert.match(sent[0].text, /Changes since version 0\.9\.6/);
+    assert.match(sent[0].text, /since version 0\.9\.6/);
     const row = await site.env.STATS.prepare("SELECT status FROM release_mail WHERE version='0.9.9'").first();
     assert.equal(row.status, 'draft');
     await page.close();

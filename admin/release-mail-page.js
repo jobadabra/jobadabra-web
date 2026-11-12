@@ -1,10 +1,11 @@
-// The owner's page for a release mail draft (/admin/growth/email?release=<version>, the link in the Telegram message): the mail as a person sees it, an editable headline and one
+// The owner's page for a release mail draft (/admin/growth/email?release=<version>, the link in the Telegram message): the mail as a person sees it, an editable headline, the top changes to tick and one
 // button "Send to N people" (owner, 28 Oct 2026: a held draft to check and ship, never a curl). POST (same origin, owner) saves the headline or sends. Guard: test/unit/admin/release-mail.test.js.
 import {isOwner, viewer} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {compose, send, validAddress} from '../shared/mail.js';
 import {audienceRows} from './email-audience.js';
 import {sendAll, releaseData} from './release-mail.js';
+import {highlightsOf, keyOf} from '../shared/mail-release.js';
 
 const notFound = () => new Response('Not found', {status: 404});
 const HEAD = {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'};
@@ -38,6 +39,8 @@ export async function releaseView(request, env) {
 .release-review form{margin:0}.release-review form>button{margin-top:12px}
 .release-review .test-row{display:flex;align-items:end;gap:12px;flex-wrap:wrap}
 .release-review .test-address{flex:1 1 240px;min-width:0}
+.release-review fieldset{border:0;margin:16px 0 0;padding:0}.release-review legend{font-weight:600;margin-bottom:6px;padding:0}
+.release-review .top-pick{display:flex;gap:10px;align-items:flex-start;font-weight:400;margin:0 0 6px;min-height:28px}.release-review .top-pick input{margin-top:4px;width:18px;height:18px;flex:none}
 .release-review .notice{padding:12px 16px;border:1px solid #4cc38a;border-radius:8px;color:#4cc38a}
 @media(max-width:600px){.release-review button{width:100%}.release-review iframe{height:640px}.release-review .test-address{flex-basis:100%}}
 </style></head><body><main><div class="release-review">
@@ -46,6 +49,7 @@ export async function releaseView(request, env) {
 <p class="muted">${draft ? 'Waiting for your approval. A test sends only to the address you enter; use Send to everyone below to publish this email.' : row.status === 'sending' ? 'Sending is in progress. Do not send this release again.' : 'This release email has already been sent.'}</p></header>${note}
 <section class="card"><h2>Release preview</h2><p class="muted">Subject: ${esc(mail.subject)}</p>
 ${draft ? `<form method="post"><input type="hidden" name="action" value="headline"><label for="release-headline">Introduction (optional)</label><input id="release-headline" type="text" name="headline" maxlength="120" value="${esc(data.intro || '')}"><button>Save introduction</button></form><p class="muted">Save introduction changes before sending a test.</p>` : ''}
+${draft ? topForm(data) : ''}
 <iframe title="Release ${esc(version)} email preview" sandbox srcdoc="${esc(mail.html)}"></iframe></section>
 <section class="card"><h2>Send yourself a test</h2>
 <p class="muted">The saved release ${esc(version)} draft, with a TEST label. Check your inbox for this subject:</p>
@@ -58,6 +62,15 @@ ${!on ? '<p class="muted">Product news sending is switched off.</p>' : ''}
 </div></main>
 </body></html>`, {headers: HEAD});
 }
+
+// The changes shown first in the mail, at most three; ticked = what the mail shows now (shared/mail-release.js highlightsOf). Owner, 12 Nov 2026: "Automatic, you can change them".
+const topForm = data => {
+  const top = highlightsOf(data.sections, data.highlights || []);
+  return `<form method="post"><input type="hidden" name="action" value="highlights"><fieldset><legend>Top changes (up to ${TOP_MAX}, shown first)</legend>`
+    + data.sections.map((section, at) => `<label class="top-pick" for="top-${at}"><input id="top-${at}" type="checkbox" name="top" value="${esc(keyOf(section))}"${top.includes(section) ? ' checked' : ''}><span>${esc(section.emoji || '')} ${esc(section.title)}</span></label>`).join('')
+    + `</fieldset><button>Save top changes</button></form><p class="muted">None ticked: the first change of each version, newest first.</p>`;
+};
+const TOP_MAX = 3;
 
 async function releasePost(request, env, url) {
   if (!(await isOwner(request, env)) || request.headers.get('Origin') !== url.origin) return notFound();
@@ -73,6 +86,10 @@ async function releasePost(request, env, url) {
     const data = JSON.parse(row.data); data.intro = String(form.get('headline') || '').trim().slice(0, 120); data.headline = data.intro;
     await env.STATS.prepare('UPDATE release_mail SET data = ? WHERE version = ?').bind(JSON.stringify(data), version).run();
     done = 'Introduction saved.';
+  } else if (row && draft && action === 'highlights') {
+    const data = JSON.parse(row.data); data.highlights = form.getAll('top').map(String).slice(0, TOP_MAX);
+    await env.STATS.prepare('UPDATE release_mail SET data = ? WHERE version = ?').bind(JSON.stringify(data), version).run();
+    done = data.highlights.length ? `Top changes saved: ${data.highlights.map(key => key.slice(key.indexOf('|') + 1)).join(', ')}.` : 'Top changes: back to the automatic pick.';
   } else if (row && draft && action === 'send') {
     if (env.MARKETING_MAIL !== 'on') done = 'MARKETING_MAIL is off: nothing sent.';
     else { const result = await sendAll(env, version); done = result.sent !== undefined ? `Sent to ${result.sent}; ${result.skipped} skipped (stopped or refused).` : 'Not sent.'; }

@@ -9,6 +9,7 @@ import {mailOf} from '../../../../shared/mail-registry.js';
 import {sourceFiles} from '../../../lib/source-files.js';
 import {compose, send, settingsLink, stopLink} from '../../../../shared/mail.js';
 import {TEMPLATES} from '../../../../shared/mail-templates.js';
+import {highlightsOf} from '../../../../shared/mail-release.js';
 import {createAccount} from '../../../../shared/pro.js';
 
 const sql = file => readFileSync(new URL(`../../../../db/migrations/${file}`, import.meta.url), 'utf8');
@@ -136,22 +137,37 @@ test('every mail: the signature on the card\'s text edge, a line under it, then 
   }
 });
 
-test('the release mail is compact, with the header and colours of every other mail', () => {
-  // Why (owner, 6 Nov 2026: "make this one more compact", "having consistent header", "be consistent between dark/light").
-  const change = (kind, title) => ({kind, title, text: 'Text.'});
-  const sections = [change('features', 'One'), change('improvements', 'Two'), change('features', 'Three'), change('fixes', 'Four')];
-  const {html, text} = compose('release', {version: '0.9.13', previousStable: '0.9.9', month: 'November 2026', sections});
+test('the release mail welcomes, shows the top changes first, then the rest grouped, with the header and colours of every other mail', () => {
+  // Why (owner, 12 Nov 2026: "hard to read", "not welcoming"; design A): a greeting, three top changes, the button, the rest calmer under one label per group, a thank-you.
+  // Why (owner, 6 Nov 2026: "having consistent header", "be consistent between dark/light"): the frame's header and theme classes.
+  const change = (version, kind, title, emoji = '') => ({version, kind, title, text: `${title} text.`, ...(emoji && {emoji})});
+  // oldest version first, as admin/release-mail.js builds them
+  const sections = [change('0.9.12', 'improvements', 'Old first', '🅰'), change('0.9.12', 'improvements', 'Old second'), change('0.9.12', 'fixes', 'Old fix'),
+    change('0.9.13', 'improvements', 'New improved'), change('0.9.13', 'features', 'New feature', '✨'), change('0.9.13', 'improvements', 'New second'), change('0.9.13', 'fixes', 'New fix')];
+  const {html, text} = compose('release', {version: '0.9.13', previousStable: '0.9.9', sections});
   const card = compose('welcome', {confirmUrl: 'https://x/c'}).html;
   const header = mail => mail.slice(mail.indexOf('class="jp-card"'), mail.indexOf('<h1'));
   assert.equal(header(html), header(card), 'the same header as a welcome mail');
   assert.match(html, /<h1 class="jp-ink"[^>]*>What.{1,6}s new in version 0\.9\.13<\/h1>/);
-  const labels = [...html.matchAll(/class="jp-sig"[^>]*>(New|Improved|Fixed)</g)].map(found => found[1]);
-  assert.deepEqual(labels, ['New', 'Improved', 'Fixed'], 'one label per group, even when changes arrive mixed');
-  assert.ok(html.indexOf('One.') < html.indexOf('Three.') && html.indexOf('Three.') < html.indexOf('Two.'), 'each change sits under its own label');
+  const at = words => { const index = html.indexOf(words); assert.ok(index > 0, words); return index; };
+  const order = ['Hi there', 'since version 0.9.9', 'New feature', 'Old first', 'New improved', 'Open Jobadabra App', 'New second', 'Old second', 'New fix', 'Old fix', 'Thank you for using Jobadabra'];
+  for (let i = 1; i < order.length; i++) assert.ok(at(order[i - 1]) < at(order[i]), `${order[i - 1]} before ${order[i]}`);
+  assert.deepEqual(highlightsOf(sections).map(section => section.title), ['New feature', 'Old first', 'New improved'], 'each version\'s first change, newest version first, New before Improved, never a fix');
+  const labels = [...html.matchAll(/text-transform:uppercase[^>]*>([^<]+)</g)].map(found => found[1]);
+  assert.deepEqual(labels, ['Also improved', 'Fixed'], 'one label per group of the rest; the top changes carry none');
+  assert.match(html, /class="jp-pill"[^>]*>✨</, 'a top change shows its emoji on a square that follows dark mode');
   assert.doesNotMatch(html, /#132439/, 'no fixed dark block: the card follows the theme');
-  const asked = compose('release', {version: '1', month: 'A & B', sections: [{kind: 'features', title: 'Why not?', text: 'T', image: {url: 'https://x/i.png'}}]}).html;
-  assert.ok(asked.includes('Why not?</strong>') && asked.includes('A &amp; B'), 'a title keeps its own ending; the date is escaped once');
+  for (const title of ['New feature', 'Old first', 'New improved']) assert.match(text, new RegExp(`${title}\\n${title} text\\.`), 'the text twin has each top change');
+  for (const title of ['New second', 'Old second', 'New fix', 'Old fix']) assert.match(text, new RegExp(`- ${title}\\. ${title} text\\.`), 'the text twin has every other change');
+  assert.ok(text.indexOf('Also improved') < text.indexOf('Fixed') && text.trim().split('\n').includes('Thank you for using Jobadabra, and good luck with your applications this week!'));
+  const chosen = compose('release', {version: '0.9.13', sections, highlights: ['Old fix']}).html;
+  assert.ok(chosen.indexOf('Old fix') < chosen.indexOf('Open Jobadabra App') && chosen.indexOf('New feature') > chosen.indexOf('Open Jobadabra App'), 'the owner\'s ticks replace the automatic pick');
+  const twin = [change('0.9.13', 'features', 'Same title', '✨'), change('0.9.13', 'fixes', 'Same title')];
+  assert.deepEqual(highlightsOf(twin, ['fixes|Same title']).map(section => section.kind), ['fixes'], 'a tick names one change even when a feature and a fix share its title (Gitar on #567)');
+  assert.deepEqual(highlightsOf(sections, ['Old fix']).map(section => section.title), ['Old fix'], 'a bare title saved before ticks had kinds still matches');
+  assert.deepEqual(highlightsOf(sections, ['Gone']).map(section => section.title), ['New feature', 'Old first', 'New improved'], 'a tick for a change no longer in the mail falls back to the automatic pick');
+  const asked = compose('release', {version: '1', intro: 'A & B', sections: [{kind: 'fixes', title: 'Why not?', text: 'T', image: {url: 'https://x/i.png'}}]}).html;
+  assert.ok(asked.includes('Why not?</strong>') && /Hi there 👋[^<]*<\/p><p[^>]*>A &amp; B<\/p>/.test(asked), 'a title keeps its own ending; the saved introduction is a paragraph under the greeting, escaped once');
   assert.match(asked, /<img class="jp-line"/, 'a picture\'s border follows dark mode');
-  for (const title of ['One', 'Two', 'Three', 'Four']) assert.match(text, new RegExp(`: ${title}\\. Text\\.`), 'the text twin has every change');
 });
 
