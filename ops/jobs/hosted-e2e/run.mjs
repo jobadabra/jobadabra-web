@@ -15,6 +15,7 @@ import {tick} from '../../api/hosted-tick.js';
 import {run as lifecycle} from '../../admin/mail-lifecycle.js';
 import {pullInbox, schedule, turnOff, turnOn} from '../../desktop/lib/hosted-search.js';
 import {FREE_BASE, TRIAL_KEY} from '../../desktop/lib/ai-free.js';
+import {dockerBuild} from './docker-build.mjs';
 import {startCloud} from './worker-fakes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -39,7 +40,7 @@ function engineEnv(trip) {
 }
 async function containerRunner(trip) {
   const image = 'jp-hosted-e2e';
-  if (!process.env.HOSTED_E2E_NO_BUILD) assert.equal(spawnSync('docker', ['build', '-q', '-f', 'hosted/Dockerfile', '-t', image, '.'], {cwd: ROOT, stdio: 'inherit'}).status, 0, 'docker build');
+  if (!process.env.HOSTED_E2E_NO_BUILD) dockerBuild(image, ROOT);
   const env = Object.entries(engineEnv(trip)).flatMap(([name, value]) => ['-e', `${name}=${value}`]);
   const started = spawnSync('docker', ['run', '-d', '--rm', '--network', 'host', '-v', `${FEEDS}:/fixtures/feeds:ro`, ...env, '--name', 'jp-hosted-e2e', image], {encoding: 'utf8'});
   assert.equal(started.status, 0, started.stderr);
