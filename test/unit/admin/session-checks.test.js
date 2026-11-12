@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
-import {checks, clean, ingest, ingestRoute, KEEP_CHECKS} from '../../../admin/session-checks.js';
+import {checks, clean, ingest, ingestRoute, KEEP_CHECKS, labelOf} from '../../../admin/session-checks.js';
+import {checksSection, rounds} from '../../../admin/session-checks-page.js';
 import {page} from '../../../admin/search-lab-page.js';
 
 function d1() {
@@ -61,4 +62,26 @@ test('the tab shows each check with its boards, what broke and the conclusion', 
   assert.match(html, /Conclusion/);
   assert.match(page([], 'checks'), /No session check yet/);
   assert.match(page([], 'checks', [], null, [{...check(), boards: check().boards}]).match(/<style>[\s\S]*?<\/style>/)[0], /\.down\{color:#ff8a80\}/, 'the red "0 relevant" keeps its colour (the Lab page\'s own CSS draws it)');
+});
+
+test('a blank role leaves no comma in front of the place; a target is a count', () => {
+  assert.equal(labelOf(', Toulouse'), 'Toulouse');
+  assert.equal(clean(check({label: ', Copenhagen'})).label, 'Copenhagen');
+  assert.equal(clean(check({target: 14})).target, 14);
+  assert.equal(clean(check()).target, null, 'no target sent: null, never 0');
+  assert.match(clean(check({target: 'many'})).error, /target/);
+});
+
+test('the tab: a quiet band after 3 days, one card per round, repeats folded, found of target bars', () => {
+  const rows = [check({run_at: '2026-11-05T19:44:00Z', session: 'eu', case_id: 'draw', label: ', Copenhagen', local_jobs: 5}), check({run_at: '2026-11-05T19:40:00Z', session: 'eu', case_id: 'draw', label: ', Copenhagen', local_jobs: 8}),
+    check({run_at: '2026-11-01T22:00:00Z', session: 'js', case_id: 'c01', label: 'Accountant, Amsterdam', local_jobs: 1, target: 26}), check({run_at: '2026-11-01T21:50:00Z', session: 'js', case_id: 'c10', label: 'Welder, Ljubljana', local_jobs: 6, target: 6})];
+  assert.deepEqual(rounds(rows).map(round => [round.day, round.session, round.checks.length, round.places.size]), [['2026-11-05', 'eu', 2, 1], ['2026-11-01', 'js', 2, 2]]);
+  const html = checksSection(rows, new Date('2026-11-12T10:00:00Z'));
+  assert.match(html, /4 checks by 2 sessions, the last 6 days ago/);
+  assert.match(html, /quiet since 2026-11-05/);
+  assert.match(html, /2 runs/, 'the same place twice in a round is one line');
+  assert.doesNotMatch(html, /, Copenhagen/);
+  assert.match(html, /1 pass · 1 below/);
+  assert.match(html, /1 of 26/);
+  assert.doesNotMatch(checksSection(rows, new Date('2026-11-06T10:00:00Z')), /quiet since/, 'a check a day ago is fresh');
 });

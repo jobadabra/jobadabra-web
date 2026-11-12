@@ -254,12 +254,31 @@ export const seeds = {...notifySeeds,
     const rows = [['2026-10-25', 'support', 'Milan', 'Italy', 62, 326, 664, 155, 106, 2, null], ['2026-10-26', 'healthcare', 'Cluj-Napoca', 'Romania', 48, 210, 540, 212, 140, 9,
       {role: 'Dialysis Nurse', place_kind: 'region', place: 'the EU', path: 'first', engine: 'api', ai_usd: 0.71, funnel: {kinds: ['healthcare'], employers_picked: 640, boards_read: 7, web_searches: 1, looked: 52300}}],
     ['2026-10-27', 'other', 'Milan', 'Italy', null, null, null, 0, 0, 0,
-      {role: 'First Officer', place_kind: 'region', place: 'Europe', path: 'field-change', engine: 'api', ai_usd: 0.93, funnel: {kinds: ['finance_admin'], employers_picked: 1025, boards_read: 1, web_searches: 0, looked: 81070}}]];
+      {role: 'First Officer', place_kind: 'region', place: 'Europe', path: 'field-change', engine: 'api', ai_usd: 0.93, funnel: {kinds: ['finance_admin'], employers_picked: 1025, boards_read: 1, web_searches: 0, looked: 81070}}],
+    ...[['2026-10-28', 'logistics', 'Lisbon', 'Portugal', 7, 7, 0, 'Cold Chain Planner'], ['2026-10-29', 'engineering', 'Bologna', 'Italy', 1, 1, 0, 'Bridge Inspector'], ['2026-10-30', 'finance_admin', 'Naples', 'Italy', 10, 6, 0, 'Claims Analyst'],
+      ['2026-10-31', 'science', 'Valencia', 'Spain', 3, 3, 0, 'Lab Technician'], ['2026-11-01', 'logistics', 'Lyon', 'France', 22, 3, 0, 'Freight Planner'], ['2026-11-02', 'manufacturing', 'Toulouse', 'France', 2, 2, 0, 'Oven Operator'],
+      ['2026-11-03', 'sales_b2b', 'Gothenburg', 'Sweden', 9, 0, 0, 'Business Developer'], ['2026-11-04', 'legal', 'Porto', 'Portugal', 0, 0, 0, 'Patent Clerk'], ['2026-11-05', 'business_ops', 'Brussels', 'Belgium', 14, 10, 2, 'Product Analyst'],
+      ['2026-11-06', 'legal', 'Helsinki', 'Finland', 12, 8, 0, 'Policy Advisor'], ['2026-11-07', 'finance_admin', 'Vienna', 'Austria', 0, 0, 0, 'Risk Analyst'], ['2026-11-08', 'engineering', 'Amsterdam', 'Netherlands', 18, 14, 0, 'Metrology Engineer']]
+      .map(([day, family, city, country, places, scored, fit70, role], i) => [day, family, city, country, places ? 30 + i * 9 : null, null, null, places, scored, fit70,
+        {role, place_kind: ['city', 'region', 'country', 'remote'][i % 4], place: ['', 'Southern Europe', '', ''][i % 4] || null, path: i % 3 ? 'first' : 'again', engine: 'free', ai_usd: 0.01 + i / 200,
+          funnel: {kinds: [family], employers_picked: 5 + i * 7, boards_read: i % 5, board_jobs: i % 4 ? 0 : 12, board_relevant: 0, web_searches: 1 + i % 2, web_found: 0, looked: places * 40, ai_refused: 3 + i % 6}}])];
     for (const [day, family, city, country, first, tenth, fit, places, scored, fit70, wide] of rows) {
       await env.STATS.prepare('INSERT INTO search_lab_draws (draw_date, seed, family, city, country, source, build, state, first_s, tenth_s, fit_s, in_places, scored, fit70) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(day, day, family, city, country, 'ci', 'abc1234', 'ok', first, tenth, fit, places, scored, fit70).run();
       if (wide) await env.STATS.prepare('UPDATE search_lab_draws SET role = ?, place_kind = ?, place = ?, path = ?, engine = ?, ai_usd = ?, funnel = ? WHERE draw_date = ?')
         .bind(wide.role, wide.place_kind, wide.place, wide.path, wide.engine, wide.ai_usd, JSON.stringify(wide.funnel), day).run().catch(() => null);
+    }
+  },
+  'session-checks': async ({env}) => {   // made-up local checks by two sessions (12 Nov 2026 redesign): a round with repeats, a round against targets, one place with no target
+    const rows = [['eu', 'draw', ', Copenhagen', 'Denmark', '2026-11-05T19:42:00Z', 5, 3, 1, 64, 127, null], ['eu', 'draw', ', Copenhagen', 'Denmark', '2026-11-05T19:39:00Z', 8, 5, 1, 64, 131, null],
+      ['eu', 'hotel-paris', 'Hotel, Paris', 'France', '2026-11-05T19:15:00Z', 140, 11, 7, 63, 135, null], ['eu', 'sales-toulouse', 'Sales, Toulouse', 'France', '2026-11-05T19:08:00Z', 130, 4, 3, 27, 135, null],
+      ['js', 'c02', 'Sales Representative, Vienna', 'Austria', '2026-11-01T22:03:00Z', 11, 3, 1, 99, 124, 82], ['js', 'c12', 'Electrician, Graz', 'Austria', '2026-11-01T22:10:00Z', 19, 5, 0, 67, 135, 56],
+      ['js', 'c06', 'Car Mechanic, Prague', 'Czechia', '2026-11-01T21:55:00Z', 5, 6, 2, 63, 103, 14], ['js', 'c10', 'Welder, Ljubljana', 'Slovenia', '2026-11-01T21:48:00Z', 6, 8, 5, 50, 104, 6],
+      ['js', 'c20', 'Welder, Naples', 'Italy', '2026-11-01T22:29:00Z', 0, 3, 0, 56, 136, null]];
+    for (const [session, id, label, country, at, local, scored, fit70, first, seconds, target] of rows) {
+      await env.STATS.prepare("INSERT INTO session_checks (id, session, case_id, label, country, role, run_at, build, mode, state, seconds, first_s, local_jobs, in_places, scored, fit70, boards_json, broke, conclusion, prs) VALUES (?, ?, ?, ?, ?, '', ?, 'abc1234', 'quick', 'ok', ?, ?, ?, ?, ?, ?, ?, ?, ?, '')")
+        .bind(`${id}@${at}`, session, id, label, country, at, seconds, first, local, local, scored, fit70, JSON.stringify(local > 50 ? [{name: 'Demo board', listed: 10, relevant: 4, note: ''}] : []), local < target ? `${local} relevant of ${local + 20} listed` : 'nothing', target ? `N ${local} of X ${target}` : 'control run').run();
+      if (target) await env.STATS.prepare('UPDATE session_checks SET target = ? WHERE id = ?').bind(target, `${id}@${at}`).run().catch(() => null);   // the old tree has no target column
     }
   },
   scouting: async ({env}) => {   // made-up employers over the European countries, one or two per kind and country, plus a few of the kinds split out of Other (26 Oct 2026)

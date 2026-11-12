@@ -5,6 +5,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {clean, draws, ingest, ingestRoute, judge, rowFromDraw} from '../../../../admin/search-lab-draws.js';
 import {page} from '../../../../admin/search-lab-page.js';
+import {eras, stopOf} from '../../../../admin/search-lab-draws-page.js';
 
 function d1() {
   const db = new DatabaseSync(':memory:');
@@ -57,8 +58,9 @@ test('the tab shows the draws with CI on each and the Lab tab stays the default'
   const html = page([draw(2, {in_places: 3}), draw(1)], 'draws');
   assert.match(html, /Random draws/);
   assert.match(html, />CI</);
-  assert.match(html, /Weak/);
-  assert.match(html, /only 3 jobs in the places/);
+  assert.match(html, /Weak · under 10 jobs|Weak · only 3 jobs in the places/);
+  assert.match(html, /only 3 jobs in the places/, 'every reason stays in the row\'s tooltip');
+  assert.match(html, /2 of 2 draws reached a relevant \(70\+\) job/, 'the band counts draws with a 70+ job');
   assert.match(page([draw(1)]), /No real search reported yet/, 'the default tab is Real installs');
   assert.doesNotMatch(page([draw(1)]), /Each daily draw/);
 });
@@ -95,4 +97,17 @@ test('the tab names a wide draw by its role, place, path and funnel', () => {
   assert.match(html, /field change, 2nd search/);
   assert.match(html, /kind finance_admin · 1,025 employers · 1 boards · 0 web searches · 81,070 jobs listed · AI \$0\.93/);
   assert.match(page([draw(1)], 'draws'), /<b>nurse<\/b> · Lyon, France/, 'an old draw reads as before');
+});
+
+test('each draw says where it stopped in a few words; the headline counts the robot\'s draws only', () => {
+  const words = rows => judge(rows).map(stopOf);
+  assert.deepEqual(words([draw(4, {in_places: 0, scored: 0, fit70: 0}), draw(3, {scored: 0, fit70: 0}), draw(2, {fit70: 0}), draw(1)]), ['no job in the places', 'nothing scored', 'none at 70+', '']);
+  assert.match(words([draw(1, {state: 'failed', failed_step: 'Reading job boards'})])[0], /crashed: Reading job boards/);
+  const mixed = judge([draw(3, {role: 'River Pilot'}), draw(2, {role: 'Welder'}), draw(1)]), {now, before} = eras(mixed);
+  assert.deepEqual([now.length, before.length], [2, 1], 'the earlier kind (no made-up role) is listed but not in the headline');
+  assert.deepEqual(eras(judge([draw(1)])).now.length, 1, 'with no robot draw every draw counts');
+  const html = page([draw(3, {role: 'River Pilot', in_places: 2}), draw(2, {role: 'Welder', fit70: 0}), draw(1, {in_places: 155})], 'draws');
+  assert.match(html, /1 of 2 draws reached a relevant/);
+  assert.match(html, /1 earlier draws of another kind/);
+  assert.match(html, /<svg class="vz-cols"/, 'the dated columns are drawn');
 });
