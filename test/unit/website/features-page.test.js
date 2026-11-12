@@ -5,11 +5,11 @@ import {test} from 'node:test';
 
 const page = name => readFileSync(new URL(`../../../web/public/${name}.html`, import.meta.url), 'utf8');
 
-test('features page: the route in order, Submit stays yours', () => {
+test('features page: the route in order, you choose who presses Submit', () => {
   const html = page('features');
   const ids = ['find', 'fit', 'apply', 'track', 'improve'].map(id => html.indexOf(`id="${id}"`));
   assert.ok(ids.every((at, i) => at > 0 && (i === 0 || at > ids[i - 1])), 'five sections in route order');
-  assert.match(html, /You press Submit/);
+  assert.match(html, /You choose who presses Submit/);
 });
 
 test('features page: Searches report, Export (Pro), Stop, Windows; no Ready to send', () => {

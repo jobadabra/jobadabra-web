@@ -209,6 +209,12 @@ section.block.tight { padding-block: 56px; }
 .journey-promises { list-style: none; margin: 22px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 28px; color: var(--muted); font-size: .88rem; }
 .journey-promises li { display: flex; align-items: center; gap: 8px; }
 .journey-promises li::before { content: "✓"; color: var(--teal); font-weight: 700; }
+.levels { list-style: none; margin: 40px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; counter-reset: level; }
+.levels li { position: relative; padding: 14px 16px 0 0; border-top: 2px solid var(--line-strong); font-size: .88rem; color: var(--muted); line-height: 1.45; }
+.levels li:nth-child(2) { border-top-color: var(--teal); }
+.levels li:nth-child(3) { border-top-color: var(--signal); }
+.levels b { display: block; margin-bottom: 4px; color: var(--ink); font-family: var(--display); font-size: .98rem; }
+@media (max-width: 760px) { .levels { grid-template-columns: 1fr; gap: 12px; } .levels li { padding-bottom: 2px; } }
 .panel-foot { margin-top: 18px; }
 @media (max-width: 760px) {
   .journey .note { text-align: left; }
