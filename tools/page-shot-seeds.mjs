@@ -324,7 +324,9 @@ export const seeds = {...notifySeeds,
     })).filter(([, [count]]) => count > 0));
     for (const [day, grow] of [['2026-10-20', 0.9], ['2026-10-27', 1]]) {
       const cells = cellsAt(grow), feeds = Math.round(Object.values(cells).reduce((sum, [count]) => sum + count, 0) / 1.4);
-      await env.STATS.prepare('INSERT INTO index_daily (day, feeds, non_it, failing, from_pool, dead_ends, cells) VALUES (?, ?, ?, 0, 0, 0, ?)').bind(day, feeds, Math.round(feeds / 3), JSON.stringify(cells)).run();
+      // Why (12 Nov 2026, web#581 red): the scouting seed writes the same days' board counts; on one database ("all") a plain INSERT broke the day key. Each seed sets only its own columns.
+      await env.STATS.prepare(`INSERT INTO index_daily (day, feeds, non_it, failing, from_pool, dead_ends, cells) VALUES (?, ?, ?, 0, 0, 0, ?)
+        ON CONFLICT(day) DO UPDATE SET feeds = excluded.feeds, non_it = excluded.non_it, cells = excluded.cells`).bind(day, feeds, Math.round(feeds / 3), JSON.stringify(cells)).run();
     }
   },
   'closed-sites': async ({env}) => {   // made-up closed sites for /admin/job-search/scouting (27 Oct 2026, table tools): 52 dead ends (refused, unreachable, no feed) and 12 browser-only or gone pages, over 6 weeks
