@@ -79,9 +79,9 @@ test('the sitemap lists every public page, and only pages that exist', () => {
   assert.deepEqual([...listed].sort(), pages.filter(page => !UNLISTED.includes(page)).sort());
 });
 
-test('the landing stays short: one hero, the numbers, three cards, the whole journey, privacy first, one closing download', () => {
+test('the landing stays short: one hero, the numbers, three cards, the whole journey, privacy first, the benchmark summary, one closing download', () => {
   const html = read('index.html');
-  assert.equal((html.match(/<section\b/g) || []).length, 5, 'sections on the landing');   // numbers, steps, journey, privacy-first, start; the hero is a header. Why (6 Nov 2026, owner): "a small section … saying that we value the Privacy"
+  assert.equal((html.match(/<section\b/g) || []).length, 6, 'sections on the landing');   // numbers, steps, journey, privacy-first, benchmarks, start; the hero is a header. Why (6 Nov 2026, owner): "a small section … saying that we value the Privacy"; (12 Nov 2026, owner): "a small/summary/preview card or section on the fist page of our website with a link to full benchmarks"
   assert.equal((html.match(/class="card-foot arrow-link" href="\/how-it-works#/g) || []).length, 3, 'each card leads to its detail');
   for (const href of html.matchAll(/href="(\/[\w-]*)(?:#[\w-]+)?"/g)) {
     if (/^\/(download|install|api)\b/.test(href[1])) continue;
