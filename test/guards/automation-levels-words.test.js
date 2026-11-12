@@ -7,8 +7,6 @@ import {test} from 'node:test';
 // CI runs this inside the joined tree: the public repo's app files and this repo's pages sit side by side.
 const root = new URL('../../', import.meta.url);
 const PAGES = new URL('web/public/', root);
-// TODO(AI): drop this once the /how-it-works rewrite (session hw, jobadabra-web-42) lands: it still says "never presses Submit" (12 Nov 2026).
-const PENDING = new Set(['how-it-works.html']);
 // The claim in its spoken forms; each is false once Automatically exists. A helper that truly never clicks (a wait page, a data fix) is worded without these.
 const NEVER_SUBMITS = /never\s+(?:presses|press|clicks?|submits?|sends?)\b[^.<]{0,20}\bsubmit|never\s+submits?\b|no,\s+never\b|submitting\s+is\s+always\s+your\s+click|you\s+always\s+press\s+submit/i;
 
@@ -20,7 +18,7 @@ test('the app still offers the Automatically level, so the guard below is in for
 
 test('no public page claims it never submits', () => {
   const bad = [];
-  for (const file of readdirSync(PAGES).filter(name => name.endsWith('.html') && !PENDING.has(name))) {
+  for (const file of readdirSync(PAGES).filter(name => name.endsWith('.html'))) {
     readFileSync(new URL(file, PAGES), 'utf8').split('\n').forEach((line, i) => {
       const hit = line.match(NEVER_SUBMITS);
       if (hit) bad.push(`${file}:${i + 1}: "${hit[0]}"`);

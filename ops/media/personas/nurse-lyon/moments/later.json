@@ -31,7 +31,7 @@
    "demo-iv-3": {"title": "Institut Cardio Rhône · Phone screen", "app_id": "0000000000000000000000000000a004", "next_step": "Interview on the unit on Wed 14 Oct"}
   },
   "draft": {
-   "demo-draft": {"title": "Institut Cardio Rhône, phone screen", "jobUrl": "https://example.com/jobs/4"}
+   "demo-draft": {"title": "Institut Cardio Rhône, phone screen", "jobUrl": "https://jobs.example/institut-cardio-rhone/cardiac-care"}
   }
  }
 }

@@ -4,17 +4,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-test('every hero app take runs the app at desktop text size 1; the phone take keeps its own; other media are untouched (hold.mjs desktopTake)', async () => {
+test('every hero app take (and any app piece that asks for it, e.g. the /how-it-works split) runs the app at desktop text size 1; the phone take keeps its own; other media are untouched (hold.mjs desktopTake)', async () => {
   const {VIDEOS} = await import('../../media/scenes.mjs');
   const {desktopTake, phoneTake} = await import('../../media/hold.mjs');
   const hero = Object.entries(VIDEOS).filter(([name, piece]) => name.startsWith('hero') && piece.source === 'app');
   assert.ok(hero.length >= 5, `${hero.length} hero app pieces`);
-  for (const [name, piece] of hero) {
+  for (const [name, piece] of [...hero, ...Object.entries(VIDEOS).filter(([n, p]) => !n.startsWith('hero') && p.source === 'app' && p.desktop)]) {
     assert.equal(desktopTake(piece).settings?.zoom, 1, `${name}: desktop text size`);
     for (const [key, value] of Object.entries(piece.settings || {})) assert.equal(desktopTake(piece).settings[key], value, `${name}: keeps ${key}`);
     if (typeof piece.phone === 'object') assert.equal(phoneTake(piece, piece.phone).settings.zoom, piece.phone.zoom, `${name}: the phone take keeps its own size`);
   }
-  for (const [name, piece] of Object.entries(VIDEOS).filter(([n, p]) => !n.startsWith('hero') || p.source !== 'app')) assert.equal(desktopTake(piece), piece, `${name}: untouched`);
+  for (const [name, piece] of Object.entries(VIDEOS).filter(([n, p]) => p.source !== 'app' || (!n.startsWith('hero') && !p.desktop))) assert.equal(desktopTake(piece), piece, `${name}: untouched`);
 });
 
 test('a hero click zooms in to TAP_ZOOM wherever its part still has its one deliberate move (scenes.mjs, camera.mjs)', async () => {

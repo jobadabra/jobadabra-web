@@ -1,4 +1,4 @@
-/* The table on /about-you: it sits in the same card as the access table on /trust (.access-wrap, styles.css) and reads like it; dots show a part a live AI step reads. */
+/* The AI-step table on /how-it-works (#ai-reads; /about-you was folded in, 12 Nov 2026): it sits in the same card as the access table on /trust (.access-wrap, styles.css) and reads like it; dots show a part a live AI step reads. */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .rd-wrap { overflow-x: auto; }
 .rd-table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: .94rem; }

@@ -27,3 +27,14 @@ test('every review step in the scenes names a session the persona has a form for
     assert.equal(step.review.fields.length, form.total, `review step for ${step.review.id}: fills ${step.review.fields.length} of the form's ${form.total} fields`);
   }
 });
+
+// 12 Nov 2026: the extension leaves the consent box to the person; the card replays the extension's own reports, so both sides count the same.
+test('the card replays the extension\'s reports from the fill\'s start, with the demo session\'s id and url, the last state kept as sent', async () => {
+  const {fromReports} = await import('../../media/live-review.mjs');
+  const reports = [{t: 1.3, left: 6, total: 6, tab: 9, boot: 'b', job: 'j', session: 's'}, {t: 1.7, left: 6, total: 6}, {t: 3.0, left: 2, total: 6}, {t: 4.1, left: 1, total: 7, missing: ['I agree']}];
+  const out = fromReports({id: 'd1', url: 'https://jobs.example/x', reports, sync: 2.5});
+  assert.deepEqual(out.map(one => [one.at, one.state.left, one.state.total]), [[0, 6, 6], [0.5, 2, 6], [1.6, 1, 7]], 'the last report before the start opens it; later ones at their own times');
+  assert.ok(out.every(one => one.state.id === 'd1' && one.state.url === 'https://jobs.example/x' && !('tab' in one.state) && !('t' in one.state)));
+  assert.deepEqual(out.at(-1).state.missing, ['I agree'], 'the field left for the person stays on the card');
+  assert.throws(() => fromReports({id: 'd1', reports: []}), /at least one report/);
+});

@@ -1,5 +1,7 @@
 // One page, rendered through the REAL Worker (workers/www/index.js) on demo data, shot at every width and theme, and refused when it is unstyled
 // (owner, 25 Oct 2026: jobadabra-web#92's Before/After images were the admin page as raw HTML, rendered without the layout that adds its CSS).
+// --video: a .webm of the page scrolled slowly from top to bottom with motion on (scroll reveals, flowing lines, autoplaying clips), for a PR preview of an animated page; --rest <ms> stops longer per screen
+// (owner, 12 Nov 2026, /how-it-works: "The preview must let the owner see the motion"). Writes <name>-<width>[-<theme>].webm instead of the .png.
 //   tools/site-run.sh node tools/page-shot.mjs --path /admin/growth/promo-codes --width 1440,390 --theme dark,light --out <dir> [--name before] [--seed promo-codes] [--full] [--clip '<selector>'] [--scroll '<selector>'] [--click '<selector>'] [--then '<selector>']
 // --clip '<selector>': shoot only that element (the section the PR changed: readable at a table cell's width; exit 1 when it is not on the page).
 // Writes <dir>/<name>-<width>[-<theme>].png (theme in the name only when more than one). Exit 1 when the page is unstyled (nothing is written for it).
@@ -24,7 +26,8 @@ fs.mkdirSync(out, {recursive: true});
 let failed = false;
 try {
   for (const width of widths) for (const theme of themes) {
-    const context = await browser.newContext({viewport: {width, height: width > 600 ? 900 : 844}, deviceScaleFactor: width > 600 ? 1 : 2, colorScheme: theme, reducedMotion: 'reduce'});
+    const height = width > 600 ? 900 : 844, film = args.video ? {recordVideo: {dir: path.join(out, '.video'), size: {width, height}}} : {};
+    const context = await browser.newContext({viewport: {width, height}, deviceScaleFactor: width > 600 ? 1 : 2, colorScheme: theme, reducedMotion: args.video ? 'no-preference' : 'reduce', ...film});
     await context.route(url => !url.href.startsWith(base), route => route.abort());   // never the live site
     const page = await context.newPage(), bad = [];
     page.on('requestfailed', r => { if (r.url().startsWith(base)) bad.push({url: r.url(), type: r.resourceType(), reason: r.failure()?.errorText}); });
@@ -41,6 +44,16 @@ try {
       if (args.scrollx) { const moved = await page.locator(String(args.scrollx)).first().evaluate(el => { const box = el.closest('.card, .scroll, .table-scroll') || el; box.scrollLeft = box.scrollWidth; return [box.scrollLeft, box.scrollWidth, box.clientWidth]; }); console.error(`scrollx ${pagePath} at ${width}px: scrolled ${moved[0]} px (content ${moved[1]}, visible ${moved[2]})`); }   // --scrollx '<selector>': scroll its card or table box fully right, and say how far it went (a table that does not scroll says 0)
       if (args.click) { await page.locator(String(args.click)).first().click(); await page.waitForTimeout(300); }
       if (args.then) { await page.locator(String(args.then)).first().click(); await page.waitForTimeout(300); }   // --then '<selector>': a second press after --click (a menu item, then its form; 3 Nov 2026)   // --click '<selector>': press it before the shot (an open dropdown); after --scroll
+      if (args.video) {   // top to bottom, a little under a screen at a time, each step resting long enough to see what rose in
+        const total = await page.evaluate(() => document.documentElement.scrollHeight), step = Math.round(height * 0.55);
+        await page.waitForTimeout(1200);
+        for (let y = step; y < total; y += step) { await page.evaluate(to => window.scrollTo({top: to, behavior: 'smooth'}), y); await page.waitForTimeout(Number(args.rest) || 1100); }   // --rest <ms>: a longer stop per screen, to see a looping animation through
+        await page.waitForTimeout(800);
+        const video = page.video(), movie = file.replace(/\.png$/, '.webm');
+        await context.close(); await video.saveAs(movie); await video.delete();
+        console.log(movie);
+        continue;
+      }
       if (args.clip) {   // Why (5 Nov 2026, owner: "the screenshots on the PRs … has nothing to do with the changes"): the PR's shot is the changed section, readable in a table cell; a selector that matches nothing fails, never a full-page fallback
         const sections = page.locator(String(args.clip));
         await sections.first().waitFor({state: 'visible', timeout: 3000}).catch(() => {});

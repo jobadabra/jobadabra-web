@@ -6,12 +6,12 @@
 <title>How it works · Jobadabra</title>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="description" content="How Jobadabra finds jobs that fit you, fills in the application forms in your browser and keeps track of every reply, while you check and press Submit.">
+<meta name="description" content="How Jobadabra works, in five steps: your CV, your strategy, jobs from several sources, three ways to apply, and Always on.">
 <link rel="canonical" href="https://www.jobadabra.top/how-it-works">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Jobadabra">
 <meta property="og:title" content="How it works · Jobadabra">
-<meta property="og:description" content="How Jobadabra finds jobs that fit you, fills in the application forms in your browser and keeps track of every reply, while you check and press Submit.">
+<meta property="og:description" content="How Jobadabra works, in five steps: your CV, your strategy, jobs from several sources, three ways to apply, and Always on.">
 <meta property="og:url" content="https://www.jobadabra.top/how-it-works">
 <meta property="og:image" content="https://www.jobadabra.top/images/logo-512.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,6 +21,8 @@
 <link rel="stylesheet" href="effects.css">
 <link rel="stylesheet" href="home.css">
 <link rel="stylesheet" href="pages.css">
+<link rel="stylesheet" href="readers.css">
+<link rel="stylesheet" href="flow.css">
 </head>
 <body data-page="how-it-works">
 <div class="wrap">
@@ -41,16 +43,87 @@
   <header class="page-head">
     <span class="eyebrow">How it works</span>
     <h1>From a new opening to a reply</h1>
-    <p class="lede">Three steps run on their own. Two moments are always yours: the checks only a person may do, and Submit.</p>
-    <nav class="page-jump" aria-label="On this page"><a href="#find">It finds</a><a href="#fill">It fills</a><a href="#control">Your click</a><a href="#track">It keeps track</a></nav>
+    <p class="lede">Five steps, from your CV to a sent application. You choose how much of it runs on its own.</p>
+    <nav class="page-jump" aria-label="On this page"><a href="#flow">The 5 steps</a><a href="#along">Along the way</a><a href="#find">The search</a><a href="#fill">The form</a><a href="#control">Levels</a><a href="#ai-reads">What the AI reads</a></nav>
   </header>
 
-  <section class="block first" id="find">
+  <!-- The 5 steps (owner, 12 Nov 2026: "We take your CV, we build the strategy out of it. We search for jobs from different sources... And then you can apply in
+       3 modes... And then you can also use Always on"; "the most important details of our app"): the first thing on the page, a line and a picture each.
+       Why (12 Nov 2026, owner): "On the first few [steps] I don't want video recordings, but rather abstract animations": each step's picture is CSS/SVG
+       motion (flow.css .anim-*), still with reduced motion. The real recordings sit lower: apply-split under #fill, find-jobs under #find. -->
+  <section class="block first" id="flow" aria-labelledby="flow-h">
+    <h2 class="sr" id="flow-h">The five steps</h2>
+    <ol class="flow">
+      <li class="flow-step flow-two reveal">
+        <div class="flow-pair">
+          <div class="flow-words"><span class="flow-num">1</span><span class="flow-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><h3>Your CV</h3><p>Add your CV once. The AI reads it for your roles, places and level.</p></div>
+          <div class="flow-words"><span class="flow-num">2</span><span class="flow-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span><h3>Your strategy</h3><p>From your CV it proposes what to look for: the roles, places and level. You change it, then confirm.</p></div>
+        </div>
+        <div class="flow-media">
+          <div class="anim anim-cv" aria-hidden="true">
+            <div class="a-doc"><span class="a-doc-head"></span><i></i><i></i><i></i><i></i><i></i><span class="a-scan"></span></div>
+            <svg class="a-link" viewBox="0 0 80 20" preserveAspectRatio="none"><path d="M2 10H74"/><path class="a-tip" d="m68 4 7 6-7 6"/></svg>
+            <div class="a-strat"><span class="a-strat-head">Your strategy</span><span class="a-chip">Roles</span><span class="a-chip">Places</span><span class="a-chip">Level</span><span class="a-ok">You confirm</span></div>
+          </div>
+        </div>
+      </li>
+      <li class="flow-step reveal">
+        <div class="flow-words"><span class="flow-num">3</span><span class="flow-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><h3>Jobs from several sources</h3><p>Find jobs searches the web, our own database of employers, and LinkedIn jobs if you turn them on. It keeps the jobs that fit and shows the closest first.</p></div>
+        <div class="flow-media">
+          <div class="anim anim-src" aria-hidden="true">
+            <div class="a-sources"><span class="a-src">The web</span><span class="a-src">Our employers</span><span class="a-src opt">LinkedIn <small>optional</small></span></div>
+            <svg class="a-merge" viewBox="0 0 100 120" preserveAspectRatio="none"><path d="M0 20C50 20 50 60 100 60"/><path d="M0 60H100"/><path class="opt" d="M0 100C50 100 50 60 100 60"/></svg>
+            <ol class="a-list"><li><b>92</b><i></i></li><li><b>88</b><i></i></li><li><b>84</b><i></i></li><li><b>76</b><i></i></li></ol>
+          </div>
+        </div>
+      </li>
+      <li class="flow-step reveal">
+        <div class="flow-words"><span class="flow-num">4</span><span class="flow-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg></span><h3>Apply, three ways</h3>
+          <ul class="flow-modes">
+            <li><b>In Chrome</b>The extension fills the form in your own browser; you check it and press Submit.</li>
+            <li><b>In the background</b>A hidden browser fills it while you do something else; you review and submit when ready.</li>
+            <li><b>Automatically</b>A hidden browser fills and submits once your checks pass. It asks you to confirm the first time.</li>
+          </ul>
+          <p><a href="#control">How much each way does for you</a></p></div>
+        <div class="flow-media">
+          <div class="anim anim-apply" aria-hidden="true">
+            <div class="a-form"><span class="a-form-head"></span><i></i><i></i><i></i><i></i></div>
+            <svg class="a-fork" viewBox="0 0 100 120" preserveAspectRatio="none"><path d="M0 60C50 60 50 18 100 18"/><path d="M0 60H100"/><path d="M0 60C50 60 50 102 100 102"/></svg>
+            <div class="a-ends"><span class="a-end you">You press Submit</span><span class="a-end mid">You review, then send</span><span class="a-end it">Sends after your checks</span></div>
+          </div>
+        </div>
+      </li>
+      <li class="flow-step reveal">
+        <div class="flow-words"><span class="flow-num">5</span><span class="flow-ico a-pulse" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 15.5A8 8 0 1 1 8.5 4a6.5 6.5 0 0 0 11.5 11.5z"/></svg></span><h3>Always on</h3><p>Optional: it keeps finding jobs while your Mac is asleep or off. Pick one way.</p></div>
+        <div class="flow-media flow-pick" aria-label="The two ways to run Always on">
+          <div class="anim anim-night" aria-hidden="true"><span class="a-off">Mac off</span><span class="a-beat"><i></i><i></i><i></i><i></i><i></i></span><span class="a-new">New matches</span></div>
+          <div class="pick-card"><b>On our servers</b><span class="pick-badge good">Easiest</span><p>Nothing to set up. New matches by e-mail every morning.</p></div>
+          <div class="pick-card"><b>On your own accounts</b><span class="pick-badge">Advanced</span><p>Your Notion, your GitHub and your own AI key. Nothing of yours on our servers.</p></div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section class="block" id="along" aria-labelledby="along-h">
+    <div class="section-head stacked">
+      <span class="eyebrow">Along the way</span>
+      <h2 id="along-h">It keeps up, and it learns</h2>
+    </div>
+    <ul class="along">
+      <li class="reveal"><span class="flow-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span><div><b>Your e-mail, checked</b><p>Connect Gmail and a reply moves its job to Interview or Rejected by itself. Read-only.</p></div></li>
+      <li class="reveal"><span class="flow-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg></span><div><b>What to do next</b><p>AI suggestions on Focus and Jobs, and a look at your week.</p></div></li>
+      <li class="reveal"><span class="flow-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10z"/></svg></span><div><b>It learns about you</b><p>An answer you give once fills the next form. The jobs you keep, dismiss and apply to shape what comes next.</p></div></li>
+    </ul>
+  </section>
+
+  <section class="block" id="find">
     <div class="section-head stacked">
       <span class="eyebrow">It finds the jobs</span>
       <h2>Every few hours, ranked for you</h2>
       <p class="lede">It reads employers' own job pages and job boards, keeps the jobs that match where and how you want to work, and scores each one against your CV.</p>
     </div>
+    <video class="page-clip" src="/media/find-jobs.mp4" poster="/media/find-jobs-poster.jpg" autoplay muted loop playsinline preload="metadata"
+      aria-label="Jobadabra: Find jobs pressed, the search running in the background, then the jobs it found, the closest first"></video>
     <div class="stop-panel">
       <dl class="items">
         <div><dt>A shared list of employers</dt><dd><b class="num" data-count="employers">5,000+</b> employers' own job pages, checked every day by our scout, growing in every field. <a href="/coverage">See where</a></dd></div>
@@ -69,14 +142,14 @@
       <h2>Your answers, in seconds</h2>
       <p class="lede">The browser extension (Chrome or Edge) fills the employer's form from your CV and your answers, and the app follows every field. Anything it doesn't know, it asks you once.</p>
     </div>
-    <div class="stage apply-stage">
-      <!-- media: apply-split (7d). Until it arrives, today's video. -->
-      <video class="apply-video wide" src="images/app/apply-split.mp4" poster="images/app/apply-split-poster.jpg" autoplay muted loop playsinline preload="metadata"
-        aria-label="Split screen: in the browser the extension fills a job application field by field while the app follows along; then both show Ready to submit"></video>
-      <video class="apply-video narrow" src="/media/extension-fill.mp4" poster="/media/extension-fill-poster.jpg" autoplay muted loop playsinline preload="metadata"
-        aria-label="The extension fills a job application field by field, asks one question, then shows Ready to submit"></video>
+    <!-- tools/media.sh records both from the real app and extension on demo data (ops/media/scenes.mjs apply-split, extension-fill); the narrow one on phones. -->
+    <div class="page-clip-pair">
+      <video class="flow-video wide" src="/media/apply-split.mp4" poster="/media/apply-split-poster.jpg" autoplay muted loop playsinline preload="metadata"
+        aria-label="Split screen: in the browser the Jobadabra extension fills a job application field by field while the Jobadabra app ticks off each field; one consent box is left for you"></video>
+      <video class="flow-video narrow" src="/media/extension-fill.mp4" poster="/media/extension-fill-poster.jpg" autoplay muted loop playsinline preload="metadata"
+        aria-label="The Jobadabra extension fills a job application field by field, leaving the consent box for you"></video>
     </div>
-    <div class="stop-panel" style="margin-top: 24px">
+    <div class="stop-panel">
       <dl class="items">
         <div><dt>Everything the form asks</dt><dd>Contact details, your CV, a cover letter and every question, from your application kit</dd></div>
         <div><dt>A cover letter</dt><dd>In your voice, from your CV and answers you've written</dd></div>
@@ -88,30 +161,35 @@
     </div>
   </section>
 
-  <section class="block" id="control">
+  <!-- Why (12 Nov 2026, owner): "what is good that we offer different level of automations and review. This is what we can sell" (and no claim that it
+       never sends; test/guards/automation-levels-words.test.js). Replaces "Where your click happens"; keeps id="control" (site.js MOVED sends #your-click here). -->
+  <section class="block" id="control" aria-labelledby="levels-h">
     <div class="section-head stacked">
-      <span class="eyebrow">You stay in control</span>
-      <h2>Where your click happens</h2>
-      <p class="lede">It does the legwork. Two moments are always yours, and it never presses Submit.</p>
+      <span class="eyebrow">Levels of automation</span>
+      <h2 id="levels-h">You choose how much it does</h2>
+      <p class="lede">Every level fills the form for you. They differ in who reviews it and who sends it, and you pick one for each job.</p>
     </div>
-    <ol class="clickflow" aria-label="An application, step by step">
-      <li><span class="who">Auto</span><b>Finds the job</b><small>scored against your CV</small></li>
-      <li><span class="who">Auto</span><b>Prepares</b><small>answers, letter, CV</small></li>
-      <li><span class="who">Auto</span><b>Fills the form</b><small>in your browser</small></li>
-      <li class="you"><span class="who">You</span><b>Checks and terms</b><small>it asks, you tick</small></li>
-      <li class="you"><span class="who">You</span><b>Review and Submit</b><small>it stops here, always</small></li>
-    </ol>
+    <div class="lv">
+      <div class="lv-scale" aria-hidden="true"><span>You do more</span><span>It does more</span></div>
+      <ol class="lv-list">
+        <li class="lv-card reveal"><span class="lv-tag">Level 1</span><b>In Chrome</b><p>The extension fills the form in your own browser. You check it and press Submit.</p>
+          <dl class="lv-who"><div><dt>Fills</dt><dd>It</dd></div><div><dt>Reviews</dt><dd class="you">You</dd></div><div><dt>Sends</dt><dd class="you">You</dd></div></dl></li>
+        <li class="lv-card reveal"><span class="lv-tag">Level 2</span><b>In the background</b><p>A hidden browser fills it while you do something else. You review it, then send.</p>
+          <dl class="lv-who"><div><dt>Fills</dt><dd>It</dd></div><div><dt>Reviews</dt><dd class="you">You</dd></div><div><dt>Sends</dt><dd class="you">You</dd></div></dl></li>
+        <li class="lv-card reveal"><span class="lv-tag">Level 3</span><b>Automatically</b><p>A hidden browser fills it and submits it once your checks pass. It asks you to confirm the first time.</p>
+          <dl class="lv-who"><div><dt>Fills</dt><dd>It</dd></div><div><dt>Reviews</dt><dd>Your checks</dd></div><div><dt>Sends</dt><dd>It</dd></div></dl></li>
+      </ol>
+    </div>
   </section>
 
   <section class="block" id="track">
     <div class="section-head stacked">
       <span class="eyebrow">It keeps track</span>
-      <h2>Replies, interviews, next steps</h2>
-      <p class="lede">Every reply and interview lands on the right application, and the app tells you what to do next.</p>
+      <h2>Interviews and next steps</h2>
+      <p class="lede">Every interview lands on the right application, and the app tells you what to do next.</p>
     </div>
     <div class="stop-panel">
       <dl class="items">
-        <div><dt>Gmail and Calendar</dt><dd>Replies and interviews update each application; read-only</dd></div>
         <div><dt>Recruiters find you too</dt><dd>Paste their message or a screenshot: it becomes a tracked job of its own</dd></div>
         <div><dt>One calendar</dt><dd>Every screening and interview; click a call to open its job</dd></div>
         <div><dt>Interview prep</dt><dd>A message the evening before, with what to practise</dd></div>
@@ -122,6 +200,26 @@
       </dl>
       <p class="consent-note"><b>Ask first, every time.</b> The app won't record until you confirm everyone on the call agreed. Recording people without their consent is illegal in many places.</p>
     </div>
+  </section>
+
+  <section class="block" id="ai-reads" aria-labelledby="ar-h">
+    <div class="section-head stacked">
+      <span class="eyebrow">What the AI reads</span>
+      <h2 id="ar-h">Which part of you each AI step reads</h2>
+      <p class="lede">A step is listed the day it ships. Sensitive answers (health, ethnicity, religion and the like) never reach any of them.</p>
+    </div>
+    <div class="access-wrap rd-wrap">
+<!-- readers:start -->
+<table class="rd-table"><thead><tr><th scope="col">AI step</th><th scope="col">Your details</th><th scope="col">CV + Experience bank</th><th scope="col">What we learned</th><th scope="col">Strategy</th><th scope="col">Voice</th><th scope="col">Never reads</th></tr></thead><tbody>
+<tr data-step="kit"><th scope="row">Kit answers</th><td data-label="Your details"><span class="rd-dot" role="img" aria-label="Does not read Your details"></span></td><td data-label="CV + Experience bank"><span class="rd-dot on" role="img" aria-label="Reads CV + Experience bank"></span></td><td data-label="What we learned"><span class="rd-dot" role="img" aria-label="Does not read What we learned"></span></td><td data-label="Strategy"><span class="rd-dot" role="img" aria-label="Does not read Strategy"></span></td><td data-label="Voice"><span class="rd-dot" role="img" aria-label="Does not read Voice"></span></td><td data-label="Never reads" class="rd-never">sensitive answers</td></tr>
+<tr data-step="cv_tailor"><th scope="row">CV tailoring</th><td data-label="Your details"><span class="rd-dot on" role="img" aria-label="Reads Your details"></span></td><td data-label="CV + Experience bank"><span class="rd-dot on" role="img" aria-label="Reads CV + Experience bank"></span></td><td data-label="What we learned"><span class="rd-dot on" role="img" aria-label="Reads What we learned"></span></td><td data-label="Strategy"><span class="rd-dot on" role="img" aria-label="Reads Strategy"></span></td><td data-label="Voice"><span class="rd-dot" role="img" aria-label="Does not read Voice"></span></td><td data-label="Never reads" class="rd-never">salary, sensitive answers</td></tr>
+<tr data-step="letter"><th scope="row">Letters</th><td data-label="Your details"><span class="rd-dot on" role="img" aria-label="Reads Your details"></span></td><td data-label="CV + Experience bank"><span class="rd-dot on" role="img" aria-label="Reads CV + Experience bank"></span></td><td data-label="What we learned"><span class="rd-dot on" role="img" aria-label="Reads What we learned"></span></td><td data-label="Strategy"><span class="rd-dot on" role="img" aria-label="Reads Strategy"></span></td><td data-label="Voice"><span class="rd-dot on" role="img" aria-label="Reads Voice"></span></td><td data-label="Never reads" class="rd-never">salary, sensitive answers</td></tr>
+<tr data-step="portrait"><th scope="row">Your portrait</th><td data-label="Your details"><span class="rd-dot on" role="img" aria-label="Reads Your details"></span></td><td data-label="CV + Experience bank"><span class="rd-dot on" role="img" aria-label="Reads CV + Experience bank"></span></td><td data-label="What we learned"><span class="rd-dot on" role="img" aria-label="Reads What we learned"></span></td><td data-label="Strategy"><span class="rd-dot on" role="img" aria-label="Reads Strategy"></span></td><td data-label="Voice"><span class="rd-dot on" role="img" aria-label="Reads Voice"></span></td><td data-label="Never reads" class="rd-never">sensitive answers</td></tr>
+</tbody></table>
+<!-- readers:end -->
+    </div>
+    <p class="legend"><span><span class="rd-dot on" aria-hidden="true"></span> reads it</span><span><span class="rd-dot" aria-hidden="true"></span> does not</span></p>
+    <p class="source-note"><b>Where the AI runs.</b> With your own key the AI runs from your computer. With Free AI a request passes through our server to the model and nothing is stored. More: <a href="/trust">Your data and safety</a> and the <a href="/privacy">Privacy policy</a>.</p>
   </section>
 
   <div class="next-page"><span>Everything inside the app, screen by screen.</span><a href="/features">Features →</a></div>

@@ -17,7 +17,9 @@ export function realSecrets(secrets) {
 export const leftWords = (text, words = []) => words.filter(word => new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(String(text || '')));
 
 // The fields the extension must have filled on form.html for the clip to show a real fill (the question answers come from the persona).
-export const MUST_FILL = ['first_name', 'last_name', 'email', 'resume', 'permit', 'privacy'];
+// Why (12 Nov 2026): no 'privacy': the extension leaves a consent box for the person to tick (the panel lists it as the field left; /how-it-works:
+// "Checks and terms: it asks, you tick"), so the check asked for a fill the product never makes and stopped every extension recording.
+export const MUST_FILL = ['first_name', 'last_name', 'email', 'resume', 'permit'];
 export const missingFills = filled => MUST_FILL.filter(field => !(filled || []).includes(field));
 
 // Every picture is dark (the site is dark-only; the app, the fictional form and the extension's panel all run dark): a mean brightness over this is the light theme or a blank window.

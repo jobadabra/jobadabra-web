@@ -23,6 +23,6 @@ The public repo keeps only the app's hook `JOBADABRA_DEMO_DIR` (desktop/lib/demo
 - [x] CI workflow, in this repo since 20 Oct 2026: daily check, Mac recording, refresh PR (proof: tests/test_site_media_refresh.py)
 - [x] Nurse-in-Lyon persona (owner, 20 Oct 2026), the media's default; dates shift to the recording week; the default person's words refused (proof: desktop/test/media-persona.test.js)
 - [x] Stills fill the window (CDP capture), close-ups at 2x, Strategy waited for, extension poster = the filled form (proof: desktop/test/media-persona.test.js, desktop/test/media-camera.test.js)
-- [ ] apply-split (browser + app side by side) for /how-it-works
+- [x] apply-split (browser + app side by side) for /how-it-works: the hero's two Apply recordings side by side (pip.mjs splitPlan), `tools/media.sh apply-split` (proof: desktop/test/media-pip.test.js; owner, 12 Nov 2026: the old hand-drawn split still showed the old name)
 - [x] First director plans committed for hero and extension-fill (proof: media/plans/extension-fill.json)
 - [ ] Retire site-demo.mjs / apply-demo.mjs: the public PR that removes the pipeline from the public repo

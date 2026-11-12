@@ -1,7 +1,7 @@
 // The product's screenshots and videos, made with nobody's hands (owner, 20 Oct 2026): records the app (demo mode, dark) and the real extension on a
 // fictional form, adds zooms, cursor and clicks in code from the click log, checks every piece, writes the site's files + manifest.json.
 //   node media/media.mjs                                   all pieces → <tmp>/jobadabra-media
-//   node media/media.mjs hero stills --out <dir>        some pieces (hero, extension-fill, stills, snips); a partial run keeps the others in manifest.json
+//   node media/media.mjs hero stills --out <dir>        some pieces (hero, extension-fill, apply-split, stills, snips); a partial run keeps the others in manifest.json
 //   node media/media.mjs --persona <folder>             another search profile (default: personas/nurse-lyon): files laid over desktop/demo + media.json
 //   node media/media.mjs --keep                         keep the frames and logs (<out>/.work) for the director (direct.mjs) or a look
 // Zooms and captions the AI director chose are in plans/<piece>.json (direct.mjs); without one, the camera frames each hold's `look`.
@@ -13,7 +13,7 @@ import {beatTimes, FIT_WARN, fromFirstLook, posterTime, renderPlan, RING, toLast
 import {dropChanges, frameCuts, STRAY_MAX, strayFrames, THUMB} from './cuts.mjs';
 import {planStrays, smallFrames} from './prestray.mjs';
 import {joinFilter, openOnCard, transitions, withCards} from './transitions.mjs';
-import {fillSeconds, pipPlan} from './pip.mjs';
+import {fillSeconds, pipPlan, splitPlan, syncTime} from './pip.mjs';
 import {captionAt, captionSize, captionTimes, SAY_FADE, sayTrack, vttOf} from './captions.mjs';
 import {leftWords, pieceProblems, realEmails, stallsOf} from './check.mjs';
 import {brightness, duration, encodeStill, encodeVideo, framesIn, missingEncoders} from './encode.mjs';
@@ -203,15 +203,19 @@ async function recordPip(name, persona, work) {
   const piece = VIDEOS[name], speed = piece.speed || 1;
   const b = await recordClip(name, persona, work, {layer: true});
   const fill = fillSeconds(b.log);   // its sync to the panel's done state
-  const pace = steps => steps.map(step => (step.review && fill ? {...step, review: {...step.review, every: Math.round(fill * 1000 / step.review.fields.length)}} : step));
+  // the card replays the extension's own reports from the fill's start when the take kept them (live-review.mjs fromReports), else ticks its listed fields evenly
+  const reports = b.log.reports?.length ? {reports: b.log.reports, sync: syncTime(b.log)} : null;
+  const pace = steps => steps.map(step => (step.review && reports ? {...step, review: {...step.review, ...reports}}
+    : step.review && fill ? {...step, review: {...step.review, every: Math.round(fill * 1000 / step.review.fields.length)}} : step));
   const a = await recordClip(piece.pip, persona, work, {layer: true, tune: other => ({...other, steps: pace(other.steps)})});
-  console.log(`media: ${name}: picture in picture with ${piece.pip}${fill ? `, the card paced on a ${fill.toFixed(1)} s fill` : ''}`);
+  console.log(`media: ${name}: ${piece.layout === 'split' ? 'side by side' : 'picture in picture'} with ${piece.pip}${fill ? `, the card paced on a ${fill.toFixed(1)} s fill` : ''}`);
   const dir = path.join(work, name);
   let said = [];
   const recsOf = phone => [a, b].map(rec => ({...(phone ? rec.phone : rec), name: rec.name}));
   const compose = async (out, width, height, phone = null) => {
     const recs = recsOf(phone);
-    const plan = pipPlan({a: recs[0], b: recs[1], width, height, fps: FPS, speed, phone});
+    const plan = piece.layout === 'split' ? splitPlan({a: recs[0], b: recs[1], width, height, fps: FPS, speed, labels: piece.labels})   // side by side (/how-it-works)
+      : pipPlan({a: recs[0], b: recs[1], width, height, fps: FPS, speed, phone});
     if (phone) said = sayTrack(plan.frames, FPS, speed);   // the phone copy: no captions on it (round 9), the site shows these
     await runRender({framesDir: dir, frames: phone ? plan.frames.map(noWords) : plan.frames, scale: 1, width, height, fps: FPS, ring: RING, captionSize: captionSize(width, Boolean(phone)), sayFade: SAY_FADE, out, ffmpeg: 'ffmpeg'}, name);
     return plan;

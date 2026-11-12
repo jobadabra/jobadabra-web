@@ -43,9 +43,20 @@ async function draw(job) {
       if (one.framed) { ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = job.width * 0.02; ctx.shadowOffsetY = job.width * 0.004; ctx.fillStyle = '#0b0f14'; ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, round); ctx.fill(); ctx.shadowColor = 'transparent'; }
       ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, round); ctx.clip();
       ctx.drawImage(bitmap, one.x * k, one.y * k, one.w * k, one.h * k, r.x, r.y, r.w, r.h);
-      if (one.framed) { ctx.lineWidth = Math.max(2, job.width * 0.0025); ctx.strokeStyle = 'rgba(242, 169, 59, 0.85)'; ctx.stroke(); }
+      if (one.framed) { ctx.lineWidth = Math.max(2, job.width * 0.0025); ctx.strokeStyle = one.dim ? 'rgba(255, 255, 255, 0.14)' : 'rgba(242, 169, 59, 0.85)'; ctx.stroke(); }   // dim: the split's pane that is not acting (pip.mjs splitPlan)
       ctx.restore();
     }
+  };
+  // the split's pane names (pip.mjs splitPlan): an amber number, then the words in small spaced capitals, sitting on the pane's top edge
+  const labels = list => {
+    const size = Math.round(job.width * 0.0085);
+    ctx.save(); ctx.textBaseline = 'alphabetic'; ctx.letterSpacing = `${(size * 0.14).toFixed(1)}px`;
+    for (const one of list) {
+      ctx.font = `700 ${size}px -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif`; ctx.fillStyle = '#ffb224'; ctx.fillText(one.num, one.x + 2, one.y);
+      const at = one.x + 2 + ctx.measureText(one.num).width + size * 0.9;
+      ctx.font = `600 ${size}px -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif`; ctx.fillStyle = '#93a1b0'; ctx.fillText(one.text.toUpperCase(), at, one.y);
+    }
+    ctx.restore();
   };
   const view = (target, bitmap, v) => target.drawImage(bitmap, v.x * s, v.y * s, v.w * s, v.h * s, 0, 0, job.width, job.height);
   const layer = document.createElement('canvas'); layer.width = job.width; layer.height = job.height;
@@ -88,6 +99,7 @@ async function draw(job) {
       }
     } else view(ctx, bitmap, frame);
     grade();
+    if (frame.labels) labels(frame.labels);   // words come after the grade, like the captions
     const px = (frame.cx - frame.x) * job.width / frame.w, py = (frame.cy - frame.y) * job.height / frame.h;
     if (frame.press != null && frame.press < job.ring) {   // the click ring: grows and fades
       const k = frame.press / job.ring;

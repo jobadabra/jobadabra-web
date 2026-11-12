@@ -27,12 +27,16 @@ export const MAIN_HOST = 'www.jobadabra.top';
 // The workers.dev name moves too (owner, 27 Oct 2026: "https://www.jobpilotto.workers.dev/ this should always redirect (301 permanently
 // moved) to jobadabra.top"); its API stays (central-scout.yml PUTs /api/index there). Its /admin pages go through shared/admin-hop.js.
 export const OLD_HOSTS = ['www.jobpilotto.top', 'www.jobpilotto.workers.dev'];
-export const PAGE_PATHS = ['/', '/about-you', '/benchmark', '/changelog', '/compare', '/coverage', '/download', '/faq', '/features', '/friends', '/how-it-works', '/intelligence', '/open', '/platforms', '/pricing', '/privacy', '/ready-live', '/research', '/terms', '/trust'];
+export const PAGE_PATHS = ['/', '/benchmark', '/changelog', '/compare', '/coverage', '/download', '/faq', '/features', '/friends', '/how-it-works', '/intelligence', '/open', '/platforms', '/pricing', '/privacy', '/ready-live', '/research', '/terms', '/trust'];
+// A page folded into another keeps its address: one 301 to where its content now lives, query kept, from any of our hosts; run_worker_first
+// keeps listing it so the Worker sees it. Why (owner, 12 Nov 2026): "I think we can delete '/about-you' since we have it explained in 'how it works'".
+export const MOVED_PAGES = {'/about-you': '/how-it-works#ai-reads'};
 export function pageRedirect(request) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return null;
   const url = new URL(request.url);
   if (url.hostname !== MAIN_HOST && !OLD_HOSTS.includes(url.hostname)) return null;
   const path = url.pathname.replace(/\.html$/, '').replace(/^\/index$/, '/');
+  if (MOVED_PAGES[path]) { const to = new URL(MOVED_PAGES[path], `https://${MAIN_HOST}`); to.search = url.search; return Response.redirect(to.toString(), 301); }
   if (!PAGE_PATHS.includes(path)) return null;
   if (url.hostname === MAIN_HOST && url.protocol === 'https:' && path === url.pathname) return null;   // already its one address
   url.protocol = 'https:';
