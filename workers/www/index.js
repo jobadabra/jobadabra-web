@@ -131,6 +131,8 @@ import {brain} from '../../api/brain.js';
 import {attribution, purge as purgeNets} from '../../api/attribution.js';
 import {log as brainLog, view as brainView} from '../../shared/brainlog.js';
 import {index as employerIndex} from '../../api/employers.js';
+import {nationalSearch} from '../../api/national.js';   // national public employment services' ads for installs, under the index's token
+import {isFeedTick, readNorway, sweepNational} from '../../api/national-feed.js';
 import {scoutMemory} from '../../api/scout-memory.js';
 import {coverage} from '../../api/coverage.js';
 import * as pool from '../../api/pool.js';
@@ -283,6 +285,7 @@ async function route(request, env, ctx) {
   if (pathname === '/ai-cost/data' && request.method === 'GET') return jobCostSpent(request, env);   // a day's reported spend for CI's budget guard (same key)
   if (pathname === '/ai-cost/data' && request.method === 'PUT') return jobCostIngest(request, env);   // each scheduled job reports its AI cost (Bearer AI_COST_PUBLISH_KEY)
   if (pathname === '/api/index') return employerIndex(request, env);
+  if (pathname === '/api/index/national') return nationalSearch(request, env);   // api/national.js: a search of the ads the site keeps from official feeds
   if (pathname === '/api/scout-memory') return scoutMemory(request, env);   // the central scout saves and restores its memory (Bearer INDEX_PUBLISH_KEY, private R2 SCOUT_MEMORY)
   if (pathname === '/api/synthetic/last') return synthetic.lastRoute(request, env);   // when the newest probe round ran, only that (shared/synthetic.js; the bot Worker's heartbeat)
   if (pathname === '/api/coverage' && request.method === 'GET') return coverage(env);   // the website's public numbers (counts only, api/coverage.js)
@@ -377,12 +380,14 @@ export default {
       if (isSearchNightTick(tickAt)) ctx.waitUntil(searchNightMissing(env, tickAt).then(done => { if (done.missing) console.log(`search night missing: alert ${done.alert}`); }).catch(error => console.error(`search night missing: ${error.message}`)));   // 06:30 UTC: no night filed for today = the owner is told once (admin/search-night-missing.js)
       if (tickAt.getUTCMinutes() === 10) ctx.waitUntil(pingOverdue(env, tickAt).catch(error => console.error(`feedback overdue ping: ${error.message}`)));   // a report 24 h old with no reply: the owner is told once (shared/feedback-overdue.js)
       if (tickAt.getUTCMinutes() === 10) ctx.waitUntil(pingWaitingReports(env, tickAt).catch(error => console.error(`report waiting ping: ${error.message}`)));   // a report unfetched 2 days: the owner is told once (shared/report-waiting.js)
+      if (isFeedTick(tickAt)) ctx.waitUntil(readNorway(env, {now: tickAt}).then(done => { if (done.status !== 'off') console.log(`national feed: ${JSON.stringify(done)}`); }).catch(error => console.error(`national feed: ${error.message}`)));   // Norway's NAV feed, once an hour (api/national-feed.js; nothing without NATIONAL_FEEDS and the key)
       return;
     }
     ctx.waitUntil(sentryAlert.purge(env).catch(error => console.error(`sentry alert purge: ${error.message}`)));
     ctx.waitUntil(retryImpact(env).catch(error => { console.error(`feedback impact retry: ${error.message}`); throw error; }));   // feedback the AI could not rate yet (shared/feedback-impact.js); rethrown so an outage makes this invocation fail, not only a log line (Gitar on #339)
     if (env.LAB_FILLS) ctx.waitUntil(pruneBundles(env.LAB_FILLS).catch(error => console.error(`bug bundles purge: ${error.message}`)));   // bundles older than 90 days (shared/bug-bundles.js)
     ctx.waitUntil(purgeFeedbackFiles(env).catch(error => console.error(`feedback files purge: ${error.message}`)));   // screenshots and logs older than 90 days (shared/feedback.js)
+    ctx.waitUntil(sweepNational(env).catch(error => console.error(`national sweep: ${error.message}`)));   // ads past 6 months leave (api/national-feed.js)
     ctx.waitUntil(synthetic.purge(env).catch(error => console.error(`synthetic purge: ${error.message}`)));
     // The day's totals first (kept for good), then the 90-day purge of raw rows.
     ctx.waitUntil(pool.rollup(env).catch(error => console.error(`pool rollup: ${error.message}`)).then(() => pool.purge(env)).catch(error => console.error(`pool purge: ${error.message}`)));
