@@ -22,6 +22,10 @@ export const INTEL_COLLECTORS = [
   // Why (11 Nov 2026, owner, asked via AskUserQuestion: "Fix now in a new session (Recommended)"): GitHub's schedule ran the central scout 2-3 times a day instead of 4, 1-2 h late (11 Nov: 01:58Z, 11:56Z, the 16:20Z slot never fired), so the employer index the app reads went stale by hours.
   // The Worker starts it at :25 of 4, 10, 16 and 22 UTC (:25 is on no other tick: collectors 0/10/15/40, probes 5/20/35/50, timers 0/5/30/40); the workflow's cron stays as the backup.
   {workflow: 'central-scout.yml', minute: 25, backup: 26, home: 'lab', hours: [4, 10, 16, 22]},
+  // Why (12 Nov 2026, owner via AskUserQuestion to session bd: "a separate lab workflow, every 2 h, free sources only"; sa's brief to bw: "started by our own Worker timer, not by a GitHub cron and not by hand"):
+  // board discovery finds job boards with 3+ local jobs for the weakest country × kind cells; the Scout publishes what it found. :45 of every even UTC hour (:45 is on no other tick; :40, bd's first pick, is e2e-intel's).
+  // backup: null, the workflow has no GitHub cron (workflow_dispatch only, concurrency group board-discovery): this timer is its only start. Its last start shows on Scouting (admin/scouting-boards.js).
+  {workflow: 'board-discovery.yml', minute: 45, backup: null, home: 'lab', hours: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22]},
 ];
 
 /** The collectors due at `date` (a 5-minute tick): its minute, and its hour when the row lists `hours`. */

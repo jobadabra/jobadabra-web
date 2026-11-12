@@ -58,3 +58,11 @@ test('gatherBoards: the live counts, the history oldest first with gaps, the Wor
   assert.deepEqual(got.start, {at: '2026-11-12T07:45:00Z', ok: true, reason: ''});
   assert.equal((await gatherBoards(fakeDb(), [])).start, null, 'never started reads as null');
 });
+
+test('gatherBoards: paused when the Scheduled snapshot reads board-discovery.yml as disabled; not paused without a snapshot', async () => {
+  const snapshot = disabled => ({prepare: sql => ({bind: () => ({all: async () => ({results: []}), first: async () => null}),
+    first: async () => (sql.includes('schedules_snapshot') ? {body: JSON.stringify({jobs: [{repo: 'jobadabra/jobadabra-lab', file: 'board-discovery.yml', disabled}]})} : null)})});
+  assert.equal((await gatherBoards(snapshot(true))).paused, true);
+  assert.equal((await gatherBoards(snapshot(false))).paused, false);
+  assert.equal((await gatherBoards(fakeDb())).paused, false, 'no snapshot: not paused');
+});

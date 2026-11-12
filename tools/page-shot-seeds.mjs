@@ -330,6 +330,12 @@ export const seeds = {...notifySeeds,
         ON CONFLICT(day) DO UPDATE SET feeds = excluded.feeds, non_it = excluded.non_it, cells = excluded.cells`).bind(day, feeds, Math.round(feeds / 3), JSON.stringify(cells)).run();
     }
   },
+  'scouting-paused': async ({env, call}) => {   // the scouting seed with board discovery disabled in GitHub (12 Nov 2026, bw): the card's grey "paused" chip over a refused Worker start
+    await seeds.scouting({env, call});
+    await env.STATS.prepare('INSERT INTO intel_start (workflow, at, ok, reason) VALUES (?, ?, 0, ?) ON CONFLICT(workflow) DO UPDATE SET at = excluded.at, ok = 0, reason = excluded.reason').bind('board-discovery.yml', new Date().toISOString(), 'GitHub dispatch failed: 422').run();
+    await env.STATS.prepare('INSERT INTO schedules_snapshot (id, at, body) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET at = excluded.at, body = excluded.body')
+      .bind(new Date().toISOString(), JSON.stringify({schema: 1, at: new Date().toISOString(), repos: [], jobs: [{repo: 'jobadabra/jobadabra-lab', file: 'board-discovery.yml', name: 'Board discovery', crons: [], manual: true, disabled: true, recent: []}]})).run();
+  },
   'closed-sites': async ({env}) => {   // made-up closed sites for /admin/job-search/scouting (27 Oct 2026, table tools): 52 dead ends (refused, unreachable, no feed) and 12 browser-only or gone pages, over 6 weeks
     const day = n => new Date(Date.parse('2026-10-26T00:00:00Z') - n * 86400000).toISOString().slice(0, 10);
     for (let n = 1; n <= 52; n++) {
