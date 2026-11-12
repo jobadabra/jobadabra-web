@@ -173,8 +173,8 @@ test('a refused ten-minute sweep (pr-verdict) is told once a day, not 144 times,
 
 // Why (12 Nov 2026, mac-9a: "does alertState count a red run on a PR branch?"): the collector reads every branch, so a PR-triggered workflow's latest runs are mostly pull_request runs; only a run on main (push, schedule, dispatch) is news.
 const prRun = (conclusion, n) => ({...run(conclusion, n), event: 'pull_request', branch: 'hi-hosted-pip'});
-test('a red pull_request run is no news; a red push run on main of release-ready-runner.yml tells once; a snapshot without main runs (old shape) records nothing', async () => {
-  const {e, tg} = await setup(), release = {repo: 'jobadabra/jobadabra', file: 'release-ready-runner.yml', name: 'Release · Ready runner', disabled: false};
+test('a red pull_request run is no news; a red push run on main of a scheduled job (hosted-e2e.yml) tells once; a snapshot without main runs (old shape) records nothing', async () => {
+  const {e, tg} = await setup(), release = {repo: 'jobadabra/jobadabra-web', file: 'hosted-e2e.yml', name: 'Hosted E2E', crons: ['17 3 * * *'], disabled: false};
   const job = (recent, main) => ({jobs: [{...release, recent, main}]});
   await alertJobs(e, job([run('success', 0)], [run('success', 0)]), {fetcher: tg.fetcher, now: hour(0)});
   await alertJobs(e, job([prRun('failure', 1), run('success', 0)], [run('success', 0)]), {fetcher: tg.fetcher, now: hour(1)});
@@ -182,7 +182,7 @@ test('a red pull_request run is no news; a red push run on main of release-ready
   assert.deepEqual(tg.sends(), [], 'a red PR run on top of a green main is not a red job');
   const told = await alertJobs(e, job([run('failure', 3), prRun('success', 2)], [run('failure', 3), run('success', 0)]), {fetcher: tg.fetcher, now: hour(3)});
   assert.deepEqual(told, {red: 1, green: 0});
-  assert.match(tg.sends()[0], /Release · Ready runner failed/);
+  assert.match(tg.sends()[0], /Hosted E2E failed/);
   await alertJobs(e, job([prRun('success', 4), run('failure', 3)], [run('failure', 3)]), {fetcher: tg.fetcher, now: hour(4)});
   assert.equal(tg.sends().length, 1, 'a green PR run does not end the red streak either');
   const old = await alertJobs(e, {jobs: [{...release, file: 'old-shape.yml', recent: [run('failure', 5)]}]}, {fetcher: tg.fetcher, now: hour(5)});
@@ -191,11 +191,27 @@ test('a red pull_request run is no news; a red push run on main of release-ready
 });
 
 test('the run link of the alert is the main run that decided the state, never a newer PR run (Gitar, #592)', async () => {
-  const {e, tg} = await setup(), release = {repo: 'jobadabra/jobadabra', file: 'release-ready-runner.yml', name: 'Release · Ready runner', disabled: false};
-  const url = n => `https://github.com/jobadabra/jobadabra/actions/runs/${n}`;
+  const {e, tg} = await setup(), release = {repo: 'jobadabra/jobadabra-web', file: 'hosted-e2e.yml', name: 'Hosted E2E', crons: ['17 3 * * *'], disabled: false};
+  const url = n => `https://github.com/jobadabra/jobadabra-web/actions/runs/${n}`;
   const mainRun = (conclusion, n) => ({...run(conclusion, n), url: url(n)}), pr = (conclusion, n) => ({...prRun(conclusion, n), url: url(n)});
   await alertJobs(e, {jobs: [{...release, recent: [mainRun('success', 0)], main: [mainRun('success', 0)]}]}, {fetcher: tg.fetcher, now: hour(0)});
   await alertJobs(e, {jobs: [{...release, recent: [pr('success', 9), mainRun('failure', 3)], main: [mainRun('failure', 3)]}]}, {fetcher: tg.fetcher, now: hour(3)});
   await alertJobs(e, {jobs: [{...release, recent: [pr('failure', 10), mainRun('success', 4)], main: [mainRun('success', 4)]}]}, {fetcher: tg.fetcher, now: hour(4)});
   assert.deepEqual(tg.links(), [url(3), url(4)], 'the 🔴 links the failing main run, the 🟢 the passing main run');
+});
+
+// Design (12 Nov 2026, the owner's false 🔴 "Spike · Windows Store package (MSIX) failed" at 21:03Z, msix-spike.yml is workflow_dispatch only): which jobs are watched is ONE rule, in alertState: a job is watched when it is scheduled
+// (crons.length > 0, GitHub's or the Worker cron's) or the Worker starts it (INTEL_COLLECTORS: board discovery has no GitHub cron). A hand-started job's old red run is history, not a streak to tell.
+const dispatchOnly = {repo: 'jobadabra/jobadabra', file: 'msix-spike.yml', name: 'Spike · Windows Store package (MSIX)', crons: [], disabled: false};
+test('a hand-started job (no schedule) with a red main run tells nothing; the same red run on a scheduled job tells once; a job only the Worker starts (board discovery) is watched too', async () => {
+  const {e, tg} = await setup();
+  const jobs = (job, conclusion, n) => ({jobs: [{...job, recent: [run(conclusion, n)], main: [run(conclusion, n)]}]});
+  for (const [job, expected] of [[dispatchOnly, 0], [{...dispatchOnly, file: 'msix-spike-scheduled.yml', crons: ['0 5 * * *']}, 1], [{repo: 'jobadabra/jobadabra-lab', file: 'board-discovery.yml', name: 'Lab · Board discovery', crons: [], disabled: false}, 1]]) {
+    const before = tg.sends().length;
+    await alertJobs(e, jobs(job, 'success', 0), {fetcher: tg.fetcher, now: hour(0)});
+    await alertJobs(e, jobs(job, 'failure', 1), {fetcher: tg.fetcher, now: hour(1)});
+    assert.equal(tg.sends().length - before, expected, `${job.file}: red main run`);
+  }
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM job_alert WHERE job = 'jobadabra/msix-spike.yml'").get().n, 0, 'a hand-started job is never recorded');
+  assert.deepEqual(tg.sends().map(text => /(Spike · [^\n]*|Lab · Board discovery) failed/.exec(text)?.[0]), ['Spike · Windows Store package (MSIX) failed', 'Lab · Board discovery failed'], 'exactly the scheduled job and the Worker-started job told');
 });
