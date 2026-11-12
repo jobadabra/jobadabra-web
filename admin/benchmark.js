@@ -7,6 +7,7 @@ import {remember} from '../shared/auth.js';
 import {APPLICANTS, FIX_KEYS, MODES, summarize} from './benchmark-data.js';
 import {page} from './benchmark-page.js';
 import {ROUND, fairSummary} from './benchmark-fair.js';
+import {state} from './benchmark-publish.js';
 
 const KEEP_DAYS = 120, MAX_ROWS = 300;
 const authorized = (request, env) => {
@@ -59,5 +60,6 @@ export async function view(request, env) {
   if (url.searchParams.has('key')) return remember(url, env, request);
   let snapshot = null;
   try { const row = env.STATS ? await env.STATS.prepare('SELECT body FROM benchmark_snapshot WHERE id = 1').first() : null; snapshot = row ? JSON.parse(row.body) : null; } catch { snapshot = null; }
-  return new Response(page(snapshot, {segment: url.searchParams.get('view') || undefined, round: url.searchParams.get('round') || undefined}), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
+  const published = await state(env.STATS);
+  return new Response(page(snapshot, {segment: url.searchParams.get('view') || undefined, round: url.searchParams.get('round') || undefined, published, confirm: url.searchParams.get('confirm'), note: url.searchParams.get('note') || ''}), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
 }

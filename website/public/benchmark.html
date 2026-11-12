@@ -50,15 +50,11 @@
 
   <section class="bench-block" id="job-search" aria-labelledby="search-title">
     <div class="bench-head">
-      <span class="bench-meta">Job search · snapshot of 27 Oct 2026</span>
+      <span class="bench-meta" data-text="searchMeta">Job search</span>
       <h2 id="search-title">The jobs each search returned</h2>
-      <p class="lede">Ten fictional job seekers, from truck driver in Sofia to UX designer in Lisbon. We judged the kind of work and the location separately.</p>
+      <p class="lede" data-text="searchLede">Fictional job seekers across Europe. We judged the kind of work and the location separately.</p>
     </div>
-    <ul class="evidence-stats">
-      <li><b>10</b><span>fictional roles and cities</span></li>
-      <li><b>896</b><span>distinct jobs judged, deduplicated within each persona</span></li>
-      <li><b>957</b><span>returned rows; some jobs appeared in several channels</span></li>
-    </ul>
+    <ul class="evidence-stats" data-text="searchStats"></ul>
     <div data-benchmark="search"><p class="bench-loading">Loading the dated search results…</p></div>
     <p class="source-note"><b>Different samples, not a recall ranking.</b> The channels returned different numbers of jobs and covered different personas. Rates are within each channel's returned rows. A 100% rate on seven or eight listings is a very small sample. Missing observations are not shown as measured zeroes.</p>
     <details class="tech bench-method"><summary>By persona: both role and place yes / returned listings</summary><div data-benchmark="personas"><p class="bench-loading">Loading persona results…</p></div><p class="source-note">“Not observed” means no returned rows in the saved data. It does not establish that the tool ran successfully and found nothing. Remote verdicts stay separate from place yes.</p></details>
@@ -66,24 +62,24 @@
 
   <section class="bench-block" id="form-filling" aria-labelledby="forms-title">
     <div class="bench-head">
-      <span class="bench-meta">Form filling · completed fair round · 27 Oct 2026</span>
-      <h2 id="forms-title">Six forms. Four tools. Every miss counted.</h2>
-      <p class="lede">Browser Use scored 84.3%; Jobadabra scored 78.2%. This is one observed run per tool, with a blind judge and the same Haiku model.</p>
+      <span class="bench-meta" data-text="formsMeta">Form filling · fair round</span>
+      <h2 id="forms-title" data-text="formsTitle">Every miss counted.</h2>
+      <p class="lede" data-text="formsLede"></p>
     </div>
     <div data-benchmark="forms"><p class="bench-loading">Loading the completed form round…</p></div>
-    <p class="source-note">All four contestants ran on CI on the same six unseen forms, with the same fictional applicant. The score includes wrong answers, answerable fields left empty, and questions another tool reached but this run did not. No application was submitted.</p>
+    <p class="source-note" data-text="formsNote"></p>
   </section>
 
   <section class="bench-block" id="methodology" aria-labelledby="method-title">
     <div class="bench-head"><h2 id="method-title">What these numbers can tell you</h2><p class="lede">These are benchmarks we run ourselves, not an independent certification or a promise about every job site.</p></div>
     <div class="stop-panel"><dl class="items">
       <div><dt>Blind judging</dt><dd>The judge sees the answer or listing and the supplied facts, without the tool's name. Search verdicts separate role and location; form verdicts separate right, wrong and empty.</dd></div>
-      <div><dt>Search limits</dt><dd>Different source coverage and small samples matter. Role match is not application success. “Both” requires role yes and place yes; remote and unknown location verdicts are kept separate. This snapshot does not measure all jobs available on the market.</dd></div>
-      <div><dt>Form limits</dt><dd>One repeat per tool, six forms, one fictional applicant and Haiku 5.5 on CI. Model access and tool execution differ. A single repeat gives no estimate of run-to-run variation. It is not a production-wide success rate.</dd></div>
-      <div><dt>Newer attempts</dt><dd>Two later post-fix rounds captured all contestants, but judging stopped at a service usage limit. We keep the last completed scored round visible, with its build and date, until those captures have valid scores.</dd></div>
+      <div><dt>Search limits</dt><dd>Different source coverage and small samples matter. Role match is not application success. “Both” requires role yes and place yes; remote and unknown location verdicts are kept separate. These rounds do not measure all jobs available on the market.</dd></div>
+      <div><dt>Form limits</dt><dd>One repeat per tool, a handful of forms, one fictional applicant and Haiku 5.5 on CI. Model access and tool execution differ. A single repeat gives no estimate of run-to-run variation. It is not a production-wide success rate.</dd></div>
+      <div><dt>Which round is shown</dt><dd>We review every round in full first, then publish the one worth showing. The page shows the latest round we published, with its date; an older one stays out of sight until we choose it again.</dd></div>
       <div><dt>Check the evidence</dt><dd>The downloadable snapshot contains aggregate counts, fictional persona labels, the scored run ID and source hashes. It contains no applicant answers or personal data. This is a dated snapshot, not a live counter.</dd></div>
     </dl></div>
-    <div class="bench-links"><a class="btn btn-ghost" href="/benchmark-results.json" download>Download aggregate data</a><a class="btn btn-ghost" href="https://github.com/jobadabra/jobadabra-benchmarks/actions/runs/40506831190">Scored form run</a><a class="btn btn-ghost" href="https://github.com/jobadabra/jobadabra-benchmarks/tree/5d362c7/search-bench/results/2026-10-27">Search verdicts</a></div>
+    <div class="bench-links" data-text="links"><a class="btn btn-ghost" href="/benchmark-results.json" download>Download aggregate data</a></div>
     <noscript><p class="source-note">The comparison tables need JavaScript. All counts are also available in the downloadable aggregate data.</p></noscript>
   </section>
   <div class="next-page"><span>How the product's capabilities compare.</span><a href="/compare">Compare the tools →</a></div>
