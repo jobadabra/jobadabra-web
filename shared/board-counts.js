@@ -56,11 +56,22 @@ export const DISCOVERY_WORKFLOW = 'board-discovery.yml';
 
 /**
  * What the page draws: today's counts from sitefacts, the last 30 daily snapshots {day, total, profiles} oldest first ('daily' = index_daily rows, newest first, as gather reads them),
- * and `start`: the Worker's last start of DISCOVERY_WORKFLOW {at, ok, reason}, null before the first (or before table intel_start).
+ * `start`: the Worker's last start of DISCOVERY_WORKFLOW {at, ok, reason}, null before the first (or before table intel_start), and `paused`: true when the hourly
+ * Scheduled snapshot (schedules_snapshot, jobs/schedules-snapshot.mjs) reads the workflow as disabled in GitHub.
+ * Why (12 Nov 2026, sa agreed with bw: "GitHub's Disable is the pause, and the chip says paused when the workflow is disabled"; no switch of our own): the Worker still tries
+ * every 2 h and GitHub refuses, so without this the card would call a pause a refusal.
  */
 export async function gatherBoards(db, daily = []) {
   const now = countsOf(await rowsOf(db).catch(() => []));
   const history = [...daily].reverse().map(row => ({day: row.day, ...(dayCounts(row.boards) || {total: null, profiles: null})}));
   const row = await db.prepare('SELECT at, ok, reason FROM intel_start WHERE workflow = ?').bind(DISCOVERY_WORKFLOW).first().catch(() => null);
-  return {...now, history, start: row ? {at: String(row.at), ok: Boolean(row.ok), reason: String(row.reason || '')} : null};
+  return {...now, history, start: row ? {at: String(row.at), ok: Boolean(row.ok), reason: String(row.reason || '')} : null, paused: await pausedOf(db)};
+}
+
+/** Whether the Scheduled snapshot reads DISCOVERY_WORKFLOW as disabled in its repo; false when the snapshot is missing, unreadable or does not list it. */
+async function pausedOf(db) {
+  try {
+    const snap = await db.prepare('SELECT body FROM schedules_snapshot WHERE id = 1').first();
+    return Boolean(JSON.parse(snap?.body || '{}').jobs?.some(job => job.file === DISCOVERY_WORKFLOW && job.disabled));
+  } catch { return false; }
 }

@@ -46,7 +46,7 @@ const BOARDS_STYLE = `${CHIP_STYLE}.bd-grid td,.bd-grid th{text-align:center;fon
  * Rows: every family with a board or a test profile; columns: every country with a board or a test profile, Europe's order first. Zero reads as zero: a profile cell at 0 is a red chip.
  */
 export function boardsSection(boards, now = new Date()) {
-  const {total = 0, cells = {}, last = {}, profiles = 0, history = [], start = null} = boards || {};
+  const {total = 0, cells = {}, last = {}, profiles = 0, history = [], start = null, paused = false} = boards || {};
   const profileAt = new Map();
   for (const cell of PROFILE_CELLS) { const key = `${cell.family}|${cell.country}`; profileAt.set(key, [...(profileAt.get(key) || []), cell.id]); }
   const used = Object.keys(cells).map(key => key.split('|'));
@@ -68,7 +68,8 @@ export function boardsSection(boards, now = new Date()) {
   const chart = columns(days, [{name: 'Boards published', tone: 's1'}, {name: `Test profiles with a board (of ${PROFILE_CELLS.length})`, tone: 's3'}], {whole: true, gapLabel: 'no snapshot that day', labelEvery: 5});
   const trendTable = `<table><tr><th>Day</th><th>Boards</th><th>Test profiles with a board</th></tr>${[...days].reverse().map(d => `<tr><td>${esc(d.day)}</td><td>${d.values[0] ?? '—'}</td><td>${d.values[1] ?? '—'}</td></tr>`).join('')}</table>`;
   const lead = [[`${total} boards`, total ? '' : 'bad'], [`${withBoards} countries`, ''], [`${profiles} of ${PROFILE_CELLS.length} test profiles have a board`, zero ? 'warn' : 'good'], ...(zero ? [[`${zero} test profiles at 0`, 'bad']] : [])];
-  const discovery = !start ? chip('discovery timer: not started yet', 'off') : start.ok ? chip(esc(`discovery started ${start.at.slice(0, 16).replace('T', ' ')} UTC`), 'good') : chip(esc(`discovery start refused: ${start.reason}`), 'bad');
+  // A disabled workflow is the pause (GitHub's Disable button): grey "paused", never the red refusal its Worker starts then get.
+  const discovery = paused ? chip('discovery paused: workflow disabled in GitHub', 'off') : !start ? chip('discovery timer: not started yet', 'off') : start.ok ? chip(esc(`discovery started ${start.at.slice(0, 16).replace('T', ' ')} UTC`), 'good') : chip(esc(`discovery start refused: ${start.reason}`), 'bad');
   return `<style>${BOARDS_STYLE}</style><section class="card" id="boards"><h2>📋 Job boards with 3+ local jobs</h2><small class="muted">Boards the central scout measured and published: each one listed 3+ jobs located in its country. Per role family × country; a board covering several families counts in each. A board not measured for 30 days leaves.</small>
 <p class="vz-lead">${discovery}</p>
 ${figure({lead, chart, table: trendTable, label: 'Show the days'})}

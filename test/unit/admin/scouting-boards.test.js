@@ -47,3 +47,9 @@ test('the Scouting page shows the card under the heat map when its data came, an
   assert.ok(html.indexOf('Where the list is strong or thin') < html.indexOf('Job boards with 3+ local jobs'));
   assert.doesNotMatch(page(base, undefined, now), /Job boards with 3\+ local jobs/);
 });
+
+test('a workflow disabled in GitHub reads as paused (grey), even when the Worker\'s last start was refused', () => {
+  const html = boardsSection({...live, history: [], start: {at: '2026-11-12T08:45:00Z', ok: false, reason: 'GitHub dispatch failed: 422'}, paused: true}, now);
+  assert.match(html, /chip off">discovery paused: workflow disabled in GitHub/);
+  assert.doesNotMatch(html, /discovery start refused/);
+});
