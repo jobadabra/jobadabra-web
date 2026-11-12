@@ -10,7 +10,9 @@ const rows = [['acme-jobs.at', 'at'], ['acme-jobs.es', 'es'], ['www.acme-jobs.lu
 
 test('brandOf: the label before the ending, a second-level ending skipped, www dropped', () => {
   for (const [host, brand] of [['acme-jobs.at', 'acme-jobs'], ['www.acme-jobs.lu', 'acme-jobs'], ['search.local-one.fr', 'local-one'], ['jobs.hire.co.uk', 'hire'],
-    ['hire.co.uk', 'hire'], ['de.bigboard.com', 'bigboard'], ['localhost', 'localhost'], ['', '']]) assert.equal(brandOf(host), brand, host);
+    ['hire.co.uk', 'hire'], ['de.bigboard.com', 'bigboard'], ['localhost', 'localhost'], ['', ''],
+    ['jobs.ch', 'jobs.ch'], ['www.jobs.de', 'jobs.de'], ['praca.pl', 'praca.pl']]) assert.equal(brandOf(host), brand, host);
+  assert.equal(reachOf([{host: 'jobs.ch', countries: 'ch'}, {host: 'jobs.de', countries: 'de'}]).multi.length, 0, 'two generic-word boards are two local boards (Gitar, web#588)');
 });
 
 test('reachOf: one brand on 3 country domains is one multi-country board; the rest local; outside Europe skipped', () => {
