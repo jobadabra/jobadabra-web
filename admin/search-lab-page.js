@@ -9,7 +9,7 @@ import {DRAWS_CSS, drawsSection} from './search-lab-draws-page.js';
 import {VISUALS_CSS} from './search-lab-visuals.js';
 import {canSend, realRows, realSection} from './search-lab-real.js';
 import {checks} from './session-checks.js';
-import {checksSection} from './session-checks-page.js';
+import {CHECKS_CSS, checksSection} from './session-checks-page.js';
 import {CHIP_STYLE} from './chip.js';
 import {nights, reference} from './search-night.js';
 import {judgeAll} from './search-night-judge.js';
@@ -29,7 +29,7 @@ export function page(drawRows = [], tab = 'real', real = [], sending = null, ses
   const shown = TABS.some(([key]) => key === tab) ? tab : 'real';
   const sections = {night: () => nightSection(nightRows, nightRef, hand), finish: () => finishSection(nightRows, hand, nightRef, week), checks: () => checksSection(sessionChecks), draws: () => drawsSection(drawRows), real: () => realSection(real, sending)};
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Lab Job Search · Admin</title>
-<link rel="icon" href="/favicon-32.png"><style>${CHIP_STYLE}${CSS}${DRAWS_CSS}${VISUALS_CSS}${NIGHT_CSS}${FINISH_STYLE}</style></head><body><main>
+<link rel="icon" href="/favicon-32.png"><style>${CHIP_STYLE}${CSS}${DRAWS_CSS}${CHECKS_CSS}${VISUALS_CSS}${NIGHT_CSS}${FINISH_STYLE}</style></head><body><main>
 <header><h1>🔬 Lab Job Search</h1><span class="muted">fictional candidates and real installs · counts and seconds only</span></header>
 <nav class="tabs">${TABS.map(([key, name]) => `<a href="?tab=${key}" class="${shown === key ? 'on' : ''}">${name}</a>`).join('')}</nav>
 ${sections[shown]()}

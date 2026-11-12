@@ -6,8 +6,10 @@ import {equal} from '../shared/guard.js';
 export const KEEP_CHECKS = 300, MAX_ROWS = 5, MAX_BOARDS = 14;
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/, BUILD = /^[0-9a-f]{7,40}$/, WHEN = /^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d)?(\.\d+)?Z$/;
 const MODES = ['full', 'quick'], STATES = ['ok', 'failed'];
-const COUNTS = ['seconds', 'first_s', 'local_jobs', 'in_places', 'scored', 'fit70'];
+const COUNTS = ['seconds', 'first_s', 'local_jobs', 'in_places', 'scored', 'fit70', 'target'];   // target: the round's X, relevant local jobs counted outside the app (12 Nov 2026)
 const text = (value, max) => String(value ?? '').replace(/[^\p{L}\p{N} ·.,;:()'#/%+=-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, max);
+/** A check's title without the separator a blank role leaves in front (", Toulouse" → "Toulouse"). Why (12 Nov 2026, owner's screenshot): 3 checks of 5 Nov showed ", Toulouse". */
+export const labelOf = value => text(value, 60).replace(/^[\s,·;:-]+/u, '');
 const count = value => (value == null ? null : Number.isInteger(value) && value >= 0 && value <= 1e7 ? value : undefined);
 
 export function clean(row) {
@@ -18,7 +20,7 @@ export function clean(row) {
   if (row.build != null && !BUILD.test(row.build)) return {error: `${row.case_id}: build is a git sha`};
   if (!MODES.includes(row.mode)) return {error: `${row.case_id}: mode is full or quick`};
   if (!STATES.includes(row.state)) return {error: `${row.case_id}: state is ok or failed`};
-  const out = {id: `${row.case_id}@${row.run_at}`, session: row.session, case_id: row.case_id, label: text(row.label, 60) || row.case_id, country: text(row.country, 40), role: text(row.role, 40),
+  const out = {id: `${row.case_id}@${row.run_at}`, session: row.session, case_id: row.case_id, label: labelOf(row.label) || row.case_id, country: text(row.country, 40), role: text(row.role, 40),
     run_at: row.run_at, build: row.build ?? null, mode: row.mode, state: row.state, broke: text(row.broke, 400), conclusion: text(row.conclusion, 600), prs: text(row.prs, 80)};
   for (const field of COUNTS) {
     const value = count(row[field]);
