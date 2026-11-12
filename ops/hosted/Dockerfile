@@ -4,7 +4,10 @@
 FROM python:3.12-slim
 WORKDIR /engine
 COPY requirements.txt requirements-render.txt ./
-RUN pip install --no-cache-dir -r requirements.txt -r requirements-render.txt && playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
+# Why (12 Nov 2026, hi): requirements-render.txt says `playwright>=1.47`, so the build took whatever was newest. Playwright 1.65.0 (released 9 Nov 21:09Z) ships a node driver that needs libatomic.so.1, which python:3.12-slim lacks:
+# `playwright install` exited 127 and this image, and hosted-e2e on main, were red from 9 Nov 23:35Z. Pinned to the last version that built (1.64.1); raise it on purpose, with this build green (and libatomic1 installed if the driver needs it).
+ARG PLAYWRIGHT_VERSION=1.64.1
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-render.txt "playwright==${PLAYWRIGHT_VERSION}" && playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
 COPY src ./src
 COPY config ./config
 COPY templates ./templates
