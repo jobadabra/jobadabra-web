@@ -122,3 +122,14 @@ test('the central scout is a lab row: four starts a day at :25 on jobadabra-lab 
   const toml = readFileSync(new URL('../../../workers/www/wrangler.toml', import.meta.url), 'utf8');
   assert.match(toml, /^BRAIN_REPO = "jobadabra\/jobadabra-lab"$/m);
 });
+
+test('board discovery is a lab row: every 2 h at :45 UTC on jobadabra-lab with the lab token, no inputs, and no GitHub cron behind it', async () => {
+  const row = INTEL_COLLECTORS.find(item => item.workflow === 'board-discovery.yml');
+  assert.deepEqual([row.home, row.minute, row.backup], ['lab', 45, null]);
+  const perDay = Array.from({length: 24 * 12}, (_, i) => tick(Math.floor(i / 12), (i % 12) * 5)).filter(at => dueCollectors(at).some(item => item.workflow === row.workflow));
+  assert.deepEqual(perDay.map(at => at.toISOString().slice(11, 16)), Array.from({length: 12}, (_, i) => `${String(i * 2).padStart(2, '0')}:45`));
+  const calls = [];
+  assert.deepEqual(await startIntelCollectors({BRAIN_GITHUB_TOKEN: 'brain-token'}, tick(2, 45), async (env, inputs, workflow) => { calls.push([env.GITHUB_REPO, env.GITHUB_TOKEN, inputs, workflow]); }), [{workflow: 'board-discovery.yml'}]);
+  assert.deepEqual(calls, [['jobadabra/jobadabra-lab', 'brain-token', undefined, 'board-discovery.yml']], 'the timer sends no inputs: the engine picks the weakest cells');
+  assert.deepEqual(await startIntelCollectors({BRAIN_GITHUB_TOKEN: 'brain-token'}, tick(3, 45), async () => { calls.push(1); }), [], 'odd hours: nothing');
+});

@@ -8,7 +8,7 @@ export const AREAS = [
 // File names (without .yml) per area; a new job lands in "Everything else" until it is listed here (test/schedules.test.js lists the unlisted ones in its failure text).
 // Why (1 Nov 2026, owner: "I want a Schedules tab in Testing that will list all scheduled related to testing"): one Testing area (it took over Self-healing, which is a Testing page) so the Testing tab and the aggregate filter by the same ids.
 const TESTING = ['e2e', 'desktop', 'mutation', 'windows-smoke', 'stable-canary', 'canary-promote', 'ai-answer-drift', 'code-review', 'pr-check-scorecard', 'tests', 'lab-ci', 'scout-canary', 'prompt-cases-night', 'coverage-report', 'ui-findings', 'ui-fix', 'ui-verdict', 'ui-ranking', 'finder-review', 'sentry-fix', 'fix-verdicts', 'issue-fixed', 'page-cases', 'record-sites', 'watch-live', 'harness', 'harness-daily', 'judge-exam', 'self-heal-stats', 'search-lab-heal', 'form-learning', 'e2e-intel', 'integration-intel', 'e2e-weekly', 'hosted-e2e'];
-const SEARCH = ['scout', 'central-scout', 'random-draw', 'daily-digest', 'product-brain', 'proposer', 'aliases', 'playbooks'];
+const SEARCH = ['scout', 'central-scout', 'board-discovery','random-draw', 'daily-digest', 'product-brain', 'proposer', 'aliases', 'playbooks'];
 export const areaOf = file => { const id = String(file).replace(/\.ya?ml$/, ''); return TESTING.includes(id) ? 'testing' : SEARCH.includes(id) ? 'search' : 'other'; };
 
 // ---- the workflow file ----
