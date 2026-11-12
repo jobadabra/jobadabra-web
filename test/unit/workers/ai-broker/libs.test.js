@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {verifyRunToken} from '../../../../workers/ai-broker/lib/oidc.mjs';
-import {laneOf, LANES, queueOf} from '../../../../workers/ai-broker/lib/lanes.mjs';
+import {claudeOnly, laneOf, LANES, queueOf} from '../../../../workers/ai-broker/lib/lanes.mjs';
 import {allow, claudeAllow, claudeWeekPercent, linesOf, CLAUDE_LIMIT_PCT, DAILY, newMeter, record, recordCall, callsToday, ownSharePct, TOKENS_PER_PERCENT} from '../../../../workers/ai-broker/lib/budget.mjs';
 import {weeklyWindow} from '../../../../workers/ai-broker/container/weekly.mjs';
 import {refuseReply, loginValues, PIECE} from '../../../../workers/ai-broker/lib/guard.mjs';
@@ -310,3 +310,21 @@ for (const name of ['central-scout', 'product-brain']) {
     }
   });
 }
+
+// Why (12 Nov 2026, owner via bm: "Broker, Claude plan, Haiku"): the form round of jobadabra-benchmarks asks through the broker (the app lost its API key path, jobadabra #3177); its run token is accepted and its calls answer on Claude alone, so ours runs on the same Haiku 5.5 as the rivals.
+test('form-round.yml of jobadabra-benchmarks: token accepted, bench lane, Claude only', async () => {
+  const {sign, jwks} = await signer();
+  const repository = 'jobadabra/jobadabra-benchmarks';
+  const verified = await verifyRunToken(await sign({...good, repository, event_name: 'workflow_dispatch', job_workflow_ref: `${repository}/.github/workflows/form-round.yml@refs/heads/main`}), {...opts(jwks), repository: allowed});
+  assert.equal(laneOf(verified), 'bench');
+  const text = JSON.stringify({tier: 'small', prompt: 'p'});
+  assert.deepEqual(JSON.parse(claudeOnly(verified, JSON.parse(text), text)), {tier: 'small', prompt: 'p', engine: 'claude', only: true});
+});
+test('claudeOnly leaves every other repository and every call that names its own engine alone', () => {
+  const text = JSON.stringify({tier: 'small', prompt: 'p'}), own = JSON.stringify({tier: 'small', prompt: 'p', engine: 'codex'});
+  assert.equal(claudeOnly({repository: 'jobadabra/jobadabra'}, JSON.parse(text), text), text);
+  assert.equal(claudeOnly({repository: 'jobadabra/jobadabra-benchmarks'}, JSON.parse(own), own), own, 'a caller that names an engine keeps it');
+  assert.equal(claudeOnly({repository: 'jobadabra/jobadabra-benchmarks'}, null, 'not json'), 'not json');
+  assert.equal(claudeOnly({repository: 'jobadabra/jobadabra-benchmarks'}, [1], '[1]'), '[1]');
+  assert.equal(claudeOnly(undefined, {a: 1}, '{"a":1}'), '{"a":1}');
+});

@@ -411,8 +411,9 @@ export default {
       let claims;
       try { claims = await verifyRunToken((request.headers.get('authorization') || '').replace(/^Bearer /, ''), {jwks: jwks(env), audience: audiences(env), repository: repositories(env)}); }
       catch (e) { return json(401, {why: String(e.message)}); }
-      const text = await request.text();
-      let asked; try { asked = JSON.parse(text); } catch { asked = null; }   // the Durable Object refuses a body that is not JSON; the key just stays empty
+      let text = await request.text();
+      let asked; try { asked = JSON.parse(text); } catch { asked = null; }
+      text = claudeOnly(claims, asked, text);   // the Durable Object refuses a body that is not JSON; the key just stays empty
       return broker.fetch(new Request('http://c/call', {method: 'POST', body: text, headers: {'x-lane': laneOf(claims), 'x-workflow': workflowOf(claims), 'x-job': jobKey(request.headers.get('x-jobadabra-job')), 'x-session': sessionKeyOf(claims, asked?.session)}}));   // Why (3 Nov 2026, owner): lane and workflow are built fresh from the verified claims; a header the caller sends is never forwarded. Why (5 Nov 2026, owner via mac-32: per-job AI cost): the one exception is the job label, a GitHub job id of a fixed shape that only names a row for display and never decides a lane or a cap
     }
     return json(404, {error: 'not found'});
@@ -424,7 +425,8 @@ const audiences = env => String(env.AUDIENCE || 'jobadabra-ai-broker').split(','
 
 // Why (1 Nov 2026, go-org-move): the repos are moving to the GitHub org `jobadabra` (created 21:34 UTC, owned by the owner), where the OIDC `repository` claim becomes `jobadabra/<repo>`; both owners are accepted until 7 days after the last repo has moved, then the two GarryOne names go.
 // Why (1 Nov 2026, owner's pick via mac-07): central-scout.yml and product-brain.yml move to jobadabra-lab; without its name every scout AI call gets "oidc: wrong repository" and skips silently. Lanes read the workflow file, not the repo, so the two keep today's lane, tiers and caps.
+// Why (12 Nov 2026, owner via bm: "Broker, Claude plan, Haiku"): jobadabra-benchmarks' form round asks the app's AI through the broker, since the app's CI engine lost its API-key path on 5 Nov (jobadabra #3177); its calls are forced to Claude alone (lib/lanes.mjs claudeOnly), so ours answers on the same Haiku 5.5 as the rivals. The repo is named only under the org (it never ran under GarryOne after the move).
 // Why (31 Oct 2026, owner: "Move all 11 now"): the private site repo's changelog and digest jobs run on the Codex plan too, so the broker accepts run tokens of both repos (REPOSITORY is a comma list).
-const repositories = env => String(env.REPOSITORY || 'GarryOne/jobadabra,GarryOne/jobadabra-web,GarryOne/jobadabra-lab,jobadabra/jobadabra,jobadabra/jobadabra-web,jobadabra/jobadabra-lab').split(',').map(name => name.trim()).filter(Boolean);
+const repositories = env => String(env.REPOSITORY || 'GarryOne/jobadabra,GarryOne/jobadabra-web,GarryOne/jobadabra-lab,jobadabra/jobadabra,jobadabra/jobadabra-web,jobadabra/jobadabra-lab,jobadabra/jobadabra-benchmarks').split(',').map(name => name.trim()).filter(Boolean);
 let jwksReader;
 const jwks = () => (jwksReader ||= githubJwks());

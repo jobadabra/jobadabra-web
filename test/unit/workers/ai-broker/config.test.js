@@ -35,8 +35,8 @@ test('the one-time transfer folder is gone and the deploy workflow still refuses
   assert.throws(() => readFileSync(new URL('../../../../workers/ai-broker/transfer/alias.js', import.meta.url)), /ENOENT/);
 });
 
-test('run tokens of the repos under both owners are accepted while they move to the jobadabra org (1 Nov 2026)', () => {
-  const four = ['GarryOne/jobadabra', 'GarryOne/jobadabra-web', 'GarryOne/jobadabra-lab', 'jobadabra/jobadabra', 'jobadabra/jobadabra-web', 'jobadabra/jobadabra-lab'];
+test('run tokens of the repos under both owners are accepted while they move to the jobadabra org (1 Nov 2026), and jobadabra-benchmarks (12 Nov 2026)', () => {
+  const four = ['GarryOne/jobadabra', 'GarryOne/jobadabra-web', 'GarryOne/jobadabra-lab', 'jobadabra/jobadabra', 'jobadabra/jobadabra-web', 'jobadabra/jobadabra-lab', 'jobadabra/jobadabra-benchmarks'];  // + benchmarks, 12 Nov 2026 (owner via bm)
   assert.deepEqual(final.vars.REPOSITORY.split(','), four);
-  assert.match(source, /env\.REPOSITORY \|\| 'GarryOne\/jobadabra,GarryOne\/jobadabra-web,GarryOne\/jobadabra-lab,jobadabra\/jobadabra,jobadabra\/jobadabra-web,jobadabra\/jobadabra-lab'/);
+  assert.match(source, /env\.REPOSITORY \|\| 'GarryOne\/jobadabra,GarryOne\/jobadabra-web,GarryOne\/jobadabra-lab,jobadabra\/jobadabra,jobadabra\/jobadabra-web,jobadabra\/jobadabra-lab,jobadabra\/jobadabra-benchmarks'/);
 });
