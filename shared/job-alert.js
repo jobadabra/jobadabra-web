@@ -37,10 +37,15 @@ const homeOf = workflow => HOME_REPO[INTEL_COLLECTORS.find(item => item.workflow
 /** red | green | none | off from the newest run ON MAIN that PASSED or FAILED. Why (12 Nov 2026, Gitar on #586): schedules-model stateOf() reads a cancelled or skipped run as green (fine for the page's chip), but here it would end a red streak with
  *  a false "works again" when a concurrency group cancels the next run; a cancelled or skipped run leaves the streak as it was. */
 const DECIDES = ['success', 'failure', 'timed_out'];
+/** Design (12 Nov 2026, the owner's false 🔴 "Spike · Windows Store package (MSIX) failed": msix-spike.yml is workflow_dispatch only, its red main runs were 24 Oct):
+ *  States of a job: red / green / none / off. ONE owner, alertState below; the verdicts that move it: disabled → off; not watched → none (never recorded, never told); else the newest success/failure/timed_out run on main decides red or green.
+ *  Watched = scheduled (`crons`, GitHub's or the Worker cron's) or started by the Worker's own timer (INTEL_COLLECTORS: board discovery has no GitHub cron). A hand-started job's red run is history, not a streak. */
+export const watched = job => (job.crons || []).length > 0 || INTEL_COLLECTORS.some(item => item.workflow === job.file && HOME_REPO[item.home] === String(job.repo).split('/').pop());
 /** The newest run on main that passed or failed: the one that decides the state AND the one the alert links (Gitar, #592: a link from `recent` could be a newer PR run). */
 export const decidingRun = job => (job.main || []).find(run => DECIDES.includes(run.conclusion));   // Why (12 Nov 2026, mac-9a): only runs on main, never a pull_request or feature-branch run (ops/jobs/schedules-snapshot.mjs onMain); a snapshot without `main` (the shape before this) records nothing
 export function alertState(job) {
   if (job.disabled) return 'off';
+  if (!watched(job)) return 'none';
   const done = decidingRun(job);
   return !done ? 'none' : done.conclusion === 'success' ? 'green' : 'red';
 }
