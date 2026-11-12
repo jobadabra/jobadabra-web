@@ -35,7 +35,7 @@ const env = () => ({STATS: d1(), STATS_KEY: 'k3y', STATS_SALT: 's', SELFHEAL_PUB
 const owner = {headers: {Cookie: 'jp_stats=k3y'}};
 const call = (e, path, init = {}) => worker.fetch(new Request(`https://www.jobpilotto.top${path}`, init), e, {});
 
-const run = (at, conclusion, mins = 3) => ({run_started_at: at, created_at: at, updated_at: new Date(Date.parse(at) + mins * 60000).toISOString(), status: conclusion ? 'completed' : 'in_progress', conclusion, html_url: 'https://github.com/jobadabra/x/actions/runs/1'});
+const run = (at, conclusion, mins = 3, extra = {}) => ({event: 'schedule', head_branch: 'main', run_started_at: at, created_at: at, updated_at: new Date(Date.parse(at) + mins * 60000).toISOString(), status: conclusion ? 'completed' : 'in_progress', conclusion, html_url: 'https://github.com/jobadabra/x/actions/runs/1', ...extra});
 function fakeGh(repos) {
   return (path, raw) => {
     const [, repo, rest] = path.match(/^repos\/([^/]+\/[^/?]+)(?:\/(.*))?$/) || [];
@@ -43,8 +43,9 @@ function fakeGh(repos) {
     if (!rest) return {private: data.private};
     if (rest.startsWith('actions/workflows?')) return {workflows: data.files.map((file, i) => ({id: i + 1, path: `.github/workflows/${file.name}`, state: file.state || 'active'}))};
     if (rest.startsWith('contents/')) return raw ? data.files.find(file => rest.endsWith(file.name)).text : data.code?.[rest.replace('contents/', '')];
-    const id = Number(rest.match(/workflows\/(\d+)\/runs/)[1]);
-    return {total_count: data.files[id - 1].runs.length, workflow_runs: data.files[id - 1].runs};
+    const id = Number(rest.match(/workflows\/(\d+)\/runs/)[1]), runs = data.files[id - 1].runs, mainOnly = /branch=main/.test(rest) && /exclude_pull_requests=true/.test(rest);   // GitHub's own filters: the main branch, no pull_request runs
+    const list = mainOnly ? runs.filter(item => item.head_branch === 'main' && item.event !== 'pull_request') : runs;
+    return {total_count: list.length, workflow_runs: list};
   };
 }
 const files = [
@@ -184,4 +185,16 @@ test('Billed min / week is a lower bound, with the repo named, when a private re
   assert.equal(tileOf(page(two, {now}))[2], 'a, b not read: their minutes are missing');
   const publicUnread = {at: '2026-10-20T17:00:00Z', repos: [{name: 'jobadabra/jobadabra', private: false, ok: false}], jobs: [job]};
   assert.equal(tileOf(page(publicUnread, {now}))[1], '90', 'an unread public repo bills 0 anyway: the number stays');
+});
+
+test('the collector keeps a main-only run list per job, so a PR-triggered workflow\'s red pull_request runs are not its state (shared/job-alert.js alertState)', async () => {
+  const prs = Array.from({length: 16}, (_, i) => run(new Date(now - (i + 1) * 600000).toISOString(), 'failure', 3, {event: 'pull_request', head_branch: 'hi-hosted-pip'}));
+  const mains = [run(new Date(now - 20 * 3600000).toISOString(), 'success'), run(new Date(now - 21 * 3600000).toISOString(), 'failure', 3, {event: 'push'})];
+  const pr = {name: 'pr-triggered.yml', text: 'name: PR triggered\non:\n  pull_request:\njobs:\n  a:\n    runs-on: ubuntu-24.04\n', runs: [...prs, ...mains]};
+  const snapshot = await collect({gh: fakeGh({'jobadabra/jobadabra-web': {private: true, files: [pr, files[0]]}}), repos: ['jobadabra/jobadabra-web'], now});
+  const mixed = snapshot.jobs.find(job => job.file === 'pr-triggered.yml'), plain = snapshot.jobs.find(job => job.file === 'ops-overview.yml');
+  assert.ok(mixed.recent.every(item => item.event === 'pull_request') && mixed.recent.length === 14, 'positive control: the newest 14 runs are all PR runs');
+  assert.deepEqual(mixed.main.map(item => [item.event, item.branch, item.conclusion]), [['schedule', 'main', 'success'], ['push', 'main', 'failure']], 'main-only, newest first, no PR run');
+  assert.ok(plain.main.length > 0 && plain.main.every(item => item.branch === 'main'), 'a workflow whose runs are all on main keeps them as they are');
+  assert.deepEqual(clean(snapshot).jobs.find(job => job.file === 'pr-triggered.yml').main.map(item => item.conclusion), ['success', 'failure'], 'the upload keeps the main list');
 });

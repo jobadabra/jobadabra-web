@@ -19,7 +19,11 @@ const realGh = (path, raw = false) => {
   return raw ? out : JSON.parse(out);
 };
 const mins = run => Math.max(0, (Date.parse(run.updated_at) - Date.parse(run.run_started_at || run.created_at)) / 60000) || 0;
-const runOf = run => ({at: run.run_started_at || run.created_at, conclusion: run.status === 'completed' ? run.conclusion : null, mins: Math.round(mins(run) * 10) / 10, url: run.html_url});
+const runOf = run => ({at: run.run_started_at || run.created_at, conclusion: run.status === 'completed' ? run.conclusion : null, mins: Math.round(mins(run) * 10) / 10, url: run.html_url, event: run.event || '', branch: run.head_branch || ''});
+// Why (12 Nov 2026, mac-9a: "does alertState count a red run on a PR branch?"): the runs above are every branch's, so a PR-triggered workflow's newest 14 are mostly pull_request runs. The shared failure alert (shared/job-alert.js) reads only
+// runs on main that are not pull_request ones (push, schedule, dispatch on main): MAIN_RUNS of them, from the same list when it already is that, else one more call with GitHub's own filters.
+export const MAIN_RUNS = 5;
+export const onMain = run => run.head_branch === 'main' && run.event !== 'pull_request';
 
 // One repo: its workflow files, parsed, with the newest runs and the minutes of the last 7 days. A repo that cannot be read is {ok: false} with no jobs (never an error that stops the others).
 export async function collectRepo(repo, {gh = realGh, workerCrons = {}, now = new Date()} = {}) {
@@ -34,11 +38,12 @@ export async function collectRepo(repo, {gh = realGh, workerCrons = {}, now = ne
     try { parsed = parseWorkflow(gh(`repos/${repo}/contents/${workflow.path}`, true)); } catch { continue; }
     const week = gh(`repos/${repo}/actions/workflows/${workflow.id}/runs?per_page=100&created=%3E%3D${since}`), weekRuns = week.workflow_runs || [];
     const recentRuns = weekRuns.length >= RUN_DOTS ? weekRuns : gh(`repos/${repo}/actions/workflows/${workflow.id}/runs?per_page=${RUN_DOTS}`).workflow_runs || [];
+    const mainRuns = (recentRuns.every(onMain) ? recentRuns : gh(`repos/${repo}/actions/workflows/${workflow.id}/runs?branch=main&exclude_pull_requests=true&per_page=${MAIN_RUNS}`).workflow_runs || []).filter(onMain).slice(0, MAIN_RUNS);
     const total = week.total_count || weekRuns.length, wall = weekRuns.reduce((sum, run) => sum + mins(run), 0) * (weekRuns.length ? total / weekRuns.length : 0);
     const worker = repo === WORKER_REPO ? workerCrons[file] || [] : [];
     const crons = [...new Set([...parsed.crons, ...worker])];
     jobs.push({repo, file, name: parsed.name || file, about: parsed.about, crons, source: worker.length && parsed.crons.length ? 'both' : worker.length ? 'worker' : 'github', manual: parsed.manual, disabled: workflow.state !== 'active',
-      ai: parsed.ai, weeklyMin: Math.round(wall), billedMin: Math.round(wall * billedWeight(parsed.runner, isPrivate)), recent: recentRuns.slice(0, RUN_DOTS).map(runOf)});
+      ai: parsed.ai, weeklyMin: Math.round(wall), billedMin: Math.round(wall * billedWeight(parsed.runner, isPrivate)), recent: recentRuns.slice(0, RUN_DOTS).map(runOf), main: mainRuns.map(runOf)});
   }
   return {repo: {name: repo, private: isPrivate, ok: true}, jobs};
 }

@@ -33,7 +33,7 @@ async function setup({connected = true} = {}) {
   return {e, tg};
 }
 const run = (conclusion, n = 0) => ({at: hour(n).toISOString(), conclusion, mins: 2, url: `https://github.com/jobadabra/jobadabra-lab/actions/runs/${100 + n}`});
-const snap = (conclusion, n, extra = {}) => ({jobs: [{repo: 'jobadabra/jobadabra-lab', file: 'board-discovery.yml', name: 'Lab · Board discovery', disabled: false, recent: [run(conclusion, n)], ...extra}]});
+const snap = (conclusion, n, extra = {}) => ({jobs: [{repo: 'jobadabra/jobadabra-lab', file: 'board-discovery.yml', name: 'Lab · Board discovery', disabled: false, recent: [run(conclusion, n)], main: [run(conclusion, n)], ...extra}]});
 
 test('a job going green, red, red, green tells once each way: ❌ with name, repo and run link, then ✅ works again', async () => {
   const {e, tg} = await setup();
@@ -139,9 +139,9 @@ test('a cancelled or skipped run decides nothing: red, cancelled, skipped stays 
   const skipped = await alertJobs(e, snap('skipped', 3), {fetcher: tg.fetcher, now: hour(3)});
   assert.deepEqual([cancelled, skipped], [{red: 0, green: 0}, {red: 0, green: 0}]);
   assert.equal(tg.sends().length, 1, 'only the first red was told');
-  await alertJobs(e, {jobs: [{...snap('cancelled', 4).jobs[0], recent: [run('cancelled', 4), run('failure', 1)]}]}, {fetcher: tg.fetcher, now: hour(4)});
+  await alertJobs(e, {jobs: [{...snap('cancelled', 4).jobs[0], main: [run('cancelled', 4), run('failure', 1)]}]}, {fetcher: tg.fetcher, now: hour(4)});
   assert.equal(tg.sends().length, 1, 'a cancelled run on top of the failed one is still red: the same streak');
-  await alertJobs(e, {jobs: [{...snap('success', 5).jobs[0], recent: [run('success', 5), run('cancelled', 4)]}]}, {fetcher: tg.fetcher, now: hour(5)});
+  await alertJobs(e, {jobs: [{...snap('success', 5).jobs[0], main: [run('success', 5), run('cancelled', 4)]}]}, {fetcher: tg.fetcher, now: hour(5)});
   assert.equal(tg.sends().length, 2);
   assert.match(tg.sends()[1], /works again/);
 });
@@ -169,4 +169,23 @@ test('a refused ten-minute sweep (pr-verdict) is told once a day, not 144 times,
   for (const minute of [10, 20, 30]) await assert.rejects(runTimers({cron: TICK, scheduledTime: at(10, minute)}, env, {dispatch: async () => { throw new Error('GitHub dispatch failed: 403'); }, report: async text => { reports.push(text); }, fetcher: tg.fetcher}));
   assert.deepEqual(reports.filter(text => /pr-verdict/.test(text)), []);
   assert.equal(tg.sends().filter(text => /pr-verdict/.test(text)).length, 1);
+});
+
+// Why (12 Nov 2026, mac-9a: "does alertState count a red run on a PR branch?"): the collector reads every branch, so a PR-triggered workflow's latest runs are mostly pull_request runs; only a run on main (push, schedule, dispatch) is news.
+const prRun = (conclusion, n) => ({...run(conclusion, n), event: 'pull_request', branch: 'hi-hosted-pip'});
+test('a red pull_request run is no news; a red push run on main of release-ready-runner.yml tells once; a snapshot without main runs (old shape) records nothing', async () => {
+  const {e, tg} = await setup(), release = {repo: 'jobadabra/jobadabra', file: 'release-ready-runner.yml', name: 'Release · Ready runner', disabled: false};
+  const job = (recent, main) => ({jobs: [{...release, recent, main}]});
+  await alertJobs(e, job([run('success', 0)], [run('success', 0)]), {fetcher: tg.fetcher, now: hour(0)});
+  await alertJobs(e, job([prRun('failure', 1), run('success', 0)], [run('success', 0)]), {fetcher: tg.fetcher, now: hour(1)});
+  await alertJobs(e, job([prRun('failure', 2), prRun('failure', 1)], [run('success', 0)]), {fetcher: tg.fetcher, now: hour(2)});
+  assert.deepEqual(tg.sends(), [], 'a red PR run on top of a green main is not a red job');
+  const told = await alertJobs(e, job([run('failure', 3), prRun('success', 2)], [run('failure', 3), run('success', 0)]), {fetcher: tg.fetcher, now: hour(3)});
+  assert.deepEqual(told, {red: 1, green: 0});
+  assert.match(tg.sends()[0], /Release · Ready runner failed/);
+  await alertJobs(e, job([prRun('success', 4), run('failure', 3)], [run('failure', 3)]), {fetcher: tg.fetcher, now: hour(4)});
+  assert.equal(tg.sends().length, 1, 'a green PR run does not end the red streak either');
+  const old = await alertJobs(e, {jobs: [{...release, file: 'old-shape.yml', recent: [run('failure', 5)]}]}, {fetcher: tg.fetcher, now: hour(5)});
+  assert.deepEqual(old, {red: 0, green: 0});
+  assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM job_alert WHERE job = 'jobadabra/old-shape.yml'").get().n, 0, 'no main runs in the snapshot: nothing is recorded, nothing is told');
 });

@@ -34,12 +34,12 @@ export const OWN_ALERT = new Map([
 const HOME_REPO = {public: 'jobadabra', web: 'jobadabra-web', lab: 'jobadabra-lab'};
 const homeOf = workflow => HOME_REPO[INTEL_COLLECTORS.find(item => item.workflow === workflow)?.home] || 'jobadabra';
 
-/** red | green | none | off from the newest run that PASSED or FAILED. Why (12 Nov 2026, Gitar on #586): schedules-model stateOf() reads a cancelled or skipped run as green (fine for the page's chip), but here it would end a red streak with
+/** red | green | none | off from the newest run ON MAIN that PASSED or FAILED. Why (12 Nov 2026, Gitar on #586): schedules-model stateOf() reads a cancelled or skipped run as green (fine for the page's chip), but here it would end a red streak with
  *  a false "works again" when a concurrency group cancels the next run; a cancelled or skipped run leaves the streak as it was. */
 const DECIDES = ['success', 'failure', 'timed_out'];
 export function alertState(job) {
   if (job.disabled) return 'off';
-  const done = (job.recent || []).find(run => DECIDES.includes(run.conclusion));
+  const done = (job.main || []).find(run => DECIDES.includes(run.conclusion));   // Why (12 Nov 2026, mac-9a): only runs on main, never a pull_request or feature-branch run (ops/jobs/schedules-snapshot.mjs onMain); a snapshot without `main` (the shape before this) records nothing
   return !done ? 'none' : done.conclusion === 'success' ? 'green' : 'red';
 }
 export const jobKey = job => `${String(job.repo).split('/').pop()}/${job.file}`;

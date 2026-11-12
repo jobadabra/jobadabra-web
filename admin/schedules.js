@@ -23,14 +23,15 @@ const authorized = (request, env) => Boolean(env.SELFHEAL_PUBLISH_KEY && equal((
 const MAX_JOBS = 400;
 const text = (value, max) => String(value ?? '').slice(0, max);
 
-// What the collector sent, cut to known fields: {schema: 1, at, repos: [{name, private, ok}], jobs: [{repo, file, name, about, crons, source, manual, disabled, weeklyMin, billedMin, ai, recent: [{at, conclusion, mins, url}]}]}
+// What the collector sent, cut to known fields: {schema: 1, at, repos: [{name, private, ok}], jobs: [{repo, file, name, about, crons, source, manual, disabled, weeklyMin, billedMin, ai, recent: [{at, conclusion, mins, url, event, branch}], main: [same, main branch and not pull_request, newest first, up to 5]}]}
 export function clean(body) {
   if (!Array.isArray(body?.jobs) || body.jobs.length > MAX_JOBS || !/^\d{4}-\d{2}-\d{2}T/.test(body.at || '')) return null;
   const num = value => (Number.isFinite(Number(value)) ? Math.round(Number(value) * 10) / 10 : 0);
+  const cleanRun = run => ({at: text(run.at, 30), conclusion: run.conclusion ? text(run.conclusion, 20) : null, mins: num(run.mins), url: /^https:\/\/github\.com\//.test(run.url || '') ? text(run.url, 200) : '', event: text(run.event, 30), branch: text(run.branch, 60)});
   return {schema: 1, at: body.at, repos: (body.repos || []).slice(0, 10).map(repo => ({name: text(repo.name, 80), private: Boolean(repo.private), ok: repo.ok !== false})),
     jobs: body.jobs.filter(job => job?.repo && job?.file).map(job => ({repo: text(job.repo, 80), file: text(job.file, 80), name: text(job.name, 120), about: text(job.about, 200), crons: (job.crons || []).slice(0, 8).map(cron => text(cron, 60)),
       source: ['github', 'worker', 'both'].includes(job.source) ? job.source : 'github', manual: Boolean(job.manual), disabled: Boolean(job.disabled), ai: Boolean(job.ai), weeklyMin: num(job.weeklyMin), billedMin: num(job.billedMin),
-      recent: (job.recent || []).slice(0, RUN_DOTS).map(run => ({at: text(run.at, 30), conclusion: run.conclusion ? text(run.conclusion, 20) : null, mins: num(run.mins), url: /^https:\/\/github\.com\//.test(run.url || '') ? text(run.url, 200) : ''}))}))};
+      recent: (job.recent || []).slice(0, RUN_DOTS).map(cleanRun), main: (job.main || []).slice(0, 5).map(cleanRun)}))};
 }
 export async function ingest(request, env, {fetcher = fetch, now = new Date()} = {}) {
   if (!authorized(request, env)) return new Response('Not found', {status: 404});
