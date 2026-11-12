@@ -1,0 +1,20 @@
+{
+  "_why": "The 30 test profiles of job search (12 Nov 2026, owner's list: Trello board 'GTM 6 · Job search: 30 profiles'; ids, countries and pool families as session bd mapped them for its board-discovery sketch, sent by sa). Fictional people: an id, a country code and a pool role family (shared/pool-tags.js FAMILIES) only. Read by shared/board-counts.js; test/unit/shared/board-counts.test.js checks every family and country exists.",
+  "profiles": [
+    {"id": "c01", "country": "nl", "family": "accounting_finance"}, {"id": "c02", "country": "at", "family": "b2b_sales"},
+    {"id": "c03", "country": "fr", "family": "nursing_care"}, {"id": "c04", "country": "es", "family": "electrical_mechanical"},
+    {"id": "c05", "country": "it", "family": "construction"}, {"id": "c06", "country": "cz", "family": "electrical_mechanical"},
+    {"id": "c07", "country": "dk", "family": "teaching"}, {"id": "c08", "country": "no", "family": "pharmacy_lab"},
+    {"id": "c09", "country": "ee", "family": "service_hotel"}, {"id": "c10", "country": "si", "family": "electrical_mechanical"},
+    {"id": "c11", "country": "sk", "family": "nursing_care"}, {"id": "c12", "country": "at", "family": "electrical_mechanical"},
+    {"id": "c13", "country": "cz", "family": "pharmacy_lab"}, {"id": "c14", "country": "it", "family": "accounting_finance"},
+    {"id": "c15", "country": "es", "family": "teaching"}, {"id": "c16", "country": "fr", "family": "b2b_sales"},
+    {"id": "c17", "country": "nl", "family": "construction"}, {"id": "c18", "country": "es", "family": "electrical_mechanical"},
+    {"id": "c19", "country": "fr", "family": "service_hotel"}, {"id": "c20", "country": "it", "family": "electrical_mechanical"},
+    {"id": "b01", "country": "bg", "family": "driving_delivery"}, {"id": "b02", "country": "ro", "family": "hr_recruiting"},
+    {"id": "b03", "country": "be", "family": "construction"}, {"id": "b04", "country": "ch", "family": "warehouse"},
+    {"id": "b05", "country": "pl", "family": "kitchen"}, {"id": "b06", "country": "hr", "family": "marketing_social"},
+    {"id": "b07", "country": "se", "family": "it_support"}, {"id": "b08", "country": "de", "family": "data_ai"},
+    {"id": "b09", "country": "fi", "family": "software_dev"}, {"id": "b10", "country": "pt", "family": "graphic_design"}
+  ]
+}

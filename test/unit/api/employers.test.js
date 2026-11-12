@@ -374,6 +374,10 @@ test('the central scout\'s measured boards are served as the same board fact ins
   e.STATS.db.prepare("UPDATE sitefacts SET day = '2000-01-01' WHERE host = 'rabota.md'").run();
   await call(e, 'PUT', auth, {feeds: [feed('a')], board_facts: [good]});   // one not measured again for 30 days leaves
   assert.deepEqual((await agreedSites(e)).filter(fact => fact.kind === 'board').map(f => f.host).sort(), ['delucru.md', 'needs.md', 'section.md', 'truthy.md'], 'the recent section stays, the 30-day-old rabota.md left');
+  // Gitar on web#581: the expiry ran only on a publish that sent board facts, so an old board stayed served (and counted on Scouting) while the scout sent none.
+  e.STATS.db.prepare("UPDATE sitefacts SET day = '2000-01-01' WHERE host = 'section.md'").run();
+  await call(e, 'PUT', auth, {feeds: [feed('a')]});
+  assert.deepEqual((await agreedSites(e)).filter(fact => fact.kind === 'board').map(f => f.host).sort(), ['delucru.md', 'needs.md', 'truthy.md'], 'a publish without board facts also lets a 30-day-old board leave');
 });
 
 // 2 Nov 2026: the scout lost its cache and published 3,871 of 6,833 feeds, and no old copy existed to go back to (owner, 5 Nov 2026: "Find root cause, and preven this happening again").

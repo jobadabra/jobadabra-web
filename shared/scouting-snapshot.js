@@ -6,6 +6,7 @@ import {gather as gatherClosed} from './closed-sites.js';
 import {gather as gatherBotChecks} from './bot-checks.js';
 import {gather as gatherReads} from './readmethods.js';
 import {cellsOf, demandOf, topKind} from './scoutingvisual.js';
+import {gatherBoards} from './board-counts.js';
 
 export const day = (date, back = 0) => new Date(date.getTime() - back * 86400000).toISOString().slice(0, 10);
 const all = async (db, sql, ...args) => ((await db.prepare(sql).bind(...args).all().catch(() => ({results: []}))).results) || [];
@@ -57,5 +58,6 @@ export async function gather(db, now = new Date(), family = '') {
   const demand = demandOf(await all(db, `SELECT DISTINCT install, roles, countries FROM contributions WHERE day >= ? AND${F}`, day(now, 30), ...f));
   const served = await all(db, 'SELECT day, kind, n FROM pool_served_day WHERE day >= ? ORDER BY day DESC, kind', day(now, 30)).catch(() => []);   // before 0100: none
   const central = await loadScouting(db);
-  return {family, served, families: await byFamily(db, now).catch(() => null), feeds, daily, demand, boards, advice, sharing7: await sharing(7), sharing30: await sharing(30), shared, routes, useful, dead, deadTotal, central, closed: await gatherClosed(db, family).catch(() => []), botChecks: await gatherBotChecks(db).catch(() => null), reads: await gatherReads(db, central?.runs || []).catch(() => null)};
+  const boardCounts = await gatherBoards(db, daily).catch(() => null);   // the published boards per family × country and their trend (shared/board-counts.js)
+  return {family, served, boardCounts, families: await byFamily(db, now).catch(() => null), feeds, daily, demand, boards, advice, sharing7: await sharing(7), sharing30: await sharing(30), shared, routes, useful, dead, deadTotal, central, closed: await gatherClosed(db, family).catch(() => []), botChecks: await gatherBotChecks(db).catch(() => null), reads: await gatherReads(db, central?.runs || []).catch(() => null)};
 }
