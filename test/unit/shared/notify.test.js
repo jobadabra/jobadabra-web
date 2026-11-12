@@ -42,7 +42,7 @@ test('the registry: unique ids, a default mode its alert allows, a known group a
     assert.ok(alert.jobs.every(file => /^(jobadabra-web\/)?[\w-]+\.yml$/.test(file)), alert.id);
     assert.ok(!/@/.test(alert.label), 'no address in a label');
   }
-  assert.deepEqual(ALERTS.filter(alert => !alert.on).map(alert => alert.id).sort(), ['daily-build-digest', 'record-sites'], 'the owner\'s defaults: the digest and the record-sites/watch list are off, the rest on');
+  assert.deepEqual(ALERTS.filter(alert => !alert.on).map(alert => alert.id).sort(), ['record-sites'], 'the owner\'s defaults: only the record-sites/watch list is off, the rest on (the build digest is on, once a day: owner, 12 Nov 2026, "Keep it, once a day")');
   assert.deepEqual(alertsForJob('e2e.yml').map(alert => alert.id), ['main-red', 'nightly-skipped']);
   assert.deepEqual(alertsForJob('schedules-snapshot.yml'), [], 'a job that sends nothing has no alert');
 });
@@ -215,4 +215,9 @@ test('search-night: the Find jobs night check tells Engineering on a change only
   const lost = {event: 'search-night', text: 'Find jobs · employer sites lost', level: 'problem', state: 'red:abc:2026-11-10'};
   assert.equal((await notify(e, lost, {fetcher: tg.fetcher, now: NOW})).body.sent, true);
   assert.equal((await notify(e, lost, {fetcher: tg.fetcher, now: NOW})).body.sent, false, 'the same lost source the same day is told once');
+});
+
+test('every alert that is not parked has its sender on the switchboard (12 Nov 2026, owner: "Still getting on old telegram bots": Admin must read "every sender uses the switchboard"); an alert whose sender is not built is parked, with its reason', () => {
+  assert.deepEqual(ALERTS.filter(alert => !alert.parked && !alert.wired).map(alert => alert.id), []);
+  for (const alert of ALERTS.filter(alert => alert.parked)) assert.ok(String(alert.parked).length > 20, `${alert.id}: a parked alert says why`);
 });

@@ -52,8 +52,9 @@ test('the page needs the login; the owner sees every alert grouped, three channe
   for (const channel of CHANNELS) assert.ok(html.includes(channel.name.replace('&', '&amp;')), channel.name);
   assert.match(html, /Connect bot/);
   assert.match(html, new RegExp(`${ALERTS.filter(alert => alert.on).length} alerts on`), 'the count follows the registry (it is not a literal that breaks with each new alert)');
-  assert.match(html, new RegExp(`${ALERTS.filter(alert => alert.wired).length} of ${ALERTS.filter(alert => !alert.parked).length} senders moved over`), 'the page counts the senders that already use the switchboard (2/4: the nine Worker-side ones)');
-  assert.match(html, /sender not moved yet/);
+  // 12 Nov 2026 (owner: "Still getting on old telegram bots"): every alert that has a sender uses the switchboard, so the page says so and no row reads "sender not moved yet"; those without a sender are parked.
+  assert.match(html, /✓ every sender uses the switchboard/);
+  assert.doesNotMatch(html, /sender not moved yet/);
   const parked = ALERTS.filter(alert => alert.parked);
   assert.ok(parked.some(alert => alert.id === 'broker-fallback'), 'positive control: the broker fallback is parked (coordinator, 5 Nov 2026)');
   assert.ok(html.includes('<span title="a once-a-day note from the broker Worker') && html.includes('>parked</span>'), 'a parked alert says so in its row instead of "sender not moved yet"');
