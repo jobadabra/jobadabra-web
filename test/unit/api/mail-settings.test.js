@@ -48,16 +48,16 @@ test('saving turns service mail off and on and sets the digest cadence', async (
   assert.ok(id);
 });
 
-test('the two news boxes show what the site holds: each only with a yes; unticking a yes is a stop, an unticked box is nothing', async () => {
+test('the two news boxes show what the site holds: What\'s new on until stopped, tips only with a yes; unticking is a stop, an unticked box is nothing', async () => {
   // Why (owner, 6 Nov 2026: "Only Trial reminder on"): shared/mail-lists.js.
   const e = {...env(), MARKETING_MAIL: 'on'};
   await createAccount(e, 'me@example.com', now, {plan: 'trial'});
   const box = async (to, name) => new RegExp(`name="${name}"[^>]* checked`).test(await (await settings(new Request(await settingsLink(e, to)), e, now)).text());
   const stops = () => e.STATS.db.prepare("SELECT list FROM mail_off WHERE list IN ('releases', 'tips')").all().map(r => r.list);
-  assert.deepEqual([await box('me@example.com', 'releases'), await box('me@example.com', 'tips')], [false, false], 'unconfirmed: the sender sends no news yet');
+  assert.deepEqual([await box('me@example.com', 'releases'), await box('me@example.com', 'tips')], [true, false], 'unconfirmed: What\'s new shows on (it sends once the address is confirmed), tips off');
   assert.equal(await box('wait@example.com', 'releases'), true, 'an address with no account is a waitlist signup: the page must show the mail it gets, so it can be stopped here');
   e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
-  assert.deepEqual([await box('me@example.com', 'releases'), await box('me@example.com', 'tips')], [false, false]);
+  assert.deepEqual([await box('me@example.com', 'releases'), await box('me@example.com', 'tips')], [true, false], 'What\'s new is on until stopped (owner, 12 Nov 2026); tips need a yes');
   const link = await settingsLink(e, 'me@example.com');
   await save(e, link, {service: 'on', releases: 'on'});
   assert.deepEqual(stops(), [], 'a tick takes nothing back');

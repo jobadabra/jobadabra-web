@@ -30,7 +30,8 @@ const known = facts => facts.confirmed || facts.signup === 'news';
 export const newsAnswered = (yes, stops) => NEWS.some(list => yes.has(list) || stops.has(list));
 
 // Why (owner, 6 Nov 2026: "Only Trial reminder on", replacing 5 Nov's "this should be on by default"): What's new is off until a yes, like News and tips. A website waitlist signup under the new wording is a yes.
-const saidYes = (list, facts) => facts.yes.has(list) || (list === 'releases' && facts.signup === 'news');
+// Why (12 Nov 2026, owner, asked via AskUserQuestion: "On for all, new too (Recommended)"; was a yes per person since #436): What's new is on for every address until it is stopped (a stop link, the switch, a bounce); the confirmed-address rule below still holds.
+const saidYes = (list, facts) => facts.yes.has(list) || list === 'releases';
 
 /** The answer a switch shows for `list`: on only when this mail would be asked for, so a switch never says less or more than the sender does. */
 export const newsAnswer = (list, facts) => !stopped(facts, list) && saidYes(list, facts);
@@ -83,7 +84,7 @@ export async function switchOff(env, addr, list, reason, now = new Date()) {
  */
 function oldBoxAnswers(marketing, facts) {
   if (typeof marketing !== 'boolean' || marketing === newsAnswer('tips', facts) || stopped(facts, 'tips')) return [];
-  return marketing ? NEWS.map(list => [list, true]) : NEWS.filter(list => facts.yes.has(list)).map(list => [list, false]);
+  return marketing ? NEWS.map(list => [list, true]) : NEWS.filter(list => newsAnswer(list, facts)).map(list => [list, false]);   // on by default counts as on (12 Nov 2026)
 }
 
 /**

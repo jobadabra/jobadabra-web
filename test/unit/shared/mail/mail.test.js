@@ -127,7 +127,7 @@ test('a sign-in code is not stopped by the service unsubscribe, and carries no u
   assert.ok(!sent[0].text.includes('unsubscribe') && !sent[0].headers);
 });
 
-test('the four types: service is on, What\'s new, News and tips and the Job digest need a yes; each stop link stops its own type only', async () => {
+test('the four types: service and What\'s new are on (owner, 12 Nov 2026), News and tips and the Job digest need a yes; each stop link stops its own type only', async () => {
   // Why (owner, 6 Nov 2026: "Only Trial reminder on"; 5 Nov 2026: "After confirming"): shared/mail-lists.js.
   TEMPLATES.news = {list: 'releases', subject: () => 'News', title: () => 'News', text: () => 'A new version', html: () => '<p>A new version</p>'};
   TEMPLATES.jobs = {list: 'jobdigest', subject: () => 'Jobs', title: () => 'Jobs', text: () => 'Matches', html: () => '<p>Matches</p>'};
@@ -138,20 +138,18 @@ test('the four types: service is on, What\'s new, News and tips and the Job dige
     const {e, sent} = setup({MARKETING_MAIL: 'on', WAITLIST: {get: async key => ({'signup:web@example.com': entry('web'), 'signup:app@example.com': entry('app')})[key] ?? null}});
     await createAccount(e, 'me@example.com', now, {plan: 'trial'});
     const reason = async (template, to, extra = {}) => { const r = await send(e, template, to, {}, {now, ...extra}); return r.ok ? 'sent' : r.reason; };
-    assert.equal(await reason('news', 'me@example.com'), 'no_tick', 'no yes yet');
-    assert.equal(await reason('news', 'nobody@example.com'), 'no_tick', 'an address we hold nothing for');
+    assert.equal(await reason('news', 'me@example.com'), 'not_confirmed', 'on, but waiting for the confirmation');
+    assert.equal(await reason('news', 'nobody@example.com'), 'not_confirmed', 'an address we hold nothing for');
     assert.equal(await reason('news', 'web@example.com'), 'sent', 'the website waitlist form names release mails');
-    assert.equal(await reason('news', 'app@example.com'), 'no_tick', 'the app\'s dialog still says "Nothing else"');
+    assert.equal(await reason('news', 'app@example.com'), 'pro_only', 'the app\'s dialog still says "Nothing else", and no account confirms the address');
     assert.equal(await reason('launch', 'app@example.com'), 'sent', 'every waitlist signup asked for the Pro launch');
     assert.equal(await reason('offer', 'web@example.com'), 'no_tick', 'Tips and tricks need a real tick, the waitlist is not one');
     assert.equal(await reason('news', 'nobody@example.com', {test: true}), 'sent', 'a test send goes to the typed address');
     assert.equal((await send({...e, MARKETING_MAIL: 'off'}, 'news', 'web@example.com', {}, {now})).reason, 'marketing_off', 'the owner\'s flag is off: nothing promotional goes out');
     e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
-    assert.equal(await reason('news', 'me@example.com'), 'no_tick', 'a confirmed address needs a yes too (owner, 6 Nov 2026)');
+    assert.equal(await reason('news', 'me@example.com'), 'sent', 'a confirmed address gets What\'s new until it stops it (owner, 12 Nov 2026)');
     assert.equal(await reason('offer', 'me@example.com'), 'no_tick');
     assert.equal(await reason('jobs', 'me@example.com'), 'no_tick');
-    await sayYes(e, await addrOf('me@example.com'), 'releases', 'card', now);
-    assert.equal(await reason('news', 'me@example.com'), 'sent', 'the card is saved with releases ticked');
     await sayYes(e, await addrOf('me@example.com'), 'jobdigest', 'settings', now);
     assert.equal(await reason('jobs', 'me@example.com'), 'sent', 'the job digest needs only its own tick, and MARKETING_MAIL does not gate it');
     assert.equal((await send({...e, MARKETING_MAIL: 'off'}, 'jobs', 'me@example.com', {}, {now})).ok, true);

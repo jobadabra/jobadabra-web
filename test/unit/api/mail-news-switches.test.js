@@ -42,17 +42,18 @@ const on = async e => Object.fromEntries((await call(choices, e, 'GET')).news.ma
 const release = {version: '1.2.3', intro: 'New', headline: 'New', sections: [{title: 'One', text: 'Two'}]};
 const pro = {pro: 10, proAi: 20, pricingUrl: 'https://x/p'};
 
-test('the card has two switches, both off, and each press is the answer the sender obeys', async () => {
+test('the card has two switches, What\'s new on until stopped, and each press is the answer the sender obeys', async () => {
+  // 12 Nov 2026, owner, asked via AskUserQuestion: "On for all, new too (Recommended)": What's new is on for every confirmed address until it is turned off.
   const {e, sent} = await setup();
   assert.deepEqual((await call(choices, e, 'GET')).news.map(row => row.name), ["What's new", 'News and tips']);
-  assert.deepEqual(await on(e), {releases: false, tips: false});
-  assert.equal((await send(e, 'release', TO, release, {now})).reason, 'no_tick', 'a confirmed address with no yes gets no release mail');
-  assert.equal((await call(choices, e, 'POST', {mail: 'releases', on: true})).ok, true);
   assert.deepEqual(await on(e), {releases: true, tips: false});
-  assert.equal((await send(e, 'release', TO, release, {now})).ok, true);
+  assert.equal((await send(e, 'release', TO, release, {now})).ok, true, 'a confirmed address with no answer gets the release mail');
   assert.equal(sent.length, 1);
   assert.equal((await call(choices, e, 'POST', {mail: 'releases', on: false})).ok, true);
   assert.deepEqual(await on(e), {releases: false, tips: false});
+  assert.equal((await send(e, 'release', TO, release, {now: later(8)})).reason, 'unsubscribed', 'turned off is a stop the sender obeys');
+  assert.equal((await call(choices, e, 'POST', {mail: 'releases', on: true})).ok, true);
+  assert.deepEqual(await on(e), {releases: true, tips: false});
 });
 
 test('someone with no address yet sees both switches off, and a press waits for the address', async () => {
@@ -107,7 +108,7 @@ test('a stale tick on a stopped box is no answer: nothing is stored', async () =
   const account = e.STATS.db.prepare('SELECT id FROM pro_accounts').get().id;
   await call(choices, e, 'POST', {mail: 'tips', on: false});
   await recordNews(e, account, {marketing: true}, now);
-  assert.deepEqual(await on(e), {releases: false, tips: false});
+  assert.deepEqual(await on(e), {releases: true, tips: false}, 'nothing stored: What\'s new keeps its default (on), tips its stop');
 });
 
 test('a failed read of the yes table is never "no yes": it throws, and only a missing table reads as empty', async () => {
