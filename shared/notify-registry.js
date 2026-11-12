@@ -48,6 +48,9 @@ export const ALERTS = [
   a('ai-fixer-round', '🔧 AI fixer: PR ready / red / conflict', 'ai', 'every', 'engineering', {wired: true, jobs: ['ai-fixer.yml', 'ai-fixer-follow.yml']}),
   a('ai-persona-night', '🧑‍💻 AI persona night report', 'ai', 'problems', 'engineering', {status: 'new', modes: ['every', 'problems'], jobs: ['ai-user-agents.yml'], parked: 'no sender exists in any repo yet (12 Nov 2026): nothing posts it to an old bot; built when the owner wants the alert'}),
   a('e2e-weekly', '📅 Weekly e2e summary (Mondays)', 'main', 'every', 'engineering', {wired: true, jobs: ['e2e-weekly.yml']}),   // Why (12 Nov 2026, owner: "Still getting on old telegram bots"): tools/ci-intel/jobs/e2e-weekly.mjs posted with the CI-alerts bot only
+  // Why (13 Nov 2026, owner: "Please move all the messages from CI alerts"): jobadabra-benchmarks lib/telegram.mjs sent both round notes straight to the CI-alerts bot; it now asks /ops/notify first (SELFHEAL_PUBLISH_KEY) and keeps that bot only as the fail-open fallback.
+  a('form-benchmark-note', '📊 Form-filling benchmark round note', 'ai', 'every', 'engineering', {wired: true}),
+  a('search-benchmark-note', '📊 Job-search benchmark round note (every 3 days)', 'ai', 'every', 'engineering', {wired: true}),
   a('ai-credit', '🪫 AI credit ran out / AI refused a job / AI step skipped', 'ai', 'daily', 'engineering', {wired: true, modes: ['every', 'daily']}),
   // Why (12 Nov 2026, owner, on two Telegram notes from the AI broker: "this one I think should be on engineering"): the broker's three notes posted straight to the owner's personal Brain bot, so no switch in Admin could route or mute them. They come through /ops/notify now (workers/ai-broker/lib/fallback.mjs noteOnce); the broker itself sends each marker once a UTC day.
   a('ai-broker-engine', '🔀 AI broker: an engine failed half of its last calls and moved behind the other', 'ai', 'every', 'engineering', {wired: true}),

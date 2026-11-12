@@ -2,9 +2,8 @@
 // what counts as search code, which PRs fall between two nights' builds, what a night that cannot be compared says, and that a GitHub failure never costs the upload. GitHub is a fake that
 // answers in the real REST/GraphQL shapes (a path filter, a `since`, pages of 100). Guard for admin/search-night-prs.js and the ingest hook in admin/search-night.js.
 import assert from 'node:assert/strict';
-import {existsSync, readFileSync, readdirSync} from 'node:fs';
 import {test} from 'node:test';
-import {KEEP_PRS, SEARCH_PATHS, markNights, prsIn, runShas, searchCommits} from '../../../../admin/search-night-prs.js';
+import {KEEP_PRS, markNights, prsIn, runShas, searchCommits} from '../../../../admin/search-night-prs.js';
 import {ingest, nights} from '../../../../admin/search-night.js';
 
 const sha = digit => String(digit).repeat(40);
@@ -45,31 +44,9 @@ function github({commits = COMMITS, runs = RUNS, dates = DATES, fail = null} = {
   return {calls, fetcher};
 }
 
-// Every file under a folder, as repo paths.
-const walk = dir => readdirSync(dir, {withFileTypes: true}).flatMap(entry => (entry.isDirectory() ? walk(`${dir}/${entry.name}`) : [`${dir}/${entry.name}`]));
-
-// The repo files a yardstick pattern such as src/daily_search*.py or src/** stands for (a pattern with no star stands for itself).
-// Why (10 Nov 2026, jobadabra #3684 turned the list into `src/**` plus `!src/...` exclusions; every web PR went red on this test, run 42885504405): GitHub's `paths:` takes `**` (any depth) and a leading `!` (leave the file out); the old reader
-// took one folder level and read every line as an include, so it listed folders and the excluded files too.
-function expand(glob) {
-  if (!glob.includes('*')) return [glob];
-  if (glob.endsWith('/**')) return existsSync(glob.slice(0, -3)) ? walk(glob.slice(0, -3)) : [];
-  const dir = glob.slice(0, glob.lastIndexOf('/')), tail = glob.slice(glob.lastIndexOf('/') + 1), pattern = new RegExp(`^${tail.replace(/[.+]/g, '\\$&').replace(/\*/g, '.*')}$`);
-  return existsSync(dir) ? readdirSync(dir).filter(name => pattern.test(name)).map(name => `${dir}/${name}`) : [];
-}
-
-test('the search paths cover every stage file of the Find jobs pipeline yardstick, so a PR that moves its numbers is never missing', t => {
-  const file = '.github/workflows/press-yardstick.yml';
-  if (!existsSync(file)) return t.skip('the public workflow is not in this tree');
-  const listed = [...readFileSync(file, 'utf8').split('workflow_dispatch:')[0].matchAll(/^\s+- '([^']+)'$/gm)].map(match => match[1]);
-  const globs = listed.filter(glob => !glob.startsWith('!') && !glob.startsWith('tools/press-yardstick') && !glob.startsWith('.github/'));
-  const left = new Set(listed.filter(glob => glob.startsWith('!')).flatMap(glob => expand(glob.slice(1))));
-  assert.ok(globs.length >= 5 && listed.length >= 15, 'positive control: the yardstick list is read');
-  const files = globs.flatMap(expand).filter(entry => !left.has(entry));
-  assert.ok(!files.includes('src/ai/apply_batch.py') && files.includes('src/ai/score.py'), 'positive control: a `!` line leaves its file out and `**` reaches files in folders');
-  assert.ok(files.some(entry => entry.startsWith('src/daily_search_')), 'positive control: a pattern is expanded to the repo files');
-  assert.deepEqual(files.filter(entry => !SEARCH_PATHS.some(path => inPath(entry, path))), [], 'a stage file of the yardstick that the marks would miss');
-});
+// Why (13 Nov 2026, owner decision of 12 Nov "Off PRs, nightly on main", jobadabra #3939): a guard that the search paths cover every stage file of the Find jobs yardstick is gone with its source: #3939 removed
+// press-yardstick.yml's `pull_request: paths:` list and tools/press-yardstick/paths.py, so nothing lists "the yardstick's stage files" any more, and a guard against a list nobody keeps is noise. It reddened every web PR
+// twice when a jobadabra change reshaped that file (#3684, 10 Nov; #3939, 13 Nov). The marks' own tests below stay.
 
 test('the PRs of a window: after the earlier build, up to this one, one entry per PR, newest first, capped', () => {
   const commits = [{oid: 'a', date: '2026-11-07T08:00:00Z', n: 7, title: 'seven'}, {oid: 'b', date: '2026-11-07T09:00:00Z', n: 7, title: 'seven again'}, {oid: 'c', date: '2026-11-07T10:00:00Z', n: null, title: 'direct'}, {oid: 'd', date: '2026-11-08T05:00:00Z', n: 9, title: 'on the build'}, {oid: 'e', date: '2026-11-06T05:00:00Z', n: 1, title: 'on the earlier build'}];
