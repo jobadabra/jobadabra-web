@@ -22,20 +22,28 @@ function d1(root) {
 }
 
 // seeds: names from tools/page-shot-seeds.mjs, or 'all'. Returns {base, env, call, close}.
-const ranOn = new WeakMap();   // a database (env) -> the seed names already run on it
+const ranOn = new WeakMap();   // a database (env) -> the once-seeds already run on it
+// The seeds whose second run on one database breaks (a plain INSERT into a unique key). Every other seed stays re-runnable on purpose: schedules,
+// testing-overview and synthetic-card upsert one snapshot row that callers such as nightly-trends re-run to reset (Gitar on #577).
+export const ONCE = ['random-draws', 'session-checks', 'scouting', 'benchmark-search'];
 /**
- * Makes every seed run at most once per database, whoever asks for it: the list, or a seed that loads others (job-search-overview, ai-cost-full, schedules' callers).
- * Invariant: a second ask for the same seed on the same env returns at once; wrapping twice keeps one wrapper.
+ * Makes the ONCE seeds run at most once per database, whoever asks for them: the "all" list, or a seed that loads them (job-search-overview).
+ * Invariant: a second ask on the same env returns at once; a seed that threw is not marked, so a later ask runs it again; wrapping twice keeps one wrapper.
  * Why (12 Nov 2026, coordinator; web main red since #566): "all" ran random-draws, then job-search-overview ran it again and the second INSERT broke search_lab_draws' unique draw_date, so every admin page check failed.
  */
-export function runOnce(seeds) {
-  for (const [name, seed] of Object.entries(seeds)) if (!seed.once) seeds[name] = Object.assign(async context => {
-    const done = ranOn.get(context.env) ?? new Set();
-    ranOn.set(context.env, done);
-    if (done.has(name)) return undefined;
-    done.add(name);
-    return seed(context);
-  }, {once: true});
+export function runOnce(seeds, names = ONCE) {
+  for (const name of names) {
+    const seed = seeds[name];
+    if (!seed || seed.once) continue;
+    seeds[name] = Object.assign(async context => {
+      const done = ranOn.get(context.env) ?? new Set();
+      ranOn.set(context.env, done);
+      if (done.has(name)) return undefined;
+      const result = await seed(context);
+      done.add(name);
+      return result;
+    }, {once: true});
+  }
   return seeds;
 }
 
