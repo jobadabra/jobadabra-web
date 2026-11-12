@@ -7,7 +7,7 @@
 import {viewer, remember} from '../shared/auth.js';
 import {equal} from '../shared/guard.js';
 import {esc} from '../shared/html.js';
-import {readStartProblem} from '../shared/intel-start.js';
+import {INTEL_COLLECTORS, readStartProblem} from '../shared/intel-start.js';
 import {startLine} from './intel-start-line.js';
 import {filterLinks} from './admin.js';
 import {graph, GRAPH_STYLE} from './schedules-graph.js';
@@ -74,12 +74,13 @@ const CSS = `.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(17
 .dots{display:flex;gap:3px;margin-top:3px}.dots i{width:8px;height:8px;border-radius:50%;background:#3fb68b}.dots i.r{background:#e5484d}.dots i.x{background:#5b626a}.dots i.c{background:none;border:1px solid #5b626a}
 .chip{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:600;color:#0b0d10}.chip.g{background:#3fb68b}.chip.r{background:#e5484d}.chip.o{background:#8d949c}.chip.w{background:#e0a43a}.small{font-size:12px}`;
 
-/** The red line's data: the snapshot's start problem and the central scout's (11 Nov 2026, owner: the scout starts from the Worker too; its refusal must show on a page, like the other collectors'; Gitar on #560: both at once, or the second hides behind the first).
- *  The scout's reason is named because this page is not its own. */
+/** The red line's data: the snapshot's start problem and every lab timer's (11 Nov 2026, owner: the scout starts from the Worker too; its refusal must show on a page, like the other collectors'; Gitar on #560: all at once, or one hides behind another).
+ *  A lab workflow's reason is named because this page is not its own. Why (12 Nov 2026, web#582 red): the scout was written here by name, so board-discovery.yml, the next lab row, had no page; every lab row of INTEL_COLLECTORS now. */
 async function startProblem(db) {
-  const own = await readStartProblem(db, 'schedules-snapshot.yml'), scout = await readStartProblem(db, 'central-scout.yml');
-  const named = scout && {...scout, reason: `central-scout.yml: ${scout.reason}`};
-  return own && named ? {...own, reason: `${own.reason}; ${named.reason}`} : own || named;
+  const own = await readStartProblem(db, 'schedules-snapshot.yml');
+  const lab = (await Promise.all(INTEL_COLLECTORS.filter(row => row.home === 'lab').map(async ({workflow}) => { const p = await readStartProblem(db, workflow); return p && {...p, reason: `${workflow}: ${p.reason}`}; }))).filter(Boolean);
+  const all = [own, ...lab].filter(Boolean);
+  return all.length ? {...all[0], reason: all.map(p => p.reason).join('; ')} : null;
 }
 // notify = {settings, canEdit, back}: the owner's alert settings behind the Notify column (admin/notify-cells.js); without it the column shows the registry's defaults, read only.
 // problem: why the Worker could not start schedules-snapshot.yml (or central-scout.yml, named in the line) on its last try (startProblem), drawn as the red "collector not starting" line the e2e and integrations pages show.
