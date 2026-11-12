@@ -35,9 +35,10 @@ export async function fallbackToday(storage, env) {
 /**
  * One note per marker per UTC day to the owner through the site's switchboard, never repeated: POST /ops/notify on the `www` Worker (service binding SITE, Bearer SELFHEAL_PUBLISH_KEY), as the registry event `event` (shared/notify-registry.js).
  * Why (12 Nov 2026, owner, on two Telegram notes from this Worker: "this one I think should be on engineering"): the notes went straight to the owner's personal Brain bot, so Admin could neither route nor mute them. The switchboard picks the channel and the owner's switch; this Worker holds no Telegram secret.
+ * `extra` = {state, level}: the switchboard's "changes only" and "only problems" modes read them (shared/notify.js), so a 🔴 and its 🟢 are two states of one alert.
  * Without the binding or the key nothing is sent (as without the old bot). A refusal or an unreachable site is logged and dropped: a note never fails a call.
  */
-export async function noteOnce(storage, env, day, marker, event, text, link = '') {
+export async function noteOnce(storage, env, day, marker, event, text, link = '', extra = {}) {
   if (!env.SITE || !env.SELFHEAL_PUBLISH_KEY) return;
   const send = await storage.transaction(async tx => {
     const key = `fallback:${day}`, state = await tx.get(key) || fresh();
@@ -49,7 +50,7 @@ export async function noteOnce(storage, env, day, marker, event, text, link = ''
   if (!send) return;
   try {
     const reply = await env.SITE.fetch('https://www/ops/notify', {method: 'POST', signal: AbortSignal.timeout(5000),
-      headers: {'content-type': 'application/json', authorization: `Bearer ${env.SELFHEAL_PUBLISH_KEY}`}, body: JSON.stringify({event, text, ...(link ? {link} : {})})});
+      headers: {'content-type': 'application/json', authorization: `Bearer ${env.SELFHEAL_PUBLISH_KEY}`}, body: JSON.stringify({event, text, ...(link ? {link} : {}), ...extra})});
     if (!reply.ok) console.error(`note ${event} not delivered: site answered ${reply.status}`);
   } catch (caught) { console.error(`note ${event} not delivered: ${String(caught?.message || caught).slice(0, 100)}`); }
 }

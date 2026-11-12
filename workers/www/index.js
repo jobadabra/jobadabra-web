@@ -110,6 +110,7 @@ import * as recipeLibrary from '../../api/recipes.js';
 import * as triageQueue from '../../api/triage.js';
 import {freeAi} from '../../shared/free-ai.js';
 import {caps as freeAiCaps} from '../../shared/free-ai-caps.js';
+import {tick as freeAiFailing} from '../../shared/free-ai-alert.js';
 import * as mail from '../../shared/mail.js';
 import * as mailUnsub from '../../api/mail-unsub.js';
 import * as mailHeld from '../../api/mail-held.js';
@@ -374,6 +375,7 @@ export default {
       ctx.waitUntil(readyTick(env).then(done => { if (done.started || done.finished) console.log(`ready tick: ${JSON.stringify(done)}`); }).catch(error => console.error(`ready tick: ${error.message}`)));   // Ready to send: due nights to the Queue, over-time nights finished (api/ready-tick.js; nothing while READY_TO_SEND is off)
       ctx.waitUntil(readySweep(env).catch(error => console.error(`ready sweep: ${error.message}`)));   // Ready to send: a batch older than a day loses its data (api/ready.js)
       ctx.waitUntil(sentryAlert.check(env).catch(error => console.error(`sentry alert: ${error.message}`)));
+      ctx.waitUntil(freeAiFailing(env, new Date(event.scheduledTime || Date.now())).catch(error => console.error(`free ai alert: ${error.message}`)));   // Free AI failing people's calls: judge the last 5 minutes, tell once when it opens and once when it closes (shared/free-ai-alert.js)
       ctx.waitUntil(runTimers(event, env, {dispatch}).catch(error => console.error(`timers: ${error.message}`)));   // the bot Worker's starts that fall on this tick (shared/timers.js; nothing while TIMERS is off)
       ctx.waitUntil(synthetic.tick(env, new Date(event.scheduledTime || Date.now())).then(done => { if (done.ran) console.log(`synthetic round: ${JSON.stringify(done)}`); }).catch(error => console.error(`synthetic round: ${error.message}`)));   // every 15 min (shared/synthetic.js; report only)
       // Why (31 Oct 2026, owner "Start it from the Worker"; the integrations collector joined 1 Nov 2026): GitHub's hourly schedules ran every ~4.5 h or not at all; this trigger fires on time, one tick an hour per collector (INTEL_COLLECTORS, shared/intel-start.js). All 5 account cron triggers are used.
