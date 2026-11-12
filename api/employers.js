@@ -192,10 +192,11 @@ export async function agreedSites(env, k = SITES_K) {
 // What each job board gave the installs that read it, per role family × country (src/contribute.py site_facts 'yield', PR 6 of
 // docs/superpowers/specs/2026-10-18-search-learns-sources.md): jobs in their places and fit 70+, summed. A cell goes out only when k installs
 // share it (one install's numbers never do); an install's countries count only where the board serves. Installs rank the boards by it.
+// measured: true on a cell the Central Scout's own read gave (storeBoardFacts): that family's jobs were seen on the board, located in that country.
 async function boardCells(env, k) {
   let rows;
   try {
-    rows = (await env.STATS.prepare(`SELECT host, body, in_places, fit70, countries, families FROM sitefacts WHERE kind = 'board' AND in_places IS NOT NULL`).all()).results || [];
+    rows = (await env.STATS.prepare(`SELECT install, host, body, in_places, fit70, countries, families FROM sitefacts WHERE kind = 'board' AND in_places IS NOT NULL`).all()).results || [];
   } catch { return {}; }   // before migration 0094
   const cells = {}, list = text => String(text || '').split(',').filter(Boolean);
   for (const row of rows) {
@@ -207,6 +208,10 @@ async function boardCells(env, k) {
         cell.installs += 1;
         cell.in_places += row.in_places || 0;
         cell.fit70 += row.fit70 || 0;
+        // Why (12 Nov 2026, owner: "We should now from the start what boards/employers we should read first"; "I agree" to counting a Scout-measured board
+        // as proven): the Scout's rows carry no fit count (storeBoardFacts writes 0), so an install could not tell a board the Scout read and found this
+        // family's jobs on, in this country, from one install's unscored list; 4% of first searches started from a proven board.
+        if (String(row.install || '').startsWith(SCOUT_BOARD_PREFIX)) cell.measured = true;
       }
     }
   }
