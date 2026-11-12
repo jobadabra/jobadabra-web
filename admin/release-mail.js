@@ -22,9 +22,11 @@ const notFound = () => new Response('Not found', {status: 404});
 
 /** Builds the complete release email from changelog groups, preserving each change's kind. */
 export function dataFrom({version, date, groups = []}) {
-  const items = KINDS.flatMap(kind => groups.filter(group => group.kind === kind).flatMap(group => (group.items || []).map(item => ({...item, kind}))));
+  const items = KINDS.flatMap(kind => groups.filter(group => group.kind === kind).flatMap(group => (group.items || []).map(item => ({...item, kind, version: group.version}))));
   if (!items.length) return null;
-  return {version, month: monthOf(date), headline: items[0].text.replace(/\.$/, ''), sections: items.map(item => ({kind: item.kind, title: item.lead, text: item.text})), updateUrl: `${SITE}/download`};
+  // emoji and version feed the mail's top changes (shared/mail-release.js highlightsOf).
+  const sections = items.map(item => ({kind: item.kind, title: item.lead, text: item.text, ...(item.emoji && {emoji: item.emoji}), ...(item.version && {version: item.version})}));
+  return {version, month: monthOf(date), headline: items[0].text.replace(/\.$/, ''), sections, updateUrl: `${SITE}/download`};
 }
 
 /** Selects the latest published stable changelog version using numeric version order. */
@@ -40,15 +42,17 @@ async function stableWindow(env, version) {
   const at = ordered.findIndex(row => row.version === version);
   if (at < 0 || ordered[at].channel !== 'stable') return null;
   const previous = ordered.findIndex((row, index) => index > at && row.channel === 'stable');
-  const between = ordered.slice(at, previous < 0 ? undefined : previous).reverse();
+  const between = ordered.slice(at, previous < 0 ? undefined : previous).filter(row => !row.hidden);
+  // One change per kind and title, the newest version's text: betas often rework one area, each with the same title ("Faster job searches" in 0.9.22 and 0.9.23).
+  // Why (owner, 12 Nov 2026, on the 0.9.23 mail showing that title twice): the mail tells what changed since the last stable, once per change, as it is now.
   const seen = new Set(), groups = [];
-  for (const row of between.filter(row => !row.hidden)) for (const group of JSON.parse(row.body)) {
-    const items = (group.items || []).filter(item => {
-      const key = JSON.stringify([group.kind, item.lead.trim(), item.text.trim()]);
+  for (const row of between) {   // newest first, so the newest text is the one kept; the groups end up oldest version first, as before
+    const mine = JSON.parse(row.body).map(group => ({...group, version: row.version, items: (group.items || []).filter(item => {
+      const key = JSON.stringify([group.kind, String(item.lead || '').trim().replace(/[.!?]$/, '').toLowerCase()]);
       if (seen.has(key)) return false;
       seen.add(key); return true;
-    });
-    if (items.length) groups.push({...group, items});
+    })})).filter(group => group.items.length);
+    groups.unshift(...mine);
   }
   return {...ordered[at], groups, previousStable: previous < 0 ? null : ordered[previous].version};
 }
