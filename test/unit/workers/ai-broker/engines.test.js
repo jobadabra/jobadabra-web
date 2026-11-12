@@ -29,6 +29,8 @@ function world(t, engine, {free = freeAnswer, extra = {}, claude = claudeOk, tok
   return {...made, calls, dispatched, env, sent};
 }
 const answered = async response => (await response.json()).engine;
+// Failures within one second count once (lib/adapt.mjs BURST_MS, 12 Nov 2026): a test that plays failures one after another moves the clock between them.
+const later = (i, from = day) => Date.now.mock.mockImplementation(() => from + i * 2000);
 
 test('the shipped default is ENGINE=codex and the order is the two subscriptions, then Free AI', () => {
   assert.equal(config.vars.ENGINE, 'codex');
@@ -255,7 +257,7 @@ test('Codex turned away for capacity (run 42040707448): the Claude subscription 
 
 test('Codex failing half its last calls moves behind Claude for 30 minutes, the owner is told once, a call that names its engine is never moved, then Codex is first again', async t => {
   const {broker, calls} = world(t, 'codex', {...withToken, codex: codexBroken});
-  for (let i = 0; i < 6; i++) { const answer = await (await broker.call('pr', body)).json(); assert.equal(answer.engine, 'claude'); assert.equal(answer.fellBack[0].engine, 'codex'); }   // Codex first, fails, Claude answers each (8 Nov 2026: a failure goes on); each still counts as a Codex failure
+  for (let i = 0; i < 6; i++) { later(i); const answer = await (await broker.call('pr', body)).json(); assert.equal(answer.engine, 'claude'); assert.equal(answer.fellBack[0].engine, 'codex'); }   // Codex first, fails, Claude answers each (8 Nov 2026: a failure goes on); each still counts as a Codex failure
   assert.equal(calls.notes, 1);
   const health = await (await broker.health()).json();
   assert.ok(health.chain.find(e => e.name === 'codex').demotedUntil);
@@ -286,12 +288,12 @@ test('only real failures count: a few failures, a used-up week, or ENGINE_ADAPT=
 
 test('Claude failing half its last calls moves behind Codex and is not called for 30 minutes; with no other subscription configured nothing moves', async t => {
   const {broker, calls} = world(t, 'claude', {...withToken, claude: claudeFails('claude-failed:1 boom')});
-  for (let i = 0; i < 6; i++) assert.equal(await answered(await broker.call('pr', body)), 'codex');   // each fell through to Codex
+  for (let i = 0; i < 6; i++) { later(i); assert.equal(await answered(await broker.call('pr', body)), 'codex'); }   // each fell through to Codex
   assert.equal(calls.claudeCli, 6);
   assert.equal(await answered(await broker.call('pr', body)), 'codex');
   assert.equal(calls.claudeCli, 6);   // demoted: Codex first, Claude not asked
   const alone = world(t, 'codex', {codex: codexBroken, extra: {FALLBACK_FREE_AI_DAY_USD: '0'}});   // no Claude token, Free AI off
-  for (let i = 0; i < 7; i++) assert.equal((await alone.broker.call('pr', body)).status, 502);   // nowhere to move: still Codex
+  for (let i = 0; i < 7; i++) { later(i); assert.equal((await alone.broker.call('pr', body)).status, 502); }   // nowhere to move: still Codex
   assert.ok((await (await alone.broker.health()).json()).chain[0].demotedUntil);   // but the failure is reported
 });
 

@@ -115,8 +115,27 @@ test('a call cut by a container restart is never an engine failure: 10 cut calls
     assert.deepEqual(sent, [], `${name}: no note`);
   }
   const sent = [], real = world(t, {claude: () => containerError('claude-failed:1 boom'), env: {...withToken, ENGINE: 'claude', ...switchboard(sent)}});
-  for (let i = 0; i < 6; i++) await real.broker.call('scheduled', body);
+  let at = Date.parse('2026-11-12T17:00:00Z');
+  t.mock.method(Date, 'now', () => at);
+  for (let i = 0; i < 6; i++) { at += 2000; await real.broker.call('scheduled', body); }   // spread over time: one counted failure each (lib/adapt.mjs BURST_MS)
   assert.ok((await (await real.broker.health()).json()).chain[0].demotedUntil, 'positive control: real failures still demote');
+  assert.deepEqual(sent.map(note => note.event), ['ai-broker-engine']);
+});
+
+// ba, 12 Nov 2026, try 2 (mac-9a: "name Codex's 5 of 10 as a fact"). Broker log 17:05Z, `codexCall` lines: 8 Codex calls (running 2.3 to 14.4 s, spawned at different times) all ended status 500 within 60 ms of each other at 17:05:39.48-.54, each trace ending `exit:0` (Codex exited with no reply: the container's `codex-failed:0 ...`), 0.7 s before the runtime logged "signalled the container to exit due to a new version rollout". Five of those on top of five good calls is "failed 5 of its last 10". The text is not in the log; the cause is shared.
+// Intended: the ring counts independent failures. Calls that fail within one second of the last counted failure share one cause (a restart, an outage seen by every parallel call) and count once; a failure that goes on shows in later seconds and demotes.
+test('a burst of parallel failures at one instant is one failure: 8 calls cut together on top of 5 good ones demote nothing; failures spread over time still do', async t => {
+  let broken = false, now = Date.parse('2026-11-12T17:00:00Z');
+  t.mock.method(Date, 'now', () => now);
+  const sent = [], {broker} = world(t, {codex: () => broken ? containerError('codex-failed:0 ') : success(), env: {...withToken, ...switchboard(sent)}});
+  for (let i = 0; i < 5; i++) { now += 1000; assert.equal((await (await broker.call('scheduled', body)).json()).engine, 'codex'); }
+  broken = true; now += 1000;
+  const burst = await Promise.all(Array.from({length: 8}, () => broker.call('scheduled', body)));
+  assert.ok(burst.every(reply => reply.status === 200), 'Claude answered each');
+  assert.equal((await (await broker.health()).json()).chain[0].demotedUntil, undefined, 'one burst, one failure');
+  assert.deepEqual(sent, []);
+  for (let i = 0; i < 6; i++) { now += 2000; await broker.call('scheduled', body); }   // positive control: the same failures spread over time
+  assert.ok((await (await broker.health()).json()).chain[0].demotedUntil);
   assert.deepEqual(sent.map(note => note.event), ['ai-broker-engine']);
 });
 
