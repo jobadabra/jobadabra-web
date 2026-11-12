@@ -364,11 +364,11 @@ test('the central scout\'s measured boards are served as the same board fact ins
   const {agreedSites} = await import('../../../api/employers.js');
   const facts = (await agreedSites(e)).filter(fact => fact.kind === 'board').sort((a, b) => a.host.localeCompare(b.host));
   assert.deepEqual(facts.map(f => [f.host, f.url, f.recipe, f.installs, f.relevant]), [
-    ['delucru.md', good.url, {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0}]],
-    ['needs.md', 'https://needs.md/?q={role}', {countries: ['md'], browser: true}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0}]],
-    ['rabota.md', 'https://rabota.md/jobs?q={role}&place={place}', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 22, fit70: 0}]],
-    ['section.md', 'https://section.md/jobs/it-software', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 9, fit70: 0}]],
-    ['truthy.md', 'https://truthy.md/?q={role}', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0}]]]);
+    ['delucru.md', good.url, {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0, measured: true}]],
+    ['needs.md', 'https://needs.md/?q={role}', {countries: ['md'], browser: true}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0, measured: true}]],
+    ['rabota.md', 'https://rabota.md/jobs?q={role}&place={place}', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 22, fit70: 0, measured: true}]],
+    ['section.md', 'https://section.md/jobs/it-software', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 9, fit70: 0, measured: true}]],
+    ['truthy.md', 'https://truthy.md/?q={role}', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0, measured: true}]]]);
   await call(e, 'PUT', auth, {feeds: [feed('a')]});   // a publish without the field keeps the facts
   assert.equal((await agreedSites(e)).filter(fact => fact.kind === 'board').length, 5);
   e.STATS.db.prepare("UPDATE sitefacts SET day = '2000-01-01' WHERE host = 'rabota.md'").run();
