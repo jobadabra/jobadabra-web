@@ -4,6 +4,9 @@ import assert from 'node:assert/strict';
 import {day, body, success, harness, entry} from './harness.mjs';
 import {addCall, addJobCall, jobKey, JOB_KEEP_DAYS, KEEP_DAYS, MAX_JOB_KEYS, MAX_JOBS_PER_WORKFLOW, MAX_WORKFLOWS, recentDays, tokensOf, workflowKey, workflowOf} from '../../../../workers/ai-broker/lib/tally.mjs';
 
+// one signing key for the file: the Worker keeps the key set it first fetched, so a second test with its own key would be "unknown signing key"
+let signing;
+const keyPair = () => (signing ||= crypto.subtle.generateKey({name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256'}, true, ['sign', 'verify']));
 const ref = (repository, file) => `${repository}/.github/workflows/${file}@refs/heads/main`;
 
 test('the workflow is the file of the verified token, with the repo but not its owner, so the org move keeps one row', () => {
@@ -85,7 +88,7 @@ test('a tally that cannot be written is logged and the answer still goes out', a
 });
 
 test('the Worker names the workflow from the verified token only: a caller-sent x-workflow is never forwarded, the admin smoke call is "admin"', async t => {
-  const pair = await crypto.subtle.generateKey({name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256'}, true, ['sign', 'verify']);
+  const pair = await keyPair();
   const jwk = {...(await crypto.subtle.exportKey('jwk', pair.publicKey)), kid: 'k1'};
   const enc = o => Buffer.from(JSON.stringify(o)).toString('base64url');
   const head = `${enc({alg: 'RS256', kid: 'k1'})}.${enc({iss: 'https://token.actions.githubusercontent.com', aud: 'jobadabra-ai-broker', repository: 'jobadabra/jobadabra', event_name: 'schedule', exp: Math.floor(Date.now() / 1000) + 600, job_workflow_ref: ref('jobadabra/jobadabra', 'ai-user-agents.yml')})}`;
@@ -165,4 +168,17 @@ test('past the day\'s workflow limit a job counts under the "other" row the tall
   const health = await (await broker.health()).json();
   assert.equal(health.tally.days['2026-10-30'].other.calls, 1, 'the tally folded the 61st workflow');
   assert.deepEqual(health.jobs.days['2026-10-30'], {'other|review': {calls: 1, tokens: 2}}, 'its job sits under that same row');
+});
+
+// Why (12 Nov 2026, owner via bm: "Broker, Claude plan, Haiku"): through the Worker's own /call, a run of jobadabra-benchmarks is forwarded with `engine: 'claude', only: true`; a run of another repo, or one that names its own engine, is forwarded as sent. CI of #578 caught a missing import that only this route reaches.
+test('the Worker forwards a jobadabra-benchmarks call as Claude only, and every other call as sent', async t => {
+  const pair = await keyPair(), jwk = {...(await crypto.subtle.exportKey('jwk', pair.publicKey)), kid: 'k1'}, enc = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const tokenFor = async repository => { const head = `${enc({alg: 'RS256', kid: 'k1'})}.${enc({iss: 'https://token.actions.githubusercontent.com', aud: 'jobadabra-ai-broker', repository, event_name: 'workflow_dispatch', exp: Math.floor(Date.now() / 1000) + 600, job_workflow_ref: ref(repository, 'form-round.yml')})}`; return `${head}.${Buffer.from(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', pair.privateKey, new TextEncoder().encode(head))).toString('base64url')}`; };
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({keys: [jwk]})));
+  const seen = [], env = {BROKER: {fetch: async request => { seen.push({lane: request.headers.get('x-lane'), body: JSON.parse(await request.text())}); return new Response('{}'); }}};
+  const post = async (repository, payload) => entry.fetch(new Request('https://broker/call', {method: 'POST', headers: {authorization: `Bearer ${await tokenFor(repository)}`}, body: JSON.stringify(payload)}), env);
+  await post('jobadabra/jobadabra-benchmarks', {tier: 'small', prompt: 'p'});
+  await post('jobadabra/jobadabra-benchmarks', {tier: 'small', prompt: 'p', engine: 'codex'});
+  await post('jobadabra/jobadabra', {tier: 'small', prompt: 'p'});
+  assert.deepEqual(seen, [{lane: 'bench', body: {tier: 'small', prompt: 'p', engine: 'claude', only: true}}, {lane: 'bench', body: {tier: 'small', prompt: 'p', engine: 'codex'}}, {lane: 'scheduled', body: {tier: 'small', prompt: 'p'}}]);
 });

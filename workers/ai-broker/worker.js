@@ -4,7 +4,7 @@
 // One `ENGINE` var names the engine that answers first (codex by default); the others follow in a fixed order and answer only when the one before ran out or is not configured (lib/engines.mjs); Claude answers only while its seven-day window reads under 90% (lib/budget.mjs). Other refusals retain their existing controls.
 import {Container, getContainer} from '@cloudflare/containers';
 import {verifyRunToken, githubJwks} from './lib/oidc.mjs';
-import {laneOf, queueOf, LANES} from './lib/lanes.mjs';
+import {claudeOnly, laneOf, queueOf, LANES} from './lib/lanes.mjs';
 import {allow, linesOf, claudeAllow, claudeWeekPercent, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
 import {refuseReply, loginValues} from './lib/guard.mjs';
 import {slots} from './lib/queue.mjs';
@@ -412,8 +412,8 @@ export default {
       try { claims = await verifyRunToken((request.headers.get('authorization') || '').replace(/^Bearer /, ''), {jwks: jwks(env), audience: audiences(env), repository: repositories(env)}); }
       catch (e) { return json(401, {why: String(e.message)}); }
       let text = await request.text();
-      let asked; try { asked = JSON.parse(text); } catch { asked = null; }
-      text = claudeOnly(claims, asked, text);   // the Durable Object refuses a body that is not JSON; the key just stays empty
+      let asked; try { asked = JSON.parse(text); } catch { asked = null; }   // the Durable Object refuses a body that is not JSON; the key just stays empty
+      text = claudeOnly(claims, asked, text);   // jobadabra-benchmarks calls that name no engine are forced to Claude alone (the signed repository claim; lib/lanes.mjs)
       return broker.fetch(new Request('http://c/call', {method: 'POST', body: text, headers: {'x-lane': laneOf(claims), 'x-workflow': workflowOf(claims), 'x-job': jobKey(request.headers.get('x-jobadabra-job')), 'x-session': sessionKeyOf(claims, asked?.session)}}));   // Why (3 Nov 2026, owner): lane and workflow are built fresh from the verified claims; a header the caller sends is never forwarded. Why (5 Nov 2026, owner via mac-32: per-job AI cost): the one exception is the job label, a GitHub job id of a fixed shape that only names a row for display and never decides a lane or a cap
     }
     return json(404, {error: 'not found'});
