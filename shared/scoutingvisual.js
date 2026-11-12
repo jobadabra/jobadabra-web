@@ -6,7 +6,7 @@ import {EUROPE} from './pool-tags.js';
 import {KINDS, KIND_NAMES} from './pool-labels.js';
 
 export const FLOOR = 25;   // employers per kind and country the scout aims for in the big markets (src/scout_cells.py FLOOR)
-export const BIG = ['de', 'gb', 'fr', 'it', 'es', 'pl', 'nl'], SMALL = ['lu', 'md', 'bg', 'hr', 'ee'];   // src/scout_cells.py BIG, SMALL
+export const BIG = ['de', 'gb', 'fr', 'it', 'es', 'pl', 'nl'], SMALL = ['lu', 'md', 'bg', 'hr', 'ee', 'si', 'lt', 'lv', 'cy', 'mt'];   // src/scout_cells.py BIG, SMALL
 // The floor follows the country's size (owner, 20 Oct 2026): 25 big markets, 10 mid-size, 5 small. Written as the engine's floor_for.
 export const floorFor = country => (BIG.includes(country) ? FLOOR : SMALL.includes(country) ? 5 : 10);
 // A count on the colour scale of the big markets: a cell at its own floor takes the colour of 25.

@@ -66,8 +66,10 @@ test('the kinds are the engine\'s, and the scout aims at every kind but software
 test('the floor follows the country size, the same lists as the engine', () => {
   const engine = readFileSync(new URL('../../../src/scout_cells.py', import.meta.url), 'utf8');
   const list = name => [...engine.match(new RegExp(`^${name} = \\((.*)\\)$`, 'm'))[1].matchAll(/'([a-z]+)'/g)].map(m => m[1]);
-  assert.deepEqual(BIG, list('BIG'));
-  assert.deepEqual(SMALL, list('SMALL'));
+  // Why (12 Nov 2026, the site lands first, owner 21 Oct 2026): the site's lists hold every country the engine lists, maybe more (new countries arrive here before the engine PR)
+  assert.deepEqual(list('BIG').filter(code => !BIG.includes(code)), []);
+  assert.deepEqual(list('SMALL').filter(code => !SMALL.includes(code)), []);
+  assert.deepEqual([...BIG, ...SMALL].filter(code => BIG.includes(code) && SMALL.includes(code)), [], 'a country is in one list only');
   assert.deepEqual([floorFor('de'), floorFor('ch'), floorFor('lu')], [25, 10, 5]);
   const cells = {'hospitality|lu': [5, 0], 'hospitality|ch': [9, 0], 'hospitality|de': [24, 0], 'logistics|de': [25, 0]};
   assert.equal(atFloor(cells), 2, 'Luxembourg at 5 and Germany at 25 count; Switzerland at 9 and Germany at 24 do not');
