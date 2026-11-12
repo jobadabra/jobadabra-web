@@ -12,6 +12,7 @@ import {PRO_PER_MINUTE, chargeCall, proLane} from './pro-ai.js';
 import {claudeCall, proRoute} from './pro-claude.js';
 import {aiAccess} from './hosted-budget.js';
 import {alertOwner} from './notify-send.js';
+import {tally} from './free-ai-alert.js';
 import {runOf} from './hosted.js';
 import {WEB_ACTION, webSearch} from './free-ai-web.js';
 
@@ -66,11 +67,24 @@ export async function who(key, env, now = new Date()) {
   return license ? {ok: true, who: await digestOf(`license:${license.id}`), license: true} : null;   // Pro / founder / friend: a separate lane, no trial budget
 }
 
+/**
+ * /api/ai/*: answers the call, then counts how it ended for the "Free AI fails people's calls" alert (shared/free-ai-alert.js); the count never changes the answer.
+ * Why (12 Nov 2026, bx; owner: "That could be real users not being able to perform actions"): the route logged a failure and told nobody; the five-minute tick reads these counts.
+ */
 export async function freeAi(request, env, now = new Date(), ctx = null, fetcher = fetch) {
+  const trace = {}, response = await answerCall(request, env, now, ctx, fetcher, trace);
+  const counted = tally(env, request, response, trace, now).catch(error => console.error(`free-ai tally: ${String(error?.message || error).slice(0, 100)}`));
+  ctx?.waitUntil ? ctx.waitUntil(counted) : await counted;
+  return response;
+}
+
+// `trace` is filled for the count: the install's digest (who) and a 502's own cause.
+async function answerCall(request, env, now, ctx, fetcher, trace) {
   const path = new URL(request.url).pathname.replace(/^\/api\/ai/, '');
   if (env.FREE_AI === 'off') return error(503, 'Free AI is paused right now. You can add your own key in Settings → Connections → AI.');
   if (!env.AI || !env.WAITLIST) return error(503, 'Free AI is not available right now.');
   const access = await who(request.headers.get('x-api-key'), env, now);
+  if (access) trace.who = access.who;
   if (!access) return error(401, 'Free AI needs this install\'s token. Restart Jobadabra and try again.', 'authentication_error');
   if (path === '/v1/models' && request.method === 'GET') return Response.json({data: [], has_more: false});   // key checks
   if (path !== '/v1/messages' || request.method !== 'POST') return error(404, 'Not available with Free AI.', 'not_found_error');
@@ -98,7 +112,7 @@ export async function freeAi(request, env, now = new Date(), ctx = null, fetcher
   const model = claude ? routed : modelFor(request.headers.get('x-jp-action'), env);
   let result, structured = false;
   // Why (5 Nov 2026, the first production hosted run: two 502s after 163 s and 173 s with no reason logged): a 502 names its cause.
-  const failed = cause => { console.error(`free-ai 502: ${cause} model=${model}${routed ? ` claude=${routed} failed` : ''} action=${request.headers.get('x-jp-action') || '-'} ms=${Date.now() - began}`); return error(502, 'Free AI could not answer just now.'); };
+  const failed = cause => { trace.cause = cause; console.error(`free-ai 502: ${cause} model=${model}${routed ? ` claude=${routed} failed` : ''} action=${request.headers.get('x-jp-action') || '-'} ms=${Date.now() - began}`); return error(502, 'Free AI could not answer just now.'); };
   if (!claude) try {
     const readPdf = async base64 => {
       const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));

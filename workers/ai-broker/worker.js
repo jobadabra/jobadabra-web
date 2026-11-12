@@ -10,6 +10,7 @@ import {refuseReply, loginValues} from './lib/guard.mjs';
 import {slots} from './lib/queue.mjs';
 import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
 import {modelOf, validEffort, weightOf, EFFORTS} from './lib/tiers.mjs';
+import {noteCall, ended} from './lib/refusing.mjs';
 import {tokenShaped, fallbackToday, newNote, apiPrecheck, freeAiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
 import {codexMessage, kindOf} from './container/kinds.mjs';
 import {walk, answered, refused, unavailable, failed, platformCut} from './lib/walk.mjs';
@@ -140,6 +141,8 @@ export class CodexBroker extends Container {
     const reply = await this.answer(lane, body, session);
     if (session) await this.noteGap(session, reply).catch(error => console.log(`sessions: ${String(error?.message || error).slice(0, 200)}`));
     await this.countCall(workflow, reply, Date.now() - started, job).catch(error => console.log(`tally: ${String(error?.message || error).slice(0, 200)}`));
+    // Why (12 Nov 2026, bx; owner: "Do I get alerts if the ai-broker starts to refuse AI calls?"): the call's end feeds the refusal streak (lib/refusing.mjs); the note never changes the answer.
+    await noteCall({storage: this.ctx.storage, env: this.brokerEnv, reply, workflow, chain: async () => (await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10))).chain}).catch(error => console.log(`refusing: ${String(error?.message || error).slice(0, 200)}`));
     return reply;
   }
 
@@ -210,7 +213,7 @@ export class CodexBroker extends Container {
     const ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note};
     const waitMs = chain.includes('claude') && configured('claude', env) && await mayPassOn({chain, body, env, storage: this.ctx.storage, verdict: door.verdict}) ? this.busyMs : undefined;   // undefined = wait for a Claude slot as long as it takes
     const done = await walk(chain, (engine, left, last) => this.turn(engine, {door, ctx, lane, body, session, left, waitMs: last ? undefined : waitMs}), (engine, v, ms) => this.record(day, engine, v, ms));
-    if (!done.reply) return this.ending(done, door, body, note);
+    if (!done.reply) { const reply = this.ending(done, door, body, note); ended.set(reply, {left: done.left}); return reply; }   // the engines' reasons ride along for the refusal streak (lib/refusing.mjs: a platform cut is not a refusal)
     // Why (1 Nov 2026, owner: CI jobs "need to be aware" which model answers, models behave differently): a reply names its engine and model, and `fellBack` lists the engines that were tried first and did not answer, with the reason. Claude answering after its busy turn did answer.
     const fell = done.left.filter(entry => !(entry.engine === done.engine && entry.why === 'busy'));
     return done.reply.ok && fell.length ? json(200, {...(await done.reply.json()), fellBack: fell}) : done.reply;
