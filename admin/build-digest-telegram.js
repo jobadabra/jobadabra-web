@@ -11,13 +11,24 @@ export function messages({day, groups, open, numbers}) {
   return [digestCard({day: dayWords(day), count, open, groups: groups.map(group => ({emoji: group.emoji, title: group.title, lead: group.bullets[0]?.lead || '', more: group.bullets.length - 1}))}).text];
 }
 
-// Sends them in order. No token or chat: {skipped} (the digest is still stored; the post is the one thing missing). A Telegram error throws, naming only the status (never the token).
-export async function post(result, {token, chat, fetch: doFetch = fetch}) {
-  if (!token || !chat) return {skipped: 'BUILDLOG_TELEGRAM_TOKEN / BUILDLOG_TELEGRAM_CHAT are not set'};
+// Sends them in order. `send(text)` (the job passes lib/telegram-post.mjs: the owner's switchboard first, this bot when it cannot deliver) -> the line it printed; without it the Build Log bot is called directly.
+// Why (12 Nov 2026, owner: "Still getting on old telegram bots: CI Alerts, Build Log ..."): the digest posted with the Build Log bot only, so the owner's Notifications switch (event daily-build-digest) could not stop it.
+// No token or chat and no `send`: {skipped} (the digest is still stored; the post is the one thing missing). A Telegram error throws, naming only the status (never the token).
+export async function post(result, {token, chat, fetch: doFetch = fetch, send = null}) {
+  if (!send && (!token || !chat)) return {skipped: 'BUILDLOG_TELEGRAM_TOKEN / BUILDLOG_TELEGRAM_CHAT are not set'};
   const list = messages(result);
+  let sent = 0;
   for (const text of list) {
+    if (send) {
+      const line = await send(text);
+      if (/not sent/.test(line)) return {skipped: line, sent};
+      if (!/^telegram: (sent|held)/.test(line)) throw new Error(`Telegram answered: ${String(line).replace(/^telegram: /, '')}`);
+      sent += 1;
+      continue;
+    }
     const response = await doFetch(`https://api.telegram.org/bot${token}/sendMessage`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({chat_id: chat, text, parse_mode: 'HTML', disable_web_page_preview: true})});
     if (!response.ok) throw new Error(`Telegram answered ${response.status}`);
+    sent += 1;
   }
-  return {sent: list.length};
+  return {sent};
 }

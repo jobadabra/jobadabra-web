@@ -9,6 +9,7 @@ import {countOf, daysToRun, makeDigest, plan, zurichDay, zurichHour} from '../ad
 import {post} from '../admin/build-digest-telegram.js';
 import {aiLine, isRefusal, reportRefusal} from '../admin/ai-refusal.js';
 import {askBroker} from '../desktop/e2e/lib/broker-client.mjs';   // the public tree's client of workers/ai-broker
+import {postTelegram} from '../desktop/e2e/lib/telegram-post.mjs';   // the switchboard first, the Build Log bot only when it cannot deliver
 import {pathToFileURL} from 'node:url';
 import {PUBLIC_REPO} from '../shared/repos.js';
 
@@ -58,7 +59,7 @@ async function runDay({day, late, publishKey, now}) {
     if (!response.ok) throw new Error(`the site refused the digest (${response.status})`);
     const stored = await response.json().catch(() => ({}));
     // The post goes out once: only when the site stored THIS final digest (a closed day answers "ignored", so a repeat run posts nothing).
-    if (decision.final && stored.final && !stored.ignored && !stored.rewritten) console.log(`Telegram: ${JSON.stringify(await post(result, {token: process.env.BUILDLOG_TELEGRAM_TOKEN, chat: process.env.BUILDLOG_TELEGRAM_CHAT}))}`);
+    if (decision.final && stored.final && !stored.ignored && !stored.rewritten) console.log(`Telegram: ${JSON.stringify(await post(result, {send: text => postTelegram({text, parse_mode: 'HTML', disable_web_page_preview: true}, {event: 'daily-build-digest', bot: {token: process.env.BUILDLOG_TELEGRAM_TOKEN, chat: process.env.BUILDLOG_TELEGRAM_CHAT}})}))}`);
   } else console.log('(SELFHEAL_PUBLISH_KEY is not set: nothing stored)');
   return result;
 }

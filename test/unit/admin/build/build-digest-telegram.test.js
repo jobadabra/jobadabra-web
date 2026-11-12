@@ -47,3 +47,14 @@ test('post: sends every message to the chat as HTML; no token or chat skips; an 
   assert.equal(none.calls.length, 0);
   await assert.rejects(post(digest, {token: 'SECRET', chat: '-100', fetch: fake(401).fetch}), error => /401/.test(error.message) && !/SECRET/.test(error.message));
 });
+
+test('post with `send` (the job hands it lib/telegram-post.mjs): every card goes to the switchboard\'s sender, never straight to the Build Log bot; held counts as sent; "not sent" is a skip; a refusal throws its line (12 Nov 2026)', async () => {
+  const lines = [];
+  const direct = fake();
+  assert.deepEqual(await post(digest, {send: async text => { lines.push(text); return 'telegram: sent'; }, fetch: direct.fetch}), {sent: 1});
+  assert.match(lines[0], /Build log 16 Oct/);
+  assert.equal(direct.calls.length, 0, 'no direct call to api.telegram.org');
+  assert.deepEqual(await post(digest, {send: async () => 'telegram: held (off)'}), {sent: 1});
+  assert.match((await post(digest, {send: async () => 'telegram: not sent (BUILDLOG_TELEGRAM_TOKEN / BUILDLOG_TELEGRAM_CHAT are not set)'})).skipped, /not sent/);
+  await assert.rejects(post(digest, {send: async () => 'telegram: refused (401)'}), /401/);
+});

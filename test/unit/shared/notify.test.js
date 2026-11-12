@@ -216,3 +216,8 @@ test('search-night: the Find jobs night check tells Engineering on a change only
   assert.equal((await notify(e, lost, {fetcher: tg.fetcher, now: NOW})).body.sent, true);
   assert.equal((await notify(e, lost, {fetcher: tg.fetcher, now: NOW})).body.sent, false, 'the same lost source the same day is told once');
 });
+
+test('every alert that is not parked has its sender on the switchboard (12 Nov 2026, owner: "Still getting on old telegram bots": Admin must read "every sender uses the switchboard"); an alert whose sender is not built is parked, with its reason', () => {
+  assert.deepEqual(ALERTS.filter(alert => !alert.parked && !alert.wired).map(alert => alert.id), []);
+  for (const alert of ALERTS.filter(alert => alert.parked)) assert.ok(String(alert.parked).length > 20, `${alert.id}: a parked alert says why`);
+});
