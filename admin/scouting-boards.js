@@ -3,6 +3,7 @@
 // Guard: test/unit/admin/scouting-boards.test.js.
 import {EUROPE} from '../shared/pool-tags.js';
 import {PROFILE_CELLS} from '../shared/board-counts.js';
+import {reachLegend, reachMap} from '../shared/board-reach.js';
 import {countryName} from '../shared/scoutingvisual.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {columns, figure, tipOf} from './viz.js';
@@ -41,6 +42,24 @@ const BOARDS_STYLE = `${CHIP_STYLE}.bd-grid td,.bd-grid th{text-align:center;fon
 .bd-grid th small{display:block;font-weight:400;margin-top:3px}.bd-grid th small .chip{padding:0 5px;font-size:11px}.bd-grid td.p{box-shadow:inset 0 0 0 2px #3987e5;border-radius:6px}.bd-grid td.z{color:#5b636c}.bd-grid td.n{background:#184f95;color:#f4efe3;border-radius:6px}
 .bd-grid td.n.hi{background:#3987e5;color:#0b0d10}.bd-key{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:#8d949c;margin-top:8px}.bd-key i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px}`;
 
+// Why (12 Nov 2026, owner picked "Map + totals only" for the website; Admin keeps names): the same tile map as /coverage with counts, a violet dot where a multi-country
+// board reaches, and each multi-country board by name. Colours from .vz (admin/viz-core.js), so light and dark both read.
+const REACH_STYLE = `.reach-map{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;max-width:420px}.reach-map .tile{aspect-ratio:1;border-radius:5px;display:grid;place-content:center;text-align:center;font:600 11px/1.15 ui-monospace,Menlo,monospace;position:relative;color:var(--vz-text)}
+.reach-map .tile b{font-size:11px;font-weight:600}.reach-map .tile small{font-weight:500;font-size:10.5px}.vz .h0{background:var(--vz-track);color:var(--vz-muted)}.vz .h2{background:color-mix(in oklab,var(--s1) 35%,var(--vz-card))}.vz .h4{background:color-mix(in oklab,var(--s1) 65%,var(--vz-card))}
+.vz .h6{background:var(--s1);color:var(--vz-ink)}.reach-map .tile.shared::after{content:"";position:absolute;top:3px;right:3px;width:7px;height:7px;border-radius:50%;background:var(--s6);box-shadow:0 0 0 1.5px var(--vz-card)}
+.reach-key{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:12.5px;color:var(--vz-muted);margin-top:8px}.reach-key span{display:inline-flex;align-items:center;gap:5px}.reach-key i{display:inline-block;width:12px;height:12px;border-radius:3px}.reach-key i.dot{border-radius:50%;background:var(--s6)}
+.reach-wrap{display:flex;gap:18px 28px;flex-wrap:wrap;align-items:flex-start}.reach-wrap table{min-width:260px}`;
+
+/** Local vs multi-country boards on the tile map, with each multi-country board's name, hosts and countries (Admin only: names never reach the website). */
+export function reachBlock(reach) {
+  if (!reach?.boards) return '';
+  const rows = reach.multi.map(board => `<tr><td><b>${esc(board.brand)}</b><br><small class="muted">${board.hosts.map(esc).join(', ')}</small></td><td>${board.countries.map(c => c.toUpperCase()).join(' · ')}</td></tr>`).join('');
+  const table = reach.multi.length ? `<table><tr><th>Multi-country board</th><th>Countries</th></tr>${rows}</table>` : '<p class="muted">No brand measured in 2+ countries yet.</p>';
+  return `<style>${REACH_STYLE}</style><h3 class="vz-sub">Across Europe: ${reach.local} local · ${reach.multi.length} multi-country</h3>
+<small class="muted">Grouped by brand: acme-jobs.at and acme-jobs.es would be one board in two countries. The website shows this map without numbers, dots or names.</small>
+<div class="vz"><div class="reach-wrap"><div>${reachMap(reach)}<div class="reach-key">${reachLegend()}</div></div>${table}</div></div>`;
+}
+
 /**
  * The card. `boards` = gatherBoards (shared/board-counts.js): {total, cells, last, profiles, history, start}; `start` is the Worker's last start of the discovery workflow ({at, ok, reason} or null).
  * Rows: every family with a board or a test profile; columns: every country with a board or a test profile, Europe's order first. Zero reads as zero: a profile cell at 0 is a red chip.
@@ -73,5 +92,6 @@ export function boardsSection(boards, now = new Date()) {
   return `<style>${BOARDS_STYLE}</style><section class="card" id="boards"><h2>📋 Job boards with 3+ local jobs</h2><small class="muted">Boards the central scout measured and published: each one listed 3+ jobs located in its country. Per role family × country; a board covering several families counts in each. A board not measured for 30 days leaves.</small>
 <p class="vz-lead">${discovery}</p>
 ${figure({lead, chart, table: trendTable, label: 'Show the days'})}
+${reachBlock(boards?.reach)}
 <h3 class="vz-sub">Per kind of work and country</h3>${grid}</section>`;
 }

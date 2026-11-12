@@ -61,3 +61,10 @@ details.tech .install-line { --hall-line: var(--line-strong); --hall-ink: var(--
 .heat-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 8px; color: var(--muted); font: 500 .76rem var(--mono); }
 .heat-legend i { display: inline-block; width: 18px; height: 12px; border-radius: 3px; margin-left: 6px; }
 @media (max-width: 520px) { .heat-card { padding: 10px; } .heat th.kind { font-size: .76rem; padding-right: 6px; } }
+/* Coverage: job boards across Europe (shared/board-reach.js reachMap): one square per country on an 8 × 7 tile map, shaded with the heat steps above (h0 none, h2/h4/h6 more boards). */
+.reach-card { margin-top: 18px; }
+.reach-map { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 5px; max-width: 460px; margin: 0 auto; }
+.reach-map .tile { aspect-ratio: 1; border-radius: 6px; display: grid; place-content: center; text-align: center; font: 600 .78rem/1.1 var(--mono); cursor: default; }
+.reach-map .tile small { font-weight: 500; font-size: .72rem; }
+.reach-card .heat-legend { gap: 6px 16px; } .reach-card .heat-legend span { display: inline-flex; align-items: center; gap: 6px; } .reach-card .heat-legend i { margin-left: 0; }
+@media (max-width: 520px) { .reach-map { gap: 3px; } .reach-map .tile { font-size: .68rem; border-radius: 4px; } }

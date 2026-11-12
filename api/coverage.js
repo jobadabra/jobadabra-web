@@ -2,6 +2,8 @@
 // index:summary, the landing's numbers too, each employer's jobs once); per country, per kind of work and the week's growth: the latest daily
 // snapshot (index_daily); the kind × country table drawn by the admin's own renderer in its public cut (heatTable open, 27 Oct 2026).
 // Counts only, never an employer or anything from an install. Read by web/public/coverage.html and web/public/site.js. Tests: test/unit/api/coverage.test.js.
+import {publicReach} from '../shared/board-reach.js';
+import {rowsOf} from '../shared/board-counts.js';
 import {countryName, heatTable, history, kindName} from '../shared/scoutingvisual.js';
 
 const HIDDEN = ['other', 'unknown'];   // shown as one line (other) or not at all (not counted yet): a chart of named kinds only
@@ -30,5 +32,7 @@ export async function coverage(env) {
   body.kinds = order(Object.entries(kinds).filter(([kind]) => !HIDDEN.includes(kind)).map(([kind, count]) => [kindName(kind), count]));
   body.other_kinds = kinds.other || 0;
   body.heat = heatTable(latest.cells, past, {open: true});
+  const boards = publicReach(await rowsOf(env.STATS).catch(() => []));   // job boards across Europe (12 Nov 2026): bands and totals only, shared/board-reach.js
+  if (boards) body.boards = boards;
   return new Response(JSON.stringify(body), {headers: {'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600'}});
 }

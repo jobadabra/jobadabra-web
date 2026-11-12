@@ -12,7 +12,7 @@ function d1() {
   for (const file of ['0029_index_daily.sql', '0099_scouting_history.sql']) db.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), 'utf8'));
   const statement = (sql, args = []) => ({bind: (...values) => statement(sql, values), run: async () => db.prepare(sql).run(...args),
     all: async () => ({results: db.prepare(sql).all(...args)}), first: async () => db.prepare(sql).get(...args)});
-  return {prepare: sql => statement(sql)};
+  return {prepare: sql => statement(sql), exec: sql => db.exec(sql)};
 }
 const feed = (i, kind, countries, jobs = 10) => ({company: `Secret Employer ${i}`, ats: 'lever', slug: `secret${i}`, kinds: {[kind]: 0.9}, countries, jobs});
 const kv = values => ({get: async key => values[key] ?? null});
@@ -74,4 +74,19 @@ test('the public heat table: counts and the week\'s change only, every field big
     'Software & IT is sorted by its size like every field (owner, 27 Oct 2026), not pinned last');
   assert.match(heat.table, /<td class="hn" data-tip="Field not sorted yet · France: 1 employer/, 'not sorted yet in one neutral, off the amber scale');
   assert.deepEqual(rows.slice(-2), ['Several fields', 'Field not sorted yet']);
+});
+
+test('job boards across Europe: totals and the map in its public cut; never a board host or brand (owner, 12 Nov 2026: "not disclose our intellectual property")', async () => {
+  const STATS = d1();
+  STATS.exec('CREATE TABLE sitefacts (install TEXT, day TEXT, host TEXT, kind TEXT, url TEXT, body TEXT, in_places INTEGER, fit70 INTEGER, countries TEXT, families TEXT, UNIQUE (install, host, kind))');   // the columns api/employers.js writes
+  await storeSnapshot(STATS, '2026-10-20', snapshot([feed(1, 'software', ['de'])]));
+  for (const [host, country] of [['secretboard.at', 'at'], ['secretboard.es', 'es'], ['hiddenjobs.fr', 'fr']])
+    await STATS.prepare(`INSERT INTO sitefacts (install, day, host, kind, url, body, in_places, fit70, countries, families) VALUES (?, '2026-10-20', ?, 'board', ?, '{}', 9, 0, ?, 'medical')`)
+      .bind(`central-scout-${country}`, host, `https://${host}/jobs?q={role}`, country).run();
+  const {boards} = await (await get({STATS})).json();
+  assert.equal(boards.local, 1);
+  assert.equal(boards.multi, 1);
+  assert.equal(boards.countries, 3);
+  assert.match(boards.map, /class="reach-map"/);
+  assert.doesNotMatch(JSON.stringify(boards), /secretboard|hiddenjobs|jobs\?q/);
 });

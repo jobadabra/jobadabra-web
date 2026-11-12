@@ -81,6 +81,24 @@
     <div class="bars" data-cov-bars="countries"><p class="source-note">The chart loads with the page.</p></div>
   </section>
 
+  <section class="block" id="boards" hidden data-cov-boards>
+    <div class="section-head stacked">
+      <span class="eyebrow">Job boards</span>
+      <h2>Job boards across Europe</h2>
+      <p class="lede">On top of the employers, each search reads job boards: local ones for a single country, and boards that cover several. Brighter means more boards.</p>
+    </div>
+    <ul class="numbers">
+      <li><b data-cov-board="local">—</b><span>local job boards</span></li>
+      <li><b data-cov-board="multi">—</b><span>boards across several countries</span></li>
+      <li><b data-cov-board="countries">—</b><span>European countries with a board</span></li>
+    </ul>
+    <div class="heat-card reach-card">
+      <div data-cov-reach></div>
+      <p class="heat-tip" data-cov-reach-tip aria-live="polite">Point at or tap a country to see how many boards it has.</p>
+      <div class="heat-legend" data-cov-reach-legend></div>
+    </div>
+  </section>
+
   <section class="block" id="yours">
     <div class="section-head stacked">
       <span class="eyebrow">On top of the list</span>
@@ -114,6 +132,20 @@ fetch('/api/coverage').then(r => (r.ok ? r.json() : null)).then(data => {
     const show = event => { const cell = event.target.closest('[data-tip]'); if (cell) tip.textContent = cell.dataset.tip; };
     heat.addEventListener('mouseover', show);
     heat.addEventListener('click', show);
+  }
+  // Job boards across Europe: bands and totals only (api/coverage.js publicReach), never a board's name.
+  const boards = document.querySelector('[data-cov-boards]');
+  if (boards && data.boards?.map) {
+    const b = data.boards;
+    const words = {local: n(b.local), multi: n(b.multi), countries: `${b.countries} of ${b.of}`};
+    for (const slot of boards.querySelectorAll('[data-cov-board]')) slot.textContent = words[slot.dataset.covBoard];
+    const map = boards.querySelector('[data-cov-reach]'), reachTip = boards.querySelector('[data-cov-reach-tip]');
+    map.innerHTML = b.map;
+    boards.querySelector('[data-cov-reach-legend]').innerHTML = b.legend;
+    const showReach = event => { const cell = event.target.closest('[data-tip]'); if (cell) reachTip.textContent = cell.dataset.tip; };
+    map.addEventListener('mouseover', showReach);
+    map.addEventListener('click', showReach);
+    boards.hidden = false;
   }
   for (const box of document.querySelectorAll('[data-cov-bars]')) {
     const rows = data[box.dataset.covBars] || [];

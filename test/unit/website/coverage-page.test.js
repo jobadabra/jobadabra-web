@@ -25,3 +25,13 @@ test('the table scrolls inside its card and every colour step is painted from th
   assert.match(css, /\.heat-card \.scroll \{ overflow-x: auto;/);
   for (const step of ['0', '1', '2', '3', '4', '5', '6', 'n']) assert.match(css, new RegExp(`\\.heat-card \\.h${step} \\{ background: (var|color-mix)\\(`));
 });
+
+test('job boards across Europe: after the employers, before "on top of the list"; filled from /api/coverage; no method words (owner, 12 Nov 2026: IP stays private)', () => {
+  const boards = page.indexOf('id="boards"'), countries = page.indexOf('id="countries"'), yours = page.indexOf('id="yours"');
+  assert.ok(countries > 0 && boards > countries && yours > boards);
+  const section = page.slice(boards, yours);
+  assert.match(section, /hidden data-cov-boards/, 'hidden until the API has boards');
+  assert.doesNotMatch(section, /scout|3\+|measured|discovery|brand/i);
+  assert.match(page, /map\.innerHTML = b\.map/);
+  assert.match(css, /\.reach-map \{ display: grid; grid-template-columns: repeat\(8,/);
+});
