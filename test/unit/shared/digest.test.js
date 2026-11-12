@@ -120,3 +120,14 @@ test('per board: recent vs earlier fill rate, and a drop flagged only with enoug
   assert.deepEqual([boards.greenhouse.earlierFilledShare, boards.greenhouse.recentFilledShare, boards.greenhouse.dropped], [0.9, 0.6, true]);
   assert.deepEqual([boards.workday.recentForms, boards.workday.dropped], [3, false]);
 });
+
+// 12 Nov 2026 (jobadabra-lab #84-#86): the button texts of a page with no Apply button we knew were ranked as questions no answer matched.
+test('wording weaknesses are questions and upload slots, never the button texts of a page with no Apply button', async () => {
+  const db = d1();
+  const label = (text, kind) => db.db.prepare(`INSERT INTO question_labels (label, kind, n, installs, boards, first_day, last_day) VALUES (?, ?, 4, '["a","b","c"]', '["ashby"]', '2026-10-10', '2026-10-11')`).run(text, kind);
+  label('example sign in', 'button');
+  label('example notice period', 'text');
+  label('example portfolio', 'upload');
+  const wording = (await digest(db, now)).weaknesses.filter(w => w.kind === 'wording').map(w => w.evidence.label).sort();
+  assert.deepEqual(wording, ['example notice period', 'example portfolio']);
+});

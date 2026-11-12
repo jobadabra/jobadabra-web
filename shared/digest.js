@@ -107,7 +107,9 @@ export async function digest(db, now = new Date()) {
       evidence: {fingerprint: row.fingerprint, kind: row.kind || '', question: row.question || ''}});
   }
   // 3. Questions no answer matched, in the forms' own words, once 3+ installs met them (question_labels keeps only those).
-  for (const row of await rows(db, 'SELECT label, kind, n, boards FROM question_labels WHERE last_day >= ? ORDER BY n DESC LIMIT 15', weekAgo)) {
+  // Why (12 Nov 2026, jobadabra-lab #84-#86): kind 'button' rows are the button texts of a page with no Apply button we knew (the app's
+  // Apply-word learning, api/aliases.js 'buttons' mode), never a question; read as one, a page's sign-in and legal links became 3 wrong proposals.
+  for (const row of await rows(db, "SELECT label, kind, n, boards FROM question_labels WHERE last_day >= ? AND kind != 'button' ORDER BY n DESC LIMIT 15", weekAgo)) {
     weaknesses.push({id: `wording:${row.label}`, kind: 'wording', cause: 'no_data', area: AREA.wording, impact: row.n,
       title: `No answer matched "${row.label}"`, now: {times: row.n}, evidence: {label: row.label, kind: row.kind, boards: json(row.boards)}});
   }
