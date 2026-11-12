@@ -17,12 +17,14 @@ export function messages({day, groups, open, numbers}) {
 export async function post(result, {token, chat, fetch: doFetch = fetch, send = null}) {
   if (!send && (!token || !chat)) return {skipped: 'BUILDLOG_TELEGRAM_TOKEN / BUILDLOG_TELEGRAM_CHAT are not set'};
   const list = messages(result);
-  let sent = 0;
+  let sent = 0, held = 0;
   for (const text of list) {
     if (send) {
       const line = await send(text);
-      if (/not sent/.test(line)) return {skipped: line, sent};
-      if (!/^telegram: (sent|held)/.test(line)) throw new Error(`Telegram answered: ${String(line).replace(/^telegram: /, '')}`);
+      // Why (12 Nov 2026, Gitar on #598): "held" (the owner's switch is off) is not "sent", and a card that is not sent after others went out is a partial digest: a failure, not a skip.
+      if (/not sent/.test(line)) { if (sent + held) throw new Error(`Telegram: card ${sent + held + 1} of ${list.length} was ${String(line).replace(/^telegram: /, '')}`); return {skipped: line}; }
+      if (/^telegram: held/.test(line)) { held += 1; continue; }
+      if (!/^telegram: sent/.test(line)) throw new Error(`Telegram answered: ${String(line).replace(/^telegram: /, '')}`);
       sent += 1;
       continue;
     }
@@ -30,5 +32,5 @@ export async function post(result, {token, chat, fetch: doFetch = fetch, send = 
     if (!response.ok) throw new Error(`Telegram answered ${response.status}`);
     sent += 1;
   }
-  return {sent};
+  return held ? {sent, held} : {sent};
 }
