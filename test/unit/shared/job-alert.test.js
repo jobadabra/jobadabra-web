@@ -25,7 +25,7 @@ function telegram() {
     const reply = result => new Response(JSON.stringify({ok: true, result}), {status: 200});
     return method === 'getMe' ? reply({username: 'a_bot'}) : method === 'getChat' ? reply({title: 'Engineering', id: body.chat_id}) : method === 'getUpdates' ? reply([{message: {chat: {id: 777}}}]) : reply({message_id: 9});
   };
-  return {fetcher, sends: () => calls.filter(call => call.method === 'sendMessage').map(call => call.body.text.replace(/<[^>]+>/g, ''))};
+  return {fetcher, sends: () => calls.filter(call => call.method === 'sendMessage').map(call => call.body.text.replace(/<[^>]+>/g, '')), links: () => calls.filter(call => call.method === 'sendMessage').map(call => /href="([^"]+)"/.exec(call.body.text)?.[1] || '')};
 }
 async function setup({connected = true} = {}) {
   const e = {STATS: d1(), NOTIFY_SECRET: 'vault-secret'}, tg = telegram();
@@ -188,4 +188,14 @@ test('a red pull_request run is no news; a red push run on main of release-ready
   const old = await alertJobs(e, {jobs: [{...release, file: 'old-shape.yml', recent: [run('failure', 5)]}]}, {fetcher: tg.fetcher, now: hour(5)});
   assert.deepEqual(old, {red: 0, green: 0});
   assert.equal(e.STATS.db.prepare("SELECT COUNT(*) AS n FROM job_alert WHERE job = 'jobadabra/old-shape.yml'").get().n, 0, 'no main runs in the snapshot: nothing is recorded, nothing is told');
+});
+
+test('the run link of the alert is the main run that decided the state, never a newer PR run (Gitar, #592)', async () => {
+  const {e, tg} = await setup(), release = {repo: 'jobadabra/jobadabra', file: 'release-ready-runner.yml', name: 'Release · Ready runner', disabled: false};
+  const url = n => `https://github.com/jobadabra/jobadabra/actions/runs/${n}`;
+  const mainRun = (conclusion, n) => ({...run(conclusion, n), url: url(n)}), pr = (conclusion, n) => ({...prRun(conclusion, n), url: url(n)});
+  await alertJobs(e, {jobs: [{...release, recent: [mainRun('success', 0)], main: [mainRun('success', 0)]}]}, {fetcher: tg.fetcher, now: hour(0)});
+  await alertJobs(e, {jobs: [{...release, recent: [pr('success', 9), mainRun('failure', 3)], main: [mainRun('failure', 3)]}]}, {fetcher: tg.fetcher, now: hour(3)});
+  await alertJobs(e, {jobs: [{...release, recent: [pr('failure', 10), mainRun('success', 4)], main: [mainRun('success', 4)]}]}, {fetcher: tg.fetcher, now: hour(4)});
+  assert.deepEqual(tg.links(), [url(3), url(4)], 'the 🔴 links the failing main run, the 🟢 the passing main run');
 });

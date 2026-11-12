@@ -37,9 +37,11 @@ const homeOf = workflow => HOME_REPO[INTEL_COLLECTORS.find(item => item.workflow
 /** red | green | none | off from the newest run ON MAIN that PASSED or FAILED. Why (12 Nov 2026, Gitar on #586): schedules-model stateOf() reads a cancelled or skipped run as green (fine for the page's chip), but here it would end a red streak with
  *  a false "works again" when a concurrency group cancels the next run; a cancelled or skipped run leaves the streak as it was. */
 const DECIDES = ['success', 'failure', 'timed_out'];
+/** The newest run on main that passed or failed: the one that decides the state AND the one the alert links (Gitar, #592: a link from `recent` could be a newer PR run). */
+export const decidingRun = job => (job.main || []).find(run => DECIDES.includes(run.conclusion));   // Why (12 Nov 2026, mac-9a): only runs on main, never a pull_request or feature-branch run (ops/jobs/schedules-snapshot.mjs onMain); a snapshot without `main` (the shape before this) records nothing
 export function alertState(job) {
   if (job.disabled) return 'off';
-  const done = (job.main || []).find(run => DECIDES.includes(run.conclusion));   // Why (12 Nov 2026, mac-9a): only runs on main, never a pull_request or feature-branch run (ops/jobs/schedules-snapshot.mjs onMain); a snapshot without `main` (the shape before this) records nothing
+  const done = decidingRun(job);
   return !done ? 'none' : done.conclusion === 'success' ? 'green' : 'red';
 }
 export const jobKey = job => `${String(job.repo).split('/').pop()}/${job.file}`;
@@ -76,7 +78,7 @@ export async function alertJobs(env, snapshot, {fetcher = fetch, now = new Date(
       if (state !== 'red' && state !== 'green') continue;
       if (!before?.state) { await save(env.STATS, key, {state, alerted: 0}, now); continue; }   // first sight: a baseline, not news
       if (before.state === state) continue;
-      const quiet = OWN_ALERT.has(key) || before.muted === 1, run = (job.recent || []).find(item => item.conclusion) || {};
+      const quiet = OWN_ALERT.has(key) || before.muted === 1, run = decidingRun(job) || {};
       const facts = {name: job.name || job.file, repo: String(job.repo).split('/').pop(), url: run.url || ''};
       if (state === 'red') {
         const told = quiet ? {sent: false, via: 'switchboard'} : await alertOwner(env, 'scheduled-job-red', {text: jobRedCard(facts).text, html: true, level: 'problem', state: `${key} red`, fetcher, now});
