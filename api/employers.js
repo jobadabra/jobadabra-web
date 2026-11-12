@@ -280,9 +280,14 @@ async function storeBoardFacts(db, facts, date) {
     ON CONFLICT(install, host, kind) DO UPDATE SET day = excluded.day, url = excluded.url, body = excluded.body, in_places = excluded.in_places, fit70 = 0,
     countries = excluded.countries, families = excluded.families`)
     .bind(`${SCOUT_BOARD_PREFIX}${fact.country}`, date, fact.host, fact.url, JSON.stringify({countries: [fact.country], ...(fact.browser ? {browser: true} : {})}), fact.local_jobs, fact.country, fact.families.join(',')));
-  const cutoff = new Date(Date.parse(date) - SCOUT_BOARD_DAYS * 86400000).toISOString().slice(0, 10);
-  statements.push(db.prepare(`DELETE FROM sitefacts WHERE install LIKE ? AND kind = 'board' AND day < ?`).bind(`${SCOUT_BOARD_PREFIX}%`, cutoff));
   if (db.batch) await db.batch(statements); else for (const statement of statements) await statement.run();
+}
+
+/** A scout board not measured within SCOUT_BOARD_DAYS of `date` leaves (no longer served by agreedSites nor counted on Scouting).
+ *  Why (12 Nov 2026, Gitar on web#581): it ran inside storeBoardFacts, so only on a publish that sent board facts; while the scout sent none, a 30-day-old board stayed served. Every publish now. */
+async function expireBoardFacts(db, date) {
+  const cutoff = new Date(Date.parse(date) - SCOUT_BOARD_DAYS * 86400000).toISOString().slice(0, 10);
+  await db.prepare(`DELETE FROM sitefacts WHERE install LIKE ? AND kind = 'board' AND day < ?`).bind(`${SCOUT_BOARD_PREFIX}%`, cutoff).run();
 }
 
 // The Brain bot an alert falls back to when the switchboard cannot deliver (shared/notify-send.js).
@@ -348,6 +353,7 @@ async function publish(request, env) {
   // The scout's measured boards, only when it sent some (an absent field keeps what is there); never a reason to refuse the index.
   const boardFacts = boardFactsOf(body.board_facts);
   if (env.STATS && boardFacts.length) await storeBoardFacts(env.STATS, boardFacts, generated.slice(0, 10)).catch(() => false);
+  if (env.STATS) await expireBoardFacts(env.STATS, generated.slice(0, 10)).catch(() => false);
   // The day's snapshot for /admin/job-search/scouting's growth: counts only; never a reason to refuse the index.
   if (env.STATS) {
     const pooled = await pooledKeys(env.STATS);
