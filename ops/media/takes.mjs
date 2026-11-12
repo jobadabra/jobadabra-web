@@ -12,7 +12,7 @@ import {nav} from './scenes.mjs';
 const here = path.dirname(new URL(import.meta.url).pathname);
 // What the recorders run (record-app.mjs, record-extension.mjs and what they import); the three functions they take from render-side modules are
 // hashed by their source (RECORDER_FUNCTIONS), so a change elsewhere in camera.mjs, edges.mjs or scenes.mjs keeps the takes.
-export const RECORDER_FILES = ['record-app.mjs', 'record-extension.mjs', 'screencast.mjs', 'persona-copy.mjs', 'hold.mjs', 'live-review.mjs', 'stand-in.mjs', 'form.html'];
+export const RECORDER_FILES = ['record-app.mjs', 'record-extension.mjs', 'fill-mark.mjs', 'screencast.mjs', 'persona-copy.mjs', 'hold.mjs', 'live-review.mjs', 'stand-in.mjs', 'form.html'];
 export const RECORDER_FUNCTIONS = {'camera.mjs': [clipTo], 'edges.mjs': [edgesScript], 'scenes.mjs': [nav]};
 export const KEY_FILE = 'take-key';
 

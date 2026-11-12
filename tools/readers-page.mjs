@@ -1,4 +1,5 @@
-// Draws the table of /about-you from the public repo's docs/about-you-readers.json (live steps only); run it again whenever a step ships.
+// Draws the AI-step table of /how-it-works (#ai-reads; /about-you was folded in there, 12 Nov 2026) from the public repo's docs/about-you-readers.json
+// (live steps only); run it again whenever a step ships.
 import fs from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
@@ -23,7 +24,7 @@ export function readersTable(data) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [source, page] = process.argv.slice(2);
-  if (!source || !page) throw new Error('Usage: readers-page.mjs <about-you-readers.json> <about-you.html>');
+  if (!source || !page) throw new Error('Usage: readers-page.mjs <about-you-readers.json> website/public/how-it-works.html');
   const html = fs.readFileSync(page, 'utf8');
   const [from, to] = MARK.map(mark => html.indexOf(mark));
   if (from < 0 || to < from) throw new Error('The page has no readers markers');

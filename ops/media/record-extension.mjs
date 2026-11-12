@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {startRealExtension} from '../desktop/e2e/lib/real-extension.mjs';
 import {edgesScript} from './edges.mjs';
+import {FILL_MARK} from './fill-mark.mjs';   // the tab mark the extension fills (fill-mark.mjs)
 import {holdEvent, holdLeft, OFF_MAX, offScreen, scrollLookIn, SHOW_WAIT, stepMarks} from './hold.mjs';
 import {unionBox} from './record-app.mjs';
 import {startScreencast, stepLog} from './screencast.mjs';
@@ -33,8 +34,12 @@ const panelBox = async page => {
 
 export async function recordExtensionVideo({persona, piece, dir}) {
   const template = fs.readFileSync(path.join(here, 'form.html'), 'utf8');
+  // the form state the extension reports to the app as it fills (what the real app's Applying card follows), stamped on the recording's clock
+  const reports = [];
+  let clock = () => null;
   const ext = await startRealExtension({allowAllSites: true, offline: true, contact: persona.applicant,
     answer: {'/extension/answer': body => answerReply(body, persona.answers),
+      '/extension/review': body => { try { const one = JSON.parse(body || '{}'); if (Object.keys(one).length) reports.push({t: clock(), ...one}); } catch {} return {}; },
       '/extension/page-kind': () => ({ok: true, kind: 'form', role: 'form', by: 'ai', confidence: 0.95, signal: 'confident'})}});
   try {
     const {page, context} = ext;
@@ -50,11 +55,12 @@ export async function recordExtensionVideo({persona, piece, dir}) {
     await page.goto(`https://${host}/jobs/apply`);
     await ext.assertIsolated();
     const cast = await startScreencast(page, path.join(dir, 'frames'));
+    clock = cast.clock;
     const log = stepLog(cast.clock, cast.paint);
     for (const item of piece.steps) {
       stepMarks(item, log);   // picture in picture (pip.mjs): where two recordings meet, and who leads
       if (item.fill) {   // what the app's Apply does: the tab, marked for the extension, which then reads and fills the form by itself
-        await page.evaluate(() => { location.hash = 'jobadabra-fill'; });
+        await page.evaluate(mark => { location.hash = mark; }, FILL_MARK);
         // picture in picture: the other recording's card starts ticking when the first field is filled, not while the panel still reads the page
         const firstField = () => page.waitForFunction(() => [...document.querySelectorAll('input, select, textarea')].some(e => (e.type === 'checkbox' ? e.checked : e.type === 'file' ? e.files.length : e.value)), null, {timeout: 60000, polling: 50});
         if (item.sync) firstField().then(() => log.add({type: 'sync'})).catch(() => {});
@@ -63,7 +69,10 @@ export async function recordExtensionVideo({persona, piece, dir}) {
         // picture in picture (pip.mjs fillSeconds): the fill ends at the panel's own done state ('.ready', extension/review.js); the next steps
         // wait for it, so the main picture shows the whole fill and the other recording's card is paced on it
         if (item.sync) {
-          await page.waitForFunction(() => document.getElementById('jobadabra-review-host')?.shadowRoot?.querySelector('.ready'), null, {timeout: 60000, polling: 50});
+          // Why (12 Nov 2026): the extension leaves a consent box for the person (the panel's "Remaining field", extension/panel-review-view.js), so
+          // "Ready to submit" never comes on the stand-in form: the fill is over at either end state
+          await page.waitForFunction(() => { const root = document.getElementById('jobadabra-review-host')?.shadowRoot, left = root?.querySelector('.left');
+            return root?.querySelector('.ready') || (left && !left.hidden); }, null, {timeout: 60000, polling: 50});
           log.add({type: 'filled'});
         }
         continue;
@@ -92,7 +101,7 @@ export async function recordExtensionVideo({persona, piece, dir}) {
     const frames = await cast.stop();
     const filled = await page.evaluate(() => [...document.querySelectorAll('input, select, textarea')]
       .filter(e => (e.type === 'checkbox' ? e.checked : e.type === 'file' ? e.files.length : e.value)).map(e => e.id));
-    const result = {viewport: await page.evaluate(() => ({w: innerWidth, h: innerHeight})), frames, events: log.events, filled, text: await page.evaluate(() => document.body.innerText)};
+    const result = {viewport: await page.evaluate(() => ({w: innerWidth, h: innerHeight})), frames, events: log.events, filled, reports, text: await page.evaluate(() => document.body.innerText)};
     fs.writeFileSync(path.join(dir, 'log.json'), JSON.stringify(result, null, 1));
     return result;
   } finally { await ext.close(); }

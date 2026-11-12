@@ -10,7 +10,7 @@ import {startScreencast, stepLog} from './screencast.mjs';
 import {nav} from './scenes.mjs';
 import {personaCopy} from './persona-copy.mjs';
 import {clickedControl, clickZoom, glideTo, magicTarget, GAP_FLOOR, gapWidth, holdEvent, holdLeft, nextCut, OFF_MAX, offScreen, PRESS_SHOW, scrollLookIn, SHOW_WAIT, stepMarks, wordsCut} from './hold.mjs';
-import {liveStates} from './live-review.mjs';
+import {fromReports, liveStates} from './live-review.mjs';
 import {edgesScript} from './edges.mjs';
 import {freePort} from '../desktop/e2e/lib/extension.mjs';
 
@@ -118,8 +118,12 @@ async function step(page, item, log, app = null) {
   if (item.js) { log.add({type: 'mark', ...say}); await page.evaluate(item.js); await watch(page, 900, log); return; }
   if (item.review) {   // the form card updating live (round 5, owner): the extension's fill reports, sent over the app's own 'review' message; no page change
     if (!app) throw new Error('media: a review step needs the app (recordAppVideo)');
-    for (const state of liveStates({start: Date.now(), ...item.review})) {   // real times: the card's list times each field from the first
-      await app.evaluate(({BrowserWindow}, sent) => BrowserWindow.getAllWindows()[0].webContents.send('review', sent), state);
+    const send = state => app.evaluate(({BrowserWindow}, sent) => BrowserWindow.getAllWindows()[0].webContents.send('review', sent), state);
+    if (item.review.reports) {   // the extension's own reports of the fill, at their recorded times (live-review.mjs fromReports)
+      const start = Date.now();
+      for (const {at, state} of fromReports(item.review)) { await page.waitForTimeout(Math.max(0, start + at * 1000 - Date.now())); await send(state); }
+    } else for (const state of liveStates({start: Date.now(), ...item.review})) {   // real times: the card's list times each field from the first
+      await send(state);
       await page.waitForTimeout(item.review.every || 300);
     }
     await watch(page, 300, log);

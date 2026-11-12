@@ -220,10 +220,10 @@
   },
   "interviews": []
  },
- "https://example.com/jobs/4": {
+ "https://jobs.example/institut-cardio-rhone/cardiac-care": {
   "app": {
    "id": "demo-app-4",
-   "url": "https://example.com/jobs/4",
+   "url": "https://jobs.example/institut-cardio-rhone/cardiac-care",
    "title": "Registered Nurse, Cardiac Care Unit",
    "company": "Institut Cardio Rhône",
    "stage": "Interview scheduled",
@@ -301,7 +301,7 @@
   ],
   "files": [],
   "match": {
-   "url": "https://example.com/jobs/4",
+   "url": "https://jobs.example/institut-cardio-rhone/cardiac-care",
    "fit": 90,
    "tier": "Strong",
    "confidence": "High",

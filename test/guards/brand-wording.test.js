@@ -16,6 +16,7 @@ const KEPT = [
   /job-pilotto(-app)?\b.*sentry|sentry.*job-pilotto|job-pilotto\.sentry/i, // the Sentry org and project slugs
   /secrets\.JOB_PILOTTO_/,                                                // a GitHub secret not yet copied to its new name
   /(ws\.)?job-pilotto-(ui-fix|ui-verdict|self-heal|e2e-testing)/,         // Anthropic console API key names
+  /jobpilotto-fill/,                                                      // the tab mark the app's Apply sets and the extension fills (public extension/tab-pages.js tabArmed); ops/media/fill-mark.mjs
 ];
 
 test('the site repo says Jobadabra, except the kept names', () => {

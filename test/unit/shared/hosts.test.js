@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
 import {test} from 'node:test';
 import worker from '../../../workers/www/index.js';
-import {apexRedirect, pageRedirect, PAGE_PATHS} from '../../../shared/hosts.js';
+import {apexRedirect, MOVED_PAGES, pageRedirect, PAGE_PATHS} from '../../../shared/hosts.js';
 
 const ask = (host, path, init) => new Request(`https://${host}${path}`, init);
 const API_PATHS = ['/api/index', '/api/notion/start?state=x', '/report/fill-failure', '/telemetry', '/admin', '/privacy', '/'];
@@ -92,6 +92,25 @@ test('a page has one address: http, the old host and .html each 301 once to http
   }
   for (const path of ['/api/index', '/report/telemetry', '/download/mac', '/admin']) assert.equal(at(`http://www.jobpilotto.top${path}`), null, path);   // installed apps: never redirected
   assert.equal(apexRedirect(new Request('http://jobadabra.top/privacy')).headers.get('Location'), 'https://www.jobadabra.top/privacy');
+});
+
+test('a page folded into another 301s there from every host and as .html, query kept; the Worker still sees it; no page file is left', async () => {
+  const toml = readFileSync(new URL('../../../workers/www/wrangler.toml', import.meta.url), 'utf8');
+  const pages = readdirSync(new URL('../../../web/public', import.meta.url));
+  for (const [path, target] of Object.entries(MOVED_PAGES)) {
+    for (const from of [`https://www.jobadabra.top${path}`, `https://www.jobadabra.top${path}.html`, `http://www.jobpilotto.top${path}`, `https://www.jobpilotto.workers.dev${path}`]) {
+      const r = pageRedirect(new Request(`${from}?from=x`));
+      assert.equal(r?.status, 301, from);
+      assert.equal(r.headers.get('Location'), `https://www.jobadabra.top${target.replace('#', '?from=x#')}`, from);
+    }
+    assert.ok(toml.includes(`"${path}"`), `run_worker_first keeps ${path}, or Workers Assets answers 404 before the redirect`);
+    assert.ok(!pages.includes(`${path.slice(1)}.html`), `${path}.html is gone`);
+    assert.ok(!PAGE_PATHS.includes(path), `${path} is not also a page`);
+  }
+  const env = {ASSETS: {fetch: async () => new Response('not found', {status: 404})}};
+  const r = await worker.fetch(new Request('https://www.jobadabra.top/about-you'), env, {});
+  assert.equal(r.status, 301);
+  assert.equal(r.headers.get('Location'), 'https://www.jobadabra.top/how-it-works#ai-reads');
 });
 
 test('the worker sends that redirect before serving the page', async () => {

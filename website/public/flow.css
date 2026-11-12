@@ -1,0 +1,143 @@
+/* /how-it-works: the 5 steps at the top (owner, 12 Nov 2026: "the most important details of our app"), then "Along the way", the clips, the levels.
+   Each step: its number on a line that runs down the steps (a slow dashed flow), an icon, a title, one line, and an abstract animation beside it
+   (.anim-*; owner, 12 Nov 2026: "abstract animations", no screen recordings at the top). Invariant: an animation's resting style IS its finished
+   picture (chips shown, list filled, form filled); keyframes only add the motion, so reduced motion (animation: none) shows the whole picture.
+   Steps rise in as they scroll into view (styles.css .reveal, site.js). Tokens: styles.css. */
+.flow { list-style: none; margin: 0; padding: 0 0 0 58px; position: relative; display: grid; gap: 28px; }
+.flow::before { content: ""; position: absolute; left: 19px; top: 22px; bottom: 22px; width: 2px; border-radius: 2px;
+  background: repeating-linear-gradient(180deg, var(--amber) 0 10px, transparent 10px 20px); opacity: .55; animation: flow-run 2.4s linear infinite; }
+@keyframes flow-run { to { background-position: 0 20px; } }
+.flow-step { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.4fr); gap: 28px; align-items: center; padding: 22px; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); transition: transform .25s ease, border-color .25s ease; }
+.flow-step:hover { transform: translateY(-2px); border-color: var(--line-strong); }
+.flow-words { position: relative; }
+.flow-pair { display: grid; gap: 26px; }
+.flow-num { position: absolute; left: -80px; top: -2px; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--paper); border: 2px solid var(--amber); color: var(--amber); font: 700 1rem var(--mono); }
+.flow-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--raised); color: var(--amber); margin-bottom: 10px; }
+.flow-words h3 { font-size: 1.25rem; }
+.flow-words p { color: var(--muted); margin-top: 6px; }
+.flow-modes { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.flow-modes li { padding: 10px 12px; border-radius: 10px; background: var(--raised); color: var(--muted); font-size: .94rem; }
+.flow-modes b { display: block; color: var(--ink); }
+.flow-video { width: 100%; display: block; border-radius: 12px; background: var(--paper); aspect-ratio: 1600 / 1000; }
+.flow-video.wide { aspect-ratio: 1920 / 680; }
+.flow-video.narrow { display: none; }
+.flow-pick { display: grid; gap: 12px; }
+.pick-card { padding: 16px 18px; border-radius: 12px; background: var(--raised); border: 1px solid var(--line); }
+.pick-card b { color: var(--ink); }
+.pick-card p { color: var(--muted); font-size: .94rem; margin-top: 4px; }
+.pick-badge { margin-left: 8px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--muted); font: 500 .72rem var(--mono); }
+.pick-badge.good { border-color: var(--teal); color: var(--teal); }
+.along { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.along li { display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 18px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); }
+.along .flow-ico { margin: 0; }
+.along b { color: var(--ink); }
+.along p { color: var(--muted); font-size: .94rem; margin-top: 4px; }
+/* The animations: one box each, the site's paper and lines; amber = it works, teal = you. */
+.anim { position: relative; min-height: 230px; padding: 22px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); display: grid; align-items: center; gap: 14px; overflow: hidden;
+  background-image: radial-gradient(var(--line) 1px, transparent 1px); background-size: 18px 18px; }
+.flow-media, .anim > * { min-width: 0; }
+.anim svg { width: 100%; height: 100%; overflow: visible; }
+.anim svg path { fill: none; stroke: var(--amber); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 5 9; vector-effect: non-scaling-stroke; animation: a-dash 1.2s linear infinite; }
+@keyframes a-dash { to { stroke-dashoffset: -14; } }
+.a-chip, .a-ok, .a-src, .a-end, .a-off, .a-new { display: inline-block; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--raised); color: var(--ink); font: 500 .76rem var(--mono); white-space: nowrap; }
+/* 1+2: a CV read top to bottom, then the strategy it proposes, chip by chip, and your OK */
+.anim-cv { grid-template-columns: minmax(90px, 140px) 56px minmax(0, 1fr); }
+.a-doc { position: relative; aspect-ratio: 3 / 4; padding: 14px 12px; border-radius: 8px; background: var(--raised); border: 1px solid var(--line-strong); display: grid; align-content: start; gap: 9px; overflow: hidden; }
+.a-doc-head { height: 8px; width: 55%; border-radius: 4px; background: var(--muted); opacity: .7; }
+.a-doc i { height: 5px; border-radius: 3px; background: var(--line-strong); }
+.a-doc i:nth-of-type(2n) { width: 80%; } .a-doc i:nth-of-type(3n) { width: 64%; }
+.a-scan { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--amber); box-shadow: 0 0 12px var(--amber); opacity: 0; animation: a-scan 6s ease-in-out infinite; }
+@keyframes a-scan { 0% { top: 6%; opacity: 0; } 6% { opacity: 1; } 34% { top: 94%; opacity: 1; } 40%, 100% { top: 94%; opacity: 0; } }
+.anim .a-link { height: 20px; }
+.a-link .a-tip { stroke-dasharray: none; animation: none; }
+.a-strat { display: flex; flex-wrap: wrap; align-content: center; gap: 8px; padding: 16px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line-strong); }
+.a-strat-head { flex-basis: 100%; color: var(--muted); font: 500 .7rem var(--mono); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 2px; }
+.a-chip { border-color: var(--amber); color: var(--amber); animation: a-pop 6s ease-out infinite; }
+.a-chip:nth-of-type(2) { animation-delay: .25s; } .a-chip:nth-of-type(3) { animation-delay: .5s; }
+.a-ok { border-color: var(--teal); color: var(--teal); animation: a-pop-late 6s ease-out infinite; }
+.a-ok::before { content: "✓ "; }
+@keyframes a-pop { 0%, 38% { opacity: 0; transform: translateY(6px); } 46%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes a-pop-late { 0%, 62% { opacity: 0; transform: scale(.9); } 70%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+/* 3: the sources flow into one list, the closest first */
+.anim-src { grid-template-columns: auto minmax(40px, 1fr) minmax(120px, 1.3fr); }
+.a-sources, .a-ends { height: 150px; display: flex; flex-direction: column; justify-content: space-between; }
+.a-src.opt { border-style: dashed; color: var(--muted); }
+.a-src small { font-size: .66rem; opacity: .8; }
+.anim .a-merge, .anim .a-fork { height: 150px; align-self: center; }
+.a-merge .opt { stroke: var(--muted); opacity: .6; }
+.a-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.a-list li { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line); animation: a-row 5s ease-out infinite; }
+.a-list li:first-child { border-color: var(--amber); }
+.a-list li:nth-child(2) { animation-delay: .2s; } .a-list li:nth-child(3) { animation-delay: .4s; } .a-list li:nth-child(4) { animation-delay: .6s; }
+.a-list b { width: 26px; height: 26px; flex: none; border-radius: 50%; border: 2px solid var(--teal); display: grid; place-items: center; color: var(--ink); font: 600 .72rem var(--mono); }
+.a-list i { flex: 1; height: 7px; border-radius: 4px; background: var(--line-strong); }
+.a-list li:nth-child(even) i { flex: .7; }
+@keyframes a-row { 0%, 30% { opacity: 0; transform: translateX(-10px); } 40%, 90% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+/* 4: one filled form, three ways to send it, from you (teal) to it (amber) */
+.anim-apply { grid-template-columns: minmax(90px, 130px) minmax(40px, 1fr) auto; }
+.a-form { padding: 14px 12px; border-radius: 8px; background: var(--raised); border: 1px solid var(--line-strong); display: grid; gap: 10px; }
+.a-form-head { height: 8px; width: 60%; border-radius: 4px; background: var(--muted); opacity: .7; }
+.a-form i { position: relative; height: 12px; border-radius: 4px; border: 1px solid var(--line-strong); overflow: hidden; }
+.a-form i::after { content: ""; position: absolute; inset: 0; background: var(--amber); opacity: .75; transform-origin: left; animation: a-fill 6s ease-out infinite; }
+.a-form i:nth-of-type(2)::after { animation-delay: .3s; } .a-form i:nth-of-type(3)::after { animation-delay: .6s; } .a-form i:nth-of-type(4)::after { animation-delay: .9s; }
+@keyframes a-fill { 0%, 8% { transform: scaleX(0); } 22%, 92% { transform: scaleX(1); } 100% { transform: scaleX(0); } }
+.a-fork path:nth-child(1) { stroke: var(--teal); }
+.a-fork path:nth-child(2) { stroke: color-mix(in srgb, var(--teal), var(--amber)); }
+.a-end.you { border-color: var(--teal); color: var(--teal); }
+.a-end.mid { border-color: color-mix(in srgb, var(--teal), var(--amber)); color: color-mix(in srgb, var(--teal), var(--amber)); }
+.a-end.it { border-color: var(--amber); color: var(--amber); }
+.a-end { animation: a-glow 6s ease-in-out infinite; }
+.a-end.mid { animation-delay: 2s; } .a-end.it { animation-delay: 4s; }
+@keyframes a-glow { 0%, 100% { box-shadow: none; } 12%, 24% { box-shadow: 0 0 0 4px rgb(255 178 36 / .14), 0 0 16px rgb(255 178 36 / .35); } 36% { box-shadow: none; } }
+/* 5: while the Mac is off it keeps beating, and new matches come in */
+.anim-night { min-height: 0; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+.a-off { color: var(--muted); }
+.a-beat { flex: 1; display: flex; justify-content: space-between; align-items: center; height: 2px; background: repeating-linear-gradient(90deg, var(--line-strong) 0 6px, transparent 6px 12px); }
+.a-beat i { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); animation: a-blink 5s ease-in-out infinite; }
+.a-beat i:nth-child(2) { animation-delay: 1s; } .a-beat i:nth-child(3) { animation-delay: 2s; } .a-beat i:nth-child(4) { animation-delay: 3s; } .a-beat i:nth-child(5) { animation-delay: 4s; }
+@keyframes a-blink { 0%, 100% { opacity: .35; transform: none; } 8% { opacity: 1; transform: scale(1.6); } 20% { opacity: .35; transform: none; } }
+.a-new { border-color: var(--teal); color: var(--teal); }
+.a-pulse { position: relative; }
+.a-pulse::after { content: ""; position: absolute; inset: 0; border-radius: 12px; border: 2px solid var(--amber); animation: a-ring 2.6s ease-out infinite; opacity: 0; }
+@keyframes a-ring { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(1.7); opacity: 0; } }
+/* The real recordings, lower on the page */
+.page-clip { display: block; width: 100%; max-width: 980px; aspect-ratio: 1600 / 1000; margin: 0 0 22px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper); }
+.page-clip-pair { margin: 0 0 22px; }
+/* Levels of automation: a scale from you (teal) to it (amber), one card per level. lv-*, not .levels: home.css (loaded here) styles the homepage's own .levels scale */
+.lv-scale { position: relative; display: flex; justify-content: space-between; padding-bottom: 16px; margin-bottom: 18px; color: var(--muted); font: 500 .72rem var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.lv-scale span:first-child { color: var(--teal); } .lv-scale span:last-child { color: var(--amber); }
+.lv-scale::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; border-radius: 4px; background: linear-gradient(90deg, var(--teal), var(--amber)); }
+.lv-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.lv-card { display: grid; align-content: start; gap: 8px; padding: 20px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--teal); }
+.lv-card:nth-child(2) { border-top-color: color-mix(in srgb, var(--teal), var(--amber)); } .lv-card:nth-child(3) { border-top-color: var(--amber); }
+.lv-tag { color: var(--muted); font: 500 .7rem var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.lv-card b { color: var(--ink); font-size: 1.15rem; }
+.lv-card p { color: var(--muted); font-size: .94rem; }
+.lv-who { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.lv-who dt { color: var(--muted); font: 500 .66rem var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.lv-who dd { margin: 2px 0 0; color: var(--amber); font-weight: 600; font-size: .92rem; }
+.lv-who dd.you { color: var(--teal); }
+@media (max-width: 900px) {
+  .flow-step { grid-template-columns: minmax(0, 1fr); }   /* minmax: a plain 1fr grows to its widest animation and spills off a phone */
+  .along, .lv-list { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .anim { padding: 16px; }
+  .anim-cv { grid-template-columns: 72px 26px minmax(0, 1fr); }
+  .anim-src { grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1fr); }
+  .anim-apply { grid-template-columns: 64px 26px minmax(0, 1fr); }
+  .a-list li { padding: 5px 7px; }
+  .a-chip, .a-ok, .a-src, .a-end, .a-off, .a-new { font-size: .66rem; padding: 4px 8px; white-space: normal; }
+  .flow { padding-left: 46px; }
+  .flow::before { left: 15px; }
+  .flow-num { left: -64px; width: 32px; height: 32px; font-size: .9rem; }
+  .flow-step { padding: 16px; }
+  .flow-video.wide { display: none; }
+  .flow-video.narrow { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow::before, .anim *, .anim *::after, .anim svg path, .a-pulse::after { animation: none !important; }
+  .flow-step, .flow-step:hover { transition: none; transform: none; }
+}

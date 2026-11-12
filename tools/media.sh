@@ -2,7 +2,7 @@
 # The ONE command that makes the site's screenshots and videos (owner, 21 Oct 2026: "Local only, one command"; CI no longer records them): lays public
 # origin/main under this repo, records the app (demo mode, nurse persona) and the real extension on this Mac, checks every piece, then
 # tools/media-refresh.sh commits the files the site already shows on branch media-refresh and opens or updates its PR. The owner merges it.
-#   tools/media.sh [--background] [--check] [--persona <folder>] [pieces...]     pieces: hero extension-fill stills snips (none = all)
+#   tools/media.sh [--background] [--check] [--persona <folder>] [pieces...]     pieces: hero extension-fill apply-split stills snips (none = all)
 #   --background  runs detached, logs to ~/.cache/jobadabra-media/media-<time>.log, prints that path and returns
 #   --check       only says whether the screens changed since the last refresh (changed|same), records nothing
 # MEDIA_REF=<branch> runs this repo's tools from a branch (to try a change before it is merged). Runs in its own worktree (default ~/jobadabra-web-media-run, MEDIA_RUN_DIR) so no checkout changes branch. Demo data only, no AI (the director's

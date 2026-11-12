@@ -77,3 +77,39 @@ export function pipPlan({a, b, width, height, fps = 30, speed = 1, phone = null}
   return {frames, from: start, seconds: end - start, at: (name, t) => t - (name === a.name ? offset : 0) - start};
 }
 
+
+// Side by side (the split of /how-it-works, scenes.mjs `layout: 'split'`): the two panes in output px, b (the piece) left and a (its part) right,
+// each in the recordings' own shape (`aspect`, so each pane shows its recording's desktop camera unchanged), as wide as the margins leave, low in
+// the frame; the labels sit in the band above them. Pure. -> {left, right, labelY}
+export const SPLIT = {margin: 0.017, label: 0.012};   // shares of the width: the gaps, and the label's lift above its pane
+export const splitRects = (width, height, aspect) => {
+  const m = Math.round(width * SPLIT.margin), w = Math.floor((width - 3 * m) / 2), h = Math.round(w / aspect), y = height - m - h;
+  if (y < m * 2) throw new Error(`media: a split of ${width} x ${height} has no room for its labels over two ${w} x ${h} panes: make it taller`);
+  return {left: {x: m, y, w, h}, right: {x: 2 * m + w, y, w, h}, labelY: Math.round(y - width * SPLIT.label)};
+};
+
+// The split's frames: both recordings on b's clock (as pipPlan), each through its own camera in its pane for the whole clip; the pane whose
+// recording leads (its `lead` marks) is edged amber, the other dimly; `labels` (1 left, 2 right) are drawn above the panes. No captions: the labels
+// say who is who. -> {frames, from, seconds, at} as pipPlan. Pure.
+export function splitPlan({a, b, width, height, fps = 30, speed = 1, labels = []}) {
+  const offset = syncTime(a.log) - syncTime(b.log);
+  const clock = {[a.name]: t => t + offset, [b.name]: t => t};
+  const plans = Object.fromEntries([a, b].map(rec => [rec.name, renderPlan(rec.log, fps, speed, {steady: true})]));
+  const marks = [a, b].flatMap(rec => leadTimes(rec.log).map(t => ({t: t - (rec === a ? offset : 0), name: rec.name}))).sort((x, y) => x.t - y.t);
+  const start = Math.min(0, -offset), end = Math.max(b.log.frames.at(-1).t, a.log.frames.at(-1).t - offset);
+  const aspect = b.log.viewport.w / b.log.viewport.h, rects = splitRects(width, height, aspect), pane = {[b.name]: rects.left, [a.name]: rects.right};
+  const recs = {[a.name]: a, [b.name]: b};
+  const view = (name, t) => {
+    const plan = plans[name], i = Math.max(0, Math.min(plan.length - 1, Math.round(clock[name](t) * fps)));
+    const {file, x, y, w, h} = plan[i];
+    return {dir: recs[name].dir, scale: recs[name].scale, file, x, y, w, h};
+  };
+  const named = labels.map((text, i) => ({text, num: String(i + 1), x: (i ? rects.right : rects.left).x, y: rects.labelY}));
+  const frames = [];
+  for (let i = 0; i <= Math.floor((end - start) * fps); i++) {
+    const t = start + i / fps, lead = (marks.filter(mark => mark.t <= t).at(-1) || marks[0])?.name;
+    const layers = [b.name, a.name].map(name => ({...view(name, t), rect: pane[name], alpha: 1, framed: true, dim: name !== lead}));
+    frames.push({layers, labels: named, cursor: false, cx: 0, cy: 0, x: 0, y: 0, w: 1, h: 1});
+  }
+  return {frames, from: start, seconds: end - start, at: (name, t) => t - (name === a.name ? offset : 0) - start};
+}

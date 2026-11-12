@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {test} from 'node:test';
 import {VIDEOS} from '../../media/scenes.mjs';
-import {fillSeconds, insetRect, PIP, pipPlan} from '../../media/pip.mjs';
+import {fillSeconds, insetRect, PIP, pipPlan, splitPlan, splitRects} from '../../media/pip.mjs';
 import {untilEnd} from '../../media/camera.mjs';
 
 test('every picture in picture names a recording that syncs with it, and both lead at some point', () => {
@@ -109,4 +109,33 @@ test('a part ending on a press drops every frame and event after it', () => {
   assert.deepEqual(quiet.frames.map(frame => [frame.t, frame.file]), [[0, 'a.jpg'], [1.3, 'b.jpg'], [2.4, 'b.jpg']], 'a quiet page: the press is still played');
   assert.deepEqual(out.events.map(event => event.type), ['hold', 'click']);
   assert.equal(untilEnd({frames: log.frames, events: []}).frames.length, 5, 'no end: unchanged');
+});
+
+// The split of /how-it-works (owner, 12 Nov 2026: the old split still showed the old name: it was a hand-drawn mock no tool re-recorded): the same two
+// recordings as the hero's Apply, side by side for the whole clip, so the next media run remakes it with the app's current screens.
+test('the split shows both recordings for the whole clip: Chrome left, the card right, each pane in the recordings\' shape, inside the frame', () => {
+  const SW = 1920, SH = 680, split = splitPlan({a, b, width: SW, height: SH, fps: 30, labels: ['In your browser', 'On your Mac']});
+  const {left, right, labelY} = splitRects(SW, SH, viewport.w / viewport.h);
+  assert.ok(left.x > 0 && left.x + left.w < right.x && right.x + right.w < SW && left.y + left.h < SH, 'two panes, apart, inside the frame');
+  assert.ok(Math.abs(left.w / left.h - viewport.w / viewport.h) < 0.01, 'each pane keeps the recording\'s shape (its desktop camera, unchanged)');
+  assert.ok(labelY > 0 && labelY < left.y, 'the labels sit above the panes');
+  for (const frame of split.frames) {
+    assert.deepEqual(frame.layers.map(layer => [layer.dir, layer.rect]), [['/b', left], ['/a', right]]);
+    assert.ok(!frame.say, 'no captions: the labels say who is who');
+    assert.deepEqual(frame.labels.map(label => [label.num, label.x]), [['1', left.x], ['2', right.x]]);
+  }
+  const lit = t => split.frames[Math.round((t - split.from) * 30)].layers.find(layer => !layer.dim).dir;
+  assert.deepEqual([1, 4.4, 5.95].map(lit), ['/a', '/b', '/a'], 'the acting pane is edged: the card, Chrome while it fills, the card at Ready to submit');
+  assert.equal(split.frames[Math.round((3 - split.from) * 30)].layers[1].file, 'a32.jpg', 'synced on the fill\'s start, as the picture in picture');
+  assert.throws(() => splitRects(1920, 600, 1.6), /no room for its labels/);
+});
+
+test('the split piece is the hero\'s Apply story: the same fill and card steps, its own part (a run with both records each once)', () => {
+  const split = VIDEOS['apply-split'], part = VIDEOS[split.pip];
+  assert.equal(split.layout, 'split');
+  assert.equal(split.steps, VIDEOS['hero-fill'].steps, 'the same fill');
+  assert.equal(part.steps, VIDEOS['hero-fill-done'].steps, 'the same live card');
+  assert.notEqual(split.pip, VIDEOS['hero-fill'].pip, 'its own part, so the two pieces never record into one folder');
+  assert.equal(split.labels.length, 2);
+  assert.ok(!split.slide && !split.phone, 'not a hero slide; /how-it-works shows the extension clip on phones');
 });

@@ -52,6 +52,14 @@ const scrollTo = (title, behavior = 'instant') => `[...document.querySelectorAll
 const SEARCH_SECONDS = 7;
 // Once the search's list is in (it loads a moment after the search ends): "In conversation" folded so the list sits under the card, her row to the middle.
 // the demo's Find card is fed by hand, so the app toasts "Its result was not saved" over the first job and reads like an error (owner, 25 Oct 2026): no toast is ever on screen in this clip
+// Why (12 Nov 2026): in demo mode the app asks "Also search LinkedIn on every Find jobs?" on every press (public desktop/lib/linkedin-handlers.js, ask: true),
+// covering the searching card; LinkedIn reading is also never shown on a public page (owner, 12 Nov 2026). Hidden before it paints and answered "Not now".
+const NO_LINKEDIN_ASK = `(() => { const style = document.createElement('style'); style.textContent = '#linkedin-dialog, #linkedin-dialog::backdrop { display: none !important; }'; document.head.append(style);
+  new MutationObserver(() => { const ask = document.getElementById('linkedin-dialog'); if (ask?.open) document.getElementById('linkedin-no')?.click(); }).observe(document.body, {attributes: true, subtree: true, attributeFilter: ['open']}); })()`;
+// Why (owner, 12 Nov 2026, "Hide details in the video"): a public page shows no sources, counts or timing, so the searching card shows only "Finding jobs…"
+// and its moving bar: its source chips and live lines, the "Employers checked N / M" line, the header's and the bottom bar's step words are hidden in the
+// recording (the app is unchanged). Every Find clip (hero, find-jobs) runs it before the press.
+const HIDE_SEARCH_DETAILS = `(() => { const style = document.createElement('style'); style.textContent = '#find-card .find-steps-row, #find-card .find-progress .progress-head, #find-card .find-scope, #search-status, #activity-step, #activity-meta { visibility: hidden !important; }'; document.head.append(style); })()`;
 const NO_TOASTS = `new MutationObserver(() => document.querySelectorAll('#toasts .toast').forEach(el => el.remove())).observe(document.body, {childList: true, subtree: true})`;
 const TO_HER_ROW = `new Promise(done => { const t0 = Date.now(); const tick = () => {
   const row = [...document.querySelectorAll('.job-row')].find(each => each.textContent.includes('Cardiac Care Unit'));
@@ -97,6 +105,16 @@ const MAIL_SHOW = "(() => { const s = document.getElementById('hero-wait'); if (
 // The stand-in form's REQUIRED fields (media/form.html), in its order: the live card (hero-fill-done) ticks them off and counts the same 6 the
 // extension's panel counts (round 6: side by side, the card said 10 while the panel said 6).
 const HER_FORM = ['First name', 'Last name', 'Email', 'Resume/CV', 'Are you legally authorised to work in this country?', 'I agree to the processing of my data for this application.'];
+// The Apply moment, shared by the hero's picture in picture and the split of /how-it-works (one story, recorded the same way): the Applying card
+// ticking off each field (CARD_STEPS, the app) and Chrome filling the form (FILL_STEPS, the extension), synced on the fill's start.
+const CARD_STEPS = [{go: 'sessions'}, {js: OPEN_HERS},   // the card's count, bar and pill change; its folded list of fields would shrink it to small text
+      {hold: 3.0, look: ['#ss-form-card .ss-form-head', '#ss-form-card .ss-form-progress'], lookWidth: 760, zoom: 2.0, phoneZoom: 2.8, cut: true, into: 'slide', lead: true, tag: 'Applying', say: 'Applying: the form opens in Chrome', beat: 'The Applying card: 0 of 6 fields, Chrome beside it'},
+      {review: {id: 'd1', url: 'https://jobs.example/institut-cardio-rhone/cardiac-care', fields: HER_FORM, every: 300}, sync: true},
+      // then one move right to the pill (owner, 24 Oct 2026: "B, then pan to the pill"): close on the count while it ticks, the pill when it is ready
+      // round 6: back to the main picture on the whole completion section (count, full bar, pill): the pill alone cut the row's words (take 4 at 8 s)
+      {hold: 2.6, look: ['#ss-form-card .ss-form-head', '#ss-form-card .ss-form-progress', '#ss-form-pill'], zoom: 2.0, phoneZoom: 2.8, phoneLook: ['#ss-form-card .ss-form-head', '#ss-form-card .ss-form-progress'], phoneLookWidth: 520, lead: true, tag: 'Applying', say: 'Filled: one box left for you', beat: 'The card: every field the extension fills, the consent box left for you'}];
+const FILL_STEPS = [{hold: 3.0, look: '#application', zoom: 1.3, wide: true, phoneZoom: 2.2, phoneLook: ['#application > h2 >> nth=0', '#location'], tag: 'Chrome', say: 'In Chrome, the extension fills the form', beat: "That job's application form, still empty"}, {fill: true, sync: true, lead: true}, {hold: 0.8},
+      {hold: 3, look: 'panel', zoom: 1.8, phoneZoom: 2.6, poster: true, say: 'Filled from the profile: ready to review', beat: 'Filled from the profile: Ready to submit, to review'}];
 // Round 6 (owner, 24 Oct 2026: "use most of them: fade, slide, tiles, title card... whenever it fits better"): every cut look names how its screen
 // comes in (`into`, transitions.mjs): slide = one screen to another, tiles = time passed, card (+ `card` words) = the flow needs explaining, fade =
 // the same screen changing. A part's `into` is its join (a card part opens on its card); a clip's `stageInto` is the site's switch into it.
@@ -123,7 +141,7 @@ export const VIDEOS = {
     steps: [
       {go: 'jobs'},
       {hold: 3.0, look: ['#find-card .eyebrow', '#find-card .magic-sub', '#find-card .magic-go'], zoom: 1.7, phoneLook: ['#find-card .magic-title', '#find-card .magic-go'], phoneZoom: 2.6, tag: 'Jobs', say: 'Fresh from setup: one button, Find jobs', beat: 'First visit to Jobs: the big Find jobs card'},
-      {js: NO_TOASTS},
+      {js: NO_TOASTS}, {js: NO_LINKEDIN_ASK}, {js: HIDE_SEARCH_DETAILS},
       {click: '#find-card .magic-go', zoom: TAP_ZOOM, phoneZoom: 3, say: 'Find jobs: the search starts'},
       // owner, 25 Oct 2026: "the Find jobs card appears once more after it is clicked" (a cut look opened wide on the idle card for a second), then "zoom in to the card
       // with the loading": no cut; the look waits for the searching card's own head and steps row (title down to the live lines, its left 760 px: owner, same day, "more centered", shot of the card
@@ -167,17 +185,11 @@ export const VIDEOS = {
   // at Ready to submit; synced on the fill's start (`sync`), its ticks paced on the fill's real time.
   'hero-fill-done': {kind: 'video', source: 'app', part: true, speed: 1.5, camera: 'steady', moment: 'applying', quiet: true, width: 1600, height: 1000, desktop: DESKTOP, phone: PHONE,
     shows: 'The Applying card ticking off each field the extension fills, then Ready to submit',
-    steps: [{go: 'sessions'}, {js: OPEN_HERS},   // the card's count, bar and pill change; its folded list of fields would shrink it to small text
-      {hold: 3.0, look: ['#ss-form-card .ss-form-head', '#ss-form-card .ss-form-progress'], lookWidth: 760, zoom: 2.0, phoneZoom: 2.8, cut: true, into: 'slide', lead: true, tag: 'Applying', say: 'Applying: the form opens in Chrome', beat: 'The Applying card: 0 of 6 fields, Chrome beside it'},
-      {review: {id: 'd1', url: 'https://jobs.example/institut-cardio-rhone/cardiac-care', fields: HER_FORM, every: 300}, sync: true},
-      // then one move right to the pill (owner, 24 Oct 2026: "B, then pan to the pill"): close on the count while it ticks, the pill when it is ready
-      // round 6: back to the main picture on the whole completion section (count, full bar, pill): the pill alone cut the row's words (take 4 at 8 s)
-      {hold: 2.6, look: ['#ss-form-card .ss-form-head', '#ss-form-card .ss-form-progress', '#ss-form-pill'], zoom: 2.0, phoneZoom: 2.8, phoneLook: ['#ss-form-card .ss-form-head', '#ss-form-card .ss-form-progress'], phoneLookWidth: 520, lead: true, tag: 'Applying', say: 'Every field ticked: Ready to submit', beat: 'The card: 6 of 6, Ready to submit'}]},
+    steps: CARD_STEPS},
   'hero-fill': {kind: 'video', source: 'extension', slide: 3, before: 'hero-fill-app', pip: 'hero-fill-done', stageInto: 'slide', into: 'slide', speed: 1.5, camera: 'steady', motion: 'reduce', width: 1600, height: 1000, budget: 1.8e6, desktop: DESKTOP, phone: PHONE,
     shows: 'Apply pressed on the job, then the Jobadabra extension filling its application form; you review, then submit',
     caption: 'Fill applications with your details.', alt: 'An application form filled by the Jobadabra extension, its panel saying Ready to submit: review, then submit',
-    steps: [{hold: 3.0, look: '#application', zoom: 1.3, wide: true, phoneZoom: 2.2, phoneLook: ['#application > h2 >> nth=0', '#location'], tag: 'Chrome', say: 'In Chrome, the extension fills the form', beat: "That job's application form, still empty"}, {fill: true, sync: true, lead: true}, {hold: 0.8},
-      {hold: 3, look: 'panel', zoom: 1.8, phoneZoom: 2.6, poster: true, say: 'Filled from the profile: ready to review', beat: 'Filled from the profile: Ready to submit, to review'}]},
+    steps: FILL_STEPS},
   'hero-track': {kind: 'video', moves: 2, source: 'app', slide: 4, stageInto: 'tiles', speed: 1.5, camera: 'steady', moment: 'later', width: 1600, height: 1000, budget: 3.2e6, desktop: DESKTOP, phone: {...PHONE, budget: 1.8e6},
     shows: 'Two weeks later: the interview e-mail for that job, the call recorded and reviewed, what to practise, the next round on the calendar',
     caption: 'Your interviews and next steps, together.', alt: 'Jobadabra two weeks later: the Institut Cardio Rhône interview e-mail, the phone screen reviewed, interview patterns and practice, then the interview in the calendar',
@@ -199,7 +211,34 @@ export const VIDEOS = {
     shows: 'The Jobadabra extension filling an application form in the browser',
     caption: 'The extension fills the form', alt: 'An application form being filled by the Jobadabra extension, with its panel on the right',
     steps: [{hold: 1}, {fill: true}, {hold: 3.4, look: '#application', zoom: 1.7, phoneLook: ['#application > h2 >> nth=0', '#resume'], poster: true}, {hold: 2.2, look: '#why', zoom: 2.2}, {hold: 2.4, look: 'panel', zoom: 2.2}]},
+  // The split of /how-it-works (spec docs/specs/2026-10-20-product-media.md "apply-split"; owner, 12 Nov 2026: "this is very old recording/demo... by the
+  // time Jobadabra was called [its old name].. Let's redo the recording"): the hero's two Apply recordings side by side (pip.mjs splitPlan), Chrome on the
+  // left, the Applying card on the right, the pane that acts edged in amber; each pane named above it, no captions. Its own part, so a run that makes
+  // the hero too records each once.
+  'apply-split-app': {kind: 'video', source: 'app', part: true, speed: 1.5, camera: 'steady', moment: 'applying', quiet: true, width: 1600, height: 1000, desktop: DESKTOP,
+    shows: 'The Applying card ticking off each field the extension fills, then Ready to submit', steps: CARD_STEPS},
+  'apply-split': {kind: 'video', source: 'extension', pip: 'apply-split-app', layout: 'split', speed: 1.5, camera: 'steady', motion: 'reduce', width: 1920, height: 680, budget: 2.4e6, desktop: DESKTOP,
+    labels: ['In your browser · the extension fills the form', 'Jobadabra on your Mac · live, in sync'],
+    shows: 'Side by side: the Jobadabra extension fills the form in Chrome while the app\'s Applying card ticks off each field, then both say Ready to submit',
+    caption: 'The extension fills; the app follows.', alt: 'Split screen: in the browser the Jobadabra extension fills a job application field by field while the Jobadabra app ticks off each field; then both show Ready to submit',
+    steps: FILL_STEPS},
 };
+// Find jobs for /how-it-works (owner, 12 Nov 2026: "We can put a video recording/animation with the find jobs card also"; details hidden, his choice A):
+// the Find jobs card pressed, the card searching ("Finding jobs…" and its bar, nothing else), then the list it filled, closest first. No cut between the
+// card and the list (12 Nov 2026: the hero's cut came 3.7 s after the search had already swapped the card for the list, a stray frame): one hold on the
+// card through the whole search, then a glide down to the list. Its words say only what a person sees (no sources, counts, timing or scoring rules).
+const FIND_PRESS = VIDEOS.hero.steps.findIndex(step => step.click === '#find-card .magic-go');
+VIDEOS['find-jobs'] = {kind: 'video', quiet: true, source: 'app', speed: 1.5, camera: 'steady', width: 1600, height: 1000, budget: 2.0e6, desktop: DESKTOP,
+  settings: VIDEOS.hero.settings, env: VIDEOS.hero.env,
+  shows: 'The Find jobs card pressed, the search running, then the jobs it found, closest first',
+  caption: 'Find jobs, closest first.', alt: 'Jobadabra: the Find jobs card pressed, the search running in the background, then the list of jobs it found, the closest first',
+  steps: [
+    ...VIDEOS.hero.steps.slice(0, FIND_PRESS).map(step => (step.hold ? {...step, say: 'Your strategy is set: press Find jobs'} : step)),
+    {...VIDEOS.hero.steps[FIND_PRESS], say: 'Find jobs: the search starts'},
+    {hold: SEARCH_SECONDS + 3.5, look: '#find-card', zoom: 1.4, wide: true, say: 'It looks for you, in the background', beat: 'The card searching, then done'},
+    {js: TO_HER_ROW},
+    {hold: 2.6, look: ['.job-row >> nth=0', ROW], lookWidth: 862, zoom: 2.0, poster: true, say: 'The closest first; the rest wait for a score', beat: 'The jobs it found, closest first'}]};
+
 // A video piece and its parts, in play order: `before`, the piece, `after` (each recorded on its own app state). Pure.
 export const partsOf = name => [VIDEOS[name].before, name, VIDEOS[name].after].filter(Boolean);
 

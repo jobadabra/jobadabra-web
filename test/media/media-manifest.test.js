@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {manifest, stillEntry, VERSION, videoEntry} from '../../media/manifest.mjs';
 import {SNIPS, STILLS, VIDEOS} from '../../media/scenes.mjs';
+import {splitRects} from '../../media/pip.mjs';
 
 test('a video entry carries the agreed fields; a partial run keeps the other entries', () => {
   const hero = videoEntry({name: 'hero', piece: VIDEOS.hero, files: {mp4: 'hero.mp4', poster: 'hero-poster.jpg', phone: 'hero-720.mp4'}, bytes: {mp4: 1}, seconds: 14.44});
@@ -24,7 +25,8 @@ test('every piece has the words the site needs; video captions are 6 words at mo
     if (piece.part) { assert.ok(piece.shows && piece.steps.length, name); continue; }   // played inside the piece that names it `before` (Apply, round 3)
     for (const key of ['shows', 'caption', 'alt']) assert.ok(piece[key], `${name}.${key}`);
     assert.ok(piece.caption.split(/\s+/).length <= 6, `${name}: caption over 6 words`);
-    assert.equal(piece.width / piece.height, 1.6, `${name}: 16:10`);
+    if (piece.layout === 'split') assert.ok(splitRects(piece.width, piece.height, 1.6).left.w > piece.width * 0.45, `${name}: two 16:10 panes side by side, each near half the width`);   // pip.mjs splitRects throws without room
+    else assert.equal(piece.width / piece.height, 1.6, `${name}: 16:10`);
     assert.ok(piece.budget > 0 && piece.steps.length, name);
   }
   const slides = Object.values(VIDEOS).filter(piece => piece.slide);
