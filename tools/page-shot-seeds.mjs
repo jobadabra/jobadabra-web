@@ -302,6 +302,15 @@ export const seeds = {...notifySeeds,
     }
     // Searches (a few installs each) so "Gaps people search in" shows two rows, like the real page (ab, 2 Nov 2026: the card beside "Countries at the floor" left an empty area).
     const day = new Date(Date.now() - 2 * 86400_000).toISOString().slice(0, 10);
+    // Published job boards (12 Nov 2026, bw): made-up boards in 11 countries, a few on test profiles' cells, measured on different days; 26 days of the board trend with 4 days missing.
+    const ago = back => new Date(Date.now() - back * 86400_000).toISOString().slice(0, 10);
+    const boards = [['fr', 'electrical_mechanical,construction', 0], ['fr', 'medical,nursing_care', 0], ['fr', 'retail_sales', 0], ['es', 'service_hotel,kitchen', 0], ['es', 'medical', 0], ['at', 'pharmacy_lab,medical', 1],
+      ['at', 'teaching', 1], ['de', 'software_dev,data_ai', 0], ['de', 'warehouse,driving_delivery', 0], ['no', 'medical', 4], ['no', 'construction', 4], ['se', 'electrical_mechanical', 2], ['dk', 'construction,electrical_mechanical', 2],
+      ['it', 'accounting_finance,admin_office', 0], ['lu', 'b2b_sales', 10], ['hr', 'marketing_social', 10], ['md', 'customer_service', 0], ['ee', 'it_support,software_dev', 3]];
+    for (const [i, [country, families, back]] of boards.entries()) await env.STATS.prepare(`INSERT INTO sitefacts (install, day, host, kind, url, body, in_places, fit70, countries, families) VALUES (?, ?, ?, 'board', ?, '{}', ?, 0, ?, ?)`)
+      .bind(`central-scout-${country}`, ago(back), `board${i}.example`, `https://board${i}.example/jobs?q={role}`, 3 + i, country, families).run();
+    for (let back = 25; back >= 1; back--) if (![6, 7, 15, 16].includes(back))
+      await env.STATS.prepare('INSERT INTO index_daily (day, feeds, boards) VALUES (?, 100, ?) ON CONFLICT(day) DO UPDATE SET boards = excluded.boards').bind(ago(back), JSON.stringify({total: Math.round(4 + (25 - back) * 0.55), profiles: Math.min(6, Math.floor((25 - back) / 4)), cells: {}})).run();
     for (const [install, roles, country] of [['i1', 'healthcare', 'ro'], ['i2', 'healthcare', 'ro'], ['i3', 'healthcare', 'ro'], ['i4', 'healthcare', 'ro'], ['i5', 'trades', 'pt'], ['i6', 'trades', 'pt'], ['i7', 'trades', 'pt']])
       await env.STATS.prepare('INSERT INTO contributions (install, day, ats, slug, company, matched, own, roles, regions, countries) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?)').bind(install, day, 'greenhouse', `demo-search-${install}`, 'Demo', roles, '', country).run();
   },

@@ -11,6 +11,7 @@ import {authorize, digestOf, equal, flag} from '../shared/guard.js';
 import {alertOwner} from '../shared/notify-send.js';
 import {store as storeScouting} from '../shared/scouting.js';
 import {snapshot, storeSnapshot} from '../shared/scouting-snapshot.js';
+import {storeBoardCounts} from '../shared/board-counts.js';
 const KEY = 'index:employers';
 const NOFEED_KEY = 'index:nofeed';
 const SUMMARY_KEY = 'index:summary';   // the website's two counts, written at every publish (the old single-value copy stops once the list outgrows it)
@@ -353,6 +354,7 @@ async function publish(request, env) {
     const date = generated.slice(0, 10);
     await storeSnapshot(env.STATS, date, snapshot(feeds, feeds.filter(feed => pooled.has(`${feed.ats}:${feed.slug}`)).length, nofeed.length)).catch(() => false);
     await storePoolSnapshot(env.STATS, date, poolSnapshot(feeds, pooled)).catch(() => false);   // what installs add, for /admin/job-search/installs (migration 0102)
+    await storeBoardCounts(env.STATS, date).catch(() => false);   // the published boards per family × country, for the Scouting page's trend (migration 0150)
   }
   // The central scout's own numbers for /intel (shared/scouting.js): never a reason to refuse the index.
   if (env.STATS && body.stats) await storeScouting(env.STATS, body.stats, generated.slice(0, 10)).catch(() => false);

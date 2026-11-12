@@ -46,7 +46,10 @@ try {
         await sections.first().waitFor({state: 'visible', timeout: 3000}).catch(() => {});
         const found = await sections.count(), visible = found === 1 && await sections.isVisible();
         if (!visible) { failed = true; console.error(`${found > 1 ? 'AMBIGUOUS SECTION' : found ? 'HIDDEN SECTION' : 'NO SECTION'} ${pagePath} at ${width}px ${theme}: --clip '${args.clip}' matches ${found}${found === 1 ? ' (not visible)' : ''}; it must match exactly one visible element (the changed card), never the first of several`); await context.close(); continue; }
-        await sections.screenshot({path: file});   // a popover opened by --click that sits outside this element is not in the image: clip its container
+        // Why (12 Nov 2026, bw: the admin menu sat across the middle of a section taller than the window; same on 27 Oct, /coverage): a locator shot scrolls the element under the sticky menu.
+        // A full-page shot clipped to the element's box from the top of the page draws the section once, the menu at its own place above. A popover outside the element is not in it: clip its container.
+        const clip = await sections.evaluate(el => { window.scrollTo(0, 0); const box = el.getBoundingClientRect(); return {x: box.left, y: box.top, width: box.width, height: box.height}; });
+        await page.screenshot({path: file, fullPage: true, clip});
       } else await page.screenshot({path: file, fullPage: !!args.full});
       console.log(file);
     }

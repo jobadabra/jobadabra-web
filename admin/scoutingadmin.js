@@ -13,6 +13,7 @@ import {day, snapshot, gather} from '../shared/scouting-snapshot.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {employerKindChart, familyChart, freshnessChart, usefulChart} from './jobsearch-charts.js';
 import {figure, VIZ_STYLE} from './viz.js';
+import {boardsSection} from './scouting-boards.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"]/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[ch]));
 export const n = value => Number(value || 0).toLocaleString('en-US');
@@ -77,6 +78,7 @@ ${familyLinks(url, data.family || '')}
 <div class="verdict">${esc(verdict)}</div>
 ${tiles(data, cells, past)}
 ${heatmap(cells, past, data.demand || {}, data.central?.ideas_cell || '')}
+${data.boardCounts ? boardsSection(data.boardCounts, today) : ''}
 ${gaps(cells, data.demand || {})}
 ${trends(cells, past)}
 ${sources(data.central)}
