@@ -3,6 +3,7 @@
 // MIN_LOCAL_JOBS), one row per board and country under the install id `central-scout-<cc>`, its `day` the last day it was measured; a row not measured for 30 days leaves.
 // Board discovery (jobadabra-lab board-discovery, session bd) feeds the same rows through the scout's next publish, so a country's newest `day` is when its boards were last measured.
 // Counts only: no board address or name leaves this module. Drawn by admin/scouting-boards.js. Guard: test/unit/shared/board-counts.test.js.
+import {reachOf} from './board-reach.js';
 import {FAMILIES} from './pool-tags.js';
 import PROFILES from './test-profiles.json' with {type: 'json'};
 
@@ -34,8 +35,9 @@ export function countsOf(rows) {
   return {total, cells, last, profiles: PROFILE_CELLS.filter(cell => cells[`${cell.family}|${cell.country}`]).length};
 }
 
-const ROWS_SQL = `SELECT countries, families, day FROM sitefacts WHERE install LIKE ? AND kind = 'board'`;
-const rowsOf = async db => ((await db.prepare(ROWS_SQL).bind(`${SCOUT_BOARD_PREFIX}%`).all()).results) || [];
+const ROWS_SQL = `SELECT host, countries, families, day FROM sitefacts WHERE install LIKE ? AND kind = 'board'`;
+/** The scout's board rows ({host, countries, families, day}); the host stays server-side (shared/board-reach.js groups by it, never sends it). */
+export const rowsOf = async db => ((await db.prepare(ROWS_SQL).bind(`${SCOUT_BOARD_PREFIX}%`).all()).results) || [];
 
 /**
  * Keeps today's counts in index_daily.boards (migration 0150), after the publish wrote the day's row (shared/scouting-snapshot.js storeSnapshot): an UPDATE, so a day without that row stays without.
@@ -62,10 +64,10 @@ export const DISCOVERY_WORKFLOW = 'board-discovery.yml';
  * every 2 h and GitHub refuses, so without this the card would call a pause a refusal.
  */
 export async function gatherBoards(db, daily = []) {
-  const now = countsOf(await rowsOf(db).catch(() => []));
+  const rows = await rowsOf(db).catch(() => []), now = countsOf(rows);
   const history = [...daily].reverse().map(row => ({day: row.day, ...(dayCounts(row.boards) || {total: null, profiles: null})}));
   const row = await db.prepare('SELECT at, ok, reason FROM intel_start WHERE workflow = ?').bind(DISCOVERY_WORKFLOW).first().catch(() => null);
-  return {...now, history, start: row ? {at: String(row.at), ok: Boolean(row.ok), reason: String(row.reason || '')} : null, paused: await pausedOf(db)};
+  return {...now, reach: reachOf(rows), history, start: row ? {at: String(row.at), ok: Boolean(row.ok), reason: String(row.reason || '')} : null, paused: await pausedOf(db)};
 }
 
 /** Whether the Scheduled snapshot reads DISCOVERY_WORKFLOW as disabled in its repo; false when the snapshot is missing, unreadable or does not list it. */

@@ -53,3 +53,13 @@ test('a workflow disabled in GitHub reads as paused (grey), even when the Worker
   assert.match(html, /chip off">discovery paused: workflow disabled in GitHub/);
   assert.doesNotMatch(html, /discovery start refused/);
 });
+
+test("Across Europe (Admin only): the tile map with counts, and each multi-country board by name, hosts and countries", async () => {
+  const {reachBlock} = await import('../../../admin/scouting-boards.js');
+  const {reachOf} = await import('../../../shared/board-reach.js');
+  const html = reachBlock(reachOf([{host: 'acme-jobs.at', countries: 'at'}, {host: 'acme-jobs.it', countries: 'it'}, {host: 'solo.fr', countries: 'fr'}]));
+  assert.match(html, /Across Europe: 1 local · 1 multi-country/);
+  assert.match(html, /<b>acme-jobs<\/b><br><small class="muted">acme-jobs\.at, acme-jobs\.it<\/small><\/td><td>AT · IT<\/td>/);
+  assert.match(html, /class="tile h2 shared"/);
+  assert.equal(reachBlock({boards: 0}), '');
+});

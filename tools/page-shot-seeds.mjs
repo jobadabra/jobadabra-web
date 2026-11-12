@@ -310,6 +310,9 @@ export const seeds = {...notifySeeds, ...publishSeeds,
       ['it', 'accounting_finance,admin_office', 0], ['lu', 'b2b_sales', 10], ['hr', 'marketing_social', 10], ['md', 'customer_service', 0], ['ee', 'it_support,software_dev', 3]];
     for (const [i, [country, families, back]] of boards.entries()) await env.STATS.prepare(`INSERT INTO sitefacts (install, day, host, kind, url, body, in_places, fit70, countries, families) VALUES (?, ?, ?, 'board', ?, '{}', ?, 0, ?, ?)`)
       .bind(`central-scout-${country}`, ago(back), `board${i}.example`, `https://board${i}.example/jobs?q={role}`, 3 + i, country, families).run();
+    for (const [host, country] of [['demo-staffing.at', 'at'], ['demo-staffing.es', 'es'], ['demo-staffing.lu', 'lu'], ['demo-recruit.at', 'at'], ['demo-recruit.it', 'it']])   // two brands across countries (bc, 12 Nov 2026)
+      await env.STATS.prepare(`INSERT INTO sitefacts (install, day, host, kind, url, body, in_places, fit70, countries, families) VALUES (?, ?, ?, 'board', ?, '{}', 6, 0, ?, 'b2b_sales')`)
+        .bind(`central-scout-${country}`, ago(0), host, `https://${host}/jobs?q={role}`, country).run();
     for (let back = 25; back >= 1; back--) if (![6, 7, 15, 16].includes(back))
       await env.STATS.prepare('INSERT INTO index_daily (day, feeds, boards) VALUES (?, 100, ?) ON CONFLICT(day) DO UPDATE SET boards = excluded.boards').bind(ago(back), JSON.stringify({total: Math.round(4 + (25 - back) * 0.55), profiles: Math.min(6, Math.floor((25 - back) / 4)), cells: {}})).run();
     for (const [install, roles, country] of [['i1', 'healthcare', 'ro'], ['i2', 'healthcare', 'ro'], ['i3', 'healthcare', 'ro'], ['i4', 'healthcare', 'ro'], ['i5', 'trades', 'pt'], ['i6', 'trades', 'pt'], ['i7', 'trades', 'pt']])
@@ -329,6 +332,12 @@ export const seeds = {...notifySeeds, ...publishSeeds,
       await env.STATS.prepare(`INSERT INTO index_daily (day, feeds, non_it, failing, from_pool, dead_ends, cells) VALUES (?, ?, ?, 0, 0, 0, ?)
         ON CONFLICT(day) DO UPDATE SET feeds = excluded.feeds, non_it = excluded.non_it, cells = excluded.cells`).bind(day, feeds, Math.round(feeds / 3), JSON.stringify(cells)).run();
     }
+    // Job boards across Europe (12 Nov 2026, bc): made-up local boards in 13 countries, one brand on 3 country domains and one on 2 (shared/board-reach.js groups them).
+    const boards = [['fr', 6], ['es', 4], ['no', 4], ['at', 3], ['lu', 2], ['se', 2], ['md', 2], ['hr', 2], ['gr', 2], ['dk', 2], ['de', 2], ['ee', 1]]
+      .flatMap(([country, n]) => Array.from({length: n}, (_, i) => [`demo-${country}-board${i}.example`, country]))
+      .concat([['demo-staffing.at', 'at'], ['demo-staffing.es', 'es'], ['demo-staffing.lu', 'lu'], ['demo-recruit.at', 'at'], ['demo-recruit.it', 'it']]);
+    for (const [host, country] of boards) await env.STATS.prepare(`INSERT INTO sitefacts (install, day, host, kind, url, body, in_places, fit70, countries, families) VALUES (?, '2026-10-27', ?, 'board', ?, '{}', 5, 0, ?, 'medical')
+      ON CONFLICT(install, host, kind) DO NOTHING`).bind(`central-scout-${country}`, host, `https://${host}/jobs?q={role}`, country).run();
   },
   'scouting-paused': async ({env, call}) => {   // the scouting seed with board discovery disabled in GitHub (12 Nov 2026, bw): the card's grey "paused" chip over a refused Worker start
     await seeds.scouting({env, call});
