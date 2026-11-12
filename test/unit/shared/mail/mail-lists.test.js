@@ -16,18 +16,19 @@ test('the types are service, job digest, releases, tips, in the owner\'s order, 
 test('who each type reaches: every case of the agreed rules in one table', () => {
   const cases = [
     // [what we know about the address, releases refusal, tips refusal, Pro launch refusal, job digest refusal]
-    ['unconfirmed account, no answer', facts(), 'no_tick', 'no_tick', 'no_tick', 'no_tick'],
-    ['confirmed account that has not said yes: What\'s new is off too (owner, 6 Nov 2026)', facts({confirmed: true}), 'no_tick', 'no_tick', 'no_tick', 'no_tick'],
+    // What's new is on for every address until stopped (owner, 12 Nov 2026: "On for all, new too"); it still needs a confirmed address or a news signup.
+    ['unconfirmed account, no answer', facts(), 'not_confirmed', 'no_tick', 'no_tick', 'no_tick'],
+    ['confirmed account that has not said yes: What\'s new is on, tips off', facts({confirmed: true}), '', 'no_tick', 'no_tick', 'no_tick'],
     ['confirmed account that said yes to What\'s new', facts({confirmed: true, yes: ['releases'], answered: true}), '', 'no_tick', 'no_tick', 'no_tick'],
-    ['confirmed account that said yes to News and tips: no yes to What\'s new', facts({confirmed: true, yes: ['tips'], answered: true}), 'no_tick', '', '', 'no_tick'],
-    ['confirmed account that ticked the job digest only', facts({confirmed: true, yes: ['jobdigest']}), 'no_tick', 'no_tick', 'no_tick', ''],
-    ['unconfirmed account that ticked tips and the digest: may be a stranger\'s', facts({yes: ['tips', 'jobdigest'], answered: true}), 'no_tick', 'not_confirmed', 'not_confirmed', 'not_confirmed'],
+    ['confirmed account that said yes to News and tips: no yes to What\'s new', facts({confirmed: true, yes: ['tips'], answered: true}), '', '', '', 'no_tick'],
+    ['confirmed account that ticked the job digest only', facts({confirmed: true, yes: ['jobdigest']}), '', 'no_tick', 'no_tick', ''],
+    ['unconfirmed account that ticked tips and the digest: may be a stranger\'s', facts({yes: ['tips', 'jobdigest'], answered: true}), 'not_confirmed', 'not_confirmed', 'not_confirmed', 'not_confirmed'],
     ['website waitlist signup under the new wording: a yes to What\'s new', facts({signup: 'news'}), '', 'no_tick', '', 'no_tick'],
-    ['app waitlist signup: its dialog says "Nothing else"', facts({signup: 'pro'}), 'no_tick', 'no_tick', '', 'no_tick'],
+    ['app waitlist signup: its dialog says "Nothing else"', facts({signup: 'pro'}), 'pro_only', 'no_tick', '', 'no_tick'],
     ['app waitlist signup with a stored yes on an unconfirmed address', facts({signup: 'pro', yes: ['releases']}), 'pro_only', 'no_tick', '', 'no_tick'],
     ['confirmed account that stopped releases', facts({confirmed: true, stops: ['releases'], yes: ['tips'], answered: true}), 'unsubscribed', '', '', 'no_tick'],
     ['stopped tips beats the tick and the waitlist', facts({confirmed: true, stops: ['tips'], yes: ['tips'], signup: 'news', answered: true}), '', 'unsubscribed', 'unsubscribed', 'no_tick'],
-    ['stopped job digest', facts({confirmed: true, stops: ['jobdigest'], yes: ['tips'], answered: true}), 'no_tick', '', '', 'unsubscribed'],
+    ['stopped job digest', facts({confirmed: true, stops: ['jobdigest'], yes: ['tips'], answered: true}), '', '', '', 'unsubscribed'],
     ['a bounce stops everything', facts({confirmed: true, stops: ['all'], yes: ['tips', 'jobdigest'], signup: 'news', answered: true}), 'suppressed', 'suppressed', 'suppressed', 'suppressed'],
   ];
   for (const [name, f, releases, tips, launch, digest] of cases) {
@@ -36,8 +37,8 @@ test('who each type reaches: every case of the agreed rules in one table', () =>
 });
 
 test('a box shows the stored answer or the type\'s default, and nothing else', () => {
-  assert.deepEqual(['releases', 'tips'].map(list => newsAnswer(list, facts())), [false, false], 'unconfirmed: the sender sends nothing');
-  assert.deepEqual(['releases', 'tips'].map(list => newsAnswer(list, facts({confirmed: true}))), [false, false], 'both off until a yes');
+  assert.deepEqual(['releases', 'tips'].map(list => newsAnswer(list, facts())), [true, false], 'What\'s new on until stopped (it waits for the confirmation to send); tips off until a yes');
+  assert.deepEqual(['releases', 'tips'].map(list => newsAnswer(list, facts({confirmed: true}))), [true, false], 'What\'s new on, tips off until a yes');
   assert.deepEqual(['releases', 'tips'].map(list => newsAnswer(list, facts({confirmed: true, stops: ['releases'], yes: ['tips']}))), [false, true], 'the stored answers');
   assert.equal(newsAnswer('tips', facts({confirmed: true, signup: 'news'})), false, 'the waitlist is not a tips tick');
 });

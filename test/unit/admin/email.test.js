@@ -122,8 +122,9 @@ test('with the MAIL switch off, or for a list the address stopped, the result sa
   const {env, sent} = await live();
   assert.equal((await view(post({template: 'welcome'}), {...env, MAIL: 'off'})).headers.get('Location'), '/admin/growth/email?test=welcome:off&destination=inbox#test-result-welcome');
   assert.equal((await view(post({template: 'pro-launch'}), {...env, MARKETING_MAIL: 'off'})).headers.get('Location'), '/admin/growth/email?test=pro-launch:marketing_off&destination=inbox#test-result-pro-launch');
-  env.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'tips', 'unsubscribe', 'x')").run(await addrOf('test-account-admin@jobpilotto.top'));   // the Pro launch is a Tips and tricks mail: a stop on that type refuses it, a test send skips only the tick rules
-  assert.equal((await view(post({template: 'pro-launch'}), {...env, MARKETING_MAIL: 'on'})).headers.get('Location'), '/admin/growth/email?test=pro-launch:unsubscribed&destination=inbox#test-result-pro-launch');
+  // 12 Nov 2026 (owner's release test "not sent (unsubscribed)"): the owner's own test skips a stop of that type; a bounce or complaint ('all') still refuses it.
+  env.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'all', 'bounce', 'x')").run(await addrOf('test-account-admin@jobpilotto.top'));
+  assert.equal((await view(post({template: 'pro-launch'}), {...env, MARKETING_MAIL: 'on'})).headers.get('Location'), '/admin/growth/email?test=pro-launch:suppressed&destination=inbox#test-result-pro-launch');
   assert.equal(sent.length, 0);
 });
 
@@ -199,4 +200,14 @@ test("an Open press counts once per visitor for its mail, inside the window; oth
   env.STATS.db.prepare("INSERT INTO visits (day, at, visitor, page, source, country, device) VALUES ('2026-10-19', '2026-10-19T00:00:00.000Z', 'v6', '/open', 'mail-digest', '', '')").run();   // the window's first day, kept by its day only (Gitar on #476)
   const data = await collect(env, {days: 7, now});
   assert.deepEqual(data.byTemplate.map(r => [r.template, r.opened]), [['welcome', 0], ['digest', 3]]);
+});
+
+test('the What\'s new count is every confirmed account that has not stopped it, with or without a stored yes (owner, 12 Nov 2026; Gitar on #569)', async () => {
+  const {env} = await fill();
+  const add = env.STATS.db.prepare('INSERT INTO pro_accounts (id, email_hash, email, created_at, plan, email_confirmed_at) VALUES (?, ?, ?, ?, ?, ?)');
+  add.run('a', await addrOf('a@example.com'), 'a@example.com', '2026-10-01', 'trial', '2026-10-01');
+  add.run('b', await addrOf('b@example.com'), 'b@example.com', '2026-10-01', 'trial', '2026-10-01');
+  add.run('c', await addrOf('c@example.com'), 'c@example.com', '2026-10-01', 'trial', null);
+  env.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'releases', 'unsubscribe', 'x')").run(await addrOf('b@example.com'));
+  assert.equal((await collect(env, {days: 7, now})).types.releases, 1, 'a counts; b stopped it; c is not confirmed');
 });

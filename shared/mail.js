@@ -45,19 +45,20 @@ export async function settingsLink(env, to) {
 }
 
 // -> {ok: true} or {ok: false, reason}. For a caller that builds an expensive mail (the digest) and wants to know first.
-export async function mailAllowed(env, to, list = 'service', {essential = false, test = false, waitlistToo = false} = {}) {
+export async function mailAllowed(env, to, list = 'service', {essential = false, test = false, ownerTest = false, waitlistToo = false} = {}) {
   if (!validAddress(to)) return {ok: false, reason: 'bad_address'};
   const news = NEWS.includes(list);
   if (news && env.MARKETING_MAIL !== 'on') return {ok: false, reason: 'marketing_off'};   // owner, 17 Oct 2026: no promotional mail until he turns it on
   const addr = await addrOf(to);
   const off = await env.STATS.prepare("SELECT list, reason FROM mail_off WHERE addr = ? AND list IN ('all', ?, 'marketing')").bind(addr, list).all();
-  for (const row of off.results || []) if (row.list === 'all' || (!essential && (row.list !== 'marketing' || news))) return {ok: false, reason: row.list === 'all' ? 'suppressed' : 'unsubscribed'};
+  // Why (12 Nov 2026, owner's release test "not sent (unsubscribed)"): the owner's own test to an address he typed skips that address's stop of the list; a bounce or complaint ('all') still holds it.
+  for (const row of off.results || []) if (row.list === 'all' || (!essential && !ownerTest && (row.list !== 'marketing' || news))) return {ok: false, reason: row.list === 'all' ? 'suppressed' : 'unsubscribed'};
   const account = await env.STATS.prepare('SELECT service_mail_off_at FROM pro_accounts WHERE email_hash = ?').bind(addr).first().catch(() => null);
   if (OPT_IN.includes(list) && !test) {   // a test send goes to the owner's typed address or the test inbox
     const reason = newsRefusal(list, await newsFacts(env, addr, clean(to)), {waitlistToo});
     if (reason) return {ok: false, reason};
   }
-  if (list === 'service' && !essential && account?.service_mail_off_at) return {ok: false, reason: 'unsubscribed'};
+  if (list === 'service' && !essential && !ownerTest && account?.service_mail_off_at) return {ok: false, reason: 'unsubscribed'};   // the owner's test skips this account switch too (Gitar on #569)
   return {ok: true};
 }
 
@@ -115,7 +116,7 @@ export async function send(env, template, to, data = {}, {now = new Date(), test
   try {
     // Why (review of hr-32, 6 Nov 2026): a mail with no stop link (an Account mail) is never held by a stop pressed on another mail of its list; a bounce or complaint ('all') still holds it.
     // `heldByStops` keeps a mail held anyway: the Always on Test (it tells whether alerts would arrive) and a report's update (the reply shows in the app).
-    const verdict = await mailAllowed(env, to, spec.list, {...spec, essential: spec.essential || (!spec.heldByStops && !footerOf(template).stop), test});
+    const verdict = await mailAllowed(env, to, spec.list, {...spec, essential: spec.essential || (!spec.heldByStops && !footerOf(template).stop), test, ownerTest});
     const addr = await addrOf(to);
     if (!verdict.ok) { if (verdict.reason !== 'bad_address' && verdict.reason !== 'marketing_off') await record(env, now, addr, spec.list, logged, verdict.reason); return verdict; }
     const ruled = ownerTest ? '' : await ruleRefusal(env, template);   // the owner's stop on this one mail, or 'rule_held' when the stops cannot be read (spec 2026-11-05-service-mail-rules-design.md)

@@ -261,13 +261,13 @@ const withWaitlist = e => { e.WAITLIST = {get: async key => ({'signup:web@exampl
 const news = async (e, install = 'install-aaaa') => { const got = await call(address, e, install, 'GET'); return {releases: got.releases, tips: got.tips, answered: got.newsAnswered, old: got.marketing}; };
 const rows = (e, sql) => e.STATS.db.prepare(sql).all().map(row => ({...row}));
 
-test('the owner\'s case: a confirmed address with no stop shows both news switches off, never answered', async () => {
+test('the owner\'s case: a confirmed address with no stop shows What\'s new on and tips off, never answered', async () => {
   // Why (5 Nov 2026): the owner's box showed "Also send me product news" ticked while the site held no tick (their row: marketing_opt_in 0, no stop on file). GET said "no stop", not "ticked".
   const {e} = setup();
   await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});
-  assert.deepEqual(await news(e), {releases: false, tips: false, answered: false, old: false}, 'unconfirmed: the sender sends no news');
+  assert.deepEqual(await news(e), {releases: true, tips: false, answered: false, old: false}, 'unconfirmed: What\'s new shows on (owner, 12 Nov 2026), sent once confirmed');
   e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
-  assert.deepEqual(await news(e), {releases: false, tips: false, answered: false, old: false}, 'both need a yes (owner, 6 Nov 2026); the app\'s old box reads tips');
+  assert.deepEqual(await news(e), {releases: true, tips: false, answered: false, old: false}, 'What\'s new on until stopped (owner, 12 Nov 2026), tips need a yes; the app\'s old box reads tips');
   assert.deepEqual(rows(e, 'SELECT * FROM mail_on'), [], 'a default stores nothing');
 });
 
@@ -276,7 +276,7 @@ test('a PUT with releases and tips stores each answer apart; a missing field cha
   await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com'});
   e.STATS.db.prepare("UPDATE pro_accounts SET email_confirmed_at = 'x'").run();
   await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', tips: true, newsVia: 'card'});
-  assert.deepEqual(await news(e), {releases: false, tips: true, answered: true, old: true});
+  assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true});
   assert.deepEqual(rows(e, 'SELECT list, via FROM mail_on'), [{list: 'tips', via: 'card'}], 'only what was pressed; the via says where');
   await call(address, e, 'install-aaaa', 'PUT', {email: 'me@example.com', releases: false});
   assert.deepEqual(await news(e), {releases: false, tips: true, answered: true, old: true}, 'stopping releases leaves tips');
@@ -326,7 +326,7 @@ test('a Pro account saves its choices at its own address; only changing the addr
   await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com'});
   e.STATS.db.prepare("UPDATE pro_accounts SET plan = 'pro'").run();
   assert.equal((await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com', tips: true})).status, 200);
-  assert.deepEqual(await news(e), {releases: false, tips: true, answered: true, old: true}, 'a Pro account counts as confirmed');
+  assert.deepEqual(await news(e), {releases: true, tips: true, answered: true, old: true}, 'a Pro account counts as confirmed');
   assert.equal((await call(address, e, 'install-aaaa', 'PUT', {email: 'other@example.com'})).status, 409);
   for (const list of ['releases', 'tips']) e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES ((SELECT email_hash FROM pro_accounts), ?, 'unsubscribe', 'x')").run(list);
   await call(address, e, 'install-aaaa', 'PUT', {email: 'pro@example.com', releases: true, tips: true});
@@ -351,7 +351,7 @@ test('a website waitlist signup counts for releases and the app one for the Pro 
   await call(address, e, 'install-aaaa', 'PUT', {email: 'web@example.com'});
   assert.deepEqual(await news(e), {releases: true, tips: false, answered: false, old: false});
   await call(address, e, 'install-bbbb', 'PUT', {email: 'app@example.com'});
-  assert.deepEqual(await news(e, 'install-bbbb'), {releases: false, tips: false, answered: false, old: false});
+  assert.deepEqual(await news(e, 'install-bbbb'), {releases: true, tips: false, answered: false, old: false});
 });
 
 // Owner, 2 Nov 2026 ("Keep it, make it painless"): the welcome goes once per address ever, so a lost mail needs a Resend, rate-limited.

@@ -22,7 +22,8 @@ export async function releaseView(request, env) {
   const data = await releaseData(env, {...JSON.parse(row.data), version}, {status: row.status});
   if (!data) return new Response('Release emails are available only for stable versions.', {status: 409});
   const mail = compose('release', {...data, name: ''}, {stop: '#', settings: '#'}), n = await reach(env), draft = row.status === 'draft', on = env.MARKETING_MAIL === 'on';
-  const note = url.searchParams.get('done') ? `<p class="notice" role="status">${esc(url.searchParams.get('done'))}</p>` : '';
+  // Why (12 Nov 2026, owner's "not sent (unsubscribed)" read in green): a refusal is drawn red, never in the success colour.
+  const note = url.searchParams.get('done') ? `<p class="notice${url.searchParams.get('bad') ? ' bad' : ''}" role="status">${esc(url.searchParams.get('done'))}</p>` : '';
   return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Release mail ${esc(version)} · Admin</title>
 <style>
 .release-review{box-sizing:border-box;max-width:840px;margin:0 auto}
@@ -41,7 +42,7 @@ export async function releaseView(request, env) {
 .release-review .test-address{flex:1 1 240px;min-width:0}
 .release-review fieldset{border:0;margin:16px 0 0;padding:0}.release-review legend{font-weight:600;margin-bottom:6px;padding:0}
 .release-review .top-pick{display:flex;gap:10px;align-items:flex-start;font-weight:400;margin:0 0 6px;min-height:28px}.release-review .top-pick input{margin-top:4px;width:18px;height:18px;flex:none}
-.release-review .notice{padding:12px 16px;border:1px solid #4cc38a;border-radius:8px;color:#4cc38a}
+.release-review .notice{padding:12px 16px;border:1px solid #4cc38a;border-radius:8px;color:#4cc38a}.release-review .notice.bad{border-color:#f87171;color:#f87171}
 @media(max-width:600px){.release-review button{width:100%}.release-review iframe{height:640px}.release-review .test-address{flex-basis:100%}}
 </style></head><body><main><div class="release-review">
 <header><a href="/admin/growth/email?tab=releases">← All email</a> <span aria-hidden="true"> · </span> <a href="/admin/growth/email?template=release">Latest stable email</a>
@@ -56,7 +57,7 @@ ${draft ? topForm(data) : ''}
 <p>${esc(compose('release', {...data, name: '', test: true}).subject)}</p>
 <form method="post"><input type="hidden" name="action" value="test"><div class="test-row"><div class="test-address"><label for="release-test-address">Your email address</label><input id="release-test-address" type="email" name="to" placeholder="you@example.com" autocomplete="email" required></div><button type="submit">Send test · ${esc(version)}</button></div></form></section>
 <section class="card"><h2>Send to everyone</h2>
-<p class="muted">${draft ? 'The release email stays a draft until you send it here. Everyone with an account or on the waitlist who has not stopped product news will receive it, once.' : row.status === 'sending' ? 'Sending is in progress. The final recipient count will appear when it finishes.' : `Sent to ${row.sent_count} on ${esc(String(row.sent_at || '').slice(0, 10))}.`}</p>
+<p class="muted">${draft ? 'The release email stays a draft until you send it here. Everyone with a confirmed address who has not turned off What\'s new will receive it, once.' : row.status === 'sending' ? 'Sending is in progress. The final recipient count will appear when it finishes.' : `Sent to ${row.sent_count} on ${esc(String(row.sent_at || '').slice(0, 10))}.`}</p>
 ${!on ? '<p class="muted">Product news sending is switched off.</p>' : ''}
 <form method="post"><input type="hidden" name="action" value="send"><button${draft && on && n ? '' : ' disabled'}>Send to ${n} ${n === 1 ? 'person' : 'people'}</button></form></section>
 </div></main>
@@ -71,17 +72,19 @@ const topForm = data => {
     + `</fieldset><button>Save top changes</button></form><p class="muted">None ticked: the first change of each version, newest first.</p>`;
 };
 const TOP_MAX = 3;
+const TEST_WHY = {bad_address: 'that is not an e-mail address', suppressed: 'this address bounced or marked our mail as spam, so nothing is sent to it', marketing_off: 'MARKETING_MAIL is off', off: 'mail is off on this site', rule_held: 'the mail rules could not be read, try again'};
 
 async function releasePost(request, env, url) {
   if (!(await isOwner(request, env)) || request.headers.get('Origin') !== url.origin) return notFound();
   const version = url.searchParams.get('release') || '', form = await request.formData().catch(() => new FormData()), action = String(form.get('action') || '');
   const row = await env.STATS.prepare('SELECT data, status FROM release_mail WHERE version = ?').bind(version).first(), draft = await env.STATS.prepare('SELECT 1 AS y FROM release_mail WHERE version = ? AND status = ?').bind(version, 'draft').first();
-  let done = 'Nothing to do: this mail is not a draft.';
+  let done = 'Nothing to do: this mail is not a draft.', bad = false;
   if (row && action === 'test') {   // the real draft, to one address the owner types; sends nothing else
     const to = String(form.get('to') || '').trim(), data = await releaseData(env, {...JSON.parse(row.data), version}, {status: row.status});
     if (!data) return new Response('Release emails are available only for stable versions.', {status: 409});
     const result = validAddress(to) ? await send(env, 'release', to, {...data, name: '', test: true}, {test: true, ownerTest: true}) : {ok: false, reason: 'bad_address'};
-    done = result.ok ? `Test of release ${version} sent to ${to}. Subject: ${compose('release', {...data, test: true}).subject}. This test did not send the release to your audience.` : `Test of release ${version} not sent (${result.reason}).`;
+    done = result.ok ? `Test of release ${version} sent to ${to}. Subject: ${compose('release', {...data, test: true}).subject}. This test did not send the release to your audience.` : `Test of release ${version} not sent to ${to}: ${TEST_WHY[result.reason] || result.reason}.`;
+    bad = !result.ok;
   } else if (row && draft && action === 'headline') {
     const data = JSON.parse(row.data); data.intro = String(form.get('headline') || '').trim().slice(0, 120); data.headline = data.intro;
     await env.STATS.prepare('UPDATE release_mail SET data = ? WHERE version = ?').bind(JSON.stringify(data), version).run();
@@ -91,8 +94,8 @@ async function releasePost(request, env, url) {
     await env.STATS.prepare('UPDATE release_mail SET data = ? WHERE version = ?').bind(JSON.stringify(data), version).run();
     done = data.highlights.length ? `Top changes saved: ${data.highlights.map(key => key.slice(key.indexOf('|') + 1)).join(', ')}.` : 'Top changes: back to the automatic pick.';
   } else if (row && draft && action === 'send') {
-    if (env.MARKETING_MAIL !== 'on') done = 'MARKETING_MAIL is off: nothing sent.';
+    if (env.MARKETING_MAIL !== 'on') { done = 'MARKETING_MAIL is off: nothing sent.'; bad = true; }
     else { const result = await sendAll(env, version); done = result.sent !== undefined ? `Sent to ${result.sent}; ${result.skipped} skipped (stopped or refused).` : 'Not sent.'; }
   }
-  return new Response(null, {status: 303, headers: {Location: `/admin/growth/email?release=${encodeURIComponent(version)}&done=${encodeURIComponent(done)}`, 'Cache-Control': 'no-store'}});
+  return new Response(null, {status: 303, headers: {Location: `/admin/growth/email?release=${encodeURIComponent(version)}&done=${encodeURIComponent(done)}${bad ? '&bad=1' : ''}`, 'Cache-Control': 'no-store'}});
 }

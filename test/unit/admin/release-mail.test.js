@@ -149,10 +149,10 @@ test('the news list shows every address with its source and what each type does 
   e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'releases', 'unsubscribe', 'x')").run(await addrOf('stop@example.com'));
   e.STATS.db.prepare("INSERT INTO mail_on (addr, list, via, at) VALUES (?, 'tips', 'card', 'x')").run(await addrOf('a@example.com'));
   const rows = await audienceRows(e), by = Object.fromEntries(rows.map(r => [r.email, r]));
-  assert.deepEqual(rows.map(r => [r.email, r.source, r.releases]).sort(), [['a@example.com', 'both', true], ['app@example.com', 'waitlist', false], ['never@example.com', 'account', false], ['stop@example.com', 'account', false], ['w@example.com', 'waitlist', true]]);
+  assert.deepEqual(rows.map(r => [r.email, r.source, r.releases]).sort(), [['a@example.com', 'both', true], ['app@example.com', 'waitlist', false], ['never@example.com', 'account', true], ['stop@example.com', 'account', false], ['w@example.com', 'waitlist', true]]);
   assert.deepEqual([by['a@example.com'].tips, by['w@example.com'].tips, by['w@example.com'].launch, by['app@example.com'].launch, by['never@example.com'].launch], [true, false, true, true, false], 'tips need a tick; the Pro launch also reaches every waitlist signup');
-  assert.deepEqual([by['never@example.com'].releasesWhy, by['stop@example.com'].releasesWhy, by['app@example.com'].releasesWhy], ['not ticked', 'stopped', 'not ticked'], 'What\'s new needs a yes');
-  assert.match(audienceCard(rows), /2 What's new, 1 News and tips, 0 Job digest, 5 addresses/);
+  assert.deepEqual([by['never@example.com'].releasesWhy, by['stop@example.com'].releasesWhy, by['app@example.com'].releasesWhy], ['', 'stopped', 'Pro mail only'], 'What\'s new is on until stopped (owner, 12 Nov 2026); an app-only signup with no confirmed account still gets none');
+  assert.match(audienceCard(rows), /3 What's new, 1 News and tips, 0 Job digest, 5 addresses/);
   const page = async headers => (await emailView(new Request('https://www.jobadabra.top/admin/growth/email?tab=people', {headers}), e)).text();
   assert.match(await page({Authorization: 'Bearer owner-key'}), /w@example\.com/);
   assert.doesNotMatch(await page({}), /w@example\.com/);
@@ -441,4 +441,16 @@ test('a stopped "What\'s new" refuses before it spends the draft, and goes once 
   await setRule(e, 'release', true, now);
   assert.deepEqual(await sendAll(e, '0.8.42', {now}), {sent: 1, skipped: 0});
   resetRuleCache();
+});
+
+test('the owner\'s release test reaches an address that stopped What\'s new; a bounced one still gets nothing (owner, 12 Nov 2026: "Test of release 0.9.23 not sent (unsubscribed)")', async () => {
+  const {e, sent} = setup();
+  await draft(e, '0.8.42', now);
+  const data = {...(await releaseData(e, {...JSON.parse(e.STATS.db.prepare('SELECT data FROM release_mail').get().data), version: '0.8.42'})), name: '', test: true};
+  e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'releases', 'unsubscribe', 'x')").run(await addrOf('me@example.com'));
+  e.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'all', 'bounce', 'x')").run(await addrOf('bounced@example.com'));
+  assert.equal((await send(e, 'release', 'me@example.com', data, {test: true, ownerTest: true})).ok, true, 'the owner typed his own address: his stop of What\'s new does not hold his own test');
+  assert.equal((await send(e, 'release', 'me@example.com', data, {test: true})).reason, 'unsubscribed', 'a test that is not the owner\'s still obeys the stop');
+  assert.equal((await send(e, 'release', 'bounced@example.com', data, {test: true, ownerTest: true})).reason, 'suppressed');
+  assert.equal(sent.length, 1);
 });
