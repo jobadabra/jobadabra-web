@@ -38,3 +38,11 @@ export function jobCell(alerts, resolve, back, canEdit) {
   if (!alerts.length) return '<span class="muted">sends nothing</span>';
   return alerts.map(alert => { const mine = resolve(alert); return `<div class="nt-cell" title="${esc(alert.label)}">${toggle(alert, mine, back, canEdit)}<span class="small">${mine.on ? `${esc(MODES[mine.mode])} · ${channelOf(mine.channel).icon}` : 'Off'}</span>${alerts.length > 1 ? `<span class="muted small">${esc(alert.label.replace(/^\S+\s/, '').slice(0, 34))}</span>` : ''}</div>`; }).join('');
 }
+
+/** The shared failure alert's switch on a job's Notify cell (owner, 12 Nov 2026: "One shared alert", a switch per job on Scheduled). `own` = why this job's own alert already covers it: no switch, the reason as words. */
+export function failureSwitch(key, {muted, own, globalOn = true}, back, canEdit) {
+  if (own) return `<div class="nt-cell" title="${esc(`Already told by ${own}`)}"><span class="small">Failure: own alert</span></div>`;
+  const on = !muted, name = `Failure alert for ${key.split('/').pop()}`;
+  const button = `<button type="submit" class="nt-tg" aria-pressed="${on}" aria-label="${esc(`${name}: ${on ? 'on' : 'off'}`)}" title="${on ? 'On: press to turn off' : 'Off: press to turn on'}"${canEdit ? '' : ' disabled'}></button>`;
+  return `<div class="nt-cell" title="Tells Engineering once when this job turns red, and once when it works again">${canEdit ? form({action: 'job-toggle', job: key, on: on ? '0' : '1', back}, button) : button}<span class="small">${on && globalOn ? 'Failure' : 'Failure off'}</span></div>`;
+}

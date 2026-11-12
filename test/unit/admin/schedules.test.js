@@ -160,7 +160,8 @@ test('the Area filter narrows the page; Testing shows its start-time graph; the 
   assert.ok(testing.includes('CI · E2E') && !testing.includes('Product brain'));
   assert.ok(testing.length > search.length && /<th>Notify<\/th>/.test(all));
   assert.match(all, /aria-label="Main went red[^"]*: on"/, 'e2e.yml carries the main-red switch, on by default');
-  assert.match(all, /sends nothing/, 'a job with no alert says so');
+  assert.doesNotMatch(all, /sends nothing/, 'no job is silent any more: a job with no alert of its own carries the shared failure switch (shared/job-alert.js)');
+  assert.match(all, /aria-label="Failure alert for [^"]*: on"/, 'a job with no alert of its own carries the shared failure switch, on by default');
   const owned = page(snapshot, {now, notify: {settings: new Map([['main-red', {enabled: 0}]]), canEdit: true, back: '/admin/operations/scheduled'}});
   assert.match(owned, /name="action" value="toggle"[^>]*><input type="hidden" name="event" value="main-red"><input type="hidden" name="on" value="1"/, 'off is shown, and its button turns it on');
   assert.ok(!/<form[^>]*>[^]*value="main-red"/.test(all.split('Run by hand only')[0]), 'a read-only viewer gets no form');

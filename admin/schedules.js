@@ -13,9 +13,10 @@ import {filterLinks} from './admin.js';
 import {graph, GRAPH_STYLE} from './schedules-graph.js';
 import {loadNightlySummary, summaryFor} from './nightly-summary.js';
 import {NIGHTLY_STYLE, NIGHTLY_SCRIPT, NIGHTLY_NOSCRIPT, detailHtml, summaryLine, toggleHtml} from './nightly-summary-html.js';
-import {NOTIFY_STYLE, jobCell} from './notify-cells.js';
+import {NOTIFY_STYLE, failureSwitch, jobCell} from './notify-cells.js';
+import {alertJobs, jobKey, OWN_ALERT, readMuted} from '../shared/job-alert.js';
 import {readSettings} from '../shared/notify.js';
-import {alertsForJob, effective} from '../shared/notify-registry.js';
+import {alertOf, alertsForJob, effective} from '../shared/notify-registry.js';
 import {AREAS, areaOf, missed, nextOf, stateOf, whenWords, words, RUN_DOTS} from '../shared/schedules-model.js';
 
 const authorized = (request, env) => Boolean(env.SELFHEAL_PUBLISH_KEY && equal((request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, ''), env.SELFHEAL_PUBLISH_KEY));
@@ -31,7 +32,7 @@ export function clean(body) {
       source: ['github', 'worker', 'both'].includes(job.source) ? job.source : 'github', manual: Boolean(job.manual), disabled: Boolean(job.disabled), ai: Boolean(job.ai), weeklyMin: num(job.weeklyMin), billedMin: num(job.billedMin),
       recent: (job.recent || []).slice(0, RUN_DOTS).map(run => ({at: text(run.at, 30), conclusion: run.conclusion ? text(run.conclusion, 20) : null, mins: num(run.mins), url: /^https:\/\/github\.com\//.test(run.url || '') ? text(run.url, 200) : ''}))}))};
 }
-export async function ingest(request, env) {
+export async function ingest(request, env, {fetcher = fetch, now = new Date()} = {}) {
   if (!authorized(request, env)) return new Response('Not found', {status: 404});
   const raw = await request.text();
   if (raw.length > 600000) return new Response('Too large', {status: 413});
@@ -39,7 +40,8 @@ export async function ingest(request, env) {
   const snapshot = clean(body);
   if (!snapshot) return new Response('Unexpected shape', {status: 400});
   await env.STATS.prepare('INSERT INTO schedules_snapshot (id, at, body) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET at = excluded.at, body = excluded.body').bind(snapshot.at, JSON.stringify(snapshot)).run();
-  return new Response(JSON.stringify({ok: true, jobs: snapshot.jobs.length}), {headers: {'Content-Type': 'application/json'}});
+  const told = await alertJobs(env, snapshot, {fetcher, now});   // the shared failure alert (shared/job-alert.js): never fails the upload
+  return new Response(JSON.stringify({ok: true, jobs: snapshot.jobs.length, ...(told.red || told.green ? {told} : {})}), {headers: {'Content-Type': 'application/json'}});
 }
 export async function read(env) {
   try { const row = env.STATS ? await env.STATS.prepare('SELECT body FROM schedules_snapshot WHERE id = 1').first() : null; return row ? JSON.parse(row.body) : null; } catch { return null; }
@@ -61,12 +63,18 @@ const sourceNote = job => (job.source === 'worker' ? ' · started by the Worker 
 // Why (#330, Gitar): the id has the repo too; two repos may schedule the same file name, and getElementById would open the first row's detail for both.
 const nightCell = (jobs, id) => (jobs.length ? `${summaryLine(jobs)}${toggleHtml(jobs, id)}` : '<span class="muted">–</span>');
 const COLUMNS = 9, REPORT_ONLY = '/admin/testing/report-only';
+// The Notify cell: the job's own registry alerts, then the shared failure alert (shared/job-alert.js) as one more switch.
+function notifyCell(job, notify) {
+  const back = notify?.back || '/admin/operations/scheduled', canEdit = Boolean(notify?.canEdit), key = jobKey(job), own = alertsForJob(job.file, job.repo.split('/').pop());
+  const shared = failureSwitch(key, {muted: notify?.muted?.has(key), own: OWN_ALERT.get(key), globalOn: effective(alertOf('scheduled-job-red'), notify?.settings.get('scheduled-job-red')).on}, back, canEdit);
+  return (own.length ? jobCell(own, alert => effective(alert, notify?.settings.get(alert.id)), back, canEdit) : '') + shared;
+}
 function row(job, now, summary = null, notify = null) {
   const mine = summaryFor(summary, job.file), id = `nd-${`${job.repo}-${job.file}`.replace(/[^a-z0-9]+/gi, '-')}`, last = job.recent.find(run => run.conclusion) || job.recent[0], url = `https://github.com/${esc(job.repo)}/actions/workflows/${esc(job.file)}`;
   return `<tr class="${job.state === 'red' ? 'red' : ''}"><td><b><a href="${url}">${esc(job.name || job.file)}</a></b><div class="muted small">${esc(job.about)}</div></td><td><span class="repo">${esc(job.repo.split('/').pop())}</span></td>
 <td>${job.schedule.map(esc).join('<br>')}<div class="muted small">${job.next ? `next ${esc(whenWords(job.next, now))}` : ''}${esc(sourceNote(job))}</div></td>
 <td>${chip(job)}<div class="muted small">${last ? `${esc(stamp(last.at, now))}${last.mins ? ` · ${esc(num(last.mins))} min` : ''}` : ''}</div></td><td>${dots(job)}</td><td>${nightCell(mine, id)}</td><td class="num">${num(job.billedMin)}</td>
-<td>${job.ai ? '<a href="/admin/ai/costs">ai-cost →</a>' : '<span class="muted">no AI</span>'}</td><td>${jobCell(alertsForJob(job.file, job.repo.split('/').pop()), alert => effective(alert, notify?.settings.get(alert.id)), notify?.back || '/admin/operations/scheduled', Boolean(notify?.canEdit))}</td></tr>${detailHtml(mine, COLUMNS, id, REPORT_ONLY)}`;
+<td>${job.ai ? '<a href="/admin/ai/costs">ai-cost →</a>' : '<span class="muted">no AI</span>'}</td><td>${notifyCell(job, notify)}</td></tr>${detailHtml(mine, COLUMNS, id, REPORT_ONLY)}`;
 }
 const STATES = [['all', 'All'], ['red', 'Red'], ['green', 'Green'], ['off', 'Disabled']];
 const CSS = `.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}.tile b{display:block;font-size:30px;margin:4px 0;font-variant-numeric:tabular-nums}.tile.bad b{color:#e5484d}.tile.warn b{color:#e0a43a}
@@ -82,7 +90,7 @@ async function startProblem(db) {
   const all = [own, ...lab].filter(Boolean);
   return all.length ? {...all[0], reason: all.map(p => p.reason).join('; ')} : null;
 }
-// notify = {settings, canEdit, back}: the owner's alert settings behind the Notify column (admin/notify-cells.js); without it the column shows the registry's defaults, read only.
+// notify = {settings, muted (job keys with the failure alert off), canEdit, back}: the owner's alert settings behind the Notify column (admin/notify-cells.js); without it the column shows the registry's defaults, read only.
 // problem: why the Worker could not start schedules-snapshot.yml (or central-scout.yml, named in the line) on its last try (startProblem), drawn as the red "collector not starting" line the e2e and integrations pages show.
 export function page(snapshot, {repo = 'all', state = 'all', area = 'all', now = new Date(), problem = null, summary = null, notify = null} = {}) {
   const graphOn = area === 'testing';   // Why (5 Nov 2026): the Testing tab of this page went; its start-time graph shows when the Area filter is Testing
@@ -127,5 +135,5 @@ export async function view(request, env) {
   const state = STATE_IDS.includes(url.searchParams.get('state')) ? url.searchParams.get('state') : 'all', snapshot = await read(env), problem = await startProblem(env.STATS);
   const known = new Set((snapshot?.jobs || []).map(job => job.repo.split('/').pop())), repo = known.has(url.searchParams.get('repo')) ? url.searchParams.get('repo') : 'all';
   const area = AREAS.some(item => item.id === url.searchParams.get('area')) ? url.searchParams.get('area') : 'all';
-  return new Response(page(snapshot, {repo, state, area, problem, summary: await loadNightlySummary(env), notify: {settings: await readSettings(env), canEdit: who.role === 'superadmin', back: `/admin/operations/scheduled${url.search && !url.searchParams.has('key') ? url.search : ''}`}}), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
+  return new Response(page(snapshot, {repo, state, area, problem, summary: await loadNightlySummary(env), notify: {settings: await readSettings(env), muted: await readMuted(env.STATS), canEdit: who.role === 'superadmin', back: `/admin/operations/scheduled${url.search && !url.searchParams.has('key') ? url.search : ''}`}}), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex'}});
 }

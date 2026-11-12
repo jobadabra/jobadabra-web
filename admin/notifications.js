@@ -5,6 +5,7 @@ import {viewer, isOwner, remember} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {ALERTS, CHANNELS, GROUPS, channelOf, effective, alertOf} from '../shared/notify-registry.js';
 import {channelStatus, connect, readSettings, saveSetting, sendTest, stats as readStats} from '../shared/notify.js';
+import {setJobMuted} from '../shared/job-alert.js';
 import {whenWords} from '../shared/schedules-model.js';
 import {NOTIFY_PATH, NOTIFY_STYLE, toggle, when, where} from './notify-cells.js';
 
@@ -72,6 +73,7 @@ async function act(request, env, url, fetcher, now) {
   const done = said => { const [path, query = ''] = back.split('?'), q = [query, said && `said=${said}`].filter(Boolean).join('&'); return new Response(null, {status: 303, headers: {Location: q ? `${path}?${q}` : path, 'Cache-Control': 'no-store'}}); };
   const refuse = async why => html(page(await load(env, fetcher, now), {canEdit: true, bad: why, now}), 400);
   if (action === 'toggle' && alertOf(event)) return await saveSetting(env, event, {enabled: form.get('on') === '1'}, now) ? done('') : refuse('That change is not allowed.');
+  if (action === 'job-toggle') return await setJobMuted(env.STATS, String(form.get('job')), form.get('on') !== '1', now) ? done('') : refuse('That change is not allowed.');
   if (action === 'mode' && alertOf(event)) return await saveSetting(env, event, {mode: String(form.get('mode'))}, now) ? done('') : refuse('That "when" is not allowed for this alert.');
   if (action === 'channel' && alertOf(event)) return await saveSetting(env, event, {channel: String(form.get('channel'))}, now) ? done('') : refuse('Unknown channel.');
   if (action === 'test' && channelOf(channel)) { const sent = await sendTest(env, channel, fetcher, now); return sent.ok ? done('tested') : refuse(`Test not sent: ${sent.why}`); }
