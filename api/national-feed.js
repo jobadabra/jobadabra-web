@@ -46,7 +46,8 @@ async function apply(db, country, {put, drop}) {
   const statements = [
     ...put.map(row => db.prepare(`INSERT INTO national_ads (country, id, title, employer, place, lat, lon, changed, find) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (country, id) DO UPDATE SET title = excluded.title, employer = excluded.employer, place = excluded.place, lat = excluded.lat, lon = excluded.lon,
-      changed = excluded.changed, find = excluded.find WHERE national_ads.changed <> excluded.changed OR national_ads.title <> excluded.title`)
+      changed = excluded.changed, find = excluded.find WHERE national_ads.changed <> excluded.changed OR national_ads.title <> excluded.title
+      OR national_ads.employer <> excluded.employer OR national_ads.place <> excluded.place OR national_ads.lat IS NOT excluded.lat OR national_ads.lon IS NOT excluded.lon`)
       .bind(country, row.id, row.title, row.employer, row.place, row.lat, row.lon, row.changed, row.find)),
     ...drop.map(id => db.prepare('DELETE FROM national_ads WHERE country = ? AND id = ?').bind(country, id)),
   ];

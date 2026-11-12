@@ -55,6 +55,17 @@ test('the first fill starts 183 days back, follows next_id to the end and keeps 
   assert.deepEqual({...state}, {page: PAGES.last.id, etag: 'etag-a6', modified: 'Wed, 11 Nov 2026 07:00:00 GMT', caught_up: 1});
 });
 
+test('an ad sent again with the same title and date but a corrected employer or municipality is rewritten, point included (Gitar on #573)', async () => {
+  const e = env();
+  await readNorway(e, {fetcher: feed([() => reply(200, PAGES.last)]).fetcher, now: NOW});
+  const again = structuredClone(PAGES.last);
+  Object.assign(again.items[0]._feed_entry, {businessName: 'Eksempel Regnskap Oslo AS', municipal: 'OSLO'});
+  await readNorway({...e}, {fetcher: feed([() => reply(200, again)]).fetcher, now: NOW});
+  const row = e.STATS.db.prepare('SELECT employer, place, lat FROM national_ads WHERE id = ?').get('00000000-0000-4000-8000-000000000005');
+  assert.deepEqual([row.employer, row.place], ['Eksempel Regnskap Oslo AS', 'Oslo']);
+  assert.ok(row.lat > 59.5 && row.lat < 60.5, 'the new municipality\'s point');
+});
+
 test('a stored ad has exactly the feed page fields: no contact, no description, no person', async () => {
   const e = env();
   const {fetcher} = feed([() => reply(200, PAGES.last)]);
