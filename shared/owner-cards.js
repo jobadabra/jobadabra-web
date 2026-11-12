@@ -121,3 +121,12 @@ export const digestCard = facts => card({level: facts.count ? 'green' : 'grey', 
 
 /** The Admin "Test" button of a channel. */
 export const testCard = name => card({level: 'grey', headline: `Test from Admin → Notifications (${name})`, verdict: {ok: true, text: 'If you read this, the channel works.'}});
+
+// The shared scheduled-job alert (shared/job-alert.js; owner, 12 Nov 2026: "One shared alert"). `facts` = {name, repo, url} (the run's link; '' draws no link).
+const jobFacts = facts => [`📦 ${facts.repo}`];
+export const jobRedCard = facts => card({level: 'red', headline: `${facts.name} failed`, facts: jobFacts(facts), verdict: {ok: false, text: 'One message per red streak; the next one is when it works again.'},
+  link: facts.url ? {text: 'Open the run', url: facts.url} : {text: 'Open Scheduled', url: site('/admin/operations/scheduled')}});
+export const jobGreenCard = facts => card({level: 'green', headline: `${facts.name} works again`, facts: jobFacts(facts), verdict: {ok: true, text: 'The last run passed.'},
+  link: facts.url ? {text: 'Open the run', url: facts.url} : {text: 'Open Scheduled', url: site('/admin/operations/scheduled')}});
+export const jobNotStartedCard = facts => card({level: 'orange', headline: `Could not start ${facts.name}`, facts: jobFacts(facts), why: [{icon: '🚫', text: facts.why}], whyTitle: '',
+  verdict: {ok: false, text: 'The Worker\'s start was refused; this job did not run on time. Once a day per job.'}, link: {text: 'Open Scheduled', url: site('/admin/operations/scheduled')}});

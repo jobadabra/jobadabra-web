@@ -36,6 +36,10 @@ const SAMPLES = {
   'release mail': cards.releaseMailCard({version: '0.9.17', headline: 'Find jobs tells you what comes next'}),
   'build log': cards.digestCard({day: '9 Nov', count: 7, open: 'the Microsoft Store review', groups: ['🧭', '🔔', '🧪', '🧩', '🔧'].map((emoji, i) => ({emoji, title: `Goal ${i}`, lead: 'A lead', more: i}))}),
   'build log empty': cards.digestCard({day: '9 Nov', count: 0, open: '', groups: []}),
+  'job red': cards.jobRedCard({name: 'Lab · Board discovery', repo: 'jobadabra-lab', url: 'https://github.com/jobadabra/jobadabra-lab/actions/runs/1'}),
+  'job red no run': cards.jobRedCard({name: 'Lab · Board discovery', repo: 'jobadabra-lab', url: ''}),
+  'job green': cards.jobGreenCard({name: 'Lab · Board discovery', repo: 'jobadabra-lab', url: 'https://github.com/jobadabra/jobadabra-lab/actions/runs/2'}),
+  'job not started': cards.jobNotStartedCard({name: 'Lab · Board discovery', repo: 'jobadabra-lab', why: 'GitHub answered 422'}),
   'admin test': cards.testCard('Engineering'),
 };
 

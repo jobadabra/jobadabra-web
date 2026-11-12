@@ -12,6 +12,7 @@ import {view as bugBundlesView} from '../../admin/bug-bundles.js';
 import * as sentryAlert from '../../admin/sentry-alert.js';
 import * as synthetic from '../../shared/synthetic.js';
 import {recordStarts, startIntelCollectors} from '../../shared/intel-start.js';
+import {alertNotStarted} from '../../shared/job-alert.js';
 import {OWN_CRON as TIMERS_OWN_CRON, runTimers} from '../../shared/timers.js';
 import {replaysIngest} from '../../admin/applying-replays.js';
 import {fidelityIngest} from '../../admin/applying-fidelity.js';
@@ -376,7 +377,7 @@ export default {
       ctx.waitUntil(runTimers(event, env, {dispatch}).catch(error => console.error(`timers: ${error.message}`)));   // the bot Worker's starts that fall on this tick (shared/timers.js; nothing while TIMERS is off)
       ctx.waitUntil(synthetic.tick(env, new Date(event.scheduledTime || Date.now())).then(done => { if (done.ran) console.log(`synthetic round: ${JSON.stringify(done)}`); }).catch(error => console.error(`synthetic round: ${error.message}`)));   // every 15 min (shared/synthetic.js; report only)
       // Why (31 Oct 2026, owner "Start it from the Worker"; the integrations collector joined 1 Nov 2026): GitHub's hourly schedules ran every ~4.5 h or not at all; this trigger fires on time, one tick an hour per collector (INTEL_COLLECTORS, shared/intel-start.js). All 5 account cron triggers are used.
-      ctx.waitUntil(startIntelCollectors(env, new Date(event.scheduledTime || Date.now()), dispatch).then(async results => { await recordStarts(env.STATS, results, new Date(event.scheduledTime || Date.now())); for (const {workflow, error} of results) { if (error) console.error(`${workflow.replace('.yml', '')} start failed: ${error}; GitHub's own schedule is the backup`); else console.log(`scheduled ${workflow} cron=*/5`); } }));
+      ctx.waitUntil(startIntelCollectors(env, new Date(event.scheduledTime || Date.now()), dispatch).then(async results => { await recordStarts(env.STATS, results, new Date(event.scheduledTime || Date.now())); await alertNotStarted(env, results, {now: new Date(event.scheduledTime || Date.now())}); for (const {workflow, error} of results) { if (error) console.error(`${workflow.replace('.yml', '')} start failed: ${error}; GitHub's own schedule is the backup`); else console.log(`scheduled ${workflow} cron=*/5`); } }));
       // Why (5 Nov 2026, Gitar on #439): the promise is a reply within 24 hours, so the owner is warned within the hour; the daily block below would warn up to a day late. One tick an hour (minute 10); the once-per-report flag stops a double ping.
       const tickAt = new Date(event.scheduledTime || Date.now());
       if (isSearchNightTick(tickAt)) ctx.waitUntil(searchNightMissing(env, tickAt).then(done => { if (done.missing) console.log(`search night missing: alert ${done.alert}`); }).catch(error => console.error(`search night missing: ${error.message}`)));   // 06:30 UTC: no night filed for today = the owner is told once (admin/search-night-missing.js)

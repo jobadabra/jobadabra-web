@@ -34,6 +34,10 @@ export const ALERTS = [
   // Search check (public search-personas.yml, desktop/e2e/search-alert.mjs) tells a lost source, a number under its floor, a night no AI answered, and green again once. On Engineering it is the bot
   // connected there (Admin → Operations → Notifications); when the switchboard refuses, the sender falls back to the CI-alerts bot.
   a('search-night', '🔎 Find jobs night check: a source lost, a floor broken or the night not run', 'main', 'changes', 'engineering', {wired: true, modes: ['every', 'changes'], jobs: ['search-personas.yml']}),
+  // Why (12 Nov 2026, owner, asked via AskUserQuestion: "One shared alert"; "let's close these gaps"): ~40 scheduled workflows alerted only if someone added a step (board discovery had none), and the Worker's refused start was silent.
+  // One sender for all of them (shared/job-alert.js, from the hourly Scheduled snapshot and the Worker's own start); the switch of each job sits on Admin → Scheduled, jobs with their own failure alert are listed in OWN_ALERT there.
+  a('scheduled-job-red', '❌ A scheduled job failed (once per red streak) · works again', 'main', 'every', 'engineering', {wired: true}),
+  a('scheduled-job-not-started', '⚠️ The Worker could not start a scheduled job (once a day per job)', 'main', 'every', 'engineering', {wired: true}),
   a('pr-check-scorecard', '📊 PR check scorecard (monthly)', 'main', 'every', 'engineering', {wired: true, jobs: ['pr-check-scorecard.yml']}),
   a('daily-build-digest', '🗓 Daily build digest', 'main', 'daily', 'engineering', {on: false, jobs: ['jobadabra-web/daily-digest.yml']}),
   a('record-sites', '📼 Record sites / watch list: new failures', 'main', 'daily', 'engineering', {wired: true, on: false, modes: ['every', 'daily'], jobs: ['record-sites.yml', 'watch-live.yml']}),

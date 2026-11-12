@@ -154,3 +154,16 @@ test('a refused form keeps the Admin look: through the real route the 400 page h
   const ok = await (await get(e, '/admin/operations/notifications')).text();
   assert.ok(ok.includes('class="admin-nav"'), 'control: the normal GET has the bar too');
 });
+
+test('the shared failure alert has a switch on every Scheduled job: pressing it saves per job, a job with its own alert shows words instead', async () => {
+  const e = env(), snapshot = {at: NOW.toISOString(), repos: [], jobs: ['board-discovery.yml', 'central-scout.yml'].map(file => ({repo: 'jobadabra/jobadabra-lab', file, name: file, about: '', crons: ['0 * * * *'], source: 'github', manual: true, disabled: false, ai: false, weeklyMin: 0, billedMin: 0, recent: [{at: NOW.toISOString(), conclusion: 'success', mins: 1, url: ''}]}))};
+  e.STATS.db.prepare('INSERT INTO schedules_snapshot (id, at, body) VALUES (1, ?, ?)').run(NOW.toISOString(), JSON.stringify(snapshot));
+  const before = await (await get(e, '/admin/operations/scheduled')).text();
+  assert.match(before, /aria-label="Failure alert for board-discovery\.yml: on"/);
+  assert.doesNotMatch(before, /Failure alert for central-scout\.yml/, 'central-scout sends its own alert');
+  assert.match(before, /Failure: own alert/);
+  const res = await post(e, {action: 'job-toggle', job: 'jobadabra-lab/board-discovery.yml', on: '0', back: '/admin/operations/scheduled'});
+  assert.deepEqual([res.status, res.headers.get('Location')], [303, '/admin/operations/scheduled']);
+  assert.match(await (await get(e, '/admin/operations/scheduled')).text(), /aria-label="Failure alert for board-discovery\.yml: off"/);
+  assert.equal((await post(e, {action: 'job-toggle', job: '../x', on: '0'})).status, 400, 'a job key of another shape is refused');
+});
