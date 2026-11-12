@@ -280,7 +280,7 @@ section.block.tight { padding-block: 56px; }
 .bench-mini header span { font: 400 .75rem var(--mono); color: var(--muted); }
 .bench-mini ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .bench-mini li { display: grid; grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr) 3.4rem; gap: 12px; align-items: center; font-size: .9rem; }
-.bench-mini .hb-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bench-mini .hb-name { overflow-wrap: anywhere; line-height: 1.25; }   /* Why (12 Nov 2026, owner: our row is "Jobadabra Search Engine" / "Jobadabra Fill Engine"): the name wraps to a second line, never an ellipsis that cuts off the word that says what it is */
 .bench-mini .hb-track { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
 .bench-mini .hb-track i { display: block; height: 100%; background: var(--board-dim); }
 .bench-mini .bench-own .hb-name { color: var(--amber); font-weight: 600; }
@@ -290,5 +290,5 @@ section.block.tight { padding-block: 56px; }
 @media (max-width: 720px) {
   .home-bench .bench-pair { grid-template-columns: minmax(0, 1fr); }
   .bench-mini { padding: 18px; }
-  .bench-mini li { grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr) 3rem; gap: 8px; font-size: .84rem; }
+  .bench-mini li { grid-template-columns: minmax(0, 7.2rem) minmax(0, 1fr) 3rem; gap: 8px; font-size: .84rem; }
 }

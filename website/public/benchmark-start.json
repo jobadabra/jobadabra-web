@@ -31,7 +31,7 @@
       },
       {
         "key": "ours",
-        "name": "Jobadabra",
+        "name": "Jobadabra Search Engine",
         "found": 113,
         "role": 82,
         "place": 23,
@@ -463,7 +463,7 @@
       },
       {
         "key": "extension",
-        "name": "Jobadabra",
+        "name": "Jobadabra Fill Engine",
         "score": 78.2,
         "repeats": 1,
         "forms": 6,

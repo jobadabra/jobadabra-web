@@ -6,6 +6,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {fairSummary} from '../../../../admin/benchmark-fair.js';
 import {formsSection, mergeResults, publishPress, results, searchSection, state} from '../../../../admin/benchmark-publish.js';
+import {ourName, publicName} from '../../../../shared/benchmark-names.js';
 import {page as formPage} from '../../../../admin/benchmark-page.js';
 import {summarize as searchSummarize} from '../../../../admin/benchmark-search-data.js';
 import {page as searchPage} from '../../../../admin/benchmark-search-page.js';
@@ -41,18 +42,18 @@ const publicNow = async env => (await (await results(new Request(`${ORIGIN}/benc
 test('the form table counts only the forms every tool ran, says which was left out and for whom, and the owner\'s words travel with it', () => {
   const section = formsSection('fixed', fairSummary(FORM_ROWS.map(r => ({...r}))).rounds.fixed, 'Ashby bot check');
   assert.deepEqual(section.forms, ['101', '102', '105']);
-  assert.deepEqual(section.leftOut, [{form: '104', tools: ['Jobadabra'], why: 'Ashby bot check'}]);
-  const ours = section.tools.find(t => t.name === 'Jobadabra'), x = section.tools.find(t => t.name === 'Tool X');
+  assert.deepEqual(section.leftOut, [{form: '104', tools: ['Jobadabra Fill Engine'], why: 'Ashby bot check'}]);
+  const ours = section.tools.find(t => t.name === 'Jobadabra Fill Engine'), x = section.tools.find(t => t.name === 'Tool X');
   assert.deepEqual([ours.right, ours.wrong, ours.empty, ours.score, ours.forms], [27, 2, 1, 90, 3]);   // form 104's 5 right of Tool X do not count
   assert.deepEqual([x.right, x.wrong, x.empty, x.score], [23, 3, 4, 76.7]);
   assert.equal(section.productBuild, 'b7');
-  assert.deepEqual(section.tools.map(t => t.name), ['Jobadabra', 'Tool X'], 'best score first');
+  assert.deepEqual(section.tools.map(t => t.name), ['Jobadabra Fill Engine', 'Tool X'], 'best score first');
 });
 
 test('a search round publishes ours (rivals\' sources off) and every rival, never the "with every source" line, with absent splits as null not zero', async () => {
   const env = setup(); await seed(env);
   const snap = await searchSnapshot(env.STATS), part = searchSection('2026-11-12', snap.rounds['2026-11-12'], snap.at);
-  assert.deepEqual(part.tools.map(t => t.name), ['Jobadabra', 'Tool A']);
+  assert.deepEqual(part.tools.map(t => t.name), ['Jobadabra Search Engine', 'Tool A']);   // owner, 12 Nov 2026: a search round calls our row the engine, not the product
   assert.deepEqual([part.tools[0].found, part.tools[0].relevant, part.tools[0].remote, part.tools[0].observedPersonas], [30, 24, null, 2]);
   assert.equal(part.date, '2026-11-12');
   assert.deepEqual(part.personas.map(p => [p.title, p.city]), [['Cook', 'Port'], ['Nurse', 'Town']]);
@@ -102,9 +103,9 @@ test('the Admin pages show what is public now, the button, and on the first pres
   const snap = JSON.parse(env.STATS.db.prepare('SELECT body FROM benchmark_snapshot WHERE id = 1').get().body), published = await state(env.STATS);
   const plain = formPage(snap, {published}), ask = formPage(snap, {published, confirm: 'publish', note: 'Ashby bot check'});
   assert.match(plain, /starting snapshot of 27 Oct 2026/); assert.match(plain, /Publish to website/); assert.doesNotMatch(plain, /The public page will say/);
-  assert.match(ask, /The public page will say/); assert.match(ask, /Form 104 not run for Jobadabra \(Ashby bot check\)/); assert.match(ask, /Publish now/);
+  assert.match(ask, /The public page will say/); assert.match(ask, /Form 104 not run for Jobadabra Fill Engine \(Ashby bot check\)/); assert.match(ask, /Publish now/);
   const ss = JSON.parse(env.STATS.db.prepare('SELECT body FROM benchmark_search_snapshot WHERE id = 1').get().body);
-  assert.match(searchPage(ss, {published, confirm: 'publish'}), /The public page will say[\s\S]*Jobadabra with every source" stays in Admin only/);
+  assert.match(searchPage(ss, {published, confirm: 'publish'}), /The public page will say[\s\S]*Jobadabra Search Engine with every source" stays in Admin only/);
   await press(env, {kind: 'form', round: 'fixed', action: 'publish', confirmed: '1'});
   const live = formPage(snap, {published: await state(env.STATS)});
   assert.match(live, /Public now: round <b>fixed<\/b>/); assert.match(live, /This round is the one on the website/); assert.match(live, /Unpublish/); assert.match(live, /brings back the starting snapshot/);
@@ -113,4 +114,37 @@ test('the Admin pages show what is public now, the button, and on the first pres
 test('mergeResults leaves the starting snapshot alone for a kind nobody published', () => {
   const base = {schema: 1, search: {a: 1}, forms: {b: 2}};
   assert.deepEqual(mergeResults(base, {form: null, search: null}), {...base, published: {}});
+});
+
+// Owner, 12 Nov 2026 (~21:45Z, via mac-9a, form rounds added, then shortened: "Since we have just above 'Form Filling' probably it will be too long and redundant"): form rounds read "Jobadabra Fill Engine".
+// Owner, 12 Nov 2026: "Instead of "Jobadabra" put "Jobadabra Search Engine" because Jobadabra is not a search engine/api/product. It's an end-to-end product" · "do this on both landing page but also bench mark".
+// Why the name is made when the page is read: a round already published has "Jobadabra" stored in its D1 body; naming by tool key + round kind in mergeResults moves those rounds too, with no data edit.
+test('a search round already published under the old name reads "Jobadabra Search Engine"; a form round reads "Jobadabra Fill Engine"; rivals are untouched', async () => {
+  const env = setup();
+  const old = {kind: 'search', round: '2026-11-05', tools: [{key: 'ours', name: 'Jobadabra', found: 5}, {key: 'jooble', name: 'Jooble', found: 9}], personas: []};
+  const oldForm = {kind: 'form', round: 'fixed', tools: [{key: 'extension', name: 'Jobadabra', score: 90}, {key: 'browser-use', name: 'Browser Use', score: 80}], forms: [], leftOut: [{form: '104', tools: ['Jobadabra'], why: 'x'}]};
+  for (const [kind, body] of [['search', old], ['form', oldForm]]) env.STATS.db.prepare('INSERT INTO benchmark_published (kind, round, published_at, body) VALUES (?, ?, ?, ?)').run(kind, body.round, '2026-11-05T10:00:00Z', JSON.stringify(body));
+  const now = await publicNow(env);
+  assert.deepEqual(now.search.tools.map(t => t.name), ['Jobadabra Search Engine', 'Jooble']);
+  assert.deepEqual(now.forms.tools.map(t => t.name), ['Jobadabra Fill Engine', 'Browser Use']);
+  assert.deepEqual(now.forms.leftOut[0].tools, ['Jobadabra Fill Engine'], 'the "not run for" line too');
+});
+
+test('the starting snapshot, before anything is published, also names the search row "Jobadabra Search Engine"', () => {
+  const start = JSON.parse(readFileSync(new URL('../../../../web/public/benchmark-start.json', import.meta.url)));
+  const merged = mergeResults(start, {form: null, search: null});
+  assert.equal(merged.search.tools.find(t => t.key === 'ours').name, 'Jobadabra Search Engine');
+  assert.equal(merged.forms.tools.find(t => t.key === 'extension').name, 'Jobadabra Fill Engine');
+  assert.equal(start.forms.tools.find(t => t.key === 'extension').name, 'Jobadabra Fill Engine');
+  assert.equal(start.search.tools.find(t => t.key === 'ours').name, 'Jobadabra Search Engine', 'the downloadable file agrees with the page');
+});
+
+test('publicName: one place for the name; each round kind names our row by what it measures; the "with every source" variant is spelled out, search only', () => {
+  assert.equal(publicName('search', 'ours'), 'Jobadabra Search Engine');
+  assert.equal(publicName('search', 'ours-all'), 'Jobadabra Search Engine (with every source)');
+  assert.equal(publicName('form', 'extension'), 'Jobadabra Fill Engine');
+  assert.equal(publicName('form', 'ours'), 'Jobadabra Fill Engine');
+  assert.equal(ourName('search'), 'Jobadabra Search Engine'); assert.equal(ourName('form'), 'Jobadabra Fill Engine');
+  assert.equal(publicName('search', 'jooble', 'x'), 'Jooble');
+  assert.equal(publicName('search', 'new-rival', 'New Rival'), 'New Rival');
 });
