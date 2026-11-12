@@ -3,18 +3,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {day, body, harness, containerError} from './harness.mjs';
+import {day, body, harness, containerError, switchboard} from './harness.mjs';
 
 const brokerConfig = JSON.parse(readFileSync(new URL('../../../../workers/ai-broker/wrangler.jsonc', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
 const FREE = {response: 'free answer', usage: {prompt_tokens: 100, completion_tokens: 20}};
 // ANTHROPIC_API_KEY is set on purpose: a leftover Worker secret (until the owner deletes it) must change nothing.
-const fallbackEnv = (run = async () => FREE) => ({...brokerConfig.vars, ANTHROPIC_API_KEY: 'fixture-not-a-key', AI: {run}, BRAIN_BOT_TOKEN: 'fixture-bot', BRAIN_CHAT_ID: 'fixture-chat'});
+const fallbackEnv = (run = async () => FREE, notes = []) => ({...brokerConfig.vars, ANTHROPIC_API_KEY: 'fixture-not-a-key', AI: {run}, ...switchboard(notes)});
 const ledger = (free = 0) => ({spent: {'free-ai': free}, held: {'free-ai': 0}, notified: {}});
 const dayKey = 'fallback:2026-10-30';
-const noPaidProvider = (t, notes = []) => t.mock.method(globalThis, 'fetch', async (url, init) => {
-  if (String(url).includes('telegram.org')) { notes.push(JSON.parse(init.body).text); return Response.json({ok: true}); }
-  assert.fail(`a paid provider was called: ${url}`);
-});
+const noPaidProvider = t => t.mock.method(globalThis, 'fetch', async url => assert.fail(`a paid provider was called: ${url}`));
 
 test('Codex out for the week: Free AI answers, keeps the schema, charges its own ledger and the health has no Claude API meter', async t => {
   t.mock.method(Date, 'now', () => day);
@@ -64,15 +61,16 @@ test('Free AI at its day cap refuses with the cap as the reason, alerts once per
   let now = day;
   t.mock.method(Date, 'now', () => now);
   const notes = [];
-  noPaidProvider(t, notes);
-  const {broker, storage, restart} = harness(undefined, fallbackEnv());
+  noPaidProvider(t);
+  const {broker, storage, restart} = harness(undefined, fallbackEnv(undefined, notes));
   await storage.put('limits', {usedPercent: 100, resetsAt: day / 1000 + 10 * 86400});   // the week stays used up across the UTC rollover
   await storage.put(dayKey, ledger(2_000_000));
   for (const owner of [broker, restart(), restart()]) {
     const reply = await owner.call('pr', body);
     assert.equal(reply.status, 429); assert.equal((await reply.json()).why, 'budget:fallback-day $2 Free AI (UTC)');
   }
-  assert.equal(notes.length, 1); assert.match(notes[0], /Free AI daily cap \$2 reached/); assert.ok(!/Claude/.test(notes[0]));
+  assert.equal(notes.length, 1); assert.match(notes[0].text, /Free AI daily cap \$2 reached/); assert.ok(!/Claude/.test(notes[0].text));
+  assert.deepEqual([notes[0].event, notes[0].url, notes[0].auth, notes[0].link], ['ai-broker-free-cap', 'https://www/ops/notify', 'Bearer fixture-publish-key', 'https://www.jobpilotto.top/admin/ai/costs'], 'through the switchboard, Engineering by its registry row');
   now += 86400000;
   assert.equal((await (await restart().health()).json()).fallback.freeAi, 0);
   assert.equal((await (await restart().call('pr', body)).json()).engine, 'free-ai');
@@ -127,7 +125,7 @@ test('concurrent Free AI calls reserve the balance before the provider runs: one
     await new Promise(resolve => setTimeout(resolve, 5));
     return FREE;
   });
-  delete env.BRAIN_BOT_TOKEN;
+  delete env.SITE;
   const {broker, storage} = harness(undefined, env);
   await storage.put('limits', {usedPercent: 100});
   await storage.put(dayKey, ledger(1_999_000));   // $0.001 left: the first call's hold takes all of it
@@ -141,7 +139,7 @@ test('concurrent Free AI calls reserve the balance before the provider runs: one
 test('a provider failure keeps the reservation (usage unknown) and says unavailable, not "cap reached"', async t => {
   t.mock.method(Date, 'now', () => day);
   noPaidProvider(t);
-  const env = fallbackEnv(async () => { throw new Error('offline provider failure'); }); delete env.BRAIN_BOT_TOKEN;
+  const env = fallbackEnv(async () => { throw new Error('offline provider failure'); }); delete env.SITE;
   const {broker, storage} = harness(undefined, env);
   await storage.put('limits', {usedPercent: 100});
   const reply = await broker.call('pr', body);
@@ -168,7 +166,7 @@ test('known usage is charged even for rejected answers and overclaims; unknown u
     [{response: 'bad usage', usage: {prompt_tokens: 100, completion_tokens: 1_000_000}}, 'fallback:usage-exceeded-reservation', 300_010],
   ];
   for (const [result, why, spent] of answers) {
-    const env = fallbackEnv(async () => result); delete env.BRAIN_BOT_TOKEN;
+    const env = fallbackEnv(async () => result); delete env.SITE;
     const {broker, storage} = harness(undefined, env);
     await storage.put('limits', {usedPercent: 100});
     const reply = await broker.call('pr', body);

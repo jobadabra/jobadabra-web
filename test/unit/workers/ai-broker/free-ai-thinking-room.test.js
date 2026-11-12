@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {day, harness} from './harness.mjs';
+import {day, harness, switchboard} from './harness.mjs';
 import {FREE_WINDOW} from '../../../../workers/ai-broker/lib/free-model.mjs';
 
 const brokerConfig = JSON.parse(readFileSync(new URL('../../../../workers/ai-broker/wrangler.jsonc', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
@@ -47,8 +47,7 @@ test('the ceiling never lets prompt plus output pass the model window: a prompt 
 test('a prompt with no room left in the window says so, and is neither sent nor reported as the day cap', async t => {
   t.mock.method(Date, 'now', () => day); noNetwork(t);
   const seen = [], notes = [];
-  t.mock.method(globalThis, 'fetch', async (url, init) => { notes.push(init?.body); return Response.json({ok: true}); });
-  const {broker, storage} = harness(undefined, {...env(thinkingModel({think: 1, answer: 1, seen})), BRAIN_BOT_TOKEN: 'fixture-bot', BRAIN_CHAT_ID: 'fixture-chat'});
+  const {broker, storage} = harness(undefined, {...env(thinkingModel({think: 1, answer: 1, seen})), ...switchboard(notes)});
   await past(storage);
   const reply = await broker.call('pr', {tier: 'small', prompt: 'p'.repeat(800_000)});
   assert.equal(reply.status, 503); assert.equal((await reply.json()).why, 'fallback:prompt-too-large');

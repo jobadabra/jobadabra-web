@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {day, body, harness, containerError} from './harness.mjs';
+import {day, body, harness, containerError, switchboard} from './harness.mjs';
 import {chainOf, ORDER} from '../../../../workers/ai-broker/lib/engines.mjs';
 
 const config = JSON.parse(readFileSync(new URL('../../../../workers/ai-broker/wrangler.jsonc', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
@@ -13,10 +13,10 @@ const claudeFails = (error, extra = {}, status = 500) => () => containerError(er
 // A fresh world per call: the env with a given ENGINE and fakes that count what each provider was asked.
 function world(t, engine, {free = freeAnswer, extra = {}, claude = claudeOk, token = false, codex = null} = {}) {
   t.mock.method(Date, 'now', () => day);
-  const calls = {free: 0, paid: 0, telegram: 0, claudeCli: 0, claudeBodies: [], claudeNow: 0, claudeMax: 0};
-  const env = {...config.vars, ...(engine === undefined ? {ENGINE: undefined} : {ENGINE: engine}), BRAIN_BOT_TOKEN: 'fixture-bot', BRAIN_CHAT_ID: 'fixture-chat',
+  const sent = [], calls = {free: 0, paid: 0, get notes() { return sent.length; }, claudeCli: 0, claudeBodies: [], claudeNow: 0, claudeMax: 0};
+  const env = {...config.vars, ...(engine === undefined ? {ENGINE: undefined} : {ENGINE: engine}), ...switchboard(sent),
     ...(token ? {CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token'} : {}), AI: {run: async () => { calls.free++; return free(); }}, ...extra};
-  t.mock.method(globalThis, 'fetch', async url => { if (String(url).includes('telegram')) { calls.telegram++; return Response.json({ok: true}); } calls.paid++; return claudeAnswer(); });   // no paid provider exists any more: any fetch but Telegram is a failure the asserts below catch
+  t.mock.method(globalThis, 'fetch', async () => { calls.paid++; return claudeAnswer(); });   // no paid provider exists any more: any fetch is a failure the asserts below catch
   const made = harness(undefined, env);
   const dispatched = [];
   const container = made.broker.containerFetch;
@@ -26,7 +26,7 @@ function world(t, engine, {free = freeAnswer, extra = {}, claude = claudeOk, tok
     calls.claudeCli++; calls.claudeBodies.push(JSON.parse(args[1].body)); calls.claudeNow++; calls.claudeMax = Math.max(calls.claudeMax, calls.claudeNow);
     try { return await claude(); } finally { calls.claudeNow--; }
   };
-  return {...made, calls, dispatched, env};
+  return {...made, calls, dispatched, env, sent};
 }
 const answered = async response => (await response.json()).engine;
 
@@ -171,12 +171,12 @@ test('the chain with Codex first: Codex\'s week used up, the Claude subscription
 });
 
 test('an invalid token: the next engine answers, the owner is told once, /health says token-invalid, and Claude is not asked again until the hour is up', async t => {
-  const {broker, calls} = world(t, 'claude', {...withToken, claude: claudeFails('claude-auth')});
+  const {broker, calls, sent} = world(t, 'claude', {...withToken, claude: claudeFails('claude-auth')});
   const first = await (await broker.call('pr', body)).json();
   assert.equal(first.engine, 'codex'); assert.deepEqual(first.fellBack, [{engine: 'claude', why: 'token-invalid'}]);
   const second = await (await broker.call('pr', body)).json();
   assert.equal(second.engine, 'codex'); assert.deepEqual(second.fellBack, [{engine: 'claude', why: 'token-invalid'}]);
-  assert.equal(calls.claudeCli, 1); assert.equal(calls.telegram, 1);
+  assert.equal(calls.claudeCli, 1); assert.equal(calls.notes, 1); assert.equal(sent[0].event, 'ai-broker-claude-token');
   assert.equal((await (await broker.health()).json()).chain[0].state, 'token-invalid');
   Date.now.mock.mockImplementation(() => day + 3601_000);   // an hour later it is tried again
   await broker.call('pr', body); assert.equal(calls.claudeCli, 2);
@@ -256,7 +256,7 @@ test('Codex turned away for capacity (run 42040707448): the Claude subscription 
 test('Codex failing half its last calls moves behind Claude for 30 minutes, the owner is told once, a call that names its engine is never moved, then Codex is first again', async t => {
   const {broker, calls} = world(t, 'codex', {...withToken, codex: codexBroken});
   for (let i = 0; i < 6; i++) { const answer = await (await broker.call('pr', body)).json(); assert.equal(answer.engine, 'claude'); assert.equal(answer.fellBack[0].engine, 'codex'); }   // Codex first, fails, Claude answers each (8 Nov 2026: a failure goes on); each still counts as a Codex failure
-  assert.equal(calls.telegram, 1);
+  assert.equal(calls.notes, 1);
   const health = await (await broker.health()).json();
   assert.ok(health.chain.find(e => e.name === 'codex').demotedUntil);
   const next = await (await broker.call('pr', body)).json();
@@ -264,7 +264,7 @@ test('Codex failing half its last calls moves behind Claude for 30 minutes, the 
   assert.equal((await (await broker.call('pr', {...body, engine: 'codex'})).json()).fellBack[0].engine, 'codex');   // an explicit choice is honoured: Codex is asked first
   Date.now.mock.mockImplementation(() => day + 31 * 60_000);
   assert.equal((await (await broker.call('pr', body)).json()).fellBack[0].engine, 'codex');   // Codex is first again, with a fresh window
-  assert.equal(calls.telegram, 1);
+  assert.equal(calls.notes, 1);
 });
 
 test('only real failures count: a few failures, a used-up week, or ENGINE_ADAPT=off never move an engine', async t => {

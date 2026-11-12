@@ -44,6 +44,10 @@ export const ALERTS = [
   a('ai-fixer-round', '🔧 AI fixer: PR ready / red / conflict', 'ai', 'every', 'engineering', {wired: true, jobs: ['ai-fixer.yml', 'ai-fixer-follow.yml']}),
   a('ai-persona-night', '🧑‍💻 AI persona night report', 'ai', 'problems', 'engineering', {status: 'new', modes: ['every', 'problems'], jobs: ['ai-user-agents.yml']}),
   a('ai-credit', '🪫 AI credit ran out / AI refused a job / AI step skipped', 'ai', 'daily', 'engineering', {wired: true, modes: ['every', 'daily']}),
+  // Why (12 Nov 2026, owner, on two Telegram notes from the AI broker: "this one I think should be on engineering"): the broker's three notes posted straight to the owner's personal Brain bot, so no switch in Admin could route or mute them. They come through /ops/notify now (workers/ai-broker/lib/fallback.mjs noteOnce); the broker itself sends each marker once a UTC day.
+  a('ai-broker-engine', '🔀 AI broker: an engine failed half of its last calls and moved behind the other', 'ai', 'every', 'engineering', {wired: true}),
+  a('ai-broker-free-cap', '💸 AI broker: Free AI reached its day cap', 'ai', 'daily', 'engineering', {wired: true, modes: ['every', 'daily']}),
+  a('ai-broker-claude-token', '🔑 AI broker: the Claude subscription token is invalid or expired', 'ai', 'daily', 'engineering', {wired: true, modes: ['every', 'daily']}),
   a('free-ai-spend', '💸 Free AI spend over its day, month or neurons limit', 'ai', 'every', 'users', {wired: true}),
   a('broker-fallback', '↩️ Broker fell back to Free AI', 'ai', 'daily', 'users', {modes: ['every', 'daily'], parked: 'a once-a-day note from the broker Worker; it moves with the old bots (4/4)'}),   // Why (5 Nov 2026, coordinator): parked, not built: the note still arrives once a day at most and a new production secret on the broker is not worth it now; trigger: when the old bots retire (4/4). Listed so the page does not count it as waiting
   a('feedback-received', '💬 Feedback received', 'users', 'every', 'users', {wired: true}),

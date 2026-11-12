@@ -2,9 +2,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {body, success, harness, containerError} from './harness.mjs';
+import {body, success, harness, containerError, switchboard} from './harness.mjs';
 import {kindOf} from '../../../../workers/ai-broker/container/kinds.mjs';
 import {walk, answered, refused, unavailable, failed} from '../../../../workers/ai-broker/lib/walk.mjs';
+import {alertOf} from '../../../../shared/notify-registry.js';
 import {newMeter, record, TOKENS_PER_PERCENT, CODEX_LIMIT_PCT} from '../../../../workers/ai-broker/lib/budget.mjs';
 
 const config = JSON.parse(readFileSync(new URL('../../../../workers/ai-broker/wrangler.jsonc', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
@@ -86,13 +87,41 @@ test('code-review 8 Nov 2026: a container image without `kind` is read by its wo
   assert.ok((await claudeFull.storage.get('claude:state')).limitUntil, 'Claude\'s limit is remembered');
 });
 
-test('code-review 8 Nov 2026: calls cut by a deploy are failed turns that go on, but never count against the engine (no demotion, no Telegram)', async t => {
+test('code-review 8 Nov 2026: calls cut by a deploy are failed turns that go on, but never count against the engine (no demotion, no note)', async t => {
   const cut = world(t, {codex: () => { throw new Error('Container suddenly disconnected'); }});
   for (let i = 0; i < 8; i++) { const answer = await (await cut.broker.call('scheduled', body)).json(); assert.equal(answer.engine, 'claude'); assert.equal(answer.fellBack[0].why, 'cut'); }
   assert.equal((await (await cut.broker.health()).json()).chain[0].demotedUntil, undefined);
   const drained = world(t, {codex: () => new Response(JSON.stringify({error: 'draining'}), {status: 503, headers: {'x-broker-draining': '1'}})});
   drained.broker.drainWaitMs = 20; drained.broker.drainPollMs = 5;
   assert.equal((await (await drained.broker.call('scheduled', body)).json()).fellBack[0].why, 'cut');
+});
+
+// ba, 12 Nov 2026 (owner, on two Telegram notes "claude/codex failed 5 of its last 10 calls" right after the release of #578; broker log 17:05Z: the platform's "Error proxying request to container" in 6 Claude calls and 1 Codex call).
+// Intended: a call the platform cut because the container went away says nothing about the engine, whichever way the text reaches us (non-JSON body, thrown, or inside the container's JSON error): it goes on to the next engine and is never counted.
+const PLATFORM = 'Error proxying request to container: The container just disconnected, try calling start() again.';
+test('a call cut by a container restart is never an engine failure: 10 cut calls on each engine demote nothing and tell nobody; real failures still do', async t => {
+  const cases = {
+    'Claude, platform text as the body': {first: 'claude', claude: () => new Response(PLATFORM, {status: 500})},
+    'Claude, the call throws': {first: 'claude', claude: () => { throw new Error('Container suddenly disconnected'); }},
+    'Claude, platform text in the container\'s JSON': {first: 'claude', claude: () => containerError(PLATFORM)},
+    'Codex, platform text as the body': {first: 'codex', codex: () => new Response(PLATFORM, {status: 500})},
+    'Codex, the call throws': {first: 'codex', codex: () => { throw new Error('Container suddenly disconnected'); }},
+    'Codex, platform text in the container\'s JSON': {first: 'codex', codex: () => containerError(PLATFORM)},
+  };
+  for (const [name, {first, ...fakes}] of Object.entries(cases)) {
+    const sent = [], {broker} = world(t, {...fakes, env: {...withToken, ENGINE: first, ...switchboard(sent)}});
+    for (let i = 0; i < 10; i++) { const answer = await (await broker.call('scheduled', body)).json(); assert.equal(answer.fellBack[0].engine, first, name); assert.equal(answer.fellBack[0].why, 'cut', name); }
+    assert.equal((await (await broker.health()).json()).chain[0].demotedUntil, undefined, name);
+    assert.deepEqual(sent, [], `${name}: no note`);
+  }
+  const sent = [], real = world(t, {claude: () => containerError('claude-failed:1 boom'), env: {...withToken, ENGINE: 'claude', ...switchboard(sent)}});
+  for (let i = 0; i < 6; i++) await real.broker.call('scheduled', body);
+  assert.ok((await (await real.broker.health()).json()).chain[0].demotedUntil, 'positive control: real failures still demote');
+  assert.deepEqual(sent.map(note => note.event), ['ai-broker-engine']);
+});
+
+test('every note the broker sends is a registry event on Engineering (owner, 12 Nov 2026: "this one I think should be on engineering"), so Admin can route and mute it', () => {
+  for (const event of ['ai-broker-engine', 'ai-broker-free-cap', 'ai-broker-claude-token']) assert.deepEqual([alertOf(event)?.channel, alertOf(event)?.wired], ['engineering', true], event);
 });
 
 test('code-review 8 Nov 2026: a reply the guard refuses (key-shaped, prompt echoed) ends the call: no other engine is asked the same prompt', async t => {

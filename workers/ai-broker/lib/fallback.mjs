@@ -32,9 +32,13 @@ export async function fallbackToday(storage, env) {
   return {day, freeAi: usd(state.spent['free-ai']), freeAiCap: usd(freeCap(env)), held: {freeAi: usd(state.held['free-ai'])}};
 }
 
-/** One Telegram note per marker per UTC day (the owner's brain bot), never repeated; a failed send is dropped. */
-export async function noteOnce(storage, env, day, marker, text, fetcher = fetch) {
-  if (!env.BRAIN_BOT_TOKEN || !env.BRAIN_CHAT_ID) return;
+/**
+ * One note per marker per UTC day to the owner through the site's switchboard, never repeated: POST /ops/notify on the `www` Worker (service binding SITE, Bearer SELFHEAL_PUBLISH_KEY), as the registry event `event` (shared/notify-registry.js).
+ * Why (12 Nov 2026, owner, on two Telegram notes from this Worker: "this one I think should be on engineering"): the notes went straight to the owner's personal Brain bot, so Admin could neither route nor mute them. The switchboard picks the channel and the owner's switch; this Worker holds no Telegram secret.
+ * Without the binding or the key nothing is sent (as without the old bot). A refusal or an unreachable site is logged and dropped: a note never fails a call.
+ */
+export async function noteOnce(storage, env, day, marker, event, text, link = '') {
+  if (!env.SITE || !env.SELFHEAL_PUBLISH_KEY) return;
   const send = await storage.transaction(async tx => {
     const key = `fallback:${day}`, state = await tx.get(key) || fresh();
     if (state.notified[marker]) return false;
@@ -42,12 +46,17 @@ export async function noteOnce(storage, env, day, marker, text, fetcher = fetch)
     await tx.put(key, state);
     return true;
   });
-  if (send) await fetcher(`https://api.telegram.org/bot${env.BRAIN_BOT_TOKEN}/sendMessage`, {method: 'POST', signal: AbortSignal.timeout(5000),
-    headers: {'content-type': 'application/json'}, body: JSON.stringify({chat_id: env.BRAIN_CHAT_ID, text})}).catch(() => {});
+  if (!send) return;
+  try {
+    const reply = await env.SITE.fetch('https://www/ops/notify', {method: 'POST', signal: AbortSignal.timeout(5000),
+      headers: {'content-type': 'application/json', authorization: `Bearer ${env.SELFHEAL_PUBLISH_KEY}`}, body: JSON.stringify({event, text, ...(link ? {link} : {})})});
+    if (!reply.ok) console.error(`note ${event} not delivered: site answered ${reply.status}`);
+  } catch (caught) { console.error(`note ${event} not delivered: ${String(caught?.message || caught).slice(0, 100)}`); }
 }
 
-const notifyCap = (storage, env, day, fetcher) => noteOnce(storage, env, day, 'free-ai',
-  `CI fallback: Free AI daily cap $${usd(freeCap(env))} reached (${day} UTC). Further judgments go grey. /admin/ai/costs`, fetcher);
+export const ADMIN_COSTS = 'https://www.jobpilotto.top/admin/ai/costs';
+const notifyCap = (storage, env, day) => noteOnce(storage, env, day, 'free-ai', 'ai-broker-free-cap',
+  `CI fallback: Free AI daily cap $${usd(freeCap(env))} reached (${day} UTC). Further judgments go grey.`, ADMIN_COSTS);
 
 function messageBody(body, maxTokens) {
   const content = [{type: 'text', text: body.schema ? promptWithSchema(body.prompt, body.schema) : body.prompt}];   // Why (8 Nov 2026, fr): the schema rides in the prompt, never as response_format (lib/free-model.mjs)
@@ -123,12 +132,12 @@ export const apiPrecheck = body => typeof body.prompt !== 'string' || !body.prom
  * Free AI's step of the engine chain: a Response when it answered or refused for good, null when the next engine should try (not configured, cap reached, transport failure).
  * Every transport can be faked offline.
  */
-export async function freeAiStep({storage, env, body, lane, weekUsedPercent, fetcher = fetch, note, started = Date.now(), login = []}) {
+export async function freeAiStep({storage, env, body, lane, weekUsedPercent, note, started = Date.now(), login = []}) {
   if (body.search) { note.search = true; return null; }   // Why (1 Nov 2026, widened 2 Nov): only Codex and the Claude subscription (WebSearch tool) can search, never this engine; the chain ends with fallback:search-unsupported when neither could take it
   const day = dayOf(), cap = freeCap(env);
   if (!cap) return null;
   const state = await storage.get(`fallback:${day}`) || fresh();
-  if (state.spent['free-ai'] + state.held['free-ai'] >= cap) { await notifyCap(storage, env, day, fetcher); return null; }
+  if (state.spent['free-ai'] + state.held['free-ai'] >= cap) { await notifyCap(storage, env, day); return null; }
   if (!env.AI) { note.unavailable = true; return null; }
   const model = FREE_MODEL;
   let request;
@@ -137,7 +146,7 @@ export async function freeAiStep({storage, env, body, lane, weekUsedPercent, fet
   const room = outputRoom(request);
   if (room < FREE_AI_MIN_OUTPUT) return refusal('fallback:prompt-too-large', `prompt ${JSON.stringify(request).length} bytes leaves ${room} tokens in the ${FREE_WINDOW}-token window`);   // not the day cap: no note, nothing held, nothing sent
   const hold = await reserve(storage, env, day, request, room);
-  if (!hold) { await notifyCap(storage, env, day, fetcher); return null; }
+  if (!hold) { await notifyCap(storage, env, day); return null; }
   Object.assign(request, FREE_EXTRAS);
   request.max_tokens = hold.output;
   let message, choiceFinish;
@@ -160,7 +169,7 @@ export async function freeAiStep({storage, env, body, lane, weekUsedPercent, fet
   const actual = Math.ceil(1e6 * costOf({...usage, input_tokens: usage.input_tokens + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0)}));
   await settle(storage, day, hold.amount, actual);
   const latest = await storage.get(`fallback:${day}`);
-  if (latest.spent['free-ai'] + latest.held['free-ai'] >= cap) await notifyCap(storage, env, day, fetcher);
+  if (latest.spent['free-ai'] + latest.held['free-ai'] >= cap) await notifyCap(storage, env, day);
   const outcome = `model=${model} max=${hold.output} output=${usage.output_tokens} prompt=${usage.input_tokens} lane=${lane} ms=${Date.now() - started}`;
   if (actual > hold.amount || usage.output_tokens > hold.output) return refusal('fallback:usage-exceeded-reservation', outcome);
   const said = Array.isArray(message.content) ? message.content.filter(part => part.type === 'text').map(part => part.text).join('\n') : '';
