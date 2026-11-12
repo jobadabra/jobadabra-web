@@ -1,0 +1,4 @@
+# Why (12 Nov 2026, Search Console "Crawled - currently not indexed" on /changelog.json): a data file is for the pages and the apps, never for Google's results.
+# Static assets answer before the Worker, so the header is set here for every .json in this folder; the Worker's own JSON route (admin/changelog-store.js) sets the same header itself. Guard: test/unit/website/seo.test.js.
+/*.json
+  X-Robots-Tag: noindex

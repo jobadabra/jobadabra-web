@@ -70,3 +70,18 @@ test('no page links to a page by its .html file: each link uses the one address 
   for (const name of readdirSync(new URL('../../../web/public', import.meta.url)).filter((f) => f.endsWith('.html')))
     assert.deepEqual(file(name).match(/href="[^"]*?\b[\w-]+\.html(?:[?#][^"]*)?"/g) || [], [], name);
 });
+
+// Search Console, 12 Nov 2026: "Crawled - currently not indexed" listed /changelog.json (a data file the changelog page links to).
+// The class: a data file is read by pages and apps, never meant as a Google result. Static assets answer before the Worker, so public/_headers sets the header for every .json there.
+test('every .json file in public/ is served with X-Robots-Tag: noindex (public/_headers)', async () => {
+  const {readdirSync} = await import('node:fs');
+  const rules = file('_headers').split(/\n(?=\S)/).filter((block) => !block.startsWith('#')).map((block) => block.trim().split('\n').map((line) => line.trim()));
+  const noindexed = rules.filter((lines) => lines.slice(1).includes('X-Robots-Tag: noindex')).map((lines) => lines[0]);
+  const jsons = readdirSync(new URL('../../../web/public', import.meta.url)).filter((f) => f.endsWith('.json'));
+  assert.ok(jsons.length > 0, 'the check has something to look at');
+  for (const name of jsons) assert.ok(noindexed.some((glob) => new RegExp('^' + glob.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$').test('/' + name)), `/${name} is not covered by a noindex rule in public/_headers`);
+});
+
+test('no .json file is in the sitemap', () => {
+  assert.deepEqual(locs().filter((loc) => loc.endsWith('.json')), []);
+});

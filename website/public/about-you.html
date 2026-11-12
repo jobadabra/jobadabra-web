@@ -42,14 +42,18 @@
   </nav>
 
   <header class="page-head">
-    <span class="eyebrow">Intelligence</span>
+    <span class="eyebrow">Your data and safety</span>
     <h1>What each AI step reads about you</h1>
-    <p class="lede">Only steps that read it today. A step is added here the day it ships, so this page never promises more than the app does.</p>
+    <p class="lede">Jobadabra uses AI in a few steps: answering application questions, tailoring your CV, writing letters and drawing your portrait. This page shows which part of what you told us each step reads, and what none of them ever reads. A step is added here the day it ships, so it never promises more than the app does.</p>
+    <nav class="page-jump" aria-label="On this page"><a href="#reads">What each step reads</a><a href="#never">What stays out</a></nav>
   </header>
 
-  <section class="block" aria-labelledby="rd-h">
-    <h2 id="rd-h" class="sr">The steps and what they read</h2>
-    <div class="rd-wrap">
+  <section class="block first" id="reads" aria-labelledby="rd-h">
+    <div class="section-head stacked">
+      <span class="eyebrow">The steps</span>
+      <h2 id="rd-h">Which part of you each step reads</h2>
+    </div>
+    <div class="access-wrap rd-wrap">
 <!-- readers:start -->
 <table class="rd-table"><thead><tr><th scope="col">AI step</th><th scope="col">Your details</th><th scope="col">CV + Experience bank</th><th scope="col">What we learned</th><th scope="col">Strategy</th><th scope="col">Voice</th><th scope="col">Never reads</th></tr></thead><tbody>
 <tr data-step="kit"><th scope="row">Kit answers</th><td data-label="Your details"><span class="rd-dot" role="img" aria-label="Does not read Your details"></span></td><td data-label="CV + Experience bank"><span class="rd-dot on" role="img" aria-label="Reads CV + Experience bank"></span></td><td data-label="What we learned"><span class="rd-dot" role="img" aria-label="Does not read What we learned"></span></td><td data-label="Strategy"><span class="rd-dot" role="img" aria-label="Does not read Strategy"></span></td><td data-label="Voice"><span class="rd-dot" role="img" aria-label="Does not read Voice"></span></td><td data-label="Never reads" class="rd-never">sensitive answers</td></tr>
@@ -59,7 +63,20 @@
 </tbody></table>
 <!-- readers:end -->
     </div>
-    <p class="source-note"><span class="rd-dot on" aria-hidden="true"></span> reads it &nbsp; <span class="rd-dot" aria-hidden="true"></span> does not. Sensitive answers (health, ethnicity, religion and the like) are never sent to any step.</p>
+    <p class="legend"><span><span class="rd-dot on" aria-hidden="true"></span> reads it</span><span><span class="rd-dot" aria-hidden="true"></span> does not</span></p>
+  </section>
+
+  <section class="block" id="never">
+    <div class="section-head stacked">
+      <span class="eyebrow">Held back</span>
+      <h2>What stays out of every step</h2>
+    </div>
+    <div class="honest levels">
+      <div class="promise lvl"><div class="icon" aria-hidden="true">🔒</div><div><h3>Sensitive answers</h3><p>Health, ethnicity, religion and the like are never sent to any step.</p></div></div>
+      <div class="promise lvl"><div class="icon" aria-hidden="true">🖐️</div><div><h3>The final press</h3><p>A step drafts; you review it. Jobadabra fills forms and never presses Submit or applies in bulk.</p></div></div>
+      <div class="promise lvl"><div class="icon" aria-hidden="true">🖥️</div><div><h3>Where the AI runs</h3><p>With your own key the AI runs from your computer. With Free AI a request passes through our server to the model and nothing is stored.</p></div></div>
+    </div>
+    <p class="source-note">More on where your data lives: <a href="/trust">Your data and safety</a> and the full <a href="/privacy">Privacy</a> policy.</p>
   </section>
   <div class="next-page"><span>Every AI step, what it sees and what it never sees.</span><a href="/intelligence">AI inside Jobadabra →</a></div>
 
