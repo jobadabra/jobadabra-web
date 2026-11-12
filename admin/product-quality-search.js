@@ -2,7 +2,7 @@
 // seekers the nightly search check could measure, an average over the last 7 nights. The red chip is the SAME verdict as the "Night search" tab and the alert (admin/search-night-judge.js judgeNight),
 // so the three cannot disagree. Pure: admin/product-quality-data.js reads the stored nights (admin/search-night.js), this file judges them. Guard: test/unit/admin/report/product-quality.test.js.
 import {judge, median, notMeasured, pooled, round, toneOf, deltaText, WORDS, WEEK} from './product-quality.js';
-import {euresOf, judgeAll, reasonWords} from './search-night-judge.js';
+import {judgeAll, reasonWords, seriesOf} from './search-night-judge.js';
 
 const isNum = value => typeof value === 'number' && Number.isFinite(value);
 
@@ -20,7 +20,7 @@ export function search({days, searchNights}) {
   // Why (10 Nov 2026, jobadabra [oe] 1/3): nights without EURES are their own series too: the switch alone lowers the jobs found, it is no "worse".
   // Why (11 Nov 2026, Gitar retro of #523): the NEWEST night decides. Falling back to an older pass showed a green "Newest night" and let the 14-day guard read the older night while nothing had been measured for days. The alert for a not-run night is not this file's (cr's G6, event search-night).
   if (judged[0].notRun) return notMeasured(base, judged.every(item => item.notRun) ? 'the last nights did not run (no AI answered): not a zero' : `the newest night (${judged[0].night}) did not run (no AI answered): not a zero`);   // Why (10 Nov 2026, cr 2/6): the all-not-run wording is kept
-  const ran = judged.filter(item => !item.notRun), newest = ran[0], nights = ran.filter(item => item.total === newest.total && euresOf(item) === euresOf(newest)), byNight = new Map(nights.map(item => [item.night, item]));
+  const ran = judged.filter(item => !item.notRun), newest = ran[0], nights = ran.filter(item => item.total === newest.total && seriesOf(item) === seriesOf(newest)), byNight = new Map(nights.map(item => [item.night, item]));
   if (!days.slice(-2 * WEEK).includes(newest.night)) return notMeasured(base, 'no nightly search in the last 14 days');   // a stopped job is the news, not an old number
   const series = days.map(day => (byNight.has(day) ? {day, value: byNight.get(day).measured, n: 1} : {day, value: null}));
   const now = pooled(series.slice(-WEEK)), before = pooled(series.slice(-2 * WEEK, -WEEK));

@@ -7,7 +7,7 @@
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {columns, figure, line} from './viz.js';
-import {euresOf} from './search-night-judge.js';
+import {asAppOf, euresOf} from './search-night-judge.js';
 
 export const FIVE = 5;   // "enough": a person with this many right jobs or more
 const DAY = 86400000;
@@ -25,7 +25,7 @@ export function scoreOf(night) {
   const rows = night.rows || [];
   return {day: night.night || night.day, total: rows.length, right: rows.filter(row => row.kind === 'measured').length, five: rows.filter(row => row.kind === 'measured' && isNum(row.local) && row.local >= FIVE).length,
     blind: rows.filter(row => BLIND.includes(row.kind)).length, rightJobs: rows.reduce((sum, row) => sum + (row.kind === 'measured' && isNum(row.local) ? row.local : 0), 0), first: median(rows.map(row => row.counters?.firstS)),
-    engine: typeof night.engine === 'string' && night.engine ? night.engine : 'unknown', eures: euresOf(night), asApp: night.asApp === 'yes' ? 'yes' : 'no', at: night.at || null};
+    engine: typeof night.engine === 'string' && night.engine ? night.engine : 'unknown', eures: euresOf(night), asApp: asAppOf(night), at: night.at || null};
 }
 
 const words = score => `${score.day} · ${score.right} of ${score.total} people with a right job · ${score.five} with ${FIVE} or more · ${score.blind ? `${score.blind} not measured` : 'all measured'} · ${score.rightJobs} right jobs · first job in their places ${score.first == null ? 'not counted' : `${score.first} s`} · AI ${score.engine}${score.eures === 'off' ? '' : ' · EURES on'}`;
@@ -48,9 +48,9 @@ export function series(judged, hand = []) {
 /** The first day a stored night ran without EURES (its own `eures` flag), or null: the chart breaks there ([oe] 1/3, jobadabra #3678: from 11 Nov 2026). */
 export const breakDay = span => span.find(item => item.night?.eures === 'off')?.day ?? null;
 /** The first day a stored night read job boards like the app (its own `asApp`), or null: the chart breaks there too (owner, 13 Nov 2026: "Yes, night reads like the app (Recommended)"). */
-export const appDay = span => span.find(item => item.night?.asApp === 'yes')?.day ?? null;
+export const appDay = span => span.find(item => item.night && asAppOf(item.night) === 'yes')?.day ?? null;
 const markOf = ({day, hand}, brk, app = null) => {
-  if (day === app) return {label: 'Reads like the app', tip: `${day} · from this night each press reads job boards as the app does (pages built by scripts, and the boards that refuse plain reading in Jobadabra's browser): the nights before it are another series, never one line rising${hand.length ? `\nand a by-hand run:\n${hand.map(words).join('\n')}` : ''}`};
+  if (day === app) return {label: day === brk ? 'EURES off · reads like the app' : 'Reads like the app', tip: `${day} · from this night ${day === brk ? 'EURES is off in CI and ' : ''}each press reads job boards as the app does (pages built by scripts, and the boards that refuse plain reading in Jobadabra's browser): the nights before it are another series, never one line rising${hand.length ? `\nand a by-hand run:\n${hand.map(words).join('\n')}` : ''}`};
   if (day === brk) return {label: 'EURES off', tip: `${day} · from this night EURES is off in CI: the nights before it are another series (they read the EURES list), never one line falling${hand.length ? `\nand a by-hand run:\n${hand.map(words).join('\n')}` : ''}`};
   if (hand.length) return {label: 'by hand', tip: `${day} · by-hand run${hand.length > 1 ? 's' : ''}:\n${hand.map(words).join('\n')}`};
   return undefined;

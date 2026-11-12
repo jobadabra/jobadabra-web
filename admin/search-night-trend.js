@@ -6,7 +6,7 @@
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {VIZ_TOOLTIP, columns, figure, line} from './viz.js';
-import {euresOf, reasonWords} from './search-night-judge.js';
+import {euresOf, reasonWords, seriesOf} from './search-night-judge.js';
 
 const DAY = 86400000;
 const isNum = value => typeof value === 'number' && Number.isFinite(value);
@@ -26,7 +26,7 @@ export const TREND_STYLE = `${CHIP_STYLE}
 export function groups(judged) {
   const by = new Map(), taken = new Set((judged || []).map(night => night.night));   // every stored night's date: a day with a night of another count is not a missing night
   // Why (10 Nov 2026, jobadabra [oe] 1/3): a night without EURES is another series as well (the judge compares it only with its own kind), so the switch is never one line falling.
-  for (const night of judged || []) { const key = `${night.total} ${euresOf(night)}`; by.set(key, [...(by.get(key) || []), night]); }
+  for (const night of judged || []) { const key = `${night.total} ${seriesOf(night)}`; by.set(key, [...(by.get(key) || []), night]); }
   return [...by].map(([, list], index) => {
     const [total, eures] = [list[0].total, euresOf(list[0])];
     const byDay = new Map(list.map(night => [night.night, night]), []), sorted = list.map(night => night.night).sort();

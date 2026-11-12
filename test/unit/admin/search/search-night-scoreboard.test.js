@@ -119,3 +119,14 @@ test('the night it started reading like the app (owner, 13 Nov 2026, asked via A
   assert.match(html, /Reads like the app from 11\/13/, 'the note names the day and the reason');
   assert.equal(appDay(series(judgeAll([clean({...night('x'), eures: 'off'}, {night: '2026-11-12'}, NOW)])).span), null, 'no such night: no break');
 });
+
+test('Gitar on #603: an as-app night is judged, trended and reported only against as-app nights; a same-day EURES and as-app break shows both', async () => {
+  const {seriesOf} = await import('../../../../admin/search-night-judge.js');
+  const {groups} = await import('../../../../admin/search-night-trend.js');
+  const before = clean({...night('x'), eures: 'off'}, {night: '2026-11-12'}, NOW), after = clean({...night('x'), eures: 'off', as_app: 'yes'}, {night: '2026-11-13'}, NOW);
+  assert.notEqual(seriesOf(before), seriesOf(after));
+  const judged = judgeAll([after, before]);
+  assert.equal(groups(judged).length, 2, 'two series, two trend lines');
+  const both = judgeAll([clean({...night('x'), eures: 'off', as_app: 'yes'}, {night: '2026-11-13'}, NOW), clean({...night('x')}, {night: '2026-11-12'}, NOW)]);
+  assert.match(scoreboardSection(both), />EURES off · reads like the app</, 'one pill naming both breaks');
+});
