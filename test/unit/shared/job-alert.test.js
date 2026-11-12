@@ -129,3 +129,18 @@ test('the own-alert list is keyed by repo and file: the lab\'s central scout is 
   assert.ok(OWN_ALERT.has(jobKey({repo: 'jobadabra/jobadabra-lab', file: 'central-scout.yml'})));
   assert.ok(!OWN_ALERT.has(jobKey({repo: 'jobadabra/jobadabra', file: 'central-scout.yml'})));
 });
+
+test('a cancelled or skipped run decides nothing: red, cancelled, skipped stays one red streak and tells no false "works again"; only a success ends it (Gitar, #586)', async () => {
+  const {e, tg} = await setup();
+  await alertJobs(e, snap('success', 0), {fetcher: tg.fetcher, now: hour(0)});
+  await alertJobs(e, snap('failure', 1), {fetcher: tg.fetcher, now: hour(1)});
+  const cancelled = await alertJobs(e, snap('cancelled', 2), {fetcher: tg.fetcher, now: hour(2)});
+  const skipped = await alertJobs(e, snap('skipped', 3), {fetcher: tg.fetcher, now: hour(3)});
+  assert.deepEqual([cancelled, skipped], [{red: 0, green: 0}, {red: 0, green: 0}]);
+  assert.equal(tg.sends().length, 1, 'only the first red was told');
+  await alertJobs(e, {jobs: [{...snap('cancelled', 4).jobs[0], recent: [run('cancelled', 4), run('failure', 1)]}]}, {fetcher: tg.fetcher, now: hour(4)});
+  assert.equal(tg.sends().length, 1, 'a cancelled run on top of the failed one is still red: the same streak');
+  await alertJobs(e, {jobs: [{...snap('success', 5).jobs[0], recent: [run('success', 5), run('cancelled', 4)]}]}, {fetcher: tg.fetcher, now: hour(5)});
+  assert.equal(tg.sends().length, 2);
+  assert.match(tg.sends()[1], /works again/);
+});

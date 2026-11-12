@@ -8,7 +8,6 @@
 import {INTEL_COLLECTORS} from './intel-start.js';
 import {alertOwner} from './notify-send.js';
 import {jobGreenCard, jobNotStartedCard, jobRedCard} from './owner-cards.js';
-import {stateOf} from './schedules-model.js';
 
 /** Why (12 Nov 2026, owner's target 3: "must not alert twice"): jobs whose workflow already tells the owner when it fails; the shared alert stays silent for them. Key = '<repo>/<file>' (repo without the owner).
  *  Keep the ai-skipped-alert steps too: they cover a run that ends green while every AI call failed, which this alert (red runs only) cannot see. */
@@ -35,6 +34,14 @@ export const OWN_ALERT = new Map([
 const HOME_REPO = {public: 'jobadabra', web: 'jobadabra-web', lab: 'jobadabra-lab'};
 const homeOf = workflow => HOME_REPO[INTEL_COLLECTORS.find(item => item.workflow === workflow)?.home] || 'jobadabra';
 
+/** red | green | none | off from the newest run that PASSED or FAILED. Why (12 Nov 2026, Gitar on #586): schedules-model stateOf() reads a cancelled or skipped run as green (fine for the page's chip), but here it would end a red streak with
+ *  a false "works again" when a concurrency group cancels the next run; a cancelled or skipped run leaves the streak as it was. */
+const DECIDES = ['success', 'failure', 'timed_out'];
+export function alertState(job) {
+  if (job.disabled) return 'off';
+  const done = (job.recent || []).find(run => DECIDES.includes(run.conclusion));
+  return !done ? 'none' : done.conclusion === 'success' ? 'green' : 'red';
+}
 export const jobKey = job => `${String(job.repo).split('/').pop()}/${job.file}`;
 const day = now => now.toISOString().slice(0, 10);
 const clip = text => String(text || '').replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 110);
@@ -65,7 +72,7 @@ export async function alertJobs(env, snapshot, {fetcher = fetch, now = new Date(
   try {
     const rows = new Map(((await env.STATS.prepare('SELECT job, state, alerted, muted FROM job_alert').all()).results || []).map(row => [row.job, row]));
     for (const job of snapshot?.jobs || []) {
-      const state = stateOf(job), key = jobKey(job), before = rows.get(key);
+      const state = alertState(job), key = jobKey(job), before = rows.get(key);
       if (state !== 'red' && state !== 'green') continue;
       if (!before?.state) { await save(env.STATS, key, {state, alerted: 0}, now); continue; }   // first sight: a baseline, not news
       if (before.state === state) continue;
