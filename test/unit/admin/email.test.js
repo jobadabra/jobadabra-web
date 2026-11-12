@@ -201,3 +201,13 @@ test("an Open press counts once per visitor for its mail, inside the window; oth
   const data = await collect(env, {days: 7, now});
   assert.deepEqual(data.byTemplate.map(r => [r.template, r.opened]), [['welcome', 0], ['digest', 3]]);
 });
+
+test('the What\'s new count is every confirmed account that has not stopped it, with or without a stored yes (owner, 12 Nov 2026; Gitar on #569)', async () => {
+  const {env} = await fill();
+  const add = env.STATS.db.prepare('INSERT INTO pro_accounts (id, email_hash, email, created_at, plan, email_confirmed_at) VALUES (?, ?, ?, ?, ?, ?)');
+  add.run('a', await addrOf('a@example.com'), 'a@example.com', '2026-10-01', 'trial', '2026-10-01');
+  add.run('b', await addrOf('b@example.com'), 'b@example.com', '2026-10-01', 'trial', '2026-10-01');
+  add.run('c', await addrOf('c@example.com'), 'c@example.com', '2026-10-01', 'trial', null);
+  env.STATS.db.prepare("INSERT INTO mail_off (addr, list, reason, at) VALUES (?, 'releases', 'unsubscribe', 'x')").run(await addrOf('b@example.com'));
+  assert.equal((await collect(env, {days: 7, now})).types.releases, 1, 'a counts; b stopped it; c is not confirmed');
+});

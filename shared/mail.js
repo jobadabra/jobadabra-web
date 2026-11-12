@@ -58,7 +58,7 @@ export async function mailAllowed(env, to, list = 'service', {essential = false,
     const reason = newsRefusal(list, await newsFacts(env, addr, clean(to)), {waitlistToo});
     if (reason) return {ok: false, reason};
   }
-  if (list === 'service' && !essential && account?.service_mail_off_at) return {ok: false, reason: 'unsubscribed'};
+  if (list === 'service' && !essential && !ownerTest && account?.service_mail_off_at) return {ok: false, reason: 'unsubscribed'};   // the owner's test skips this account switch too (Gitar on #569)
   return {ok: true};
 }
 
