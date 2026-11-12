@@ -12,7 +12,7 @@ const LAB_TILES = ['night', 'finish', 'real', 'draws'];   // Why (12 Nov 2026, o
 async function labTiles(env, now) {
   const tabs = labTabs(await labData(env, now), now);
   return LAB_TILES.map(key => tabs.find(entry => entry.tab === key)).map(entry => ({label: entry.title, value: entry.value, sub: entry.sub, status: entry.status,
-    ...(entry.series?.filter(value => value != null).length >= 2 ? {series: entry.series} : {}), href: `/admin/job-search/lab?tab=${entry.tab}`}));
+    ...(entry.series?.filter(value => value != null).length >= 2 ? {series: entry.series, higherIsBetter: entry.higherIsBetter !== false} : {}), href: `/admin/job-search/lab?tab=${entry.tab}`}));
 }
 
 async function installsTiles(env, now) {

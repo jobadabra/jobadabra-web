@@ -40,4 +40,5 @@ test('Job search → Overview shows the same four Lab numbers, linked to their t
   const tiles = await HEADLINES['/admin/job-search/lab']({}, now);
   assert.deepEqual(tiles.map(tile => tile.href), ['night', 'finish', 'real', 'draws'].map(tab => `/admin/job-search/lab?tab=${tab}`));
   assert.deepEqual(await labData({}, now), {nights: [], hand: [], real: [], draws: [], checks: []});
+  assert.equal(labTabs(data, now).find(entry => entry.tab === 'real').higherIsBetter, false, 'a longer time to the first job is worse: its trend arrow goes red when it rises');
 });

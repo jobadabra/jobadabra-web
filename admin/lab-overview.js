@@ -19,7 +19,7 @@ const TONE = {good: 'good', warn: 'warn', bad: 'bad', none: 'off'};
 
 /**
  * The five Lab tabs' numbers. data: {nights: judged nights newest first (search-night-judge.js judgeAll) | null when unreadable, hand: by-hand runs, real: search reports,
- * draws: stored draws newest first, checks: session checks newest first}. Each entry: {tab, title, value, sub, status: good|warn|bad|none, series?: numbers oldest first, chart?: data for the card}.
+ * draws: stored draws newest first, checks: session checks newest first}. Each entry: {tab, title, value, sub, status: good|warn|bad|none, series?: numbers oldest first, higherIsBetter?: false when a rise is worse, chart?: data for the card}.
  * Invariant: a tab with no data says so with status 'none', never a 0 that looks measured.
  */
 export function labTabs(data, now = new Date()) {
@@ -50,7 +50,7 @@ function realOf(reports) {
   if (!reports.length) return {...base, value: '–', sub: 'no real search reported yet', status: 'none'};
   const all = summarize(reports).all, days = byDay(reports).slice(0, 30).reverse();
   return {...base, value: clock(all.first_s), sub: `time to first job · ${num(all.searches)} searches, ${num(all.installs)} installs · 70+ in ${num(all.reached)}`,
-    status: all.first_s == null ? 'warn' : all.first_s <= PRESS_LIMIT_S ? 'good' : 'warn', series: days.map(day => day.first_s),
+    status: all.first_s == null ? 'warn' : all.first_s <= PRESS_LIMIT_S ? 'good' : 'warn', series: days.map(day => day.first_s), higherIsBetter: false,   // seconds: a rise is slower
     chart: days.map(day => ({day: day.day, values: [day.searches], tip: `${day.day}: ${day.searches} searches · first job ${clock(day.first_s)}`}))};
 }
 
