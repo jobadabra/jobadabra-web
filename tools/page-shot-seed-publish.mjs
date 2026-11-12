@@ -20,17 +20,17 @@ const SEARCH = [['Jobadabra', 1, [30, 22, 28], [9, 7, 11]], ['Jobadabra with eve
 
 async function fill(env) {
   for (const [tool, rows] of Object.entries(FORMS)) for (const [form, right, wrong, empty, unreached] of rows) {
-    await env.STATS.prepare('INSERT INTO benchmark_runs (id, at, applicant, mode, tool, ours, build, form, heldout, fixes, required, right, wrong, empty, unans, holds, dups, round, rep, unreached) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, 0, 0, ?, 1, ?)')
-      .bind(`fixed/${form}/${tool}`, AT, 'thin', tool === 'extension' ? 'user' : 'any', tool, tool === 'extension' ? 1 : 0, tool === 'extension' ? 'a1b2c3d' : '', form, '', right + wrong + empty, right, wrong, empty, 'fixed', unreached).run();
+    await env.STATS.prepare('INSERT OR IGNORE INTO benchmark_runs (id, at, applicant, mode, tool, ours, build, form, heldout, fixes, required, right, wrong, empty, unans, holds, dups, round, rep, unreached) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, 0, 0, ?, 1, ?)')
+      .bind(`pub/fixed/${form}/${tool}`, AT, 'thin', tool === 'extension' ? 'user' : 'any', tool, tool === 'extension' ? 1 : 0, tool === 'extension' ? 'a1b2c3d' : '', form, '', right + wrong + empty, right, wrong, empty, 'fixed', unreached).run();
   }
   const form = await formSnapshot(env.STATS);
-  await env.STATS.prepare('INSERT INTO benchmark_snapshot (id, at, body) VALUES (1, ?, ?)').bind(form.at, JSON.stringify(form)).run();
+  await env.STATS.prepare('INSERT OR REPLACE INTO benchmark_snapshot (id, at, body) VALUES (1, ?, ?)').bind(form.at, JSON.stringify(form)).run();
   for (const [tool, ours, found, relevant, beyond = '{}'] of SEARCH) for (const [i, [persona, country, kind]] of PERSONAS.entries()) {
-    await env.STATS.prepare('INSERT INTO benchmark_search_runs (id, at, round, persona, kind, country, tool, ours, build, found, place, role, relevant, employers, seconds, cents, missed, beyond) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)')
-      .bind(`${tool}/${i}`, AT, '2026-11-12', persona, kind, country, tool, ours, ours ? 'a1b2c3d' : '', found[i], Math.max(found[i] - 1, 0), Math.max(found[i] - 3, relevant[i]), relevant[i], relevant[i] + 2, '{}', beyond).run();
+    await env.STATS.prepare('INSERT OR IGNORE INTO benchmark_search_runs (id, at, round, persona, kind, country, tool, ours, build, found, place, role, relevant, employers, seconds, cents, missed, beyond) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)')
+      .bind(`pub/${tool}/${i}`, AT, '2026-11-12', persona, kind, country, tool, ours, ours ? 'a1b2c3d' : '', found[i], Math.max(found[i] - 1, 0), Math.max(found[i] - 3, relevant[i]), relevant[i], relevant[i] + 2, '{}', beyond).run();
   }
   const search = await searchSnapshot(env.STATS);
-  await env.STATS.prepare('INSERT INTO benchmark_search_snapshot (id, at, body) VALUES (1, ?, ?)').bind(search.at, JSON.stringify(search)).run();
+  await env.STATS.prepare('INSERT OR REPLACE INTO benchmark_search_snapshot (id, at, body) VALUES (1, ?, ?)').bind(search.at, JSON.stringify(search)).run();
   return {form, search};
 }
 

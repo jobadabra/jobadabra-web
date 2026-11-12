@@ -1,5 +1,6 @@
 // "Publish to website" for the two benchmark pages (owner, 12 Nov 2026: "First I should see them more in depth in Admin, and then having a button to publish them on the website (/benchmark). Same for job search benchmarks").
-// The public /benchmark shows ONLY what the owner published here: the newest row of each kind in benchmark_published (what he saw in the confirm), else the starting snapshot kept in the site's files (website/public/benchmark-results.json).
+// The public /benchmark shows ONLY what the owner published here: the newest row of each kind in benchmark_published (what he saw in the confirm), else the starting snapshot kept in the site's files (website/public/benchmark-start.json).
+// Why (12 Nov 2026, Gitar on #584): the starting file must not be named like the route; Cloudflare serves a same-named asset before the Worker runs, and published rounds would never show.
 // Nothing reaches the public page by itself: a CI round fills Admin; one confirmed press makes it public; "Unpublish" brings back the round before. Pure builders first, then the D1 state, the card and the owner-only POST.
 // Public shape = allowlisted aggregates only (tool names, counts, fictional persona labels); never an answer, a listing or a URL of a job. Guard: test/unit/admin/benchmark/benchmark-publish.test.js.
 import {isOwner} from '../shared/auth.js';
@@ -51,11 +52,10 @@ export async function state(db) {
   const out = {form: {now: null, before: null}, search: {now: null, before: null}};
   if (!db) return out;
   try {
-    for (const kind of KINDS) {
-      const {results = []} = await db.prepare('SELECT id, round, published_at, body FROM benchmark_published WHERE kind = ? ORDER BY id DESC LIMIT 2').bind(kind).all();
-      const row = r => (r ? {id: r.id, round: r.round, published_at: r.published_at, body: JSON.parse(r.body)} : null);
-      out[kind] = {now: row(results[0]), before: row(results[1])};
-    }
+    // Why (12 Nov 2026, #584): one query for both kinds; an Admin benchmark page reads its snapshot row and this, never the runs table.
+    const {results = []} = await db.prepare('SELECT kind, id, round, published_at, body FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY kind ORDER BY id DESC) AS n FROM benchmark_published) WHERE n <= 2 ORDER BY kind, id DESC').all();
+    const row = r => (r ? {id: r.id, round: r.round, published_at: r.published_at, body: JSON.parse(r.body)} : null);
+    for (const kind of KINDS) { const mine = results.filter(r => r.kind === kind); out[kind] = {now: row(mine[0]), before: row(mine[1])}; }
   } catch { /* table not there yet */ }
   return out;
 }
@@ -111,7 +111,7 @@ export async function publishPress(request, env, now = new Date()) {
 
 /** GET /benchmark-results.json: the public page's data (the starting snapshot from the site's files, each section replaced by the owner's newest published one). */
 export async function results(request, env) {
-  const asset = await env.ASSETS.fetch(new Request(new URL('/benchmark-results.json', request.url), {headers: request.headers}));
+  const asset = await env.ASSETS.fetch(new Request(new URL('/benchmark-start.json', request.url), {headers: request.headers}));
   if (!asset.ok) return asset;
   const merged = mergeResults(await asset.json(), await currentOf(env.STATS));
   return new Response(JSON.stringify(merged), {headers: {'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60'}});

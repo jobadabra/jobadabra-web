@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 import {renderResults} from '../../../web/public/benchmark.js';
-const data = JSON.parse(readFileSync(new URL('../../../web/public/benchmark-results.json', import.meta.url)));
+const data = JSON.parse(readFileSync(new URL('../../../web/public/benchmark-start.json', import.meta.url)));
 
 test('renders all scored form contestants in score order including our second place', () => {
   const {forms} = renderResults(data);

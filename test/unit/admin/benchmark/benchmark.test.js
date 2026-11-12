@@ -68,13 +68,13 @@ test('the ingest needs the publish key, drops bad rows, stores a run once, and r
   assert.equal(e.STATS.db.prepare('SELECT COUNT(*) AS n FROM benchmark_snapshot').get().n, 1);
 });
 
-test('the page reads ONE snapshot row, never the runs table; closed to anyone but the owner', async () => {
+test('the page reads ONE snapshot row and the published rounds, never the runs table; closed to anyone but the owner', async () => {
   const e = env();
   await put(e, {runs: FIXTURE});
   e.STATS.reads.queries = e.STATS.reads.rows = 0;
   assert.equal((await call(e, '/admin/form-filling/benchmark')).status, 404);
   const html = await (await call(e, '/admin/form-filling/benchmark', owner)).text();
-  assert.deepEqual([e.STATS.reads.queries, e.STATS.reads.rows], [1, 1]);
+  assert.deepEqual([e.STATS.reads.queries, e.STATS.reads.rows], [2, 1]);   // Why (12 Nov 2026, #584): + one read of benchmark_published (nothing published here) for the Publish card
   assert.match(html, /Benchmark Form Filling/);
 });
 

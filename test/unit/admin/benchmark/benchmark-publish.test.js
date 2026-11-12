@@ -19,7 +19,7 @@ function d1() {
   return {db, prepare: sql => statement(sql)};
 }
 const ORIGIN = 'https://www.jobadabra.top';
-const setup = () => ({STATS: d1(), STATS_SALT: 's', STATS_KEY: 'k3y', STATS_API_KEY: 'owner-key', ASSETS: {fetch: async () => new Response(JSON.stringify({schema: 1, date: '2026-10-27', search: {tools: [{name: 'Old'}], personas: [], verdictsUrl: 'https://old'}, forms: {tools: [{name: 'Old'}], runId: '1', productBuild: 'old'}}))}});
+const setup = () => ({STATS: d1(), STATS_SALT: 's', STATS_KEY: 'k3y', STATS_API_KEY: 'owner-key', ASSETS: {fetch: async req => new URL(req.url).pathname !== '/benchmark-start.json' ? new Response('', {status: 404}) : new Response(JSON.stringify({schema: 1, date: '2026-10-27', search: {tools: [{name: 'Old'}], personas: [], verdictsUrl: 'https://old'}, forms: {tools: [{name: 'Old'}], runId: '1', productBuild: 'old'}}))}});
 const fair = (tool, form, right, wrong, empty, unreached, ours = 0) => ({id: `fixed/${form}/${tool}`, at: '2026-11-12T10:00:00Z', applicant: 'thin', mode: ours ? 'user' : 'any', round: 'fixed', rep: 1, tool, ours, build: ours ? 'b7' : '', form, heldout: 0, fixes: '',
   required: right + wrong + empty, right, wrong, empty, unans: 0, holds: 0, dups: 0, unreached});
 const FORM_ROWS = [fair('Ours', '101', 9, 1, 0, 0, 1), fair('Ours', '102', 10, 0, 0, 0, 1), fair('Ours', '105', 8, 1, 1, 0, 1),   // ours never ran 104 (a bot check)
