@@ -18,3 +18,15 @@ export function laneOf(claims) {
 export const LANES = ['pr', 'byhand', 'scheduled', 'bench', 'drift'];
 /** The queue a lane waits in: drift and by-hand checks wait with scheduled work, behind every PR check. */
 export const queueOf = lane => lane === 'drift' || lane === 'byhand' ? 'scheduled' : lane;
+
+/** The one repository whose calls answer on Claude alone. */
+export const CLAUDE_ONLY_REPOS = ['jobadabra/jobadabra-benchmarks'];
+
+/**
+ * Takes the verified claims, the parsed body (or null) and the body text; returns the text to forward: for a run of jobadabra-benchmarks a body that names no engine gets `engine: 'claude', only: true`, any other call is returned unchanged.
+ * Why (12 Nov 2026, owner via bm: "Broker, Claude plan, Haiku"): the benchmark's rivals answer on Haiku 5.5, so ours must too (benchmarks CLAUDE.md "same AI for every contestant"); the app under test sends plain Messages bodies and cannot name an engine, so the broker names it from the signed repository claim, never from a header the caller sends. Tier small = Haiku 5.5 on the Claude plan; a refusal (Claude's week past 90%) is the call's own `budget:` answer, never Codex or Free AI.
+ */
+export function claudeOnly(claims, asked, text) {
+  if (!CLAUDE_ONLY_REPOS.includes(claims?.repository) || !asked || typeof asked !== 'object' || Array.isArray(asked) || Object.hasOwn(asked, 'engine')) return text;
+  return JSON.stringify({...asked, engine: 'claude', only: true});
+}
