@@ -109,5 +109,5 @@ test('a send through the old bot while the channel is down keeps its state: the 
   assert.deepEqual([again.sent, again.via, again.why], [false, 'switchboard', 'same-state']);
   const other = await tell(e, tg, {legacy: OLD, state: 'red:def:2026-11-05'}, 'main-red');
   assert.deepEqual([other.sent, other.via], [true, 'switchboard']);
-  assert.equal((await stats(e)).get('main-red').fallback, 1, 'Admin still counts the one send made without the switchboard');
+  assert.equal((await stats(e, NOW)).get('main-red').fallback, 1, 'Admin still counts the one send made without the switchboard');
 });
