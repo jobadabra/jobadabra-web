@@ -36,3 +36,9 @@ export async function walk(chain, take, note) {
   if (busy) { const done = await turn(busy, true); if (done) return done; }
   return {engine: null, reply: null, left, held};
 }
+
+/**
+ * Whether a failure's text is the platform's own word that the container went away under the call (a deploy or restart), not the engine's: a call so cut says nothing about the engine and is never counted against it (lib/adapt.mjs).
+ * Why (12 Nov 2026, ba; the release of #578 17:01-17:04Z, then both engines "failed 5 of 10" at 17:05:39Z, owner's two Telegram notes): Claude's `platform: Error proxying request to container: The container just disconnected` took the plain `failed` path, while Codex's cut calls were already `cut` (8 Nov, bd). Broker log 17:05Z: that text in 6 Claude calls and 1 Codex call.
+ */
+export const platformCut = text => /Error proxying request to container|container (just|suddenly) disconnected/i.test(String(text || ''));

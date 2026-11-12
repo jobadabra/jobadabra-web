@@ -183,7 +183,7 @@ The broker is already deployed; this is for a fresh account or a rebuild.
 |---|---|
 | `BROKER_ADMIN_TOKEN` | the `/admin/*` routes (Keychain `jobadabra.codex-broker.admin_token`) |
 | `CLAUDE_CODE_OAUTH_TOKEN` | the Claude engine; made with `claude setup-token`. Without it Claude is skipped |
-| `BRAIN_BOT_TOKEN`, `BRAIN_CHAT_ID` | Telegram notes, e.g. the Claude token gone bad or an engine moved back |
+| `SELFHEAL_PUBLISH_KEY` | the notes to the owner (Claude token gone bad, an engine moved back, Free AI's cap): posted to the site's `/ops/notify` through the `SITE` service binding, so Admin → Notifications routes and mutes them (Engineering). Same key as every CI upload. No Telegram secret here |
 
 **Vars** (`wrangler.jsonc`)
 

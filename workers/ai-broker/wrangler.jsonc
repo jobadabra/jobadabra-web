@@ -20,7 +20,9 @@
   "containers": [
     {"name": "ai-broker", "image": "./container/Dockerfile", "image_build_context": ".", "instance_type": {"vcpu": 2, "memory_mib": 6144, "disk_mb": 4000}, "max_instances": 1}
   ],
-  // Owner sets BRAIN_BOT_TOKEN and BRAIN_CHAT_ID as Worker secrets (they must be set on this Worker too: secrets do not move with the namespace).
+  // Why (12 Nov 2026, owner: "this one I think should be on engineering"): the broker's notes go to the site's switchboard (POST /ops/notify on the `www` Worker), which picks the channel and the owner's switch; no Telegram secret lives here.
+  // Secret: SELFHEAL_PUBLISH_KEY (the key every CI upload uses; Bearer for /ops/notify; a Worker secret does not move with the namespace). Without it, or without this binding, a note is not sent.
+  "services": [{"binding": "SITE", "service": "www"}],
   "ai": {"binding": "AI"},
   "durable_objects": {"bindings": [{"name": "BROKER", "class_name": "CodexBroker"}]},
   "exports": {"CodexBroker": {"type": "durable-object", "storage": "sqlite", "container": "ai-broker"}}

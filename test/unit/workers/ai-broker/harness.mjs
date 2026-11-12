@@ -18,6 +18,8 @@ export const day = Date.parse('2026-10-30T23:59:59Z');
 export const body = {prompt: 'offline test', tier: 'small'};
 // A failed container reply as server.mjs sends it: the error text plus the coded `kind` (container/kinds.mjs; owner, 8 Nov 2026: "Yes, codes").
 export const containerError = (error, extra = {}, status = 500) => new Response(JSON.stringify({error, kind: kindOf(error), ...extra}), {status});
+// The site's switchboard as the broker sees it (12 Nov 2026, ba): the SITE service binding to `www` plus the key for POST /ops/notify. Every note posted lands in `sent` as {url, auth, event, text, link?}.
+export const switchboard = (sent = []) => ({SELFHEAL_PUBLISH_KEY: 'fixture-publish-key', SITE: {fetch: async (url, init) => { sent.push({url: String(url), auth: init.headers.authorization, ...JSON.parse(init.body)}); return Response.json({ok: true, sent: true}); }}});
 export const success = () => new Response(JSON.stringify({reply: 'ok', tokens: {input: 2, output: 3}, ms: 1}));
 
 export function harness(meter, env = {}) {

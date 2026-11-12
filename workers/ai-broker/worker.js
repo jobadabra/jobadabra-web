@@ -12,7 +12,7 @@ import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
 import {modelOf, validEffort, weightOf, EFFORTS} from './lib/tiers.mjs';
 import {tokenShaped, fallbackToday, newNote, apiPrecheck, freeAiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
 import {codexMessage, kindOf} from './container/kinds.mjs';
-import {walk, answered, refused, unavailable, failed} from './lib/walk.mjs';
+import {walk, answered, refused, unavailable, failed, platformCut} from './lib/walk.mjs';
 import {chainOf, configured, recordOutcome, engineHealth, CHOICES, SUBS} from './lib/engines.mjs';
 import {CLAUDE_MODELS} from './lib/tiers.mjs';
 import {demotedNow, recordPerf} from './lib/adapt.mjs';
@@ -73,6 +73,7 @@ export class CodexBroker extends Container {
   // `source` is the text the detail is made of, `bodyWhy` what the 502 says (default: the same, scrubbed). Scrubbed whole, then cut: a key across the cut must not survive. A container that has not answered yet keeps the reason for /health `startError` (#285); a diagnostic write never decides the verdict.
   // Why (8 Nov 2026, bd): this replaces `whileStarting`, which passed a failure on only while the container was starting (#285, #435). Every failure goes on now, so "starting" only decides what /health shows.
   async codexFailure(source, bodyWhy, timeline, starting, why = 'failed') {
+    if (platformCut(source)) why = 'cut';   // the platform's word, whichever path it came by (12 Nov 2026, ba)
     const clean = String(source || '').replace(/\s+/g, ' ').trim(), login = await this.login().catch(() => null), withheld = !login || tokenShaped(clean, login), detail = (withheld ? '(detail withheld: token-shaped)' : clean).slice(0, 200);   // a login that cannot be read withholds the detail: the failure still moves on, nothing unchecked goes out
     if (starting) await this.ctx.storage.put('startError', {at: Date.now(), error: detail}).catch(() => {});
     return failed(why, detail, json(502, {why: withheld ? detail : bodyWhy ?? clean.slice(0, 300), ...(timeline ? {timeline} : {})}));   // Why (code-review, 10 Nov 2026): bodyWhy (the not-JSON container text) went out raw even when its detail was withheld
@@ -331,12 +332,12 @@ export class CodexBroker extends Container {
   }
 
   // Why (1 Nov 2026, first live Claude call failed with no reason shown): a failed Claude step says why in `fellBack[].detail` and /health `lastError`, scrubbed: nothing token-shaped, at most 200 characters.
-  async claudeFailure(text) {
+  async claudeFailure(text, why = platformCut(text) ? 'cut' : 'failed') {
     const clean = String(text || '').replace(/\s+/g, ' ').trim();
     const login = await this.login().catch(() => null), detail = (!login || refuseReply(clean, login) ? '(detail withheld: token-shaped)' : clean).slice(0, 200);   // a login that cannot be read withholds the detail, never throws
     const state = (await this.ctx.storage.get('claude:state')) || {};
     await this.ctx.storage.put('claude:state', {...state, lastError: {at: Date.now(), text: detail}});
-    return failed('failed', detail);
+    return failed(why, detail);
   }
 
   // Whether Claude's own seven-day window allows a call now (lib/budget.mjs claudeAllow), read from the last Claude reply's limits.
@@ -361,10 +362,12 @@ export class CodexBroker extends Container {
       // Why (8 Nov 2026, code-review): the line was read when the call came in, and a call waits for a slot with no deadline (searches, the retry turn); a Claude call that finished meanwhile may have moved the week to 90%. Read it again with the slot in hand, so no call starts past the line.
       const late = await this.claudeLine();
       if (!late.ok) return unavailable('budget', late.why, false);
-      const reply = await this.toContainer('/claude', JSON.stringify({prompt: body.prompt, schema: body.schema, images: body.images, model, ...(body.search === true ? {search: true} : {})}));
+      let reply;
+      try { reply = await this.toContainer('/claude', JSON.stringify({prompt: body.prompt, schema: body.schema, images: body.images, model, ...(body.search === true ? {search: true} : {})})); }
+      catch (error) { return await this.claudeFailure(`call: ${String(error?.message || error)}`, 'cut'); }   // as Codex's step: a call cut by a restart is a failed turn that goes on, never an engine failure (12 Nov 2026, ba)
       let answer;
       let raw = '';
-      try { raw = await reply.text(); answer = JSON.parse(raw); } catch { return await this.claudeFailure('platform: ' + raw); }   // the platform's own error text, not our server's JSON
+      try { raw = await reply.text(); answer = JSON.parse(raw); } catch { return await this.claudeFailure('platform: ' + raw, 'cut'); }   // the platform's own error text, not our server's JSON
       if (answer.limits) {
         // Why (8 Nov 2026, code-review): a rate_limit_event may carry one window only; a missing seven-day window must not turn a known 95% into "unknown" and reopen Claude. The old reading stands until its own reset.
         const before = ((await storage.get('claude:state')) || {}).limits?.sevenDay;
@@ -375,7 +378,7 @@ export class CodexBroker extends Container {
         const kind = kindOfReply(answer);
         if (kind === 'login-lost') {
           await storage.put('claude:state', {...((await storage.get('claude:state')) || {}), invalidUntil: now + 3600_000});   // retried hourly: a new token needs no deploy of ours
-          await noteOnce(storage, env, new Date(now).toISOString().slice(0, 10), 'claude-token-invalid', 'AI broker: the Claude subscription token is invalid or expired. Claude is skipped, the next engine answers. Fix: claude setup-token, then update the Worker secret CLAUDE_CODE_OAUTH_TOKEN.');
+          await noteOnce(storage, env, new Date(now).toISOString().slice(0, 10), 'claude-token-invalid', 'ai-broker-claude-token', 'AI broker: the Claude subscription token is invalid or expired. Claude is skipped, the next engine answers. Fix: claude setup-token, then update the Worker secret CLAUDE_CODE_OAUTH_TOKEN.');
           return unavailable('token-invalid');
         }
         if (kind === 'out-of-quota') {
