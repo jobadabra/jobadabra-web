@@ -8,10 +8,10 @@ import {aiCostFull} from './page-shot-seed-ai-cost.mjs';
 import {dayShare} from './page-shot-seed-day-share.mjs';
 import {healFull, testingFull} from './page-shot-seed-testing.mjs';
 import {searchFinish, searchFinishRead, searchFinishWeek} from './page-shot-seed-finish.mjs'; import {searchScoreboard} from './page-shot-seed-scoreboard.mjs'; import {qualityBoard} from './page-shot-seed-quality.mjs'; import {searchNight, searchNight18, searchNightEuresOff, searchNightNotRun, searchNightYield, searchTrend, searchTrendPrs} from './page-shot-seed-night.mjs'; import {finderSilence} from './page-shot-seed-finders.mjs'; import {methodsCost} from './page-shot-seed-methods-cost.mjs';
-import {redMainRows, stateFields, stateRows} from './page-shot-seed-state.mjs'; import {notifySeeds} from './page-shot-seed-notify.mjs';
+import {redMainRows, stateFields, stateRows} from './page-shot-seed-state.mjs'; import {notifySeeds} from './page-shot-seed-notify.mjs'; import {publishSeeds} from './page-shot-seed-publish.mjs';
 const form = fields => ({method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(fields)});
 
-export const seeds = {...notifySeeds,
+export const seeds = {...notifySeeds, ...publishSeeds,
   'release-mail': async ({env}) => {
     env.MAIL = 'on'; env.MARKETING_MAIL = 'on';
     const data = {version: '0.9.9', month: 'November 2026', headline: 'Locations update as soon as you choose them',

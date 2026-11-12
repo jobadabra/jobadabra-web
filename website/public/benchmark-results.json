@@ -444,7 +444,8 @@
         "file": "persona-10.json",
         "sha256": "211c48af3b35a7295de885c169dd3ab172a83d79fcca01e8bebf007a19514804"
       }
-    ]
+    ],
+    "verdictsUrl": "https://github.com/jobadabra/jobadabra-benchmarks/tree/5d362c7/search-bench/results/2026-10-27"
   },
   "forms": {
     "tools": [

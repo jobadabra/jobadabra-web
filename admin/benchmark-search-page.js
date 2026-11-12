@@ -6,6 +6,7 @@ import {CHIP_STYLE, chip} from './chip.js';
 import {kindsChart} from './jobsearch-charts.js';
 import {figure, VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 import {shareTone} from './applying-tiles.js';
+import {PUBLISH_STYLE, panel, searchSection} from './benchmark-publish.js';
 
 const pct = value => (value == null ? '–' : `${value}%`);
 const clock = seconds => (seconds == null ? '–' : seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
@@ -57,12 +58,12 @@ const METHOD = `<section class="card"><details><summary>How this is measured</su
 <li>Both lists are pooled per persona, shuffled and judged blind; every rule applies to both. No posting texts are kept, only titles, employers and places.</li>
 <li>Biases: the other tool's example config leans to AI and tech; keywords are the English job title; single runs.</li></ul></details></section>`;
 
-export function page(snapshot, {round} = {}) {
+export function page(snapshot, {round, published, confirm} = {}) {
   const key = pickRound(snapshot, round), view = key ? snapshot.rounds[key] : null, keys = Object.keys(snapshot?.rounds || {}).sort().reverse();
   const body = !view ? `<section class="card"><h2>No data yet</h2><p class="muted">The bake-off's search-bench publish step sends every scored round here (<code>PUT /benchmark-search/data</code>); the first round fills this page.</p></section>`
-    : `${keys.length > 1 ? filterLinks(keys.map(k => [k, k, `?round=${encodeURIComponent(k)}`]), key) : ''}${tiles(view)}${scoreboard(view)}${grid(view)}${kinds(view)}${missed(view)}${beyond(view)}${METHOD}`;
+    : `${published ? panel({kind: 'search', round: key, part: searchSection(key, view, snapshot.at), published, ask: confirm === 'publish'}) : ''}${keys.length > 1 ? filterLinks(keys.map(k => [k, k, `?round=${encodeURIComponent(k)}`]), key) : ''}${tiles(view)}${scoreboard(view)}${grid(view)}${kinds(view)}${missed(view)}${beyond(view)}${METHOD}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Benchmark Job Search · Admin</title>
-<link rel="icon" href="/favicon-32.png"><style>${CSS}${CHIP_STYLE}${VIZ_STYLE}</style></head><body><main>
+<link rel="icon" href="/favicon-32.png"><style>${CSS}${PUBLISH_STYLE}${CHIP_STYLE}${VIZ_STYLE}</style></head><body><main>
 <header><h1>🏁 Benchmark Job Search</h1><span class="muted">${snapshot ? `as of ${esc(snapshot.at.slice(0, 16).replace('T', ' '))} UTC${key ? ` · round ${esc(key)}` : ''}` : ''}</span></header>
 ${body}</main>${VIZ_TOOLTIP}</body></html>`;
 }

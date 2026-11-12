@@ -6,6 +6,7 @@ import {countTone, shareTone} from './applying-tiles.js';
 import {segmentKey} from './benchmark-data.js';
 import {objectiveBlock} from './benchmark-objective.js';
 import {fairBlock, pickRound} from './benchmark-fair.js';
+import {PUBLISH_STYLE, formsSection, panel} from './benchmark-publish.js';
 
 const pct = value => (value == null ? '–' : `${value}%`);
 const tone = value => shareTone(value);
@@ -68,7 +69,7 @@ const METHOD = `<section class="card"><details><summary>How this is measured</su
 <li>A required upload the harness's safety guard stopped (the page posts to its own upload address first, and the guard refuses every write to the form site) counts as a hold for every tool, like a consent box. It is recomputed from each run's saved guard log, so no run predates it.</li>
 <li>A tool's total counts its newest run on each form. A single live run varies by about ±1 field: read a 1-2 field difference as noise.</li></ul></details></section>`;
 
-export function page(snapshot, {segment, round} = {}) {
+export function page(snapshot, {segment, round, published, confirm, note = ''} = {}) {
   const key = pickSegment(snapshot, segment), view = key ? snapshot.segments[key] : null;
   const keys = Object.keys(snapshot?.segments || {});
   const fair = fairBlock(snapshot?.fair, round), fairKey = pickRound(snapshot?.fair, round);
@@ -77,9 +78,10 @@ export function page(snapshot, {segment, round} = {}) {
     : `${key.endsWith(':user') ? '' : `<div class="banner">${esc(segmentLabel(key))}: not what real users run, and never added to user mode. Use it only to compare with itself.</div>`}
 ${keys.length > 1 ? filterLinks(keys.map(k => [k, segmentLabel(k), `?view=${encodeURIComponent(k)}`]), key) : ''}
 ${objectiveBlock(view)}${tiles(view)}${scoreboard(view)}${grid(view)}${trend(view)}${METHOD}`;
-  const shown = fair ? `${fair}${view ? `<details class="oldrounds">${OLD}${body}</details>` : ''}` : body;
+  const card = fairKey && published ? panel({kind: 'form', round: fairKey, part: formsSection(fairKey, snapshot.fair.rounds[fairKey], note), published, ask: confirm === 'publish', note}) : '';
+  const shown = fair ? `${card}${fair}${view ? `<details class="oldrounds">${OLD}${body}</details>` : ''}` : body;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Benchmark Form Filling · Admin</title>
-<link rel="icon" href="/favicon-32.png"><style>${CSS}</style></head><body><main>
+<link rel="icon" href="/favicon-32.png"><style>${CSS}${PUBLISH_STYLE}</style></head><body><main>
 <header><h1>📏 Benchmark Form Filling</h1><span class="muted">${snapshot ? `as of ${esc(snapshot.at.slice(0, 16).replace('T', ' '))} UTC · ${fairKey ? 'fair round' : key ? esc(segmentLabel(key)) : ''}` : ''}</span></header>
 ${shown}</main></body></html>`;
 }

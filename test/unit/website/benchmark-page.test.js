@@ -30,3 +30,15 @@ test('source text is escaped rather than executable HTML', () => {
   assert.doesNotMatch(renderResults(dirty).search, /<img src=x/);
   assert.match(renderResults(dirty).search, /&lt;img/);
 });
+
+test('a location count the round did not record reads "not recorded", never "null"', () => {
+  // Why (12 Nov 2026, owner: "null remote · null no · null unknown"): a published search round carries role and place counts only.
+  const sparse = structuredClone(data);
+  for (const t of sparse.search.tools) Object.assign(t, {remote: null, no: null, unknown: null});
+  for (const p of sparse.search.personas) p.judgedJobs = null;
+  const {search, personas} = renderResults(sparse);
+  for (const html of [search, personas]) assert.doesNotMatch(html, /null/);
+  assert.match(search, /\d+ yes · other verdicts not recorded/);
+  assert.match(search, /Remote: not recorded/);
+  assert.match(personas, /Judged jobs not recorded/);
+});
