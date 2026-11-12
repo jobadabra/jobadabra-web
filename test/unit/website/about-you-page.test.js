@@ -37,3 +37,11 @@ test('the table the tool draws from the export holds every live step with exactl
 test('the Intelligence page links to it', () => {
   assert.match(readFileSync(new URL('../../../web/public/intelligence.html', import.meta.url), 'utf8'), /href="\/about-you"/);
 });
+
+// Search Console, 12 Nov 2026: /about-you was "Crawled - currently not indexed" (~170 words, one inbound link, a bare table). It stays in the sitemap, so it needs real text and more than one page linking to it.
+test('/about-you has text beside its table and is linked from two pages (Intelligence and Trust)', () => {
+  const read = name => readFileSync(new URL(`../../../web/public/${name}`, import.meta.url), 'utf8');
+  const words = read('about-you.html').replace(/<script[\s\S]*?<\/script>|<table[\s\S]*?<\/table>|<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length;
+  assert.ok(words >= 250, `${words} words outside the table`);
+  for (const name of ['intelligence.html', 'trust.html']) assert.match(read(name), /href="\/about-you"/, name);
+});

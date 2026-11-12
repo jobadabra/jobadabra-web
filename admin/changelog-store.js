@@ -50,5 +50,5 @@ export async function list(request, env) {
   try { ({results: rows = []} = await env.STATS.prepare('SELECT version, date, channel, body FROM changelog_entries WHERE hidden = 0').all()); } catch { rows = []; }
   if (!rows.length) return env.ASSETS.fetch(new Request(new URL('/changelog-seed.json', request.url), request));   // not public/changelog.json: a static file with the route's name would be served before this code runs
   const entries = rows.map(row => ({version: row.version, date: row.date, channel: row.channel, groups: JSON.parse(row.body)}));
-  return json(newestFirst(entries), 200, {'Cache-Control': 'public, max-age=300'});
+  return json(newestFirst(entries), 200, {'Cache-Control': 'public, max-age=300', 'X-Robots-Tag': 'noindex'});   // Why (12 Nov 2026, Search Console): a data file Google crawled and judged "Crawled - currently not indexed"; the header says that on purpose. The seed fallback gets it from public/_headers
 }

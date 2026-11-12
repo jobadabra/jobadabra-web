@@ -39,3 +39,15 @@ test('the scan catches the two shapes that widened the page on 21 Oct 2026', () 
   assert.ok(!sides('0 calc(50% - 50vw)').some(reachesOut));
   assert.ok(!sides('-12px 0 auto').some(reachesOut));
 });
+
+// 12 Nov 2026 (owner: "the container is still broken", /about-you): readers.css had `body[data-page="about-you"] .wrap { max-width: 100% }`, so that page ran edge to edge
+// while every other page sits in the centred 1160px wrapper. The wrapper is styles.css's `.wrap` alone; a page sheet may style what is inside it, never the wrapper itself.
+test('only styles.css sets the width of the page wrapper (.wrap)', () => {
+  assert.match(readFileSync(new URL('styles.css', dir), 'utf8'), /\.wrap \{ max-width: 1160px; margin-inline: auto; \}/, 'positive control: the one rule exists');
+  for (const name of sheets.filter(each => each !== 'styles.css')) {
+    const css = readFileSync(new URL(name, dir), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g))
+      if (/(^|[\s>,])\.wrap(?![\w-])/.test(selector) && !/\.wrap\s+\S/.test(selector.trim().replace(/^.*,\s*/, '')))
+        assert.ok(!/(max-width|min-width|width|margin)/.test(body), `${name}: "${selector.trim()}" restyles the page wrapper`);
+  }
+});
