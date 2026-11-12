@@ -17,7 +17,8 @@ function world(t, {codex = success} = {}) {
   t.mock.method(globalThis, 'fetch', async () => Response.json({ok: true}));
   let now = T;
   t.mock.method(Date, 'now', () => now);
-  const sent = [], env = {...config.vars, ENGINE: 'codex', FALLBACK_FREE_AI_DAY_USD: '0', ...switchboard(sent)};
+  const sent = [], board = switchboard(sent), site = {down: false}, env = {...config.vars, ENGINE: 'codex', FALLBACK_FREE_AI_DAY_USD: '0', ...board,
+    SITE: {fetch: async (...args) => { if (site.down) throw new Error('site unreachable'); return board.SITE.fetch(...args); }}};   // site.down = the switchboard cannot be reached
   const meter = {...newMeter(0), daily: {day: Math.floor(T / 86400000), calls: {drift: 24, byhand: 0}}};
   const made = harness(meter, env);
   made.broker.containerFetch = async () => codex();
@@ -25,7 +26,7 @@ function world(t, {codex = success} = {}) {
   const at = ms => { now = T + ms; };
   const refused = (workflow = SCOUT) => made.broker.call('drift', body, workflow);   // 429 budget:daily
   const fine = (workflow = SCOUT) => made.broker.call('pr', body, workflow);
-  return {...made, sent, refusing, at, refused, fine, env};
+  return {...made, sent, refusing, at, refused, fine, env, site};
 }
 
 test('the alert is a registry event on Engineering, wired, on by default, "changes only" with its modes', () => {
@@ -94,4 +95,26 @@ test('the streak survives a restart of the broker (a deploy in an outage does no
   again.containerFetch = async () => success();
   w.at(20_000); for (let i = 0; i < 5; i++) await again.call('drift', body, SCOUT);
   assert.equal(w.refusing().length, 1);
+});
+
+test('Gitar on #594: a 🔴 the site could not take is kept and sent on a later call, once; an outage that ends before it was delivered sends nothing at all', async t => {
+  const w = world(t);
+  t.mock.method(console, 'error', () => {});
+  w.site.down = true;
+  for (let i = 0; i < 5; i++) { w.at(i * 2000); await w.refused(); }
+  assert.deepEqual(w.refusing(), [], 'the site was down: nothing arrived');
+  w.at(30_000); await w.refused(); assert.deepEqual(w.refusing(), [], 'a retry is at most once a minute');
+  w.site.down = false;
+  w.at(70_000); await w.refused();
+  assert.equal(w.refusing().length, 1); assert.equal(w.refusing()[0].state, 'down');
+  w.at(140_000); await w.refused(); w.at(210_000); await w.refused();
+  assert.equal(w.refusing().length, 1, 'delivered once, not again');
+  for (let m = 5; m <= 20; m++) { w.at(m * MIN); await w.fine(); }
+  assert.equal(w.refusing().length, 2, 'the first streak ends with its 🟢');
+  // Second streak: the site is down when it opens, and it is over before any retry gets through: nobody was told it began, so nobody is told it ended.
+  const later = 60 * MIN; w.site.down = true;
+  for (let i = 0; i < 5; i++) { w.at(later + i * 2000); await w.refused(); }
+  for (let m = 1; m <= 12; m++) { w.at(later + m * MIN); await w.fine(); }
+  w.site.down = false; w.at(later + 14 * MIN); await w.fine(); w.at(later + 16 * MIN); await w.fine();
+  assert.equal(w.refusing().length, 2, 'the first streak\'s 🔴 and 🟢 only');
 });

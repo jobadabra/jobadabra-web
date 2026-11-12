@@ -2,7 +2,9 @@
 // Every call's end is classified here and fed to the shared sliding-window streak (shared/streak.js); the owner is told once when it opens (🔴) and once when it closes (🟢), through the switchboard like the broker's other notes.
 // Who is told about: every caller of this Worker is a GitHub Actions job (README: "callers are CI jobs only"; /call needs a run token), so the text names the workflow tag the broker already records, never "people".
 import {step, newStreak, listOf} from '../../../shared/streak.js';
-import {noteOnce, ADMIN_COSTS} from './fallback.mjs';
+import {noteOnce, forgetNote, ADMIN_COSTS} from './fallback.mjs';
+
+const RETRY_MS = 60_000;
 
 /** What the walk said about a call that nobody answered: Response -> {left} (the engines that did not answer, lib/walk.mjs), set by worker.js answer(). A WeakMap, so concurrent calls never share it. */
 export const ended = new WeakMap();
@@ -40,13 +42,30 @@ export const upText = event => `🟢 AI broker answers again (the streak began $
 export async function noteCall({storage, env, reply, workflow, now = Date.now(), chain}) {
   const outcome = await outcomeOf(reply, ended.get(reply)?.left);
   if (!outcome) return;
-  const event = await storage.transaction(async tx => {
-    const {state, event} = step(await tx.get('streak') || newStreak(), now, {bad: outcome.bad, why: outcome.why, who: short(workflow)});
-    await tx.put('streak', state);
-    return event;
-  });
-  if (!event) return;
   const day = new Date(now).toISOString().slice(0, 10);
-  if (event.kind === 'down') await noteOnce(storage, env, day, `refusing-${event.startedAt}`, 'ai-broker-refusing', downText(event, await chain().catch(() => [])), ADMIN_COSTS, {state: 'down', level: 'problem'});
-  else await noteOnce(storage, env, day, `refusing-up-${event.startedAt}`, 'ai-broker-refusing', upText(event), ADMIN_COSTS, {state: 'up', level: 'ok'});
+  // One transaction decides what to send: the event this call opened or closed, else a note an earlier call could not deliver (at most one retry a minute, so a site that is down never slows every call).
+  const todo = await storage.transaction(async tx => {
+    const {state, event} = step(await tx.get('streak') || newStreak(), now, {bad: outcome.bad, why: outcome.why, who: short(workflow)});
+    let next = null;
+    if (event?.kind === 'up' && state.unsent?.kind === 'down' && state.unsent.startedAt === event.startedAt) delete state.unsent;   // nobody was told it began: no "again" either (shared/synthetic.js does the same)
+    else if (event) { if (state.unsent?.kind === 'up') delete state.unsent; next = {event}; }
+    else if (state.unsent && now >= state.unsent.retryAt) { state.unsent.retryAt = now + RETRY_MS; next = {retry: state.unsent}; }
+    await tx.put('streak', state);
+    return next;
+  });
+  if (!todo) return;
+  const note = todo.retry || (todo.event.kind === 'down'
+    ? {kind: 'down', startedAt: todo.event.startedAt, text: downText(todo.event, await chain().catch(() => []))}
+    : {kind: 'up', startedAt: todo.event.startedAt, text: upText(todo.event)});
+  const marker = note.kind === 'down' ? `refusing-${note.startedAt}` : `refusing-up-${note.startedAt}`;
+  const delivered = await noteOnce(storage, env, day, marker, 'ai-broker-refusing', note.text, ADMIN_COSTS, note.kind === 'down' ? {state: 'down', level: 'problem'} : {state: 'up', level: 'ok'});
+  // Why (12 Nov 2026, Gitar on #594): noteOnce takes its marker before the POST, so a site that could not be reached at the moment a streak opened would lose the 🔴 for good. The note is kept in the streak state and tried again on a later call.
+  await storage.transaction(async tx => {
+    const state = await tx.get('streak');
+    if (!state) return;
+    if (delivered) { if (state.unsent?.kind === note.kind && state.unsent.startedAt === note.startedAt) delete state.unsent; }
+    else state.unsent = {...note, retryAt: now + RETRY_MS};
+    await tx.put('streak', state);
+  });
+  if (!delivered) await forgetNote(storage, day, marker);
 }

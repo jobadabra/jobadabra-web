@@ -15,6 +15,7 @@ const minuteOf = now => now.toISOString().slice(0, 16);
 export async function outcomeOf(response, seen = {}) {
   if (response.ok) return {bad: false};
   if (response.status < 500) return null;   // their own limit, token or body: not an outage
+  // Why (12 Nov 2026, mac-9a's brief and the owner's approved text, "Free AI is busy today"; Gitar on #594 suggested leaving it out): the global busy lines (the day or month stop, Workers AI's daily allowance) stay counted. `free-ai-spend` tells the owner when spend crosses its alert line, before the stop; this tells when everybody is turned away, which is a person who cannot act.
   const said = await response.clone().json().catch(() => null), message = String(said?.error?.message || '');
   const why = seen.cause ? String(seen.cause).replace(/\s+/g, ' ').trim() : message.split(/[.?!]/)[0] || `HTTP ${response.status}`;
   return {bad: true, why: why.slice(0, 80)};
@@ -30,10 +31,13 @@ export async function tally(env, request, response, seen, now) {
   if (outcome.bad) await env.STATS.prepare('INSERT INTO free_ai_failed (at, who, why) VALUES (?, ?, ?)').bind(now.toISOString(), String(seen.who || 'unknown').slice(0, 16), outcome.why).run();
 }
 
-/** The last five minutes as the streak reads them, from D1: {ok, bad, whys: [[why, n]], installs}. */
+/**
+ * The last five minutes as the streak reads them, from D1: {ok, bad, whys: [[why, n]], installs}.
+ * Why (12 Nov 2026, Gitar on #594): both queries cut at the same whole minute (minute > now-5min), so the failures listed (causes, installs) are exactly the ones in the ratio.
+ */
 async function windowOf(env, now) {
   const from = new Date(now.getTime() - 5 * 60_000), sum = await env.STATS.prepare('SELECT COALESCE(SUM(ok), 0) AS ok, COALESCE(SUM(bad), 0) AS bad FROM free_ai_minutes WHERE minute > ? AND minute <= ?').bind(minuteOf(from), minuteOf(now)).first();
-  const rows = (await env.STATS.prepare('SELECT who, why FROM free_ai_failed WHERE at > ? AND at <= ?').bind(from.toISOString(), now.toISOString()).all()).results || [], whys = {};
+  const rows = (await env.STATS.prepare('SELECT who, why FROM free_ai_failed WHERE substr(at, 1, 16) > ? AND substr(at, 1, 16) <= ?').bind(minuteOf(from), minuteOf(now)).all()).results || [], whys = {};
   for (const row of rows) whys[row.why] = (whys[row.why] || 0) + 1;
   return {ok: sum?.ok || 0, bad: sum?.bad || 0, whys: Object.entries(whys).sort((a, b) => b[1] - a[1]).slice(0, 3), installs: new Set(rows.map(row => row.who)).size, who: []};
 }

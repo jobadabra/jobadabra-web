@@ -117,3 +117,14 @@ test('a site without its database or without Workers AI answers as before and co
   w.fail('x');
   assert.equal((await w.call('install-gggg', 1000)).status, 502);
 });
+
+test('Gitar on #594: the failures listed are exactly the ones in the ratio (same whole-minute edge for the counts and the details)', async () => {
+  const w = world(); await w.ready();
+  w.fail('old cause');
+  for (let i = 0; i < 3; i++) await w.call('install-hhhh', 20_000 + i * 1000);   // 12:00:30, in the minute the 5-minute edge cuts out
+  w.fail('new cause');
+  for (let i = 0; i < 3; i++) await w.call('install-iiii', 3 * MIN + i * 1000);
+  await w.judge(5 * MIN);   // 12:05:10
+  assert.equal(failing(w.sends).length, 1);
+  assert.match(w.sends[0], /3 of 3 in 5 min/); assert.match(w.sends[0], /new cause ×3/); assert.doesNotMatch(w.sends[0], /old cause/); assert.match(w.sends[0], /installs affected: 1/);
+});
