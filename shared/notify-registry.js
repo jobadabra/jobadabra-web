@@ -34,6 +34,9 @@ export const ALERTS = [
   // Search check (public search-personas.yml, desktop/e2e/search-alert.mjs) tells a lost source, a number under its floor, a night no AI answered, and green again once. On Engineering it is the bot
   // connected there (Admin → Operations → Notifications); when the switchboard refuses, the sender falls back to the CI-alerts bot.
   a('search-night', '🔎 Find jobs night check: a source lost, a floor broken or the night not run', 'main', 'changes', 'engineering', {wired: true, modes: ['every', 'changes'], jobs: ['search-personas.yml']}),
+  // Why (13 Nov 2026, owner via sa: one Telegram message per finished run of the 30 Trello profiles on CI): the by-hand search-profiles.yml (public) says how many of the profiles got 0 right jobs,
+  // how many meet their target (N >= X, X = the profile's EURES count) and links the table; its sender (public desktop/e2e/tell-owner.mjs --event search-profiles) merges after this line.
+  a('search-profiles', '🧪 30 profiles on CI: a by-hand run finished (how many got 0 right jobs, how many meet their EURES count)', 'main', 'every', 'engineering', {wired: true, jobs: ['search-profiles.yml']}),
   // Why (12 Nov 2026, owner, asked via AskUserQuestion: "One shared alert"; "let's close these gaps"): ~40 scheduled workflows alerted only if someone added a step (board discovery had none), and the Worker's refused start was silent.
   // One sender for all of them (shared/job-alert.js, from the hourly Scheduled snapshot and the Worker's own start); the switch of each job sits on Admin → Scheduled, jobs with their own failure alert are listed in OWN_ALERT there.
   a('scheduled-job-red', '❌ A scheduled job failed (once per red streak) · works again', 'main', 'every', 'engineering', {wired: true}),

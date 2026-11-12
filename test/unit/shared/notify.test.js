@@ -217,6 +217,15 @@ test('search-night: the Find jobs night check tells Engineering on a change only
   assert.equal((await notify(e, lost, {fetcher: tg.fetcher, now: NOW})).body.sent, false, 'the same lost source the same day is told once');
 });
 
+test('search-profiles: a by-hand run of the 30 Trello profiles tells Engineering every time it ends, from search-profiles.yml (13 Nov 2026, owner via sa)', async () => {
+  const alert = alertOf('search-profiles');
+  assert.deepEqual([alert.on, alert.mode, alert.channel, alert.group, alert.wired], [true, 'every', 'engineering', 'main', true]);
+  assert.ok(alertsForJob('search-profiles.yml').some(item => item.id === 'search-profiles'));
+  const e = env(), tg = await withBot(e), run = {event: 'search-profiles', text: '🧪 30 profiles · 4 of 30 got 0 right jobs · 11 meet target (N ≥ X)'};
+  assert.equal((await notify(e, run, {fetcher: tg.fetcher, now: NOW})).body.sent, true);
+  assert.equal((await notify(e, run, {fetcher: tg.fetcher, now: NOW})).body.sent, true, 'every run is told, not once a day');
+});
+
 test('every alert that is not parked has its sender on the switchboard (12 Nov 2026, owner: "Still getting on old telegram bots": Admin must read "every sender uses the switchboard"); an alert whose sender is not built is parked, with its reason', () => {
   assert.deepEqual(ALERTS.filter(alert => !alert.parked && !alert.wired).map(alert => alert.id), []);
   for (const alert of ALERTS.filter(alert => alert.parked)) assert.ok(String(alert.parked).length > 20, `${alert.id}: a parked alert says why`);
