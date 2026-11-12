@@ -91,7 +91,7 @@
 
   // The cursor glow on every card (effects.css .glow): the light follows a mouse or pen, never a finger, and stays still with reduced motion.
   // A new kind of card joins CARDS, or LEFT_OUT in test/unit/website/effects.test.js says why not.
-  const CARDS = ['.glow-panel', '.steps li', '.numbers li', '.next-page', '.os-card', '.trust-grid li', '.stop-panel', '.setup-cols > div', '.pass', '.boarding',
+  const CARDS = ['.glow-panel', '.bench-mini', '.steps li', '.numbers li', '.next-page', '.os-card', '.trust-grid li', '.stop-panel', '.setup-cols > div', '.pass', '.boarding',
     '.faq details', '.promise', '.plat-card', '.ai-step', '.apply-steps li', '.evidence-stats li', '.first-run li', 'details.tech'];
   for (const card of document.querySelectorAll(CARDS.join(','))) {
     card.classList.add('glow');
