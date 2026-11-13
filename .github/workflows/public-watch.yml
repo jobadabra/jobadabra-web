@@ -54,7 +54,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          [ "${{ steps.change.outputs.site }}" = changed ] && gh workflow run site.yml
-          [ "${{ steps.change.outputs.ready }}" = changed ] && gh workflow run release-ready-runner.yml
-          [ "${{ steps.change.outputs.hosted }}" = changed ] && gh workflow run release-hosted-runner.yml -f target=production
+          # Why (Gitar on #634): a deploy that did not start keeps its old record, so only it is tried again next time; the ones that started are recorded and never fired twice
+          failed=0
+          # A record new to the tag has no old copy: it is left empty, which never equals a hash, so the next watch starts that deploy again.
+          start() { local out="$1" records; read -ra records <<< "$2"; shift 2; [ "$out" = changed ] || return 0; gh workflow run "$@" && return 0
+            echo "::error::$1 did not start; it is tried again at the next watch" >&2; failed=1
+            for record in "${records[@]}"; do git -C "$GITHUB_WORKSPACE/.state" checkout -q -- "$record" 2>/dev/null || : > "$GITHUB_WORKSPACE/.state/$record"; done; }
+          start "${{ steps.change.outputs.site }}" .public-site site.yml
+          start "${{ steps.change.outputs.ready }}" .public-ready release-ready-runner.yml
+          start "${{ steps.change.outputs.hosted }}" ".public-hosted .public-hosted-own" release-hosted-runner.yml -f target=production
           tools/state-tag.sh write public-watch-state "$GITHUB_WORKSPACE/.state" "Record the public files the last deploy was started for" .public-site .public-ready .public-hosted .public-hosted-own
+          exit "$failed"
