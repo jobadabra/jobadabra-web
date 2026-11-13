@@ -20,7 +20,7 @@ export function totals(rows) {
 
 const parse = text => { try { const value = typeof text === 'object' ? text : JSON.parse(text || '{}'); return value && typeof value === 'object' ? value : {}; } catch { return {}; } };
 
-// rows -> {rounds: {'2026-10-20': {tools, personas, grid, kinds, missed}}}: tools = ours first, then the others by relevant jobs.
+// rows -> {rounds: {'2026-10-20': {at, ai, tools, personas, grid, kinds, missed}}} (at = the newest row's time: the page lists rounds by it): tools = ours first, then the others by relevant jobs.
 export function summarize(rows) {
   const rounds = {};
   for (const round of [...new Set(rows.map(row => row.round))].sort()) {
@@ -36,7 +36,7 @@ export function summarize(rows) {
     const missed = {};
     for (const tool of tools.filter(item => !item.ours)) for (const row of tool.rows) for (const [system, count] of Object.entries(parse(row.missed))) missed[system] = (missed[system] || 0) + (Number(count) || 0);
     // Why (13 Nov 2026): the AI is ours alone; 'app' if any of our lines in the round ran on it (admin/benchmark-ai.js).
-    rounds[round] = {ai: mine.some(row => row.ours && aiOf(row.ai) === 'app') ? 'app' : 'haiku', tools: tools.map(({rows: _rows, ...tool}) => tool), personas, grid, kinds, missed: Object.entries(missed).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 30)};
+    rounds[round] = {at: mine.reduce((newest, row) => (row.at > newest ? row.at : newest), ''), ai: mine.some(row => row.ours && aiOf(row.ai) === 'app') ? 'app' : 'haiku', tools: tools.map(({rows: _rows, ...tool}) => tool), personas, grid, kinds, missed: Object.entries(missed).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 30)};
   }
   return {schema: 1, rounds};
 }
