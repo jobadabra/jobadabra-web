@@ -125,6 +125,7 @@ import {view as promoCodesView} from '../../admin/promo-codes.js';
 import {status as trialStatus} from '../../shared/trial.js';
 import * as hosted from '../../shared/hosted.js';
 import * as hostedState from '../../api/hosted-state.js';
+import * as linkedinTurn from '../../api/linkedin-turn.js';
 import {tick as hostedTick} from '../../api/hosted-tick.js';
 import {test as hostedTest} from '../../api/hosted-test.js';
 import {ready, sweep as readySweep} from '../../api/ready.js';
@@ -333,6 +334,8 @@ async function route(request, env, ctx) {
   if (pathname === '/api/hosted/result') return hosted.result(request, env);   // a container's one result post (run token)
   if (pathname === '/api/hosted/state') return hostedState.state(request, env);   // the container's state, encrypted in R2 (api/hosted-state.js)
   if (pathname === '/api/hosted/config') return hostedState.config(request, env);   // profile and search the app pushes (no CV); the container reads
+  if (pathname === '/api/linkedin/turn') return linkedinTurn.turn(request, env);   // the Always on LinkedIn trial: a turn before each public-search GET (api/linkedin-turn.js; 404 while LINKEDIN_CLOUD_TRIAL is off)
+  if (pathname === '/api/linkedin/answer') return linkedinTurn.answer(request, env);   // what LinkedIn answered to that GET (a stop answer stops the cloud for 24 h)
   if (pathname === '/api/hosted/export' || pathname === '/api/hosted/data') return hostedState.own(request, env);   // download and delete my hosted data
   if (pathname.startsWith('/api/ready/')) return ready(request, env);   // Ready to send, phase 1: the owner's night batch and morning rows (api/ready.js; 404 while READY_TO_SEND is off)
   if (pathname === '/api/hosted/test') return hostedTest(request, env);   // the Test button on our servers' card: one real run now, steps in words (api/hosted-test.js)
