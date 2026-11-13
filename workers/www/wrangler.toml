@@ -94,6 +94,9 @@ HOSTED_ALWAYS_ON = "on"
 HOSTED_MAX_RUNS_DAY = "2000"         # global cap of hosted runs a day (api/hosted-tick.js); trial runs are capped first by HOSTED_TRIAL_MAX_RUNS_DAY
 HOSTED_TRIAL_MAX_RUNS_DAY = "1500"
 HOSTED_RUN_MICRO = "11000"   # compute debited per finished run, micro-USD: 2x the $0.0055 measured in a container (owner, 17 Oct 2026: "$0.011, keep 2x")
+# The Always on LinkedIn trial (api/linkedin-turn.js): "off" = its routes answer 404. Only the owner's install (secret READY_OWNER) gets a turn; LINKEDIN_CLOUD_A_DAY raises the 30 a day, never above 200.
+# Why (owner, 13 Nov 2026, asked via AskUserQuestion: "Both ways", "By hand, right after merge (Recommended)"): on at merge for the first by-hand run.
+LINKEDIN_CLOUD_TRIAL = "on"
 # Ready to send, phase 1 (api/ready.js, spec docs/superpowers/specs/2026-10-17-ready-to-send.md): "off" = every route answers 404. Secret READY_OWNER = the owner's install id (only that install reaches a route).
 READY_TO_SEND = "on"
 READY_NIGHT_MAX_USD = "1"   # a night's container + AI cost stops the batch here (owner, 17 Oct 2026: a cap per night)
