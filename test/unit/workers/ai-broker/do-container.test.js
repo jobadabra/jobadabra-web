@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {AiBroker, AllowHosts, body, success, entry} from './harness.mjs';
+import {AiBroker, AllowHosts, body, success, entry, harness, PARALLEL, NEXT_PARALLEL} from './harness.mjs';
 import {INSTANCE} from '../../../../workers/ai-broker/lib/do-container.mjs';
 
 const config = JSON.parse(readFileSync(new URL('../../../../workers/ai-broker/wrangler.jsonc', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
@@ -155,4 +155,10 @@ test('Gitar on #606: every call renews the 10-minute sleep, and a start whose lo
   fail = false;
   assert.equal((await b.made.containerFetch('http://c/call', {method: 'POST', body: '{}'})).status, 200);
   assert.equal(failing.log.filter(([what]) => what === 'start').length, 2, 'the next call started a new container, with its login');
+});
+
+test('Gitar on #607: the 4 vCPU AiBroker runs 24 calls at once and the 2 vCPU CodexBroker keeps 16, so a rollback (BROKER_ACTIVE unset) never puts 24 on 2 vCPU', t => {
+  const {made} = broker(t, box());
+  assert.deepEqual([made.gate.stats().slots, NEXT_PARALLEL], [24, 24]);
+  assert.deepEqual([harness().broker.gate.stats().slots, PARALLEL], [16, 16]);
 });

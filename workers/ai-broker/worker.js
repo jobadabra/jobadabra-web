@@ -34,10 +34,10 @@ export {ContainerProxy} from '@cloudflare/containers';   // required by the outb
 // slots are full, and the waits came in bursts (15-16Z p90 23-31 s, scheduled lane 87% of all waiting) while the container's CPU stayed at most 0.46-0.60 (median 0.18-0.26)
 // and memory at most 2.1 of 6 GiB; hours that peaked at 0.93-0.96 CPU had no waits (slots not full, so more slots add no load there). Read the waits and CPU per minute on
 // the first by-hand Search check after this deploy: back to 12 if the CPU passes ~0.9 in minutes that still wait.
-/** How many calls run in the container at once, every engine together (the one gate below). */
-export const PARALLEL = 24;
+/** How many calls run in the 4 vCPU AiBroker's container at once, every engine together (the one gate below); OLD_PARALLEL is the 2 vCPU CodexBroker's, kept for a rollback (BROKER_ACTIVE unset) until plan 2/2 removes it. */
+export const PARALLEL = 24, OLD_PARALLEL = 16;
 // Why 24 (13 Nov 2026, owner, asked via AskUserQuestion by sa: "24 slots now, measure (Recommended)"): 16 slots fit ~2.5 parallel searches; 2 searches waited p90 11-16 s,
-// 4 searches + board discovery p90 ~110 s (all 16 busy, up to 27 waiting, 2 vCPU at 1.92-1.99). 24 runs on 4 vCPU (#606); 24 Claude calls at ~210 MB = ~5.2 GiB of 6 (no paid memory).
+// 4 searches + board discovery p90 ~110 s (all 16 busy, up to 27 waiting, 2 vCPU at 1.92-1.99). 24 runs on 4 vCPU (#606) only: Gitar on #607, a rollback to the 2 vCPU broker keeps its 16; 24 Claude calls at ~210 MB = ~5.2 GiB of 6 (no paid memory).
 // Design (13 Nov 2026, owner: "make the claude limit to be an unified slot cap which is 16" · "no isolate claude cap"): one gate of PARALLEL slots, owned by this class, for
 // every engine. A call holds one slot from its engine's turn to the reply, whatever the engine; nothing else limits how many calls of one engine run. Third change of the Claude
 // cap in a day (3 -> 6 #604 -> Worker variable 16 -> one gate), so the separate gate is gone rather than tuned: at 3 the Claude-only benchmark (639 calls, 12 Nov 23:20-23:55Z)
@@ -49,7 +49,7 @@ const pass = req => fetch(req);
 const json = (status, body) => new Response(JSON.stringify(body), {status, headers: {'content-type': 'application/json'}});
 
 // The broker, on either container runtime: CodexBroker (the Container class, today's policy) and AiBroker (durable_object policy, lib/do-container.mjs).
-const brokerOf = Base => class extends Base {
+const brokerOf = (Base, parallel) => class extends Base {
   constructor(ctx, env) {
     super(ctx, env);
     this.brokerEnv = env;
@@ -63,7 +63,7 @@ const brokerOf = Base => class extends Base {
   interceptHttps = true;
   allowedHosts = HOSTS;
   static outboundByHost = Object.fromEntries(HOSTS.map(h => [h, pass]));
-  gate = slots(PARALLEL);
+  gate = slots(parallel);
   turns = keyedLock();   // one turn at a time per Codex conversation (lib/sessions.mjs); other keys and plain calls never wait
   drainWaitMs = DRAIN_WAIT_MS; drainPollMs = 1000;   // how long a call waits for a stopping container to hand over (toContainer); a test shortens both
   busyMs = BUSY_MS;   // how long a call that may pass on waits for a Claude slot (lib/busy.mjs); a test shortens it
@@ -163,7 +163,7 @@ const brokerOf = Base => class extends Base {
 
   // One slot wait into its engine's wait alert (lib/waiting.mjs); never delays or changes the call.
   waited(wait) {
-    if (wait) noteWait({storage: this.ctx.storage, env: this.brokerEnv, wait, slots: PARALLEL}).catch(error => console.log(`waiting: ${String(error?.message || error).slice(0, 200)}`));
+    if (wait) noteWait({storage: this.ctx.storage, env: this.brokerEnv, wait, slots: parallel}).catch(error => console.log(`waiting: ${String(error?.message || error).slice(0, 200)}`));
   }
 
   // Reads the finished reply's own tokens, engine and time (a refusal has none and still counts as a call), then adds them to today's row in one transaction.
@@ -421,9 +421,9 @@ const brokerOf = Base => class extends Base {
 };
 
 /** The broker CI calls reach today: the Container class, 2 vCPU / 6 GiB (wrangler.jsonc). */
-export class CodexBroker extends brokerOf(Container) {}
+export class CodexBroker extends brokerOf(Container, OLD_PARALLEL) {}
 /** The same broker on the durable_object policy at 4 vCPU / 6 GiB (lib/do-container.mjs; plan 1/3, 13 Nov 2026): only /admin/next/* and /next/health reach it until the switch (2/3). */
-export class AiBroker extends brokerOf(doContainer(DurableObject)) {}
+export class AiBroker extends brokerOf(doContainer(DurableObject), PARALLEL) {}
 /** AiBroker's container's only way out: the AI hosts (lib/do-container.mjs registers it for each). */
 export class AllowHosts extends allowHosts(WorkerEntrypoint, HOSTS) {}
 
