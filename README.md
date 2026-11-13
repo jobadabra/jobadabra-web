@@ -37,3 +37,5 @@ Lab: `RANDOM_DRAWS_ANTHROPIC_KEY`, `CI_APP_ID`, `CI_APP_PRIVATE_KEY`. `NET_RECOR
 Never deploy Worker `www` from here and from public `site.yml` at the same time.
 
 **The tidy top level and the joined tree** (owner, 2 Nov 2026): the repo root shows few, grouped folders; `tools/layout-map.txt` says where each lands in the joined tree (this repo laid over the public one), so `website/` runs as `web/` with no import or workflow step changed. `tools/lay-private.sh` is the one place that applies the map (overlay.sh, tree.sh, hero.sh); a test is `test/tooling/lay-private.test.js`.
+
+<!-- gl proof 13 Nov 2026: tests the shared PR-labels workflow; closed unmerged -->
