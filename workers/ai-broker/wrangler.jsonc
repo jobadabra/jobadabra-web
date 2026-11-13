@@ -20,12 +20,16 @@
   // 1 vCPU was the limit, not the 8 slots (CPU 0.99 in the busiest minutes at 2-3 people, web#558; start-up 1.7 s alone, 8.5 s at 8 calls). 2 vCPU needs at least 6 GiB (Cloudflare: 3 GiB a vCPU minimum). Memory is billed while awake ($0.009 a GiB-hour), CPU by use,
   // so the extra is about +$0.027 an awake hour. max_instances stays 1 (one login, one refresher; several containers = untested two-refreshers design). PARALLEL is 12 since 12 Nov 2026 (worker.js says why): memory would allow far more, CPU (now 2) is what is unmeasured at more than 12.
   "containers": [
-    {"name": "ai-broker", "image": "./container/Dockerfile", "image_build_context": ".", "instance_type": {"vcpu": 2, "memory_mib": 6144, "disk_mb": 4000}, "max_instances": 1}
+    {"name": "ai-broker", "image": "./container/Dockerfile", "image_build_context": ".", "instance_type": {"vcpu": 2, "memory_mib": 6144, "disk_mb": 4000}, "max_instances": 1},
+    // Why (13 Nov 2026, owner: "then, explore and try" the custom instance types; "Yes, start PR 1/3 (Recommended)"): the same image on the durable_object policy, whose size AiBroker
+    // sets when it starts the container (4 vCPU / 6 GiB, lib/do-container.mjs; the old policy needs 12 GiB for 4 vCPU). Built beside the broker above, reached only by /admin/next/* until 2/3.
+    // This policy has no max_instances: one container per AiBroker object, and the front Worker names one object ("broker").
+    {"name": "ai-broker-next", "class_name": "AiBroker", "scheduling_policy": "durable_object", "images": {"base": {"dockerfile": "./container/Dockerfile", "build_context": "."}}}
   ],
   // Why (12 Nov 2026, owner: "this one I think should be on engineering"): the broker's notes go to the site's switchboard (POST /ops/notify on the `www` Worker), which picks the channel and the owner's switch; no Telegram secret lives here.
   // Secret: SELFHEAL_PUBLISH_KEY (the key every CI upload uses; Bearer for /ops/notify; a Worker secret does not move with the namespace). Without it, or without this binding, a note is not sent.
   "services": [{"binding": "SITE", "service": "www"}],
   "ai": {"binding": "AI"},
-  "durable_objects": {"bindings": [{"name": "BROKER", "class_name": "CodexBroker"}]},
-  "exports": {"CodexBroker": {"type": "durable-object", "storage": "sqlite", "container": "ai-broker"}}
+  "durable_objects": {"bindings": [{"name": "BROKER", "class_name": "CodexBroker"}, {"name": "BROKER_NEXT", "class_name": "AiBroker"}]},
+  "exports": {"CodexBroker": {"type": "durable-object", "storage": "sqlite", "container": "ai-broker"}, "AiBroker": {"type": "durable-object", "storage": "sqlite"}}
 }
