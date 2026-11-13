@@ -6,6 +6,7 @@ import {MAX_CANDIDATES, candidateStatements, cleanCandidates, pruneCandidates} f
 import {familyOfInstall} from '../shared/engines.js';
 import {COUNTRIES, METROS, FAMILIES} from '../shared/pool-tags.js';
 import {REGIONS, ROLES} from '../shared/pool-labels.js';
+import {installHit} from '../shared/install-caps.js';
 
 const SYSTEMS = ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'teamtailor', 'join', 'workday', 'umantis', 'successfactors', 'oracle', 'phenom', 'eightfold', 'careers', 'amazon', 'netflix', 'jobsch'];
 // A learned page layout, checked and in one canonical form (identical layouts from several installs are counted together): a CSS selector of
@@ -165,7 +166,9 @@ export async function contribute(request, env, now = new Date()) {
   const kv = env.WAITLIST, limit = `pool:${install}`;
   const minute = `${limit}:${Math.floor(now.getTime() / 60000)}`;
   const used = kv ? Number(await kv.get(minute)) || 0 : 0;
-  if (used >= PER_MINUTE) return Response.json({ok: false, error: `at most ${PER_MINUTE} contributions a minute`}, {status: 429});
+  const full = used >= PER_MINUTE;
+  await installHit(env, 'pool-minute', install, used + 1, PER_MINUTE, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+  if (full) return Response.json({ok: false, error: `at most ${PER_MINUTE} contributions a minute`}, {status: 429});
   if (kv) await kv.put(minute, String(used + 1), {expirationTtl: 120});
   const today = day(now);
   // matched / own: a one-item share made the same day (matched false) must not undo what that day's jobs check saw.

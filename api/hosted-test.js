@@ -16,6 +16,7 @@ import {hostedOn, installOf, runToken, startRun} from '../shared/hosted.js';
 import {addrOf} from '../shared/mail.js';
 import {testAlert} from './mail-held.js';
 import {dayCaps, freeStopped, MONTH_COMPUTE_MICRO, monthSpent, openRun, runsToday, SITE, trialSpent} from './hosted-tick.js';
+import {installHit} from '../shared/install-caps.js';
 
 // READ_WAIT_MS: a container starts and reads the profile in ~10 s (production, 5 Nov 2026: 7-10 s); past this it did not start. Why (review of hr-23): well under the app's 60 s give-up
 // (desktop/renderer/always-on-test-words.js), so the site's failed verdict always arrives first and no step is left on Checking. AI_WAIT_MS: the AI's one short answer.
@@ -84,7 +85,9 @@ export async function test(request, env, now = new Date()) {
   const tests = await env.STATS.prepare("SELECT SUM(CASE WHEN started_at >= ? THEN 1 ELSE 0 END) AS n, MAX(started_at) AS last FROM hosted_runs WHERE account = ? AND slot LIKE 'test-%' AND started_at >= ?")
     .bind(`${stamp.slice(0, 10)}T00:00:00`, account.id, new Date(Math.min(now.getTime() - COOLDOWN_MS, Date.parse(`${stamp.slice(0, 10)}T00:00:00Z`))).toISOString()).first();
   if (tests.last && now.getTime() - Date.parse(tests.last) < COOLDOWN_MS) return say(429, 'A test ran a moment ago. Try again in a few minutes.', {reason: 'cooldown'});
-  if ((tests.n || 0) >= TESTS_PER_DAY) return say(429, 'You have tested a few times today. Try again tomorrow.', {reason: 'daily'});
+  const full = (tests.n || 0) >= TESTS_PER_DAY;
+  await installHit(env, 'hosted-tests-day', account.id, (tests.n || 0) + 1, TESTS_PER_DAY, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+  if (full) return say(429, 'You have tested a few times today. Try again tomorrow.', {reason: 'daily'});
   if (await monthSpent(env, account.id, stamp) >= MONTH_COMPUTE_MICRO) return say(409, PAUSED.guard, {reason: 'guard'});
   const trial = !(account.plan === 'pro' && account.status === 'active');
   if (trial && await trialSpent(env, schedule.install)) return say(402, PAUSED['trial-over'], {reason: 'trial-over'});

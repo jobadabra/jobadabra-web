@@ -14,6 +14,7 @@ import {benchmarks, report} from '../shared/knowledge.js';
 import {isOwner} from '../shared/auth.js';
 import {packMeanings, vote as voteMeanings} from './meanings.js';
 import {shares as factShares} from '../shared/fact-asks.js';
+import {installHit} from '../shared/install-caps.js';
 
 const STATUSES = ['candidate', 'canary', 'verified', 'disabled'];
 const STEPS = [5, 25, 100];
@@ -76,7 +77,9 @@ export async function pack(request, env, now = new Date()) {
   if (env.WAITLIST) {
     const key = `aliases-get:${install}:${day(now)}`;
     const used = Number(await env.WAITLIST.get(key)) || 0;
-    if (used >= PER_INSTALL_PER_DAY) { await flag(env, 'quota', access.who, 'aliases', now); return json({ok: false, error: 'limit reached for today'}, 429); }
+    const full = used >= PER_INSTALL_PER_DAY;
+    await installHit(env, 'aliases-day', access.who, used + 1, PER_INSTALL_PER_DAY, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+    if (full) { await flag(env, 'quota', access.who, 'aliases', now); return json({ok: false, error: 'limit reached for today'}, 429); }
     await env.WAITLIST.put(key, String(used + 1), {expirationTtl: 2 * 86400});
   }
   const rows = (await env.STATS.prepare("SELECT key, phrase, status, rollout FROM aliases WHERE status IN ('canary', 'verified')").all()).results || [];

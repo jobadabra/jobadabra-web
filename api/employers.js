@@ -12,6 +12,7 @@ import {alertOwner} from '../shared/notify-send.js';
 import {store as storeScouting} from '../shared/scouting.js';
 import {snapshot, storeSnapshot} from '../shared/scouting-snapshot.js';
 import {storeBoardCounts} from '../shared/board-counts.js';
+import {installHit} from '../shared/install-caps.js';
 const KEY = 'index:employers';
 const NOFEED_KEY = 'index:nofeed';
 const SUMMARY_KEY = 'index:summary';   // the website's two counts, written at every publish (the old single-value copy stops once the list outgrows it)
@@ -254,7 +255,9 @@ async function download(request, env, now = new Date()) {
     if (have && have === (await env.WAITLIST.get(GENERATED_KEY))) return text(304, null, {'Cache-Control': 'private, max-age=3600'});
     const key = `index-get:${install}:${day(now)}`;
     const used = Number(await env.WAITLIST.get(key)) || 0;
-    if (used >= INDEX_PER_INSTALL_PER_DAY) { await flag(env, 'index-quota', access.who, 'index downloads', now); return text(429, JSON.stringify({ok: false, error: 'limit reached for today'}), {'Content-Type': 'application/json'}); }
+    const full = used >= INDEX_PER_INSTALL_PER_DAY;
+    await installHit(env, 'index-day', access.who, used + 1, INDEX_PER_INSTALL_PER_DAY, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+    if (full) { await flag(env, 'index-quota', access.who, 'index downloads', now); return text(429, JSON.stringify({ok: false, error: 'limit reached for today'}), {'Content-Type': 'application/json'}); }
     await env.WAITLIST.put(key, String(used + 1), {expirationTtl: 2 * 86400});
   }
   const tag = await etag(stored);

@@ -9,6 +9,7 @@ import {suggestImpact} from '../shared/feedback-impact.js';
 import {alertOwner} from '../shared/notify-send.js';
 import {feedbackCard, fitWords} from '../shared/owner-cards.js';
 import {sendPhoto} from '../shared/notify-telegram.js';
+import {installHit} from '../shared/install-caps.js';
 
 const PER_INSTALL_PER_DAY = 10;
 // Why (2 Nov 2026, owner: "the app version, the OS platform, the installation id"): the platform field carries the OS version and architecture too ("win32 10.0.19045 x64"), so 40 characters, not 20.
@@ -67,7 +68,9 @@ export async function feedback(request, env, fetcher = fetch, now = new Date(), 
   if (!version || !platform) return Response.json({ok: false, error: 'give the app version and platform: update the app and try again'}, {status: 400});
   const day = now.toISOString().slice(0, 10);
   const {n} = await env.STATS.prepare('SELECT COUNT(*) AS n FROM feedback WHERE day = ? AND install = ?').bind(day, install).first() || {n: 0};
-  if (n >= PER_INSTALL_PER_DAY) return Response.json({ok: false, error: 'limit reached for today'}, {status: 429});
+  const full = n >= PER_INSTALL_PER_DAY;
+  await installHit(env, 'feedback-day', install, n + 1, PER_INSTALL_PER_DAY, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+  if (full) return Response.json({ok: false, error: 'limit reached for today'}, {status: 429});
   const ref = hex(), skipped = [], kept = {};   // kept: text kind -> the text to store
   let shot = null;
   const carried = [...(body.screenshot ? ['screenshot'] : []), ...Object.keys(TEXT_FILES).filter(kind => body[kind])];

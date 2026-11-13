@@ -5,6 +5,7 @@
 //   PUT /api/playbook                    the owner's key: {board, text} (the private repo's playbooks/ publishes here)
 import {authorize, flag} from '../shared/guard.js';
 import {isOwner} from '../shared/auth.js';
+import {installHit} from '../shared/install-caps.js';
 
 const BOARD = /^[a-z0-9-]{2,30}$/, MAX_TEXT = 40000, PER_INSTALL_PER_DAY = 30;
 const day = date => date.toISOString().slice(0, 10);
@@ -28,7 +29,9 @@ export async function playbook(request, env, now = new Date()) {
   if (!BOARD.test(board)) return json({ok: false, error: 'bad board'}, 400);
   const key = `playbook-get:${install}:${day(now)}`;
   const used = Number(await env.WAITLIST.get(key)) || 0;
-  if (used >= PER_INSTALL_PER_DAY) { await flag(env, 'quota', access.who, 'playbook', now); return json({ok: false, error: 'limit reached for today'}, 429); }
+  const full = used >= PER_INSTALL_PER_DAY;
+  await installHit(env, 'playbook-day', access.who, used + 1, PER_INSTALL_PER_DAY, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+  if (full) { await flag(env, 'quota', access.who, 'playbook', now); return json({ok: false, error: 'limit reached for today'}, 429); }
   await env.WAITLIST.put(key, String(used + 1), {expirationTtl: 2 * 86400});
   const stored = await env.WAITLIST.get(`playbook:${board}`);
   return json({ok: true, board, text: stored ? JSON.parse(stored).text : ''});

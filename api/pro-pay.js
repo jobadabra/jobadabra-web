@@ -5,6 +5,7 @@ import {authorize} from '../shared/guard.js';
 import {accountOf, addCredit, createAccount, link, makePro, planOn} from '../shared/pro.js';
 import {CREDIT, PRO_KINDS, refusal} from '../shared/pro-packages.js';
 import {createCheckout, feeOf, keyMatchesMode, providerName, verifyEvent} from './payments/index.js';
+import {installHit} from '../shared/install-caps.js';
 
 export {CREDIT};   // what each purchase adds (shared/pro-packages.js; the older app test greps these literals: topup5: 5_000_000, topup10: 10_000_000, topup20: 20_000_000)
 const parseKey = key => { const [tag, install, token] = String(key || '').split('.'); return tag === 'JPF1' && install && token ? {install, token} : null; };   // the install's Free AI key
@@ -22,7 +23,9 @@ export async function checkout(request, env, now = new Date(), fetcher = fetch) 
   if (why) return json({ok: false, error: why}, 409);
   if (!keyMatchesMode(env)) return json({ok: false, error: 'Payments are not available right now.'}, 503);   // a test key in live mode (or the reverse) never reaches the provider
   const hour = `procheckout:${access.who}:${now.toISOString().slice(0, 13)}`, used = Number(await env.WAITLIST?.get(hour)) || 0;
-  if (used >= 20) return json({ok: false, error: 'Too many attempts. Try again in an hour.'}, 429);
+  const full = used >= 20;
+  await installHit(env, 'pay-attempts-hour', access.who, used + 1, 20, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+  if (full) return json({ok: false, error: 'Too many attempts. Try again in an hour.'}, 429);
   await env.WAITLIST?.put(hour, String(used + 1), {expirationTtl: 7200});
   const home = env.PRO_RETURN_URL || 'https://www.jobadabra.top/';
   const made = await createCheckout(env, {kind: body.kind, install: given.install, successUrl: `${home}?pro=thanks`, cancelUrl: `${home}?pro=cancelled`}, fetcher);

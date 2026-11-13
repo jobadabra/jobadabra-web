@@ -3,6 +3,7 @@
 import {isOwner} from '../shared/auth.js';
 import {clean as cleanSearch} from '../shared/search-report.js';
 import {KINDS, KEEP_DAYS, MAX_BYTES, MAX_EVENTS, PER_INSTALL_PER_DAY, day, text, scrub, describe, hash} from '../shared/telemetry.js';
+import {installHit} from '../shared/install-caps.js';
 
 // POST /report/telemetry {events: [...]}: checked, limited per install per day, stored.
 export async function collect(request, env, now = new Date()) {
@@ -15,7 +16,9 @@ export async function collect(request, env, now = new Date()) {
   const today = day(now), country = /^[A-Z]{2}$/.test(request.cf?.country || '') ? request.cf.country : null;   // Cloudflare's country code for the request, never an address
   const kv = env.WAITLIST, countKey = `telemetry:${events[0].install}:${today}`;
   const count = kv ? Number(await kv.get(countKey)) || 0 : 0;
-  if (count >= PER_INSTALL_PER_DAY) return Response.json({ok: false, error: 'limit reached for today'}, {status: 429});
+  const full = count >= PER_INSTALL_PER_DAY;
+  await installHit(env, 'telemetry-day', events[0].install, count + 1, PER_INSTALL_PER_DAY, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+  if (full) return Response.json({ok: false, error: 'limit reached for today'}, {status: 429});
   if (kv) await kv.put(countKey, String(count + events.length), {expirationTtl: 2 * 86400});
   for (const item of events) {
     const data = scrub(JSON.stringify(item.kind === 'search' ? cleanSearch(item) : item)).slice(0, MAX_BYTES);

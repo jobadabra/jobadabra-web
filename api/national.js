@@ -13,6 +13,7 @@
 import {authorize, flag} from '../shared/guard.js';
 import {betaOf} from './canary-reach.js';
 import PLACES from '../shared/norway-places.json' with {type: 'json'};
+import {installHit} from '../shared/install-caps.js';
 
 export const PAGE = 100;   // rows an answer holds: the engine's national reader asks 100 a page (src/sources/national.py PAGE)
 export const PER_INSTALL_PER_DAY = 400;   // searches: a Find jobs press asks at most places x role words x pages (national.PAGES), well under this
@@ -84,7 +85,9 @@ export async function nationalSearch(request, env, now = new Date()) {
   if (!word) return json(400, {ok: false, error: 'q (one role word) needed'});
   const day = now.toISOString().slice(0, 10);
   const used = await env.STATS.prepare(`INSERT INTO national_use (day, who, n) VALUES (?, ?, 1) ON CONFLICT (day, who) DO UPDATE SET n = n + 1 RETURNING n`).bind(day, access.who).first();
-  if ((used?.n || 0) > PER_INSTALL_PER_DAY) { await flag(env, 'national-quota', access.who, country, now); return json(429, {ok: false, error: 'limit reached for today'}); }
+  const full = (used?.n || 0) > PER_INSTALL_PER_DAY;
+  await installHit(env, 'national-day', access.who, used?.n || 0, PER_INSTALL_PER_DAY, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+  if (full) { await flag(env, 'national-quota', access.who, country, now); return json(429, {ok: false, error: 'limit reached for today'}); }
   const point = ['lat', 'lon', 'r'].map(key => url.searchParams.has(key) ? Number(url.searchParams.get(key)) : NaN);
   const found = await search(env.STATS, country, {word, box: boxOf(...point), offset});
   return json(200, {ok: true, ...found});
