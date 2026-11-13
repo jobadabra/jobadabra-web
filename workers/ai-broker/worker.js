@@ -31,7 +31,18 @@ export {ContainerProxy} from '@cloudflare/containers';   // required by the outb
 // and memory at most 2.1 of 6 GiB; hours that peaked at 0.93-0.96 CPU had no waits (slots not full, so more slots add no load there). Read the waits and CPU per minute on
 // the first by-hand Search check after this deploy: back to 12 if the CPU passes ~0.9 in minutes that still wait.
 const PARALLEL = 16;
-const CLAUDE_PARALLEL = 3;   // Why (11 Nov 2026, as): kept at 3 though the container now has 6 GiB: more Claude calls at once were never measured on the subscription
+// How many Claude calls run at once: the Worker variable CLAUDE_PARALLEL (a whole number, at most PARALLEL: each also holds a shared slot), else 6. It is set on the
+// Worker, not in wrangler.jsonc, and `keep_vars` keeps it across releases, so a step up or a roll back needs no code change; /health `claudeQueue.slots` says what runs.
+// Why (13 Nov 2026, owner, asked via AskUserQuestion by sa: "Yes, 3 to 6 (Recommended)" · "We can probably incraese it to more than 6"): at 3, 23:20-23:55Z 12 Nov, the
+// Claude-only benchmark (639 calls) waited p50 80 s, p90 180 s, max 301 s and its caller gave up on 92, while the 16 shared slots never filled (Codex slot wait max 1.3 s);
+// the container held 2.63 of 6 GiB and CPU 0.82 at most (210 MB a Claude call). Concurrency above 3 on the Claude plan was never measured: each step is watched
+// (waits, errors, out-of-quota in /health, CPU, memory) and rolled back if the plan pushes back.
+const CLAUDE_PARALLEL = 6;
+/** The Claude slots for this Worker's env: CLAUDE_PARALLEL when it is a whole number from 1, capped at PARALLEL; else CLAUDE_PARALLEL's default. */
+export const claudeSlots = env => {
+  const n = Number(env?.CLAUDE_PARALLEL);
+  return Number.isInteger(n) && n >= 1 ? Math.min(n, PARALLEL) : CLAUDE_PARALLEL;
+};
 const CALLER_WAIT_MS = 180_000, CODEX_GUARD_MS = 100_000, START_MS = 10_000;   // the callers' own wait (desktop/e2e/lib/broker-client.mjs: AbortSignal.timeout(180000), an abort is not retried), the container's Codex guard (container/server.mjs), a cold start
 const DRAIN_WAIT_MS = CALLER_WAIT_MS - CODEX_GUARD_MS - START_MS;   // Why (8 Nov 2026, Gitar on #501): a call that waits for the next container must still have time to run in it before its caller gives up, or the hand-over only moves the loss; past this it is passed on like any start-up failure (Claude, Free AI) instead of answered to nobody. Calls the old container is still finishing are guarded at 100 s (Codex) and 150 s (Claude), so a drain longer than this wait costs the refused call its Codex turn, as every deploy did before
 const HOSTS = ['chatgpt.com', 'auth.openai.com', 'api.openai.com', 'api.anthropic.com'];   // the only hosts the container may reach (the reply is the only way out); api.anthropic.com is the Claude engine's (1 Nov 2026), measured: telemetry is off, so nothing else is needed
@@ -42,6 +53,7 @@ export class CodexBroker extends Container {
   constructor(ctx, env) {
     super(ctx, env);
     this.brokerEnv = env;
+    this.claudeGate = slots(claudeSlots(env));   // Why (1 Nov 2026): one Claude CLI call peaks near 210 MB (measured), so at most claudeSlots(env) at once, and each also holds one of the PARALLEL shared slots
     // Why (1 Nov 2026): the Claude subscription's token reaches the container as an environment variable and only the Claude call reads it (container/server.mjs passes explicit environments to every child); it is never in the image, a reply or a log.
     this.envVars = env.CLAUDE_CODE_OAUTH_TOKEN ? {CLAUDE_CODE_OAUTH_TOKEN: env.CLAUDE_CODE_OAUTH_TOKEN} : {};
   }
@@ -53,7 +65,6 @@ export class CodexBroker extends Container {
   allowedHosts = HOSTS;
   static outboundByHost = Object.fromEntries(HOSTS.map(h => [h, pass]));
   gate = slots(PARALLEL);
-  claudeGate = slots(CLAUDE_PARALLEL);   // Why (1 Nov 2026): one Claude CLI call peaks near 210 MB (measured), so at most CLAUDE_PARALLEL at once, and each also holds one of the PARALLEL shared slots
   turns = keyedLock();   // one turn at a time per Codex conversation (lib/sessions.mjs); other keys and plain calls never wait
   drainWaitMs = DRAIN_WAIT_MS; drainPollMs = 1000;   // how long a call waits for a stopping container to hand over (toContainer); a test shortens both
   busyMs = BUSY_MS;   // how long a call that may pass on waits for a Claude slot (lib/busy.mjs); a test shortens it
@@ -126,7 +137,7 @@ export class CodexBroker extends Container {
     // `ready` = a login is stored AND the container has answered since its last start (a sleeping container keeps its last proof; its next wake starts over); `starting` = login stored, nothing answered yet (readers: the release gate accepts it, nobody else reads this field). `startError` = the last Codex failure passed on while starting.
     const state = !(await this.ctx.storage.get('login')) ? 'no-login' : (await this.ctx.storage.get('lost')) ? 'login-lost' : (await this.ctx.storage.get('answered')) ? 'ready' : 'starting';
     const startError = state === 'starting' ? await this.ctx.storage.get('startError') : null;
-    return json(200, {state, ...(startError ? {startError} : {}), limits: this.limits, lines: linesOf(LANES, ((await this.ctx.storage.get('claude:state')) || {}).limits), own: meter.tokens, daily: {drift: callsToday(meter, 'drift'), byhand: callsToday(meter, 'byhand')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
+    return json(200, {state, ...(startError ? {startError} : {}), limits: this.limits, lines: linesOf(LANES, ((await this.ctx.storage.get('claude:state')) || {}).limits), own: meter.tokens, daily: {drift: callsToday(meter, 'drift'), byhand: callsToday(meter, 'byhand')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), claudeQueue: {slots: claudeSlots(this.brokerEnv), ...this.claudeGate.stats()}, fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
   }
 
   // The owner-visible refusals of the Codex login: they stand when Codex is reached, another engine does not hide them.

@@ -20,7 +20,7 @@ async function setup(t, {engine = 'codex', week = 100, claude = null, hold = tru
   t.mock.method(Date, 'now', () => day);
   t.mock.timers.enable({apis: ['setTimeout']});
   const calls = {free: 0, claudeCli: 0}, held = [];
-  const env = {...config.vars, ENGINE: engine, CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token', AI: {run: async () => { calls.free++; return free(); }}, ...extra};
+  const env = {...config.vars, CLAUDE_PARALLEL: '3', ENGINE: engine, CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token', AI: {run: async () => { calls.free++; return free(); }}, ...extra};
   t.mock.method(globalThis, 'fetch', async () => Response.json({ok: true}));
   const made = harness(undefined, env);
   made.broker.containerFetch = async url => {
@@ -304,4 +304,19 @@ test('/health reads the stored Codex week after a restart, before any call (gi: 
   const {broker} = await setup(t, {week: 73, hold: false});   // the harness stores the reading and starts the broker with none in memory
   assert.equal(broker.limits, null);
   assert.equal((await json(await broker.health())).limits.usedPercent, 73);
+});
+
+test('Claude runs CLAUDE_PARALLEL calls at once (a whole number, capped at the shared slots), 6 when it is unset or not a number, and /health says how many (13 Nov 2026)', async t => {
+  // Why (13 Nov 2026, owner, asked via AskUserQuestion by sa: "Yes, 3 to 6 (Recommended)" · "We can probably incraese it to more than 6"): at 3 the Claude-only benchmark waited p90 180 s.
+  for (const [value, slots] of [[undefined, 6], ['10', 10], ['40', 16], ['0', 6], ['six', 6], ['2.5', 6]]) {
+    const made = harness(undefined, {...config.vars, ...(value === undefined ? {} : {CLAUDE_PARALLEL: value})});
+    const releases = [];
+    for (let i = 0; i < slots; i++) releases.push(await made.broker.claudeGate.acquire('scheduled'));
+    assert.equal(made.broker.claudeGate.stats().active, slots, `${value}: ${slots} run`);
+    const next = settles(made.broker.claudeGate.acquire('scheduled'));
+    await quiet();
+    assert.equal(next.done, false, `${value}: call ${slots + 1} waits`);
+    assert.equal((await (await made.broker.health()).json()).claudeQueue.slots, slots, `${value}: /health says ${slots}`);
+    for (const release of releases) release();
+  }
 });
