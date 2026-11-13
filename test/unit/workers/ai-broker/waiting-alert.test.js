@@ -42,10 +42,10 @@ test('calls that wait over 30 s for a slot open one 🔴 as soon as they are 1 i
   const w = world(t);
   const running = await w.fill();
   const waiting = Array.from({length: STARVE + 3}, () => w.call());
-  await until(() => w.broker.gate.stats().waiting.bench === STARVE + 3);
+  await until(() => w.broker.gate.stats().waiting.scheduled === STARVE + 3);
   w.at(31_000);
   for (let i = 0; i < STARVE + 3; i++) { w.held.shift()(); await quiet(); }
-  await until(() => w.broker.gate.stats().waiting.bench === 0);
+  await until(() => w.broker.gate.stats().waiting.scheduled === 0);
   await quiet();
   assert.equal(w.waits().length, 1, 'one note for the streak');
   const [down] = w.waits();
@@ -64,7 +64,7 @@ test('waits under 30 s are no starvation: a full gate whose calls get a slot in 
   const w = world(t);
   const running = await w.fill();
   const waiting = Array.from({length: 8}, () => w.call());
-  await until(() => w.broker.gate.stats().waiting.bench === 8);
+  await until(() => w.broker.gate.stats().waiting.scheduled === 8);
   w.at(20_000);
   await w.releaseAll(); await Promise.all([...running, ...waiting]); await quiet();
   assert.deepEqual(w.waits(), []);
@@ -76,7 +76,7 @@ test('a caller that gives up after waiting over 30 s is a starved call, counted 
   const callers = Array.from({length: STARVE + 1}, () => new AbortController());
   const waiting = callers.map(c => w.call(c.signal));
   const late = w.call();
-  await until(() => w.broker.gate.stats().waiting.bench === STARVE + 2);
+  await until(() => w.broker.gate.stats().waiting.scheduled === STARVE + 2);
   w.at(10_000); callers[0].abort();   // left after 10 s: no starvation
   w.at(40_000); for (const c of callers.slice(1)) c.abort();
   await quiet();

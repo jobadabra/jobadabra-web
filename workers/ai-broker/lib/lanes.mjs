@@ -18,8 +18,8 @@ export function laneOf(claims) {
 }
 
 export const LANES = ['pr', 'byhand', 'scheduled', 'bench', 'drift'];
-/** The queue a lane waits in: drift and by-hand checks wait with scheduled work, behind every PR check. */
-export const queueOf = lane => lane === 'drift' || lane === 'byhand' ? 'scheduled' : lane;
+/** The queue a lane waits in: a PR check in its own, every other lane (by-hand, scheduled, drift, benchmarks) in one line in arrival order behind it (lib/queue.mjs). */
+export const queueOf = lane => lane === 'pr' ? 'pr' : 'scheduled';
 
 /** The one repository whose calls answer on Claude alone. */
 export const CLAUDE_ONLY_REPOS = ['jobadabra/jobadabra-benchmarks'];

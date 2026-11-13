@@ -48,10 +48,10 @@ test('a timed wait gives up after its time and leaves the line; an untimed one w
   t.mock.timers.enable({apis: ['setTimeout']});
   const line = slots(1), first = await line.acquire('pr');
   const timed = line.acquire('scheduled', 500), untimed = line.acquire('scheduled');
-  assert.deepEqual(line.stats().waiting, {pr: 0, scheduled: 2, bench: 0});
+  assert.deepEqual(line.stats().waiting, {pr: 0, scheduled: 2});
   t.mock.timers.tick(500);
   assert.equal(await timed, null);
-  assert.deepEqual(line.stats().waiting, {pr: 0, scheduled: 1, bench: 0}, 'the one that gave up is out of the line');
+  assert.deepEqual(line.stats().waiting, {pr: 0, scheduled: 1}, 'the one that gave up is out of the line');
   const inTime = line.acquire('pr', 500);
   first();
   const got = await inTime;

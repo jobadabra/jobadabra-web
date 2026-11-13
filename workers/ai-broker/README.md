@@ -118,6 +118,15 @@ Callers name a tier, never a model. The Claude ids live in `shared/pro-claude.js
 | 502 | the engine failed (`why` is its own error, with any key or token withheld) |
 | 503 | `no-login` / `login-lost` (Codex needs the owner), or `only-<engine>: …` / `subs: …` when the engines a call allows cannot answer |
 
+### `POST /claim`, `DELETE /claim`
+
+Room for searches, first come first served (owner, 13 Nov 2026: "each workflow should take its necessary slots" · "First come, first serve" · "Not everyhting that's available"). Same run token as `/call`; the run is named from it (`<repo>/<workflow file>#<run id>`), never from the body.
+
+- `POST {"need": n}` (1 to `capacity`, today 6 searches at once): `200 {granted: true, need, expires}` when it fits, else `202 {granted: false, position, held, ahead}`. Ask again every ~15 s while waiting; once granted, ask every ~3 min to keep it. A renewal never grows a claim.
+- `DELETE`: frees the claim (or the place in line). Call it in an `if: always()` step.
+- A held claim with no ask for 10 min, or a waiting place with none for 60 s, is dropped, so a cancelled run frees its room by itself.
+- Strict order: the head of the line is never passed by a smaller claim behind it. No lanes, no share kept back.
+
 ### `GET /health`
 
 Public; counts and states only. Read it before a big run to see the room left.
@@ -132,6 +141,7 @@ Public; counts and states only. Read it before a big run to see the room left.
 | `chain` | per engine: configured, answered / ran out / busy / failed today, average time, Claude's limits and last error |
 | `engine` | the engine that answers first now |
 | `queue` | calls running now and waiting per queue |
+| `claims` | room by claim: `{capacity, used, held: [{who, need, since, expires}], waiting: [{who, need, since}]}` (see `POST /claim`) |
 | `fallback` | Free AI's spend today and its cap |
 | `tally`, `jobs` | calls per workflow and per job, per day |
 
