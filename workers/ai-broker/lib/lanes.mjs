@@ -10,7 +10,8 @@ export function laneOf(claims) {
   // Its own lane, not 'pr': it never goes before a PR check and has a day cap (lib/budget.mjs). Since 8 Nov 2026 (owner: "codex up to 100%, Claude up to 90%") the PR reserve and the rule keeping it off Claude are gone: it uses Codex and Claude like every lane.
   // Why (8 Nov 2026, owner: "Yes, tapes use it too (Recommended)"): press-tapes.yml records the same personas by hand for The press's yardstick, under the same day cap.
   // Why (12 Nov 2026, owner, asked via AskUserQuestion by sa: "Move it to CI"): search-profiles.yml runs the 30 Trello profiles' first search by hand on CI instead of the owner's Mac; it adds one workflow name to this lane.
-  if (claims.environment === 'search-check-by-hand' && /(^|\/)\.github\/workflows\/(search-personas|press-tapes|search-profiles)\.yml$/.test(workflow.split('@')[0])) return 'byhand';
+  // Why (13 Nov 2026, rs; owner via sa: same-minute before/after pairs prove a Find jobs PR): search-pair.yml (jobadabra #3957) runs in the same environment; without its name it fell into 'scheduled'.
+  if (claims.environment === 'search-check-by-hand' && /(^|\/)\.github\/workflows\/(search-personas|press-tapes|search-profiles|search-pair)\.yml$/.test(workflow.split('@')[0])) return 'byhand';
   if (/(^|\/)\.github\/workflows\/ai-answer-drift\.yml$/.test(workflow.split('@')[0])) return 'drift';
   if (/bench/i.test(workflow)) return 'bench';
   return 'scheduled';

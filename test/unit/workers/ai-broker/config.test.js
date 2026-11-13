@@ -12,7 +12,7 @@ const source = readFileSync(new URL('../../../../workers/ai-broker/worker.js', i
 test('the final config keeps the Worker, the class and the container application the stored login lives under', () => {
   assert.equal(final.name, 'jobadabra-ai-broker');
   assert.deepEqual(Object.keys(final.exports), ['CodexBroker', 'AiBroker']);   // the class name must not change without a migration; AiBroker is that migration's new class (13 Nov 2026, lib/move.mjs copies the state)
-  assert.match(source, /export class CodexBroker extends brokerOf\(Container\)/);
+  assert.match(source, /export class CodexBroker extends brokerOf\(Container, OLD_PARALLEL\)/);
   assert.equal(final.durable_objects.bindings[0].class_name, 'CodexBroker');
   assert.equal(final.exports.CodexBroker.container, 'ai-broker');
   assert.equal(final.containers[0].name, 'ai-broker');

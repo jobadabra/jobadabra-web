@@ -29,6 +29,8 @@ function world(t) {
   const releaseAll = async () => { for (let i = 0; i < 200 && (held.length || made.broker.gate.stats().active); i++) { while (held.length) held.shift()(); await quiet(); } };
   return {...made, sent, held, waits, at, call, fill, releaseAll};
 }
+/** The fewest starved calls that reach 1 in 10 of a window whose other calls are one full gate: k / (PARALLEL + k) >= WAIT_SHARE (2 at 16 slots, 3 at 24). */
+const STARVE = Math.ceil(PARALLEL / 9);
 
 test('the alert is a registry event on Engineering, wired, on by default, "changes only" with its modes', () => {
   const alert = alertOf('ai-broker-waiting');
@@ -39,17 +41,17 @@ test('the alert is a registry event on Engineering, wired, on by default, "chang
 test('calls that wait over 30 s for a slot open one 🔴 as soon as they are 1 in 10 of the window (the window\'s p90 over 30 s), naming the engine, the share, who waited and the slots; 3 more send nothing; a calm window sends one 🟢', async t => {
   const w = world(t);
   const running = await w.fill();
-  const waiting = Array.from({length: 5}, () => w.call());
-  await until(() => w.broker.gate.stats().waiting.bench === 5);
+  const waiting = Array.from({length: STARVE + 3}, () => w.call());
+  await until(() => w.broker.gate.stats().waiting.bench === STARVE + 3);
   w.at(31_000);
-  for (let i = 0; i < 5; i++) { w.held.shift()(); await quiet(); }
+  for (let i = 0; i < STARVE + 3; i++) { w.held.shift()(); await quiet(); }
   await until(() => w.broker.gate.stats().waiting.bench === 0);
   await quiet();
   assert.equal(w.waits().length, 1, 'one note for the streak');
   const [down] = w.waits();
   assert.equal(down.state, 'down'); assert.equal(down.level, 'problem');
-  assert.match(down.text, new RegExp(`^🔴 AI broker queue: 2 of ${PARALLEL + 2} Codex calls in 5 min waited over 30 s for a slot`));
-  assert.match(down.text, /search-round\.yml ×2/); assert.match(down.text, new RegExp(`Codex slots: ${PARALLEL}`));
+  assert.match(down.text, new RegExp(`^🔴 AI broker queue: ${STARVE} of ${PARALLEL + STARVE} Codex calls in 5 min waited over 30 s for a slot`));
+  assert.match(down.text, new RegExp(`search-round\\.yml ×${STARVE}`)); assert.match(down.text, new RegExp(`Codex slots: ${PARALLEL}`));
   await w.releaseAll(); await Promise.all([...running, ...waiting]);
   const times = [];
   for (let m = 1; m <= 14; m++) { w.at(m * MIN); const before = w.waits().length; const one = w.call(); await until(() => w.held.length === 1); w.held.shift()(); await one; await quiet(); if (w.waits().length > before) times.push(m); }
@@ -71,20 +73,20 @@ test('waits under 30 s are no starvation: a full gate whose calls get a slot in 
 test('a caller that gives up after waiting over 30 s is a starved call, counted once (not again when its call later gets the slot); one that left within 30 s counts nothing', async t => {
   const w = world(t);
   const running = await w.fill();
-  const callers = Array.from({length: 3}, () => new AbortController());
+  const callers = Array.from({length: STARVE + 1}, () => new AbortController());
   const waiting = callers.map(c => w.call(c.signal));
   const late = w.call();
-  await until(() => w.broker.gate.stats().waiting.bench === 4);
+  await until(() => w.broker.gate.stats().waiting.bench === STARVE + 2);
   w.at(10_000); callers[0].abort();   // left after 10 s: no starvation
-  w.at(40_000); callers[1].abort(); callers[2].abort();
+  w.at(40_000); for (const c of callers.slice(1)) c.abort();
   await quiet();
   assert.equal(w.waits().length, 1);
-  assert.match(w.waits()[0].text, new RegExp(`^🔴 AI broker queue: 2 of ${PARALLEL + 2} Codex calls`)); assert.match(w.waits()[0].text, /caller gave up ×2/);
+  assert.match(w.waits()[0].text, new RegExp(`^🔴 AI broker queue: ${STARVE} of ${PARALLEL + STARVE} Codex calls`)); assert.match(w.waits()[0].text, new RegExp(`caller gave up ×${STARVE}`));
   w.at(80_000);
   await w.releaseAll(); await Promise.all([...running, ...waiting, late]); await quiet();
   const window = windowOf(await w.storage.get('waiting:codex'), T + 80_000);
-  assert.deepEqual([window.ok, window.bad], [PARALLEL, 3], 'the 3 left calls add nothing when they get their slot; the late call that waited 80 s is the third');
-  assert.deepEqual(window.whys, [['caller gave up', 2], ['waited', 1]]);
+  assert.deepEqual([window.ok, window.bad], [PARALLEL, STARVE + 1], 'the left calls add nothing when they get their slot; the late call that waited 80 s is the last');
+  assert.deepEqual(window.whys, [['caller gave up', STARVE], ['waited', 1]]);
   assert.equal(w.waits().length, 1, 'still one note');
 });
 
