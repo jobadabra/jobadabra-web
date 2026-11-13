@@ -2,6 +2,7 @@
 // the grid per persona, the split by kind (tech / non-tech) and the job systems whose jobs we miss. Pure functions: tool, persona and job-system names arrive as data, none is written here.
 // found = jobs the tool showed; place = those the blind judge put in the persona's city, nearby or remote for their country; role = judged the persona's kind of job; relevant = both.
 // Guard: test/unit/admin/benchmark/benchmark-search.test.js.
+import {aiOf} from './benchmark-ai.js';
 export const KINDS = ['tech', 'non-tech'];
 export const share = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : null);
 const sum = (rows, key) => rows.reduce((total, row) => total + (Number(row[key]) || 0), 0);
@@ -39,7 +40,8 @@ export function summarize(rows) {
     // that looks complete. `searches` = the personas of the line; a rival's `missing` = those it has no number for.
     const beyond = {}, seen = {}, withAllRows = tools.filter(item => item.withAll).flatMap(item => item.rows);
     for (const row of withAllRows) for (const [rival, count] of Object.entries(parse(row.beyond))) { beyond[rival] = (beyond[rival] || 0) + (Number(count) || 0); if (count !== null) seen[rival] = (seen[rival] || 0) + 1; }   // null = the rival's job failed for that search
-    rounds[round] = {tools: tools.map(({rows: _rows, ...tool}) => tool), personas, grid, kinds, missed: Object.entries(missed).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 30),
+    // Why (13 Nov 2026): the AI is ours alone; 'app' if any of our lines in the round ran on it (admin/benchmark-ai.js).
+    rounds[round] = {ai: mine.some(row => row.ours && aiOf(row.ai) === 'app') ? 'app' : 'haiku', tools: tools.map(({rows: _rows, ...tool}) => tool), personas, grid, kinds, missed: Object.entries(missed).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 30),
       beyond: Object.entries(beyond).map(([rival, jobs]) => [rival, jobs, withAllRows.length - (seen[rival] || 0)]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])), beyondSearches: withAllRows.length};
   }
   return {schema: 1, rounds};

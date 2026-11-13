@@ -7,6 +7,7 @@ import {kindsChart} from './jobsearch-charts.js';
 import {figure, VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 import {shareTone} from './applying-tiles.js';
 import {PUBLISH_STYLE, panel, searchSection} from './benchmark-publish.js';
+import {AIS, aiOf, changes} from './benchmark-ai.js';
 
 const pct = value => (value == null ? '–' : `${value}%`);
 const clock = seconds => (seconds == null ? '–' : seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
@@ -51,6 +52,12 @@ const beyond = view => ((view.beyond || []).length ? `<section class="card"><h2>
 const missed = view => (view.missed.length ? `<section class="card"><h2>Relevant jobs we miss, by job system</h2><p class="muted">Jobs another tool showed that the judge found relevant and in place, and ours did not show: where they came from (the other tool's own provider name).</p>
 <table><tr><th>Job system</th><th class="num">Jobs we miss</th></tr>${view.missed.map(([system, n]) => `<tr><td>${esc(system)}</td><td class="num">${n}</td></tr>`).join('')}</table></section>` : '');
 
+// Which AI ours ran in the round on screen, and where it changed (owner, 13 Nov 2026): rounds before and after a change are not comparable. The round links carry the same word.
+const aiNote = (snapshot, key) => {
+  const move = changes(snapshot.rounds).find(item => item.round === key), mine = aiOf(snapshot.rounds[key].ai);
+  return `<p class="muted ai-note"><b>AI:</b> Ours ran on ${AIS[mine].label} in this round.${move ? ` <b class="warn">AI changed: ${AIS[move.from].arrow} → ${AIS[move.to].arrow}, not comparable with the rounds before.</b>` : ''}</p>`;
+};
+
 const METHOD = `<section class="card"><details><summary>How this is measured</summary>
 <ul><li>The same random role × city personas for both tools, run on the same day (within the hour per persona); the pick is seeded and recorded.</li>
 <li>The other tool runs out of the box on a GitHub runner from a pinned release; only its role keywords and place are filled in, by script, the same rule for every persona.</li>
@@ -61,7 +68,7 @@ const METHOD = `<section class="card"><details><summary>How this is measured</su
 export function page(snapshot, {round, published, confirm} = {}) {
   const key = pickRound(snapshot, round), view = key ? snapshot.rounds[key] : null, keys = Object.keys(snapshot?.rounds || {}).sort().reverse();
   const body = !view ? `<section class="card"><h2>No data yet</h2><p class="muted">The bake-off's search-bench publish step sends every scored round here (<code>PUT /benchmark-search/data</code>); the first round fills this page.</p></section>`
-    : `${published ? panel({kind: 'search', round: key, part: searchSection(key, view, snapshot.at), published, ask: confirm === 'publish'}) : ''}${keys.length > 1 ? filterLinks(keys.map(k => [k, k, `?round=${encodeURIComponent(k)}`]), key) : ''}${tiles(view)}${scoreboard(view)}${grid(view)}${kinds(view)}${missed(view)}${beyond(view)}${METHOD}`;
+    : `${published ? panel({kind: 'search', round: key, part: searchSection(key, view, snapshot.at), published, ask: confirm === 'publish'}) : ''}${keys.length > 1 ? filterLinks(keys.map(k => [k, `${k} · ${AIS[aiOf(snapshot.rounds[k].ai)].short}`, `?round=${encodeURIComponent(k)}`]), key) : ''}${aiNote(snapshot, key)}${tiles(view)}${scoreboard(view)}${grid(view)}${kinds(view)}${missed(view)}${beyond(view)}${METHOD}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Benchmark Job Search · Admin</title>
 <link rel="icon" href="/favicon-32.png"><style>${CSS}${PUBLISH_STYLE}${CHIP_STYLE}${VIZ_STYLE}</style></head><body><main>
 <header><h1>🏁 Benchmark Job Search</h1><span class="muted">${snapshot ? `as of ${esc(snapshot.at.slice(0, 16).replace('T', ' '))} UTC${key ? ` · round ${esc(key)}` : ''}` : ''}</span></header>

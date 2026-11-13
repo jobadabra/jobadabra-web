@@ -53,7 +53,9 @@ export function texts(data) {
   const roles = s.personas.map(p => p.title), judged = s.judgedJobs == null ? '' : '<li><b>' + esc(s.judgedJobs) + '</b><span>distinct jobs judged, deduplicated within each persona</span></li>';
   return {text: {
     searchMeta: 'Job search · ' + (day(s.date) || 'latest round'),
-    searchLede: esc(s.personas.length) + ' fictional job seekers, from ' + esc(roles[0] || '') + ' in ' + esc(s.personas[0]?.city || '') + ' to ' + esc(roles.at(-1) || '') + ' in ' + esc(s.personas.at(-1)?.city || '') + '. We judged the kind of work and the location separately.',
+    searchLede: esc(s.personas.length) + ' fictional job seekers, from ' + esc(roles[0] || '') + ' in ' + esc(s.personas[0]?.city || '') + ' to ' + esc(roles.at(-1) || '') + ' in ' + esc(s.personas.at(-1)?.city || '') + '. We judged the kind of work and the location separately.' +
+      // Why (13 Nov 2026, owner): from this round Jobadabra runs the app’s own AI tiers; rounds before ran Haiku only, so the two are not comparable. A Haiku round (or the 27 Oct snapshot) says nothing extra.
+      (s.ai === 'app' ? ' Jobadabra ran on the app’s own AI tiers (Haiku + Sonnet) in this round; earlier rounds ran Haiku only, so they are not comparable.' : ''),
     searchStats: '<li><b>' + esc(s.personas.length) + '</b><span>fictional roles and cities</span></li>' + judged + '<li><b>' + esc(s.returnedRows) + '</b><span>returned rows; some jobs appeared in several channels</span></li>',
     formsMeta: 'Form filling · fair round · ' + (day(f.date) || '27 Oct 2026'),
     formsTitle: esc(f.tools[0]?.forms ?? '') + ' forms. ' + esc(f.tools.length) + ' tools. Every miss counted.',

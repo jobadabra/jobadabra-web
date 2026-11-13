@@ -4,6 +4,7 @@
 import {fromCards} from './headlines-growth.js';
 import {labTabs} from './lab-overview.js';
 import {labData} from './lab-overview-data.js';
+import {changeText, changes} from './benchmark-ai.js';
 
 const num = value => (Number(value) || 0).toLocaleString('en-US');
 const day = (now, back) => new Date(now.getTime() - back * 86400000).toISOString().slice(0, 10);
@@ -31,9 +32,10 @@ async function benchmarkTiles(env) {
   const dates = Object.keys(rounds).sort(), last = dates.at(-1), tools = rounds[last]?.tools || [];
   const ours = tools.find(tool => tool.ours && !tool.withAll), others = tools.filter(tool => !tool.ours).sort((a, b) => (b.relevant || 0) - (a.relevant || 0));
   if (!ours) return [{label: 'Benchmark · right jobs', value: '–', sub: 'no round yet', status: 'none'}];
-  const best = others[0], series = dates.map(date => (rounds[date].tools || []).find(tool => tool.ours && !tool.withAll)?.relevant ?? null);
+  const moves = changes(rounds), best = others[0], series = dates.map(date => (rounds[date].tools || []).find(tool => tool.ours && !tool.withAll)?.relevant ?? null);
   return [{label: 'Benchmark · right jobs, last round', value: num(ours.relevant), sub: `${last}${others.slice(0, 2).map(tool => ` · ${tool.tool} ${num(tool.relevant)}`).join('')}`,
-    status: !best || (ours.relevant || 0) >= (best.relevant || 0) ? 'good' : 'bad', ...(series.filter(value => value != null).length >= 2 ? {series} : {})}];
+    status: !best || (ours.relevant || 0) >= (best.relevant || 0) ? 'good' : 'bad', ...(series.filter(value => value != null).length >= 2 ? {series} : {}),
+    breaks: moves.map(move => move.index), ...(moves.length ? {mark: changeText(moves.at(-1))} : {})}];
 }
 
 export const JOB_SEARCH = {'/admin/job-search/lab': labTiles, '/admin/job-search/scouting': fromCards('/admin/job-search/scouting'), '/admin/job-search/installs': installsTiles, '/admin/job-search/benchmark': benchmarkTiles};

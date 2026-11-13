@@ -207,17 +207,20 @@ export const sum = key => rows => rows.reduce((total, row) => total + (Number(ro
 export const ratio = (top, bottom) => rows => { const b = sum(bottom)(rows); return b ? sum(top)(rows) / b : null; };
 
 // A small bar chart of the weeks, the last bar marked, and this week's value with an arrow against the week before.
-export function spark(values, {format = value => String(Math.round(value)), higherIsBetter = true, width = 96, height = 22} = {}) {
+// `breaks` = bar indexes where the thing measured changed (owner, 13 Nov 2026: the benchmark's AI switched, rounds before and after are not comparable): a wider gap and a dashed line before that bar, and no arrow when the last two bars straddle one.
+export function spark(values, {format = value => String(Math.round(value)), higherIsBetter = true, width = 96, height = 22, breaks = []} = {}) {
   const list = (values || []).map(v => (v == null || Number.isNaN(v) ? null : Number(v)));
-  const max = Math.max(...list.filter(v => v != null), 0) || 1, gap = 2, bar = (width - gap * (list.length - 1)) / Math.max(list.length, 1);
+  const split = [...new Set(breaks)].filter(i => i > 0 && i < list.length).sort((a, b) => a - b), jump = 6;
+  const max = Math.max(...list.filter(v => v != null), 0) || 1, gap = 2, bar = (width - gap * (list.length - 1) - jump * split.length) / Math.max(list.length, 1);
+  const left = i => i * (bar + gap) + jump * split.filter(b => b <= i).length;
   const bars = list.map((v, i) => {
     const h = v == null ? 1 : Math.max(1, Math.round((v / max) * (height - 2)));
-    return `<rect x="${(i * (bar + gap)).toFixed(1)}" y="${height - h}" width="${bar.toFixed(1)}" height="${h}" rx="1" fill="${i === list.length - 1 ? '#f5b54a' : v == null ? '#262c33' : '#5b6470'}"/>`;
-  }).join('');
+    return `<rect x="${left(i).toFixed(1)}" y="${height - h}" width="${bar.toFixed(1)}" height="${h}" rx="1" fill="${i === list.length - 1 ? '#f5b54a' : v == null ? '#262c33' : '#5b6470'}"/>`;
+  }).join('') + split.map(i => `<line class="brk" x1="${(left(i) - (gap + jump) / 2).toFixed(1)}" x2="${(left(i) - (gap + jump) / 2).toFixed(1)}" y1="0" y2="${height}" stroke="#e0a43a" stroke-dasharray="2 2"><title>AI changed here: the bars before and after are not comparable</title></line>`).join('');
   const now = list.at(-1), before = list.at(-2);
   let arrow = '';
-  if (now != null && before != null && now !== before) arrow = `<span class="${(now > before) === higherIsBetter ? 'up' : 'down'}">${now > before ? '▲' : '▼'}</span>`;
-  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="last ${list.length} weeks">${bars}</svg><span>${now == null ? '–' : esc(format(now))} ${arrow}</span>`;
+  if (now != null && before != null && now !== before && !split.includes(list.length - 1)) arrow = `<span class="${(now > before) === higherIsBetter ? 'up' : 'down'}">${now > before ? '▲' : '▼'}</span>`;
+  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="last ${list.length} weeks${split.length ? ', AI changed during them' : ''}">${bars}</svg><span>${now == null ? '–' : esc(format(now))} ${arrow}</span>`;
 }
 // The chip a section header carries: what is counted, and its weeks.
 export const trendChip = (label, values, options) => `<span class="trend" title="${esc(label)}, per week, last ${(values || []).length} weeks">${esc(label)} ${spark(values, options)}</span>`;
