@@ -9,18 +9,22 @@
 export const SYSTEM_PROMPT = "You are a helpful assistant. Follow the user's instructions exactly.";   // Why: an own, short prompt replaces Claude Code's default coding prompt; it must not shape answer length (the lean test used "Answer briefly." only to keep the reply short)
 const MEDIA = {png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif'};
 
-// Why (2 Nov 2026, the first digest call that the Claude engine took after Codex ran out): the real daily-digest prompt (145 PRs, 70k characters, 27k input tokens) takes Claude 85-117 s on this account, 72-105 s of it thinking, 20-29k output tokens. The same call measured with `--effort low` (85 s) and `MAX_THINKING_TOKENS=0` (no change: still 105 s of thinking) did not get shorter, so the CLI's thinking cannot be turned down from outside. The Codex kill at 100 s killed it at 103 s ("claude-failed:null ... thinking_duration_ms 95200"). Callers wait 180 s (desktop/e2e/lib/broker-client.mjs), so a Claude call gets 150 s.
+// Why (2 Nov 2026, the first digest call that the Claude engine took after Codex ran out): the real daily-digest prompt (145 PRs, 70k characters, 27k input tokens) takes Claude 85-117 s on this account, 72-105 s of it thinking, 20-29k output tokens. The same call measured with `--effort low` (85 s) and `MAX_THINKING_TOKENS=0` (no change: still 105 s of thinking) did not get shorter, so a call that long cannot be cut short from outside (a small call does think less at --effort low: claudeArgs, 13 Nov 2026). The Codex kill at 100 s killed it at 103 s ("claude-failed:null ... thinking_duration_ms 95200"). Callers wait 180 s (desktop/e2e/lib/broker-client.mjs), so a Claude call gets 150 s.
 export const CLAUDE_TIMEOUT_MS = 150000;
 
 /**
  * The CLI arguments of one call: no tools, no settings, no slash commands, no MCP, no saved session; the model is a full id (claude-haiku-5-5, ...).
  * Why (2 Nov 2026, owner: "Web search on Claude"): a call with `search` gets exactly one tool, WebSearch, allowed up front (nothing to ask in -p mode); no shell, no page fetching, no file access.
  * Measured live with the real CLI on the subscription token: 22.5 s, a cited answer, WebSearch the only tool used.
+ * `effort` (low|medium|high|xhigh, optional) becomes `--effort`; without it the CLI picks its own default.
  */
-export function claudeArgs({model, schema, search = false}) {
+export function claudeArgs({model, schema, search = false, effort}) {
   const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--tools', ...(search ? ['WebSearch', '--allowedTools', 'WebSearch'] : ['']), '--no-session-persistence',
     '--setting-sources', '', '--disable-slash-commands', '--strict-mcp-config', '--system-prompt', SYSTEM_PROMPT, '--model', String(model)];
   if (schema) args.push('--json-schema', JSON.stringify(schema));
+  // Why (13 Nov 2026, cx; sa: "build that PR"): the app runs Haiku at --effort low and Sonnet at medium (src/ai/engine.py effort_for); the broker dropped the caller's effort, so CI's calls thought more than the app's.
+  // Measured on the owner's plan, same prompts, effort sent vs not: title triage (Haiku) p50 5.7 vs 7.0 s and 877 vs 1282 thinking tokens; right answers equal on every question (title 48/48, place 22/22 vs 20/20, score 34/35 vs 35/35, visit 1 vs 1 "no" kept in 10).
+  if (effort) args.push('--effort', String(effort));   // the Worker already refused any value outside lib/tiers.mjs EFFORTS
   return args;
 }
 
