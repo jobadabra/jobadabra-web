@@ -205,22 +205,30 @@ export async function agreedSites(env, k = SITES_K) {
 async function boardCells(env, k) {
   let rows;
   try {
-    rows = (await env.STATS.prepare(`SELECT install, host, body, in_places, fit70, countries, families FROM sitefacts WHERE kind = 'board' AND in_places IS NOT NULL`).all()).results || [];
+    rows = (await env.STATS.prepare(`SELECT install, day, host, body, in_places, fit70, countries, families FROM sitefacts WHERE kind = 'board' AND in_places IS NOT NULL`).all()).results || [];
   } catch { return {}; }   // before migration 0094
   const cells = {}, list = text => String(text || '').split(',').filter(Boolean);
   for (const row of rows) {
-    let serves;
-    try { serves = JSON.parse(row.body || '{}').countries || []; } catch { serves = []; }
+    let serves, counted;
+    try { const body = JSON.parse(row.body || '{}'); serves = body.countries || []; counted = familyJobsOf(body.family_jobs); } catch { serves = []; }
+    const scout = String(row.install || '').startsWith(SCOUT_BOARD_PREFIX);
     for (const family of list(row.families)) {
       for (const country of list(row.countries).filter(c => serves.includes(c))) {
         const cell = ((cells[row.host] ||= {})[`${family}|${country}`] ||= {family, country, installs: 0, in_places: 0, fit70: 0});
         cell.installs += 1;
-        cell.in_places += row.in_places || 0;
+        // A Scout row with counts gives the family's own number (a family not measured gives none); a Scout row from before the count still gives its whole count (older apps rank by it).
+        cell.in_places += scout && counted ? counted[family] || 0 : row.in_places || 0;
         cell.fit70 += row.fit70 || 0;
         // Why (12 Nov 2026, owner: "We should now from the start what boards/employers we should read first"; "I agree" to counting a Scout-measured board
         // as proven): the Scout's rows carry no fit count (storeBoardFacts writes 0), so an install could not tell a board the Scout read and found this
         // family's jobs on, in this country, from one install's unscored list; 4% of first searches started from a proven board.
-        if (String(row.install || '').startsWith(SCOUT_BOARD_PREFIX)) cell.measured = true;
+        // Why (13 Nov 2026, bp): `measured` only with MIN_RIGHT_JOBS+ jobs of this family, so apps already installed stop trusting a family seen once; `right` is the number itself
+        // (absent: not measured) and `day` when it was measured: installs order boards by it (src/ai/board_ideas.py).
+        if (scout && counted) {
+          const right = counted[family];
+          if (Number.isInteger(right)) { cell.right = right; cell.day = row.day; }
+          if (right >= MIN_RIGHT_JOBS) cell.measured = true;
+        }
       }
     }
   }
@@ -275,6 +283,17 @@ async function download(request, env, now = new Date()) {
 // Why (13 Nov 2026, owner: "shouldn't the central scout and board discovery do that... spend those 60-90s ?"): `layout` is how the board's job cards are laid out
 // (src/sources/page_recipes.py shape, checked by recipeOf), learned once by board discovery; it rides in the same recipe and installs replay it with no AI per link.
 export const SCOUT_BOARD_PREFIX = 'central-scout-', SCOUT_BOARD_DAYS = 30, MAX_SCOUT_BOARDS = 400, MIN_LOCAL_JOBS = 3;
+/** The jobs of a board that must be of ONE role family, located in the country, before the board is "measured" for it (src/scout_board_counts.py MIN_RIGHT: the engine checks it too).
+ *  Why (13 Nov 2026, bp, owner: "Why ? Let's fix it."; "we know exactly: this board will give x jobs, this other board will give y jobs"): a Scout fact carried the board's whole local-job count
+ *  and the SET of families seen once, and boardCells credited the count to every family of the set: airlinejobs.com/es (one aircraft electrician among 178 jobs) was `measured` for electricians. */
+export const MIN_RIGHT_JOBS = 3;
+/** The Scout's count of a board's jobs per role family ({family: jobs}), each a whole number 0-5000 of a pool family; undefined when it sent none or not an object
+ *  (a fact kept before the count, or a bad one: the board stays, as a board that proves no family). A family not in it was not measured: never read as 0. */
+export function familyJobsOf(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  return Object.fromEntries(Object.entries(raw).filter(([family, jobs]) => FAMILIES.includes(family) && Number.isInteger(jobs) && jobs >= 0).map(([family, jobs]) => [family, Math.min(jobs, 5000)]));
+}
+
 export function boardFactsOf(list) {
   const out = new Map();
   for (const item of (Array.isArray(list) ? list : []).slice(0, MAX_SCOUT_BOARDS * 3)) {
@@ -289,7 +308,8 @@ export function boardFactsOf(list) {
       || (url.match(/\{(\w*)\}/g) || []).some(token => !['{role}', '{place}'].includes(token)) || !COUNTRIES.includes(country) || !families.length
       || !(jobs >= MIN_LOCAL_JOBS)) continue;
     const layout = recipeOf(item.layout);   // how the board's job cards are laid out, learned by board discovery; a bad one is dropped, never the board
-    out.set(`${host}\n${country}`, {host, url, country, families, local_jobs: Math.min(jobs, 5000), ...(item.browser === true ? {browser: true} : {}), ...(layout ? {layout} : {})});
+    const familyJobs = familyJobsOf(item.family_jobs);
+    out.set(`${host}\n${country}`, {host, url, country, families, local_jobs: Math.min(jobs, 5000), ...(familyJobs ? {family_jobs: familyJobs} : {}), ...(item.browser === true ? {browser: true} : {}), ...(layout ? {layout} : {})});
   }
   return [...out.values()].slice(0, MAX_SCOUT_BOARDS);
 }
@@ -298,7 +318,7 @@ async function storeBoardFacts(db, facts, date) {
   const statements = facts.map(fact => db.prepare(`INSERT INTO sitefacts (install, day, host, kind, url, body, in_places, fit70, countries, families) VALUES (?, ?, ?, 'board', ?, ?, ?, 0, ?, ?)
     ON CONFLICT(install, host, kind) DO UPDATE SET day = excluded.day, url = excluded.url, body = excluded.body, in_places = excluded.in_places, fit70 = 0,
     countries = excluded.countries, families = excluded.families`)
-    .bind(`${SCOUT_BOARD_PREFIX}${fact.country}`, date, fact.host, fact.url, JSON.stringify({countries: [fact.country], ...(fact.browser ? {browser: true} : {}), ...(fact.layout ? {layout: fact.layout} : {})}), fact.local_jobs, fact.country, fact.families.join(',')));
+    .bind(`${SCOUT_BOARD_PREFIX}${fact.country}`, date, fact.host, fact.url, JSON.stringify({countries: [fact.country], ...(fact.family_jobs ? {family_jobs: fact.family_jobs} : {}), ...(fact.browser ? {browser: true} : {}), ...(fact.layout ? {layout: fact.layout} : {})}), fact.local_jobs, fact.country, fact.families.join(',')));
   if (db.batch) await db.batch(statements); else for (const statement of statements) await statement.run();
 }
 
