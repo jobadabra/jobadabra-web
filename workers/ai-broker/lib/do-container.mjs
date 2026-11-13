@@ -4,7 +4,7 @@
 // this one takes any size up to the account's 4 vCPU / 12 GiB, and CPU is billed by use, so 4 vCPU at the same 6 GiB costs about nothing more. The Container class does not run on this policy.
 // Design: one container per broker object. A call needs it: started once (allowed hosts first, then start, then ready on GET /health, then onStart) and shared by every call that waits;
 // a container this object did not start (a restart of the object) is used as it is. The image it was started from is stored: an object that wakes to a container of an older image
-// (a deploy; containers on this policy take no part in Cloudflare's rollouts) sends it SIGTERM, and container/server.mjs drains it (new calls refused with x-broker-draining, which
+// (a deploy; containers on this policy take no part in Cloudflare's rollouts), or of other env (a secret put or rotated: env reaches a container only at start), sends it SIGTERM, and container/server.mjs drains it (new calls refused with x-broker-draining, which
 // worker.js toContainer sends again until the next container takes them).
 
 /** The size AiBroker's container starts with (Cloudflare's runtime field names). */
@@ -12,6 +12,18 @@ export const INSTANCE = {vcpu: 4, memoryMib: 6144, diskMb: 4000};
 /** How long a new container may take to answer GET /health, and how long it stays up after the last call (the old class's sleepAfter '10m'). */
 export const READY_MS = 30_000, SLEEP_MS = 600_000;
 const POLL_MS = 250;
+
+/**
+ * A SHA-256 digest of the env a container is started with (names and values, sorted), so a later wake can tell a changed secret without ever storing one. -> hex.
+ * Why (13 Nov 2026, coordinator sa: "drain the container when the set of secret NAMES given to it changes (as for the image), so a new or rotated secret reaches the next container
+ * without a manual step"): CLAUDE_API_KEY was put while a container ran; env reaches a container only at start, so the paid lane answered paid-failed (run 43468806536).
+ * Values are hashed too, so a rotated CLAUDE_CODE_OAUTH_TOKEN drains it as well.
+ */
+export async function envDigest(env = {}) {
+  const text = JSON.stringify(Object.entries(env).filter(([, value]) => value != null).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+  return [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
 
 /** A WorkerEntrypoint that passes a request on only to `hosts` (the container's one way out); AiBroker registers it for each host. */
 export const allowHosts = (Entrypoint, hosts) => class extends Entrypoint {
@@ -31,11 +43,12 @@ export const doContainer = Base => class extends Base {
     ctx.blockConcurrencyWhile?.(() => this.wake());
   }
 
-  /** On every wake of the object: a running container of an older image is told to drain; one of the current image keeps running and gets its sleep timer back. */
+  /** On every wake of the object: a running container of an older image or other env (a secret put or rotated) is told to drain; one of both current keeps running and gets its sleep timer back. */
   async wake() {
     const box = this.ctx.container;
     if (!box?.running) return;
-    if ((await this.ctx.storage.get('containerImage')) !== box.images?.base) { box.signal(15); return; }
+    const [image, env] = await Promise.all([this.ctx.storage.get('containerImage'), this.ctx.storage.get('containerEnv')]);
+    if (image !== box.images?.base || env !== await envDigest(this.envVars)) { box.signal(15); return; }
     await box.setInactivityTimeout(SLEEP_MS);
   }
 
@@ -58,6 +71,7 @@ export const doContainer = Base => class extends Base {
     // Gitar on #606: a step that fails after start() must not leave a running container that the next call would take as ready (no login restored): it is destroyed, and the next call starts over.
     try {
       await this.ctx.storage.put('containerImage', box.images.base);
+      await this.ctx.storage.put('containerEnv', await envDigest(this.envVars));
       await box.setInactivityTimeout(SLEEP_MS);
       const until = Date.now() + READY_MS;
       for (;;) {
