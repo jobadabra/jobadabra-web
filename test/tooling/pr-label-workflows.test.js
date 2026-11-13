@@ -1,64 +1,24 @@
-// Guard for the PR labels workflow (owner, 2 Nov 2026: "same workflow on all repos"; web #299 showed a red ✗ from a cancelled Gitar-label run).
-// The scripts live in the public jobadabra/jobadabra (tools/gitar-label.mjs, tools/conflict-label.mjs, with their cases in that repo's tests); this repo only checks out main's copy and writes labels.
+// Guard for the PR labels workflow (owner, 2 Nov 2026: "same workflow on all repos"; web #299 showed a red ✗ from a cancelled Gitar-label run; owner, 13 Nov 2026: "One shared workflow").
+// pr-labels.yml is the org's one caller (jobadabra templates/org-repo/pr-labels.yml). The checkout of the scripts, the concurrency groups and the Gitar check trigger's filter live once in
+// jobadabra's pr-labels-shared.yml, with their cases in that repo's tests; this repo only says which events start it and calls it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync, readFileSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
 
-const read = name => readFileSync(new URL(`../../.github/workflows/${name}`, import.meta.url), 'utf8');
-const labels = read('pr-labels.yml');
+const labels = readFileSync(new URL('../../.github/workflows/pr-labels.yml', import.meta.url), 'utf8');
+const on = labels.split('\non:\n')[1].split('\n\n')[0];
 
-test('the workflow reads the scripts from jobadabra/jobadabra main, as a file pattern, never the PR\'s code', () => {
-  assert.ok(labels.includes('repository: jobadabra/jobadabra\n') || labels.includes('repository: jobadabra/jobadabra   #'), 'the script comes from the public engine repo');
-  assert.ok(/\n {10}ref: main\n/.test(labels), "main's copy, never the PR's");
-  assert.ok(labels.includes('sparse-checkout-cone-mode: false'), 'a file pattern: cone mode reads every entry as a folder (Gitar on web#258)');
-  assert.ok(!/head\.(sha|ref)|github\.head_ref/.test(labels), "a PR's code is never checked out");
+test('the workflow only calls the shared one from jobadabra main: no copy of its logic, no PR code', () => {
+  assert.ok(labels.includes('uses: jobadabra/jobadabra/.github/workflows/pr-labels-shared.yml@main'));
+  assert.ok(!/actions\/checkout|head\.(sha|ref)|github\.head_ref/.test(labels), "a PR's code is never checked out here");
   assert.ok(labels.includes('pull-requests: write') && labels.includes('issues: write') && !labels.includes('contents: write'), 'its only writes are labels');
-  assert.ok(labels.includes('tools/gitar-label.mjs') && labels.includes('tools/conflict-label.mjs'));
-  // Why (2 Nov 2026, #304 red on CI): no "this repo has no tools/*-label.mjs" assertion: CI lays the public repo's tree under this one, so that file exists there. The checkout's
-  // `repository: jobadabra/jobadabra` above is what proves no local copy is used.
 });
 
-// Web #299: the Gitar label run was cancelled by a newer Gitar comment and the PR list drew a failed check. jobadabra removed the group for the same reason (#2400).
-// Why-changed (7 Nov 2026, jobadabra#3513): the sweep (workflow_dispatch) has its own group 'tick', so it never cancels a push's run and a push never cancels it.
-test('only a push to main or a sweep can cancel a run: every PR run is its own group', () => {
-  assert.ok(labels.includes("group: pr-labels-${{ github.event_name == 'push' && 'main' || github.event_name == 'workflow_dispatch' && 'tick' || github.run_id }}"), 'a cancelled run is drawn as a red ✗ in the PR list');
-});
-
-test('the Gitar label runs on a push, on Gitar\'s review and on a NEW Gitar comment (an edit starts nothing)', () => {
-  const on = labels.split('\non:\n')[1].split('\n\n')[0];
+// Why (13 Nov 2026, jobadabra#4020; benchmarks #38 and jobadabra #4000): Gitar approves by only editing its comment, which starts nothing; its check ends 0-2 s later, so the check is a trigger.
+test('the label runs on a push to main, a PR push, Gitar\'s review, a NEW comment and Gitar\'s check (an edit starts nothing)', () => {
+  assert.ok(on.includes('push:\n    branches: [main]'));
   assert.ok(on.includes('pull_request_target:\n    types: [opened, synchronize, reopened]'));
   assert.ok(on.includes('pull_request_review:\n    types: [submitted, dismissed]'));
   assert.ok(on.includes('issue_comment:\n    types: [created]') && !on.includes('edited'));
-  assert.ok(labels.includes("github.event.comment.user.login == 'gitar-bot[bot]'") && labels.includes("github.event.review.user.login == 'gitar-bot[bot]'"));
-});
-
-// Owner, 1 Nov 2026: a conflict appears when main moves and goes when the PR is pushed. A label, not a gate.
-test('the conflict label runs when main or a PR moves, labels that PR alone, and nothing waits for it', () => {
-  const on = labels.split('\non:\n')[1].split('\n\n')[0];
-  assert.ok(on.includes('push:\n    branches: [main]'));
-  assert.ok(on.includes('pull_request_target:\n    types: [opened, synchronize, reopened]'));
-  assert.ok(labels.includes('PR: ${{ github.event.pull_request.number }}'), "a PR's run labels that PR alone");
-  assert.ok(/\n  labels:\n/.test(labels) && !/\n\s+needs:/.test(labels), 'a label job waits for nothing and nothing waits for it');
-});
-
-// Why (2 Nov 2026, owner: "red"): #304 listed only tools/conflict-label.mjs, but that script imports ./gitar-label.mjs, so every web PR drew a red "conflict" check
-// (ERR_MODULE_NOT_FOUND). These workflows run from main only, so no PR run can catch it: the check is here, on the sparse list itself.
-const sparseList = flow => flow.split('sparse-checkout: |\n')[1].split('\n          sparse-checkout-cone-mode')[0].split('\n').map(l => l.trim()).filter(Boolean);
-
-test('every relative import of a checked-out script is in that workflow\'s sparse list (all label workflows)', () => {
-  for (const [name, flow] of [['pr-labels.yml', labels]]) {
-    const listed = sparseList(flow);
-    assert.ok(listed.length > 0, `${name} lists its scripts`);
-    for (const file of listed) assert.ok(!/[#\s]/.test(file), `${name}: sparse entry "${file}" holds a comment or a space; a YAML block scalar has no comments, so it would be part of the pattern`);
-    for (const file of listed) {
-      const path = new URL(`../../${file}`, import.meta.url);
-      if (!existsSync(path)) continue;   // CI lays the public repo's tree under this one (joined tree); a bare checkout has no copy, the static case below still holds
-      // An import (`from './x'`) or a sibling file the script runs (`new URL('./x', import.meta.url)`, 3 Nov 2026: gh_retry.py): both must be fetched.
-      for (const [, target] of readFileSync(path, 'utf8').matchAll(/(?:from\s+|new URL\()'\.\/([^']+)'/g)) {
-        assert.ok(listed.includes(`tools/${target}`), `${name}: ${file} imports ./${target}, which the sparse checkout does not fetch`);
-      }
-    }
-  }
-  assert.ok(sparseList(labels).includes('tools/gitar-label.mjs'), 'conflict-label.mjs imports ./gitar-label.mjs (addLabel)');
-  for (const [name, flow] of [['pr-labels.yml', labels]]) assert.ok(sparseList(flow).includes('tools/gh_retry.py'), `${name}: both scripts run gh through tools/gh_retry.py (jobadabra #3091); a bare checkout has no copy to read, so it is pinned here`);
+  assert.ok(on.includes('check_run:\n    types: [created, completed]'));
 });
