@@ -25,7 +25,16 @@ concurrency:
   cancel-in-progress: false   # a started run finishes and the next waits: a cancelled run is a red cross on main (tests/test_main_runs_finish.py)
 
 jobs:
+  # Why (13 Nov 2026, plan 2026-11-13-cloud-runners.md 3/3; owner: "prepare the CICD for staging... but let's keep it disabled until we have first real users" · "I'd like to avoid now long
+  # CICD during the developpment phase"): with the repo variable STAGING_GATE = on, the site deploys to www-staging and every route is asked there first; a red staging stops production.
+  # Off (today) the job is skipped and the deploy runs as before.
+  staging:
+    if: vars.STAGING_GATE == 'on'
+    uses: ./.github/workflows/site-staging.yml
+    secrets: inherit
   deploy:
+    needs: staging
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25   # Why (13 Nov 2026): up to 15 min waiting for the Apply runner after a rename; a normal deploy takes about 2
     env:

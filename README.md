@@ -47,12 +47,14 @@ flowchart LR
   www --- d1[("D1 www-stats")]
   www --- kv[("KV waitlist")]
   www --- r2[("R2 hosted-state, form-reports,<br/>lab-fills, feedback-files, scout-memory")]
-  subgraph staging["Staging (off until the first real users; plan 3/3)"]
-    wst["Worker www-staging"] --> q3[["queue find-jobs-runs-staging"]] --> fjs["Worker find-jobs-runner-staging<br/>max 2"]
+  subgraph staging["Staging: repo variable STAGING_GATE, off until the first real users"]
+    wst["Worker www-staging<br/>own D1, KV, bucket"] --> q3[["queue find-jobs-runs-staging"]] --> fjs["Worker find-jobs-runner-staging<br/>max 2"]
+    wst --> q4[["queue apply-runs-staging"]] --> aps["Worker apply-runner-staging<br/>max 2"]
   end
 ```
 
 - **Alerts** (the 5-minute tick, `shared/cap-alerts.js`, `shared/cloud-health.js`): each runner 🟠 at 80 live / 🔴 when full and a start was refused; each container's memory and disk 🟠 80% / 🔴 95%, CPU p95 80% / 100%; each Worker's errors; failed Always on runs and Apply fills.
+- **Staging gate** (repo variable `STAGING_GATE`, off): on, each production deploy goes to its staging copy first (site: every route asked; runners: the new container comes up) and a red staging stops production.
 - **Deploys**: `site.yml` (www, on push; makes the queues and waits for `apply-runner`), `release-ready-runner.yml` (on push), `release-hosted-runner.yml` (public-watch or by hand), `release-ai-broker.yml` (the AI broker, on push).
 
 ## Contract with the public repo

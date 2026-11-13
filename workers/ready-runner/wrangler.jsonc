@@ -6,7 +6,8 @@
   "main": "worker.js",
   "compatibility_date": "2026-09-01",
   "workers_dev": false,
-  "observability": {"enabled": true},   // keeps the consumer's errors and the container's log lines (counts and words only): 18 Oct 2026, a failed night left no trace
+  // keeps the consumer's errors and the container's log lines (counts and words only): 18 Oct 2026, a failed night left no trace
+  "observability": {"enabled": true},
   "containers": [
     {"class_name": "Browser", "image": "../../hosted/ready-fill/Dockerfile", "image_build_context": "../..", "instance_type": "standard-1", "max_instances": 100}
   ],

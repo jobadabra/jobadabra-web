@@ -20,6 +20,12 @@ test('the Hosted data is staging\'s own: D1, KV, bucket and queue', () => {
   for (const production of ['61f8d0f7-82c2-4afe-a6e5-508aaaf2cfa0', 'a871d4644b614266b5bfa7f1b5e811c1', 'bucket_name = "hosted-state"', 'queue = "find-jobs-runs"']) assert.ok(!staging.includes(production), `production's ${production} is gone`);
 });
 
+test('staging\'s Apply nights go to its own queue and runner, never production\'s', () => {
+  assert.ok(staging.includes(`queue = "${STAGING_DATA.readyQueue}"`) && staging.includes(`service = "${STAGING_DATA.readyRunner}"`));
+  for (const production of ['queue = "apply-runs"', 'service = "apply-runner"']) assert.ok(!staging.includes(production), `production's ${production} is gone`);
+  assert.throws(() => stagingToml(toml.replace('service = "apply-runner"', 'service = "renamed"')), /the Apply runner was not switched/);
+});
+
 test('Always on is on in staging and production, and only staging\'s runs call staging back', () => {
   assert.match(staging, /^HOSTED_ALWAYS_ON = "on"/m);
   assert.match(staging, /^HOSTED_SITE = "https:\/\/www-staging\.jobpilotto\.workers\.dev"/m);
