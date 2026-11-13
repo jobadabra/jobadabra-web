@@ -25,34 +25,35 @@ export function windowOf(state, now) {
   return {...sum, whys: top(whys, 3), who: top(who, 3)};
 }
 
-const over = (window, minCalls = MIN_CALLS) => window.ok + window.bad >= minCalls && window.bad / (window.ok + window.bad) >= BAD_SHARE;
+const over = (window, minCalls = MIN_CALLS, share = BAD_SHARE) => window.ok + window.bad >= minCalls && window.bad / (window.ok + window.bad) >= share;
 
 /**
  * Records one finished call at `now` (epoch ms) and returns {state, event}: event is null, {kind: 'down', startedAt, ...window} when the streak opens, or {kind: 'up', startedAt, ...window} when it closes.
- * `call` = {bad: boolean, why?: string, who?: string}; `minCalls` = the least calls in a window that can open a streak. The state passed in is not changed.
+ * `call` = {bad: boolean, why?: string, who?: string}; `minCalls` = the least calls in a window that can open a streak; `share` = the part of them that must be bad
+ * (BAD_SHARE; the broker's wait alert asks 1 in 10, lib/waiting.mjs). The state passed in is not changed.
  */
-export function step(before, now, call, minCalls = MIN_CALLS) {
+export function step(before, now, call, minCalls = MIN_CALLS, share = BAD_SHARE) {
   const state = structuredClone(before), key = Math.floor(now / BUCKET_MS);
   const bucket = (state.buckets[key] ||= {ok: 0, bad: 0, whys: {}, who: {}});
   if (call.bad) { bucket.bad++; bump(bucket.whys, String(call.why || 'unknown').slice(0, 80)); bump(bucket.who, String(call.who || 'unknown').slice(0, 80)); } else bucket.ok++;
   for (const old of Object.keys(state.buckets)) if (Number(old) < key - Math.floor(WINDOW_MS / BUCKET_MS) - 1) delete state.buckets[old];
   const quiet = now - state.lastAt;
   state.lastAt = now;
-  return judge(state, now, windowOf(state, now), minCalls, quiet);
+  return judge(state, now, windowOf(state, now), minCalls, quiet, share);
 }
 
 /**
  * The open/close decision on a window that is already counted (Free AI counts in D1 and judges on the site's five-minute tick, shared/free-ai-alert.js): {ok, bad, whys, who} -> {state, event} as step().
  * `quiet` = ms since the previous call when the caller knows it (a pause in the calls counts as calm from the last call); a ticking caller leaves it 0.
  */
-export function judge(before, now, window, minCalls = MIN_CALLS, quiet = 0) {
+export function judge(before, now, window, minCalls = MIN_CALLS, quiet = 0, share = BAD_SHARE) {
   const state = structuredClone(before);
   if (!state.open) {
-    if (!over(window, minCalls)) return {state, event: null};
+    if (!over(window, minCalls, share)) return {state, event: null};
     state.open = {startedAt: now}; state.calmSince = null;
     return {state, event: {kind: 'down', startedAt: now, ...window}};
   }
-  if (over(window, minCalls)) { state.calmSince = null; return {state, event: null}; }
+  if (over(window, minCalls, share)) { state.calmSince = null; return {state, event: null}; }
   // Calm: the window is under the line.
   state.calmSince ??= quiet >= WINDOW_MS ? now - quiet : now;
   if (now - state.calmSince < WINDOW_MS) return {state, event: null};

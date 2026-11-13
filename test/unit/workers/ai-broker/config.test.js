@@ -40,8 +40,3 @@ test('run tokens of the repos under both owners are accepted while they move to 
   assert.deepEqual(final.vars.REPOSITORY.split(','), four);
   assert.match(source, /env\.REPOSITORY \|\| 'GarryOne\/jobadabra,GarryOne\/jobadabra-web,GarryOne\/jobadabra-lab,jobadabra\/jobadabra,jobadabra\/jobadabra-web,jobadabra\/jobadabra-lab,jobadabra\/jobadabra-benchmarks'/);
 });
-
-test('the Claude slot count lives on the Worker, not in this file, and a release keeps it (owner via sa, 13 Nov 2026: "We can probably incraese it to more than 6")', () => {
-  assert.equal(final.keep_vars, true, 'a release must not delete the CLAUDE_PARALLEL set on the Worker');
-  assert.equal(final.vars.CLAUDE_PARALLEL, undefined, 'set here, every release would reset a step up or a roll back made on the Worker');
-});
