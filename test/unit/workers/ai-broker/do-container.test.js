@@ -139,3 +139,20 @@ test('/admin/copy moves the old broker\'s state into the new one (the login amon
   assert.equal(await to.storage.get('containerImage'), undefined);
   assert.equal((await entry.fetch(new Request('https://broker/admin/copy', {method: 'POST'}), env)).status, 401);
 });
+
+test('Gitar on #606: every call renews the 10-minute sleep, and a start whose login restore fails is destroyed, so the next call starts over instead of using a container without the login', async t => {
+  const container = box({readyAfter: 0}), {made} = broker(t, container);
+  await made.containerFetch('http://c/call', {method: 'POST', body: '{}'});
+  await made.containerFetch('http://c/call', {method: 'POST', body: '{}'});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(container.log.filter(([what, ms]) => what === 'sleep' && ms === 600_000).length, 3, 'once at the start, then after each call');
+  const failing = box({readyAfter: 0}), b = broker(t, failing);
+  const port = failing.getTcpPort;
+  let fail = true;
+  failing.getTcpPort = n => ({fetch: async (url, init) => { if (fail && new URL(url).pathname === '/auth') throw new Error('auth refused'); return port(n).fetch(url, init); }});
+  await assert.rejects(b.made.containerFetch('http://c/call', {method: 'POST', body: '{}'}), /auth refused/);
+  assert.equal(failing.running, false, 'the half-started container is gone');
+  fail = false;
+  assert.equal((await b.made.containerFetch('http://c/call', {method: 'POST', body: '{}'})).status, 200);
+  assert.equal(failing.log.filter(([what]) => what === 'start').length, 2, 'the next call started a new container, with its login');
+});

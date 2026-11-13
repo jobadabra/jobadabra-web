@@ -46,7 +46,8 @@ export const doContainer = Base => class extends Base {
     // A start in flight is shared, never repeated: `running` turns true only midway through boot(). A container this object did not start (it woke to one) is used as it is: ready, or draining (it says so per call).
     this.#ready ||= (box.running ? Promise.resolve() : this.boot()).then(() => { this.#up = true; });
     try { await this.#ready; } catch (error) { this.#ready = null; throw error; }
-    return box.getTcpPort(this.defaultPort).fetch(url, init);
+    try { return await box.getTcpPort(this.defaultPort).fetch(url, init); }
+    finally { box.setInactivityTimeout(SLEEP_MS).catch(() => {}); }   // Gitar on #606: the old class renewed sleepAfter on every request; renewed here too, whatever the runtime counts from
   }
 
   /** Allowed hosts, start, ready, onStart: in that order, once per container. */
@@ -54,23 +55,26 @@ export const doContainer = Base => class extends Base {
     const box = this.ctx.container, allow = this.ctx.exports.AllowHosts;
     for (const host of this.allowedHosts) await box.interceptOutboundHttps(host, allow);   // internet off: only these names resolve, and only through the entrypoint
     box.start({image: box.images.base, instance: INSTANCE, enableInternet: false, env: this.envVars});
-    await this.ctx.storage.put('containerImage', box.images.base);
-    await box.setInactivityTimeout(SLEEP_MS);
-    const until = Date.now() + READY_MS;
-    for (;;) {
-      try { if ((await box.getTcpPort(this.defaultPort).fetch('http://c/health')).ok) break; } catch { /* not listening yet */ }
-      if (!box.running || Date.now() >= until) {
-        await box.destroy(new Error('not ready')).catch(() => {});
-        throw new Error(`container not ready after ${Math.round((Date.now() - until + READY_MS) / 1000)} s`);
+    // Gitar on #606: a step that fails after start() must not leave a running container that the next call would take as ready (no login restored): it is destroyed, and the next call starts over.
+    try {
+      await this.ctx.storage.put('containerImage', box.images.base);
+      await box.setInactivityTimeout(SLEEP_MS);
+      const until = Date.now() + READY_MS;
+      for (;;) {
+        try { if ((await box.getTcpPort(this.defaultPort).fetch('http://c/health')).ok) break; } catch { /* not listening yet */ }
+        if (!box.running || Date.now() >= until) throw new Error(`container not ready after ${Math.round((Date.now() - until + READY_MS) / 1000)} s`);
+        await new Promise(resolve => setTimeout(resolve, POLL_MS));
       }
-      await new Promise(resolve => setTimeout(resolve, POLL_MS));
+      await this.onStart?.((url, init) => box.getTcpPort(this.defaultPort).fetch(url, init));   // not containerFetch: that one waits for this very start
+    } catch (error) {
+      await box.destroy(error).catch(() => {});
+      throw error;
     }
-    await this.onStart?.((url, init) => box.getTcpPort(this.defaultPort).fetch(url, init));   // not containerFetch: that one waits for this very start
   }
 
   /** The owner's kill test (/admin/stop): the container goes, the stored login stays. */
   async stop() {
-    this.#ready = null;
+    this.#ready = null; this.#up = false;
     await this.ctx.container.destroy();
   }
 };
