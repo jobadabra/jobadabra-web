@@ -16,6 +16,7 @@ export const UNITS = {
   calls: {amount: n => Math.round(Number(n)), show: n => `${n} calls`, word: 'calls'},
   reports: {amount: n => Math.round(Number(n)), show: n => `${n} reports`, word: 'reports'},
   bytes: {amount: n => Math.round(Number(n) / 1048576), show: n => `${n} MB`, word: 'MB'},
+  containers: {amount: n => Math.round(Number(n)), show: n => `${n} containers`, word: 'containers'},
 };
 const TTL = {day: 2, week: 9, month: 40};
 const periodOf = (period, now) => now.toISOString().slice(0, period === 'month' ? 7 : 10);

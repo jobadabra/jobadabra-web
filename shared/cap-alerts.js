@@ -8,6 +8,13 @@ import {LIMITS, allowanceOf} from './free-ai.js';
 import {monthLine} from './free-ai-web.js';
 import {ALL_BYTES_PER_DAY, ALL_REPORTS_PER_DAY} from './report-form.js';
 
+/** Containers each cloud runner may run at once (workers/hosted-runner and workers/ready-runner wrangler.jsonc max_instances). */
+export const RUNNER_CEILING = 100;
+// Runs live now, per runner: a container per open run (hosted_runs) or per running night (ready_batches); `?` = now.
+export const RUNNER_LIVE = {
+  'find-jobs-runner': 'SELECT COUNT(*) AS n FROM hosted_runs WHERE finished_at IS NULL AND expires_at > ?',
+  'apply-runner': "SELECT COUNT(*) AS n FROM ready_batches WHERE state = 'running' AND expires_at > ?",
+};
 const num = (value, fallback) => (Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback);
 const BUSY_TODAY = 'every Free install sees "Free AI is busy today" until 00:00 UTC';
 
@@ -34,6 +41,15 @@ export const CAPS = {
   'form-report-bytes-day': {title: 'Form report uploads today', event: 'form-reports-full', period: 'day', unit: 'bytes',
     line: () => ALL_BYTES_PER_DAY, approach: () => ALL_BYTES_PER_DAY * 0.8,
     sees: 'every Report press says "limit reached for today" until 00:00 UTC', fix: 'raise ALL_BYTES_PER_DAY in shared/report-form.js'},
+  // Why (13 Nov 2026, owner, asked via AskUserQuestion: "100 each (Recommended)", "80% of the ceiling (Recommended)"; "80% warning and 100% critical"): a runner past its max_instances refuses
+  // the next person's start (Cloudflare errors that start), and the Ready to send ceiling of 2 would have queued a third Pro person in silence. RUNNER_CEILING is the one number; a test holds
+  // both runners' wrangler.jsonc max_instances to it.
+  'find-jobs-runner': {title: 'Find jobs runner (Always on searches running now)', event: 'runner-capacity', period: 'day', unit: 'containers',
+    line: () => RUNNER_CEILING, approach: () => RUNNER_CEILING * 0.8,
+    sees: 'at the ceiling the next due person\'s Always on search does not start and waits for the next tick', fix: 'raise max_instances in workers/hosted-runner/wrangler.jsonc and RUNNER_CEILING'},
+  'apply-runner': {title: 'Apply runner (Ready to send nights and Full automation running now)', event: 'runner-capacity', period: 'day', unit: 'containers',
+    line: () => RUNNER_CEILING, approach: () => RUNNER_CEILING * 0.8,
+    sees: 'at the ceiling the next person\'s night or Full automation batch does not start', fix: 'raise max_instances in workers/ready-runner/wrangler.jsonc and RUNNER_CEILING'},
 };
 for (const [name, cap] of Object.entries(CAPS)) cap.name = name;
 
@@ -55,4 +71,19 @@ export async function send(env, event, level, text, fetcher) {
     legacy: env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null}).catch(() => null);
   const unconfigured = told?.via === 'none' && (told.why === 'no-bot' || told.why === 'channel-not-connected' || told.why === 'no-store');
   return Boolean(unconfigured || told?.sent || told?.via === 'switchboard');
+}
+
+/**
+ * The 5-minute tick's look at the two cloud runners: counts the runs live now and tells the owner through the cap alert (🟠 at 80% of RUNNER_CEILING, 🔴 at the ceiling, each once a day).
+ * A full runner counts as reached: the next start is refused by Cloudflare, not merely close. -> {name: live} for the log. Never rejects.
+ */
+export async function runnerCheck(env, {now = new Date(), fetcher = fetch} = {}) {
+  const live = {};
+  for (const [name, sql] of Object.entries(RUNNER_LIVE)) {
+    try {
+      live[name] = Number((await env.STATS.prepare(sql).bind(now.toISOString()).first())?.n) || 0;
+      await capCheck(env, name, live[name], {now, fetcher, reached: live[name] >= CAPS[name].line(env)});
+    } catch { live[name] = null; }
+  }
+  return live;
 }
