@@ -153,11 +153,11 @@ curl -s https://jobadabra-ai-broker.jobpilotto.workers.dev/health | jq '{state, 
 2. **The chain** starts with `engine` (or `ENGINE`) and follows `codex → claude → free-ai`. An engine that was doing worse lately (half of its last calls failed) moves behind the other subscription for 30 minutes, unless the call names its own engine.
 3. **Each engine's turn:**
    - **Codex** answers until its week is 100% used.
-   - **Claude** answers while its seven-day window reads under 90%. At most 6 Claude calls run at once by default; the Worker variable `CLAUDE_PARALLEL` (set on the Worker in Cloudflare, kept across releases by `keep_vars`) moves it without a release, and `/health` `claudeQueue.slots` shows the number in use.
+   - **Claude** answers while its seven-day window reads under 90%.
    - **Free AI** has a $2 UTC-day cap and takes neither a search nor an image.
 4. **The reply** names the engine and model. A refusal names the first engine's own reason.
 
-At most 16 calls run in the container at once (`PARALLEL` in `worker.js`; at most 3 of them on Claude); PR calls wait ahead of the rest.
+At most 16 calls run in the container at once (`PARALLEL` in `worker.js`, every engine together: Claude has no cap of its own since 13 Nov 2026); PR calls wait ahead of the rest.
 
 <details>
 <summary>Kept conversations (sessions)</summary>

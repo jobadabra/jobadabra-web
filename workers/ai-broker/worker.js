@@ -14,6 +14,7 @@ import {slots} from './lib/queue.mjs';
 import {BUSY_MS, mayPassOn} from './lib/busy.mjs';
 import {modelOf, validEffort, weightOf, EFFORTS} from './lib/tiers.mjs';
 import {noteCall, ended} from './lib/refusing.mjs';
+import {named, waiting, served, left, noteWait} from './lib/waiting.mjs';
 import {tokenShaped, fallbackToday, newNote, apiPrecheck, freeAiStep, apiFinish, noteOnce} from './lib/fallback.mjs';
 import {codexMessage, kindOf} from './container/kinds.mjs';
 import {walk, answered, refused, unavailable, failed, platformCut} from './lib/walk.mjs';
@@ -33,19 +34,12 @@ export {ContainerProxy} from '@cloudflare/containers';   // required by the outb
 // slots are full, and the waits came in bursts (15-16Z p90 23-31 s, scheduled lane 87% of all waiting) while the container's CPU stayed at most 0.46-0.60 (median 0.18-0.26)
 // and memory at most 2.1 of 6 GiB; hours that peaked at 0.93-0.96 CPU had no waits (slots not full, so more slots add no load there). Read the waits and CPU per minute on
 // the first by-hand Search check after this deploy: back to 12 if the CPU passes ~0.9 in minutes that still wait.
-const PARALLEL = 16;
-// How many Claude calls run at once: the Worker variable CLAUDE_PARALLEL (a whole number, at most PARALLEL: each also holds a shared slot), else 6. It is set on the
-// Worker, not in wrangler.jsonc, and `keep_vars` keeps it across releases, so a step up or a roll back needs no code change; /health `claudeQueue.slots` says what runs.
-// Why (13 Nov 2026, owner, asked via AskUserQuestion by sa: "Yes, 3 to 6 (Recommended)" · "We can probably incraese it to more than 6"): at 3, 23:20-23:55Z 12 Nov, the
-// Claude-only benchmark (639 calls) waited p50 80 s, p90 180 s, max 301 s and its caller gave up on 92, while the 16 shared slots never filled (Codex slot wait max 1.3 s);
-// the container held 2.63 of 6 GiB and CPU 0.82 at most (210 MB a Claude call). Concurrency above 3 on the Claude plan was never measured: each step is watched
-// (waits, errors, out-of-quota in /health, CPU, memory) and rolled back if the plan pushes back.
-const CLAUDE_PARALLEL = 6;
-/** The Claude slots for this Worker's env: CLAUDE_PARALLEL when it is a whole number from 1, capped at PARALLEL; else CLAUDE_PARALLEL's default. */
-export const claudeSlots = env => {
-  const n = Number(env?.CLAUDE_PARALLEL);
-  return Number.isInteger(n) && n >= 1 ? Math.min(n, PARALLEL) : CLAUDE_PARALLEL;
-};
+/** How many calls run in the container at once, every engine together (the one gate below). */
+export const PARALLEL = 16;
+// Design (13 Nov 2026, owner: "make the claude limit to be an unified slot cap which is 16" · "no isolate claude cap"): one gate of PARALLEL slots, owned by this class, for
+// every engine. A call holds one slot from its engine's turn to the reply, whatever the engine; nothing else limits how many calls of one engine run. Third change of the Claude
+// cap in a day (3 -> 6 #604 -> Worker variable 16 -> one gate), so the separate gate is gone rather than tuned: at 3 the Claude-only benchmark (639 calls, 12 Nov 23:20-23:55Z)
+// waited p50 80 s, p90 180 s and its caller gave up on 92 while the 16 shared slots never filled. A Claude call peaks near 210 MB, so 16 fit in 6 GiB (3.4 GiB).
 const CALLER_WAIT_MS = 180_000, CODEX_GUARD_MS = 100_000, START_MS = 10_000;   // the callers' own wait (desktop/e2e/lib/broker-client.mjs: AbortSignal.timeout(180000), an abort is not retried), the container's Codex guard (container/server.mjs), a cold start
 const DRAIN_WAIT_MS = CALLER_WAIT_MS - CODEX_GUARD_MS - START_MS;   // Why (8 Nov 2026, Gitar on #501): a call that waits for the next container must still have time to run in it before its caller gives up, or the hand-over only moves the loss; past this it is passed on like any start-up failure (Claude, Free AI) instead of answered to nobody. Calls the old container is still finishing are guarded at 100 s (Codex) and 150 s (Claude), so a drain longer than this wait costs the refused call its Codex turn, as every deploy did before
 const HOSTS = ['chatgpt.com', 'auth.openai.com', 'api.openai.com', 'api.anthropic.com'];   // the only hosts the container may reach (the reply is the only way out); api.anthropic.com is the Claude engine's (1 Nov 2026), measured: telemetry is off, so nothing else is needed
@@ -57,7 +51,6 @@ const brokerOf = Base => class extends Base {
   constructor(ctx, env) {
     super(ctx, env);
     this.brokerEnv = env;
-    this.claudeGate = slots(claudeSlots(env));   // Why (1 Nov 2026): one Claude CLI call peaks near 210 MB (measured), so at most claudeSlots(env) at once, and each also holds one of the PARALLEL shared slots
     // Why (1 Nov 2026): the Claude subscription's token reaches the container as an environment variable and only the Claude call reads it (container/server.mjs passes explicit environments to every child); it is never in the image, a reply or a log.
     this.envVars = env.CLAUDE_CODE_OAUTH_TOKEN ? {CLAUDE_CODE_OAUTH_TOKEN: env.CLAUDE_CODE_OAUTH_TOKEN} : {};
   }
@@ -109,7 +102,7 @@ const brokerOf = Base => class extends Base {
     const url = new URL(request.url);
     if (url.pathname === '/login' && request.method === 'POST') return this.setLogin(await request.text());
     if (url.pathname === '/health') return this.health();
-    if (url.pathname === '/call' && request.method === 'POST') return this.call(request.headers.get('x-lane'), await request.json(), workflowKey(request.headers.get('x-workflow')), jobKey(request.headers.get('x-job')), sessionKey(request.headers.get('x-session')));
+    if (url.pathname === '/call' && request.method === 'POST') return this.call(request.headers.get('x-lane'), await request.json(), workflowKey(request.headers.get('x-workflow')), jobKey(request.headers.get('x-job')), sessionKey(request.headers.get('x-session')), request.signal);
     if (url.pathname === '/export' && request.method === 'POST') return json(200, await exportState(this.ctx.storage));   // reached only through /admin/copy (lib/move.mjs)
     if (url.pathname === '/import' && request.method === 'POST') return json(200, {copied: await importState(this.ctx.storage, await request.json())});
     if (url.pathname === '/stop' && request.method === 'POST') { await this.stop(); return json(200, {stopped: true}); }   // the owner's kill test (admin route in front)
@@ -143,7 +136,7 @@ const brokerOf = Base => class extends Base {
     // `ready` = a login is stored AND the container has answered since its last start (a sleeping container keeps its last proof; its next wake starts over); `starting` = login stored, nothing answered yet (readers: the release gate accepts it, nobody else reads this field). `startError` = the last Codex failure passed on while starting.
     const state = !(await this.ctx.storage.get('login')) ? 'no-login' : (await this.ctx.storage.get('lost')) ? 'login-lost' : (await this.ctx.storage.get('answered')) ? 'ready' : 'starting';
     const startError = state === 'starting' ? await this.ctx.storage.get('startError') : null;
-    return json(200, {state, ...(startError ? {startError} : {}), limits: this.limits, lines: linesOf(LANES, ((await this.ctx.storage.get('claude:state')) || {}).limits), own: meter.tokens, daily: {drift: callsToday(meter, 'drift'), byhand: callsToday(meter, 'byhand')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), claudeQueue: {slots: claudeSlots(this.brokerEnv), ...this.claudeGate.stats()}, fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
+    return json(200, {state, ...(startError ? {startError} : {}), limits: this.limits, lines: linesOf(LANES, ((await this.ctx.storage.get('claude:state')) || {}).limits), own: meter.tokens, daily: {drift: callsToday(meter, 'drift'), byhand: callsToday(meter, 'byhand')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
   }
 
   // The owner-visible refusals of the Codex login: they stand when Codex is reached, another engine does not hide them.
@@ -154,14 +147,21 @@ const brokerOf = Base => class extends Base {
   }
 
   // One call, answered and then counted for its workflow (lib/tally.mjs). The count never changes the answer: a tally that cannot be written is logged and the reply goes out.
-  async call(lane, body, workflow = 'unknown', job = '', session = '') {
+  async call(lane, body, workflow = 'unknown', job = '', session = '', signal = null) {
     const started = Date.now();
+    named(body, workflow);
+    signal?.addEventListener?.('abort', () => this.waited(left(body)), {once: true});   // the caller gave up: a starved call when it had waited past the line (lib/waiting.mjs)
     const reply = await this.answer(lane, body, session);
     if (session) await this.noteGap(session, reply).catch(error => console.log(`sessions: ${String(error?.message || error).slice(0, 200)}`));
     await this.countCall(workflow, reply, Date.now() - started, job).catch(error => console.log(`tally: ${String(error?.message || error).slice(0, 200)}`));
     // Why (12 Nov 2026, bx; owner: "Do I get alerts if the ai-broker starts to refuse AI calls?"): the call's end feeds the refusal streak (lib/refusing.mjs); the note never changes the answer.
     await noteCall({storage: this.ctx.storage, env: this.brokerEnv, reply, workflow, chain: async () => (await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10))).chain}).catch(error => console.log(`refusing: ${String(error?.message || error).slice(0, 200)}`));
     return reply;
+  }
+
+  // One slot wait into its engine's wait alert (lib/waiting.mjs); never delays or changes the call.
+  waited(wait) {
+    if (wait) noteWait({storage: this.ctx.storage, env: this.brokerEnv, wait, slots: PARALLEL}).catch(error => console.log(`waiting: ${String(error?.message || error).slice(0, 200)}`));
   }
 
   // Reads the finished reply's own tokens, engine and time (a refusal has none and still counts as a call), then adds them to today's row in one transaction.
@@ -290,7 +290,9 @@ const brokerOf = Base => class extends Base {
     const entered = Date.now();
     const unlock = session ? await this.turns(session) : () => {};   // before the slot: a waiting turn of one conversation must not hold a slot others need
     try {
+      waiting(body, 'codex');
       const release = await this.gate.acquire(queueOf(lane));   // nightly drift and by-hand Search checks share scheduled queue priority
+      this.waited(served(body));
       try {
         const delta = typeof body.delta === 'string' ? body.delta : '', now = Date.now();
         const plan = session ? planOf(((await this.ctx.storage.get('sessions')) || {})[session], {now, tier: body.tier ?? 'mid', delta}) : null;
@@ -374,11 +376,10 @@ const brokerOf = Base => class extends Base {
     if ((state.invalidUntil || 0) > now) return unavailable('token-invalid', '', false);
     if ((state.limitUntil || 0) > now) return unavailable('ran-out', '', false);
     const model = CLAUDE_MODELS[body.tier ?? 'mid'];
-    const priority = queueOf(lane), waitStarted = Date.now();
-    const releaseClaude = await this.claudeGate.acquire(priority, waitMs);
-    if (!releaseClaude) return unavailable('busy');
-    const release = await this.gate.acquire(priority, waitMs === undefined ? undefined : Math.max(0, waitMs - (Date.now() - waitStarted)));   // the PARALLEL shared slots count against the same deadline
-    if (!release) { releaseClaude(); return unavailable('busy'); }
+    waiting(body, 'claude');
+    const release = await this.gate.acquire(queueOf(lane), waitMs);
+    this.waited(served(body));
+    if (!release) return unavailable('busy');
     try {
       // Why (8 Nov 2026, code-review): the line was read when the call came in, and a call waits for a slot with no deadline (searches, the retry turn); a Claude call that finished meanwhile may have moved the week to 90%. Read it again with the slot in hand, so no call starts past the line.
       const late = await this.claudeLine();
@@ -413,7 +414,7 @@ const brokerOf = Base => class extends Base {
       if (bad) return failed('bad-answer', '', json(422, {why: bad}));   // whether it ends the call depends on its place in the chain: worker.js turn()
       return answered(json(200, {reply: answer.reply, tokens: answer.tokens, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, weekUsedPercent: this.limits?.usedPercent ?? null, engine: 'claude'}));
     } catch (e) { return await this.claudeFailure('call: ' + String(e?.message || e)); }
-    finally { release(); releaseClaude(); }
+    finally { release(); }
   }
 };
 
@@ -448,7 +449,7 @@ export default {
       let text = await request.text();
       let asked; try { asked = JSON.parse(text); } catch { asked = null; }   // the Durable Object refuses a body that is not JSON; the key just stays empty
       text = claudeOnly(claims, asked, text);   // jobadabra-benchmarks calls that name no engine are forced to Claude alone (the signed repository claim; lib/lanes.mjs)
-      return broker.fetch(new Request('http://c/call', {method: 'POST', body: text, headers: {'x-lane': laneOf(claims), 'x-workflow': workflowOf(claims), 'x-job': jobKey(request.headers.get('x-jobadabra-job')), 'x-session': sessionKeyOf(claims, asked?.session)}}));   // Why (3 Nov 2026, owner): lane and workflow are built fresh from the verified claims; a header the caller sends is never forwarded. Why (5 Nov 2026, owner via mac-32: per-job AI cost): the one exception is the job label, a GitHub job id of a fixed shape that only names a row for display and never decides a lane or a cap
+      return broker.fetch(new Request('http://c/call', {method: 'POST', body: text, signal: request.signal, headers: {'x-lane': laneOf(claims), 'x-workflow': workflowOf(claims), 'x-job': jobKey(request.headers.get('x-jobadabra-job')), 'x-session': sessionKeyOf(claims, asked?.session)}}));   // Why (3 Nov 2026, owner): lane and workflow are built fresh from the verified claims; a header the caller sends is never forwarded. Why (5 Nov 2026, owner via mac-32: per-job AI cost): the one exception is the job label, a GitHub job id of a fixed shape that only names a row for display and never decides a lane or a cap
     }
     return json(404, {error: 'not found'});
   },

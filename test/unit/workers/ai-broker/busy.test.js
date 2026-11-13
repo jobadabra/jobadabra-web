@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {day, body, success, harness, containerError} from './harness.mjs';
+import {day, body, success, harness, containerError, PARALLEL} from './harness.mjs';
 import {LANES} from '../../../../workers/ai-broker/lib/lanes.mjs';
 import {slots} from '../../../../workers/ai-broker/lib/queue.mjs';
 import {BUSY_MS} from '../../../../workers/ai-broker/lib/busy.mjs';
@@ -15,12 +15,12 @@ const until = async condition => { for (let i = 0; i < 2000 && !condition(); i++
 const settles = promise => { const state = {done: false}; promise.then(() => { state.done = true; }, () => { state.done = true; }); return state; };
 const quiet = () => new Promise(resolve => setImmediate(resolve)).then(() => new Promise(resolve => setImmediate(resolve)));
 
-// A broker whose Claude calls stay in the container until the test releases them (`held`), so its 3 slots can be full. Codex's week is used up unless `week` says otherwise.
+// A broker whose Claude calls stay in the container until the test releases them (`held`), so all PARALLEL slots (every engine shares them, 13 Nov 2026) can be full. Codex's week is used up unless `week` says otherwise.
 async function setup(t, {engine = 'codex', week = 100, claude = null, hold = true, free = () => ({response: 'free answer', usage: {prompt_tokens: 100, completion_tokens: 20}}), extra = {}} = {}) {
   t.mock.method(Date, 'now', () => day);
   t.mock.timers.enable({apis: ['setTimeout']});
   const calls = {free: 0, claudeCli: 0}, held = [];
-  const env = {...config.vars, CLAUDE_PARALLEL: '3', ENGINE: engine, CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token', AI: {run: async () => { calls.free++; return free(); }}, ...extra};
+  const env = {...config.vars, ENGINE: engine, CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token', AI: {run: async () => { calls.free++; return free(); }}, ...extra};
   t.mock.method(globalThis, 'fetch', async () => Response.json({ok: true}));
   const made = harness(undefined, env);
   made.broker.containerFetch = async url => {
@@ -34,12 +34,12 @@ async function setup(t, {engine = 'codex', week = 100, claude = null, hold = tru
   if (claude !== null) await made.storage.put('claude:state', {limits: {status: 'allowed', fiveHour: null, sevenDay: {utilization: claude / 100, resetsAt: day / 1000 + 3600, status: 'allowed'}}});   // the CLI's own reading, a fraction
   const releaseOne = () => held.shift()();
   const drain = async promise => { const state = settles(promise); for (let i = 0; i < 500 && !state.done; i++) { while (held.length) held.shift()(); await quiet(); } return promise; };   // lets every held container call finish until `promise` is settled
-  const fill = async () => {   // three searches take Claude's three slots and stay there
-    const running = Array.from({length: 3}, () => made.broker.call('pr', {...body, search: true, engine: 'claude', only: true}));   // pinned to Claude whatever Codex has left
-    await until(() => calls.claudeCli === 3);
+  const fill = async () => {   // PARALLEL searches take every slot and stay there
+    const running = Array.from({length: PARALLEL}, () => made.broker.call('pr', {...body, search: true, engine: 'claude', only: true}));   // pinned to Claude whatever Codex has left
+    await until(() => calls.claudeCli === PARALLEL);
     return running;
   };
-  const wait = async () => { await until(() => made.broker.claudeGate.stats().waiting.pr === 1); t.mock.timers.tick(BUSY_MS); await quiet(); };
+  const wait = async () => { await until(() => made.broker.gate.stats().waiting.pr === 1); t.mock.timers.tick(BUSY_MS); await quiet(); };
   return {...made, calls, held, releaseOne, drain, fill, wait};
 }
 const json = async response => response.json();
@@ -71,12 +71,12 @@ test('Claude busy for 10 s: a call without search is answered by Free AI, listed
   const answer = await json(await passed);
   assert.equal(answer.engine, 'free-ai'); assert.equal(answer.reply, 'free answer');
   assert.deepEqual(answer.fellBack, [{engine: 'codex', why: 'ran-out'}, {engine: 'claude', why: 'busy'}]);
-  assert.equal(calls.claudeCli, 3, 'the busy call was never sent to the container');
+  assert.equal(calls.claudeCli, PARALLEL, 'the busy call was never sent to the container');
   const health = await json(await broker.health()), claude = health.chain.find(e => e.name === 'claude');
   assert.equal(claude.busyToday, 1); assert.equal(claude.failedToday, 0); assert.equal(claude.ranOutToday, 0);
   assert.equal(claude.state, 'ready', 'busy is not a fault: Claude is not moved back or marked');
-  for (let i = 0; i < 3; i++) releaseOne();
-  assert.deepEqual((await Promise.all(running)).map(r => r.status), [200, 200, 200], 'calls already sent to the container finish');
+  for (let i = 0; i < PARALLEL; i++) releaseOne();
+  assert.ok((await Promise.all(running)).every(r => r.status === 200), 'calls already sent to the container finish');
 });
 
 test('Claude busy: a search call keeps waiting for Claude and Claude answers; Free AI is never asked', async t => {
@@ -88,7 +88,7 @@ test('Claude busy: a search call keeps waiting for Claude and Claude answers; Fr
   releaseOne();   // the freed slot goes to the waiting search
   const answer = await json(await drain(search));
   assert.equal(answer.engine, 'claude'); assert.deepEqual(answer.fellBack, [{engine: 'codex', why: 'ran-out'}]);
-  assert.equal(calls.free, 0); assert.equal(calls.claudeCli, 4);
+  assert.equal(calls.free, 0); assert.equal(calls.claudeCli, PARALLEL + 1);
   await drain(Promise.all(running));
 });
 
@@ -99,7 +99,7 @@ test('Claude busy and Free AI at its daily cap: the call waits for Claude (no en
   const running = await fill();
   const call = broker.call('pr', body), state = settles(call);
   await quiet(); await quiet();
-  assert.equal(broker.claudeGate.stats().waiting.pr, 1);
+  assert.equal(broker.gate.stats().waiting.pr, 1);
   t.mock.timers.tick(BUSY_MS); await quiet();
   assert.equal(state.done, false); assert.equal(calls.free, 0);
   releaseOne();
@@ -113,7 +113,7 @@ test('a call with engine "claude" and only: true waits for a busy Claude and nev
   const {broker, calls, fill, releaseOne, drain} = await setup(t, {week: 10});
   const running = await fill();
   const call = broker.call('pr', {...body, engine: 'claude', only: true}), state = settles(call);
-  await until(() => broker.claudeGate.stats().waiting.pr === 1);
+  await until(() => broker.gate.stats().waiting.pr === 1);
   t.mock.timers.tick(BUSY_MS); await quiet();
   assert.equal(state.done, false, 'after 10 s it still waits: its chain is Claude alone');
   assert.equal(calls.free, 0);
@@ -143,7 +143,7 @@ test('Claude busy and the call has images: Free AI cannot take them, so the call
   const {broker, calls, fill, releaseOne, drain} = await setup(t);
   const running = await fill();
   const call = broker.call('pr', {...body, images: [{name: 'a.png', base64: 'QQ=='}]}), state = settles(call);
-  await until(() => broker.claudeGate.stats().waiting.pr === 1);
+  await until(() => broker.gate.stats().waiting.pr === 1);
   t.mock.timers.tick(BUSY_MS); await quiet();
   assert.equal(state.done, false); assert.equal(calls.free, 0, 'Free AI was not tried');
   releaseOne();
@@ -157,10 +157,12 @@ test('Claude busy while Codex still has allowance (Claude first, Codex behind it
   const running = await fill();
   const call = broker.call('pr', body);
   await wait();
+  await until(() => broker.gate.stats().waiting.pr === 1);   // one gate: Codex's turn waits for the next slot too
+  releaseOne();
   const answer = await json(await call);
   assert.equal(answer.engine, 'codex'); assert.deepEqual(answer.fellBack, [{engine: 'claude', why: 'busy'}]);
   assert.equal(calls.free, 0);
-  for (let i = 0; i < 3; i++) releaseOne();
+  for (let i = 1; i < PARALLEL; i++) releaseOne();
   await Promise.all(running);
 });
 
@@ -278,14 +280,14 @@ test('a call waiting for a Claude slot is held to the line again when it gets th
   const cases = {search: {search: true}, image: {images: [{name: 'a.png', base64: 'AAAA'}]}, 'strict Claude call': {engine: 'claude', only: true}};
   for (const [name, asked] of Object.entries(cases)) await t.test(name, async t => {
     const {broker, storage, calls, fill, releaseOne, drain} = await setup(t, {week: 100, claude: 89});
-    const running = await fill();   // three pinned searches hold Claude's three slots
+    const running = await fill();   // pinned searches hold every slot
     const waiter = broker.call('pr', {...body, ...asked});   // admitted at 89%, waits for a slot with no deadline
-    await until(() => broker.claudeGate.stats().waiting.pr === 1);
+    await until(() => broker.gate.stats().waiting.pr === 1);
     await storage.put('claude:state', {limits: {status: 'allowed', sevenDay: {utilization: 0.91, resetsAt: day / 1000 + 3600, status: 'allowed'}}});   // a finished call wrote 91%
     releaseOne();
     const refused = await waiter;
     assert.equal(refused.status, 429); assert.equal((await json(refused)).why, 'budget:claude-week 91% of 90%');
-    assert.equal(calls.claudeCli, 3, 'the waiter never started a Claude call'); assert.equal(calls.free, 0);
+    assert.equal(calls.claudeCli, PARALLEL, 'the waiter never started a Claude call'); assert.equal(calls.free, 0);
     await drain(Promise.all(running));
   });
 });
@@ -306,17 +308,14 @@ test('/health reads the stored Codex week after a restart, before any call (gi: 
   assert.equal((await json(await broker.health())).limits.usedPercent, 73);
 });
 
-test('Claude runs CLAUDE_PARALLEL calls at once (a whole number, capped at the shared slots), 6 when it is unset or not a number, and /health says how many (13 Nov 2026)', async t => {
-  // Why (13 Nov 2026, owner, asked via AskUserQuestion by sa: "Yes, 3 to 6 (Recommended)" · "We can probably incraese it to more than 6"): at 3 the Claude-only benchmark waited p90 180 s.
-  for (const [value, slots] of [[undefined, 6], ['10', 10], ['40', 16], ['0', 6], ['six', 6], ['2.5', 6]]) {
-    const made = harness(undefined, {...config.vars, ...(value === undefined ? {} : {CLAUDE_PARALLEL: value})});
-    const releases = [];
-    for (let i = 0; i < slots; i++) releases.push(await made.broker.claudeGate.acquire('scheduled'));
-    assert.equal(made.broker.claudeGate.stats().active, slots, `${value}: ${slots} run`);
-    const next = settles(made.broker.claudeGate.acquire('scheduled'));
-    await quiet();
-    assert.equal(next.done, false, `${value}: call ${slots + 1} waits`);
-    assert.equal((await (await made.broker.health()).json()).claudeQueue.slots, slots, `${value}: /health says ${slots}`);
-    for (const release of releases) release();
-  }
+test('Claude has no cap of its own: PARALLEL Claude calls run at once and the next one waits, and a Codex call waits behind them in the same gate (owner, 13 Nov 2026: "no isolate claude cap")', async t => {
+  const {broker, calls, fill, releaseOne, drain} = await setup(t, {week: 10});
+  const running = await fill();
+  assert.equal(calls.claudeCli, PARALLEL, `${PARALLEL} Claude calls run at once`);
+  const codex = broker.call('pr', body), state = settles(codex);
+  await until(() => broker.gate.stats().waiting.pr === 1);
+  assert.equal(state.done, false, 'Codex waits for a slot the Claude calls hold');
+  releaseOne();
+  assert.equal((await json(await drain(codex))).engine, 'codex');
+  await drain(Promise.all(running));
 });
