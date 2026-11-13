@@ -6,6 +6,7 @@ import {countTone, shareTone} from './applying-tiles.js';
 import {segmentKey} from './benchmark-data.js';
 import {objectiveBlock} from './benchmark-objective.js';
 import {fairBlock, pickRound} from './benchmark-fair.js';
+import {ROUND_STYLE} from './benchmark-rounds.js';
 import {PUBLISH_STYLE, formsSection, panel} from './benchmark-publish.js';
 
 const pct = value => (value == null ? '–' : `${value}%`);
@@ -72,7 +73,7 @@ const METHOD = `<section class="card"><details><summary>How this is measured</su
 export function page(snapshot, {segment, round, published, confirm, note = ''} = {}) {
   const key = pickSegment(snapshot, segment), view = key ? snapshot.segments[key] : null;
   const keys = Object.keys(snapshot?.segments || {});
-  const fair = fairBlock(snapshot?.fair, round), fairKey = pickRound(snapshot?.fair, round);
+  const fair = fairBlock(snapshot?.fair, round, published?.form?.now?.round), fairKey = pickRound(snapshot?.fair, round);
   const OLD = `<summary class="old">Old rounds (before 27 Oct 2026): each tool on its own model, on forms we had tested and fixed on, judged per tool. Not comparable with the fair round above.</summary>`;
   const body = !view ? (fair ? '' : `<section class="card"><h2>No data yet</h2><p class="muted">The bake-off's publish step sends every scored run here (<code>PUT /benchmark/data</code>); the first scored run fills this page.</p></section>`)
     : `${key.endsWith(':user') ? '' : `<div class="banner">${esc(segmentLabel(key))}: not what real users run, and never added to user mode. Use it only to compare with itself.</div>`}
@@ -81,7 +82,7 @@ ${objectiveBlock(view)}${tiles(view)}${scoreboard(view)}${grid(view)}${trend(vie
   const card = fairKey && published ? panel({kind: 'form', round: fairKey, part: formsSection(fairKey, snapshot.fair.rounds[fairKey], note), published, ask: confirm === 'publish', note}) : '';
   const shown = fair ? `${card}${fair}${view ? `<details class="oldrounds">${OLD}${body}</details>` : ''}` : body;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Benchmark Form Filling · Admin</title>
-<link rel="icon" href="/favicon-32.png"><style>${CSS}${PUBLISH_STYLE}</style></head><body><main>
+<link rel="icon" href="/favicon-32.png"><style>${CSS}${ROUND_STYLE}${PUBLISH_STYLE}</style></head><body><main>
 <header><h1>📏 Benchmark Form Filling</h1><span class="muted">${snapshot ? `as of ${esc(snapshot.at.slice(0, 16).replace('T', ' '))} UTC · ${fairKey ? 'fair round' : key ? esc(segmentLabel(key)) : ''}` : ''}</span></header>
 ${shown}</main></body></html>`;
 }

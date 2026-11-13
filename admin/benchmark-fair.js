@@ -5,6 +5,7 @@
 // Guard: test/unit/admin/benchmark/benchmark-fair.test.js.
 import {esc} from '../shared/html.js';
 import {shareTone} from './applying-tiles.js';
+import {roundPicker} from './benchmark-rounds.js';
 
 export const ROUND = /^(old|fixed|week-\d{4}-W\d{2})$/;
 export const isFair = row => (row.round || 'old') !== 'old';
@@ -43,10 +44,11 @@ export const pickRound = (fair, asked) => { const keys = Object.keys(fair?.round
 const pct = v => (v == null ? '–' : `${v}%`);
 const tone = v => shareTone(v == null ? null : Math.round(v));
 
-export function fairBlock(fair, asked) {
+export function fairBlock(fair, asked, publicRound) {
   const key = pickRound(fair, asked); if (!key) return '';
   const r = fair.rounds[key], keys = Object.keys(fair.rounds).sort(roundOrder);
-  const links = keys.length > 1 ? `<p class="filters">${keys.map(k => k === key ? `<b>${esc(roundLabel(k))}</b>` : `<a href="?round=${encodeURIComponent(k)}">${esc(roundLabel(k))}</a>`).join(' · ')}</p>` : '';
+  // The same dropdown as the job-search page (owner, 13 Nov 2026: "not chips"); every key here is a real round (ROUND), so no side-check list.
+  const links = roundPicker({real: keys.map(k => [k, `${roundLabel(k)}${k === publicRound ? ' · public' : ''}`]), current: key});
   const rows = r.tools.map(t => `<tr class="${t.ours ? 'ours' : ''}"><td>${esc(t.tool)}${t.ours && t.build ? ` <span class="muted">build ${esc(t.build)}</span>` : ''}</td>
 <td class="num ${tone(t.score)}">${pct(t.score)}</td><td class="num muted">${t.reps > 1 ? `${t.low}–${t.high}` : '–'}</td><td class="num good">${t.right}</td>
 <td class="num ${t.wrong ? 'bad' : ''}">${t.wrong}</td><td class="num">${t.empty}</td><td class="num">${t.unreached}</td><td class="num">${t.forms}</td><td class="num">${t.reps}</td></tr>`).join('');
