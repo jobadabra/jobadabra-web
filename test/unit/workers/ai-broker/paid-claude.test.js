@@ -100,3 +100,29 @@ test('the month cap: past $100 this month the lane answers as if the key were ab
   const month = w.sent.filter(note => note.event === 'ai-broker-cap' && /this month/.test(note.text)).map(note => note.text.slice(0, 2));
   assert.deepEqual(month, ['🔴']);
 });
+
+test('calls arriving at once near the cap: each reserves its estimate first, so none is sent past the line (Gitar on #626)', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}});
+  await planOut(w.storage);
+  await w.storage.put('paid:2026-11-13', {usd: 9.97});
+  const replies = await Promise.all([1, 2, 3, 4, 5].map(() => w.broker.call('bench', claudeOnly, 'jobadabra-benchmarks/search-ours.yml')));
+  assert.equal(w.claude.length, 0, 'no call fits under $10 with its estimate'); assert.ok(replies.every(reply => reply.status !== 200));
+});
+
+test('a paid call that fails or is refused is still booked: its tokens when known, else its estimate (Gitar on #626)', async t => {
+  const failing = world(t, {env: {CLAUDE_API_KEY: KEY}, reply: () => Response.json({error: 'claude-failed:1 boom', kind: 'failed'}, {status: 500})});
+  await planOut(failing.storage);
+  await failing.broker.call('bench', claudeOnly, 'jobadabra-benchmarks/search-ours.yml');
+  assert.ok((await paidDay(failing.storage, new Date(T))).usd > 0, 'a failed call books its estimate');
+  const echoed = world(t, {env: {CLAUDE_API_KEY: KEY}, reply: () => Response.json({reply: `here: ${KEY}`, tokens: {input: 1_000_000, cached: 0, output: 0}, ms: 1})});
+  await planOut(echoed.storage);
+  await echoed.broker.call('bench', claudeOnly, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal((await paidDay(echoed.storage, new Date(T))).usd, 2, 'a refused reply books its own tokens: 1M input on Sonnet');
+});
+
+test('cache reads cost a tenth of input and cache writes a quarter more, as Anthropic bills them (Gitar on #626)', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}, reply: () => Response.json({reply: 'ok', tokens: {input: 2_000_000, cached: 1_000_000, cacheWritten: 1_000_000, output: 0}, ms: 1})});
+  await planOut(w.storage);
+  const answer = await (await w.broker.call('bench', claudeOnly, 'jobadabra-benchmarks/search-ours.yml')).json();
+  assert.equal(answer.usd, 2.7, '1M read at $0.2 + 1M written at $2.5');
+});

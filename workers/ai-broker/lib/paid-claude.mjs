@@ -24,37 +24,52 @@ export const paidMonthCap = env => (Number(env?.CLAUDE_API_MONTH_USD) > 0 ? Numb
 export const paidDay = async (storage, now = new Date(Date.now())) => (await storage.get(`paid:${dayOf(now)}`)) || {usd: 0};
 const monthKey = now => `paid-month:${now.toISOString().slice(0, 7)}`;
 
+// Why (#626, Gitar): a reply's tokens priced as Anthropic bills them; `input` from the container holds both cache parts (container/claude.mjs readClaude): reads at a tenth, writes at 1.25x.
+const priced = (model, tokens = {}) => {
+  const read = tokens.cached || 0, written = tokens.cacheWritten || 0, plain = Math.max(0, (tokens.input || 0) - read - written);
+  return claudeUsd(model, {input_tokens: plain + read * 0.1 + written * 1.25, output_tokens: tokens.output || 0});
+};
+// What a call is held at before it runs: its prompt (about 3 characters a token) plus the CLI's own context, and a long answer. Settled to the real price after.
+const estimateOf = (model, body) => claudeUsd(model, {input_tokens: Math.ceil(String(body.prompt || '').length / 3) + 5000, output_tokens: 8000});
+const round = usd => Math.round(usd * 1e6) / 1e6;
+// Adds `usd` (may be negative: a settlement) to the day and the month, in one transaction. `limit` = refuse when either would pass its cap. -> {day, month} after, or {over: 'day' | 'month'}.
+const book = (storage, env, now, usd, limit = false) => storage.transaction(async tx => {
+  const dk = `paid:${dayOf(now)}`, mk = monthKey(now), day = (await tx.get(dk)) || {usd: 0}, month = (await tx.get(mk)) || {usd: 0};
+  if (limit && day.usd + usd > paidCap(env)) return {over: 'day'};
+  if (limit && month.usd + usd > paidMonthCap(env)) return {over: 'month'};
+  await tx.put(dk, {usd: round(day.usd + usd)}); await tx.put(mk, {usd: round(month.usd + usd)});
+  return {day: round(day.usd + usd), month: round(month.usd + usd)};
+});
+
 /**
  * One call on the key, in place of the plan's `why` ('ran-out' or 'budget'). `held` = the caller already holds a container slot (it releases it). -> a walk verdict.
- * Past the day or the month cap: the plan's own verdict again (as if the key were absent), and that cap's 🔴 card. A failed paid call never touches the plan's state.
+ * Why (#626, Gitar): the call's estimate is reserved before it runs, so calls arriving at once cannot all pass a cap read before any of them booked; it is settled to the real price after,
+ * and a call that ran is booked even when it failed or was refused (its tokens when known, else its estimate). Past the day or the month cap: the plan's own verdict again (as if the key
+ * were absent), and that cap's 🔴 card. A failed paid call never touches the plan's state.
  */
 export async function paidClaude(broker, lane, body, waitMs, why, {held = false} = {}) {
   const storage = broker.ctx.storage, env = broker.brokerEnv, now = new Date(Date.now()), cap = paidCap(env);
-  if ((await paidDay(storage, now)).usd >= cap) { await brokerCap(storage, env, 'broker-claude-api-day', null, {reached: true, now}); return unavailable(why, 'paid lane at its day cap', false); }
-  if (((await storage.get(monthKey(now))) || {usd: 0}).usd >= paidMonthCap(env)) { await brokerCap(storage, env, 'broker-claude-api-month', null, {reached: true, now}); return unavailable(why, 'paid lane at its month cap', false); }
-  const model = CLAUDE_MODELS[body.tier ?? 'mid'];
-  const release = held ? () => {} : await broker.gate.acquire(queueOf(lane), waitMs);
-  if (!release) return unavailable('busy');
+  const model = CLAUDE_MODELS[body.tier ?? 'mid'], estimate = estimateOf(model, body);
+  const reserved = await book(storage, env, now, estimate, true);
+  if (reserved.over) { await brokerCap(storage, env, `broker-claude-api-${reserved.over}`, null, {reached: true, now}); return unavailable(why, `paid lane at its ${reserved.over} cap`, false); }
+  let usd = estimate, release = null;
   try {
+    release = held ? () => {} : await broker.gate.acquire(queueOf(lane), waitMs);
+    if (!release) { usd = 0; return unavailable('busy'); }   // never sent: nothing to pay
     let reply, answer;
     try {
       reply = await broker.toContainer('/claude', JSON.stringify({prompt: body.prompt, schema: body.schema, images: body.images, model, paid: true, ...(body.search === true ? {search: true} : {}), ...(body.effort ? {effort: body.effort} : {})}));
       answer = JSON.parse(await reply.text());
     } catch { return failed('paid-failed', 'the paid call did not answer'); }
+    if (answer?.tokens) usd = priced(model, answer.tokens);
     if (!reply.ok) return failed('paid-failed', String(answer?.kind || 'failed').slice(0, 40));   // the kind only: an error tail is never passed on from this lane
     const bad = refuseReply(answer.reply, await broker.login());
     if (bad) return failed('bad-answer', '', json(422, {why: bad}));
-    const usd = claudeUsd(model, {input_tokens: answer.tokens?.input, output_tokens: answer.tokens?.output});
-    const [total, month] = await storage.transaction(async tx => {
-      const key = `paid:${dayOf(now)}`, day = (await tx.get(key)) || {usd: 0}, mk = monthKey(now), so = (await tx.get(mk)) || {usd: 0};
-      await tx.put(key, {usd: day.usd + usd}); await tx.put(mk, {usd: so.usd + usd});
-      return [day.usd + usd, so.usd + usd];
-    });
-    await Promise.all([
-      brokerCap(storage, env, 'broker-claude-api-day', total * 1e6, {now}),
-      brokerCap(storage, env, 'broker-claude-api-month', month * 1e6, {now}),
-      noteOnce(storage, env, dayOf(now), 'claude-api-paid', 'ai-broker-claude-api', `💳 AI broker: the Claude plan is out, and a Claude-only call was answered on the broker's API key (paid; up to $${cap} a day and $${paidMonthCap(env)} a month). This is the first today.`).catch(() => {}),
-    ]);
+    await noteOnce(storage, env, dayOf(now), 'claude-api-paid', 'ai-broker-claude-api', `💳 AI broker: the Claude plan is out, and a Claude-only call was answered on the broker's API key (paid; up to $${cap} a day and $${paidMonthCap(env)} a month). This is the first today.`).catch(() => {});
     return answered(json(200, {reply: answer.reply, tokens: answer.tokens, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, engine: 'claude', paid: true, usd: Math.round(usd * 1e4) / 1e4}));
-  } finally { release(); }
+  } finally {
+    release?.();
+    const after = await book(storage, env, now, usd - estimate).catch(() => null);   // the settlement: the reservation becomes the real price
+    if (after) await Promise.all([brokerCap(storage, env, 'broker-claude-api-day', after.day * 1e6, {now}), brokerCap(storage, env, 'broker-claude-api-month', after.month * 1e6, {now})]);
+  }
 }
