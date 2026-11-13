@@ -6,6 +6,7 @@
 import {checkCap} from '../../../shared/cap-check.js';
 import {CLAUDE_LIMIT_PCT, CODEX_LIMIT_PCT, DAILY, callsToday, claudeWeekPercent} from './budget.mjs';
 import {freeCap} from './fallback.mjs';
+import {paidCap, paidMonthCap} from './paid-claude.mjs';
 
 const WEEK_RESET = 'it resets on its own when the plan\'s week ends';
 /** name -> the cap (shared/cap-check.js checkCap). The week lines approach at 80% of their line. */
@@ -18,6 +19,10 @@ export const BROKER_CAPS = {
     sees: 'CI judgments that no other engine takes go grey until 00:00 UTC', fix: 'raise FALLBACK_FREE_AI_DAY_USD in workers/ai-broker/wrangler.jsonc'},
   'broker-drift-day': {title: 'CI\'s drift lane today', event: 'ai-broker-cap', period: 'day', unit: 'calls', line: () => DAILY.drift, approach: () => DAILY.drift * 0.8,
     sees: 'the drift checks are refused until 00:00 UTC', fix: 'raise DAILY.drift in workers/ai-broker/lib/budget.mjs'},
+  'broker-claude-api-day': {title: 'The broker\'s paid Claude key today', event: 'ai-broker-cap', period: 'day', unit: 'usd', line: env => paidCap(env) * 1e6, approach: env => paidCap(env) * 1e6 * 0.8,
+    sees: 'Claude-only calls get "ran out" again until the plan reopens or 00:00 UTC', fix: 'raise CLAUDE_API_DAY_USD in workers/ai-broker/wrangler.jsonc'},
+  'broker-claude-api-month': {title: 'The broker\'s paid Claude key this month', event: 'ai-broker-cap', period: 'month', unit: 'usd', line: env => paidMonthCap(env) * 1e6, approach: env => paidMonthCap(env) * 1e6 * 0.8,
+    sees: 'Claude-only calls get "ran out" again until the plan reopens or the 1st', fix: 'raise CLAUDE_API_MONTH_USD in workers/ai-broker/wrangler.jsonc'},
 };
 for (const [name, cap] of Object.entries(BROKER_CAPS)) cap.name = name;
 

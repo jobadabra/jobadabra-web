@@ -1,5 +1,6 @@
 // CI's last-resort engine (Free AI, Workers AI) and its UTC-day ledger. Reservations commit before transport; only known usage releases them.
 // Why (3 Nov 2026, owner: "We should not use API Keys at all anymore. Everything should be around the ai-broker."): the paid Anthropic API step is gone. When Codex and the Claude subscription are both out, a call goes to Free AI or fails with its reason; no engine here holds a paid key.
+// Changed (13 Nov 2026, owner via the coordinator: "let's create a new API Key, specifically for AI broker. It would be a fallback, when somebody requests specifically Claude and we're out of the plan/subscription limits"): one exception to the line above, a Claude-only call when the plan is out, on the broker's own key with a day cap (lib/paid-claude.mjs). Every other call still never uses an API key.
 import {toWorkersAi, fromWorkersAi} from '../../../shared/free-ai-translate.js';
 import {refuseReply} from './guard.mjs';
 import {codexMessage} from '../container/kinds.mjs';
