@@ -59,7 +59,8 @@ export const ALERTS = [
   a('ai-broker-engine', '🔀 AI broker: an engine failed half of its last calls and moved behind the other', 'ai', 'every', 'engineering', {wired: true}),
   // Why (13 Nov 2026, owner: "One medium when we approaching the limit/cap and another one, ciritical, when we reached it"): a 🟠 and a 🔴 on one day are two cards, so "every" (each is once a day by its own flag, shared/cap-check.js).
   a('ai-broker-free-cap', '💸 AI broker: Free AI near (🟠) or at (🔴) its day cap', 'ai', 'every', 'engineering', {wired: true, modes: ['every', 'daily']}),
-  a('ai-broker-cap', '📈 AI broker: the Codex week, the Claude week or the drift lane near (🟠) or at (🔴) its line', 'ai', 'every', 'engineering', {wired: true}),
+  a('ai-broker-cap', '📈 AI broker: the Codex week, the Claude week, the drift lane or the paid Claude key\'s day near (🟠) or at (🔴) its line', 'ai', 'every', 'engineering', {wired: true}),
+  a('ai-broker-claude-api', '💳 AI broker: a Claude-only call answered on the broker\'s paid API key (the plan is out); once a day', 'ai', 'every', 'engineering', {wired: true}),   // workers/ai-broker/lib/paid-claude.mjs
   a('ai-broker-claude-token', '🔑 AI broker: the Claude subscription token is invalid or expired', 'ai', 'daily', 'engineering', {wired: true, modes: ['every', 'daily']}),
   // Why (12 Nov 2026, owner: "Do I get alerts if the ai-broker starts to refuse AI calls?" · "I should get alerts (medium/high criticalitiy)" · "For now let's keep it like Telegram"): a refused or failed broker call is a CI job that goes grey or red (every broker caller is a GitHub Actions job, never a person).
   // Over 5 minutes, 5 or more calls with half refused or failed (shared/streak.js: a normal day fails 0.0-0.1%, a bad one 2-7%): one 🔴 naming why and which workflows, one 🟢 when it answers again. A deploy's container cut and a caller's 400 never count. The broker being down is the `site-probe` alert (shared/synthetic.js `broker`).

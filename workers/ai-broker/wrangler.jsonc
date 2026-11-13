@@ -11,7 +11,7 @@
   "workers_dev": true,
   "observability": {"enabled": true},
   // Why (31 Oct 2026, owner: '$2/day'; paid Claude API removed 3 Nov 2026, owner: no API keys): Free AI is the only engine with a UTC-day cap; the two subscriptions have their own allowances.
-  "vars": {"AUDIENCE": "jobadabra-ai-broker", "REPOSITORY": "GarryOne/jobadabra,GarryOne/jobadabra-web,GarryOne/jobadabra-lab,jobadabra/jobadabra,jobadabra/jobadabra-web,jobadabra/jobadabra-lab,jobadabra/jobadabra-benchmarks", "FALLBACK_FREE_AI_DAY_USD": "2", "ENGINE": "codex", "ENGINE_ADAPT": "on"},
+  "vars": {"AUDIENCE": "jobadabra-ai-broker", "REPOSITORY": "GarryOne/jobadabra,GarryOne/jobadabra-web,GarryOne/jobadabra-lab,jobadabra/jobadabra,jobadabra/jobadabra-web,jobadabra/jobadabra-lab,jobadabra/jobadabra-benchmarks", "FALLBACK_FREE_AI_DAY_USD": "2", "CLAUDE_API_DAY_USD": "10", "CLAUDE_API_MONTH_USD": "100", "ENGINE": "codex", "ENGINE_ADAPT": "on"},
   "containers": [
     // Why (13 Nov 2026, owner: "then, explore and try" the custom instance types; "Measure, then migrate (Recommended)"): the durable_object policy, whose size AiBroker sets when it starts
     // the container (4 vCPU / 6 GiB, lib/do-container.mjs; the Container class needed 12 GiB for 4 vCPU). It has no max_instances: one container per AiBroker object, and the front Worker names one.

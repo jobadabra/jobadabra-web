@@ -18,6 +18,12 @@ export const CLAUDE_TIMEOUT_MS = 150000;
  * Measured live with the real CLI on the subscription token: 22.5 s, a cited answer, WebSearch the only tool used.
  * `effort` (low|medium|high|xhigh, optional) becomes `--effort`; without it the CLI picks its own default.
  */
+/**
+ * The CLI's credential for one call: the plan's token (CLAUDE_CODE_OAUTH_TOKEN), or for a paid call the broker's API key (CLAUDE_API_KEY, given as ANTHROPIC_API_KEY) and no plan token,
+ * so a paid call can never spend the plan, nor the plan the key. `proc` = the container's environment.
+ */
+export const claudeEnv = (proc, paid) => (paid ? {ANTHROPIC_API_KEY: proc.CLAUDE_API_KEY || ''} : {CLAUDE_CODE_OAUTH_TOKEN: proc.CLAUDE_CODE_OAUTH_TOKEN || ''});
+
 export function claudeArgs({model, schema, search = false, effort}) {
   const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--tools', ...(search ? ['WebSearch', '--allowedTools', 'WebSearch'] : ['']), '--no-session-persistence',
     '--setting-sources', '', '--disable-slash-commands', '--strict-mcp-config', '--system-prompt', SYSTEM_PROMPT, '--model', String(model)];

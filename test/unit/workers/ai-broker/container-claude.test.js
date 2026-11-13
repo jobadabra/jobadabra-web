@@ -11,7 +11,7 @@ import {spawn as spawnProcess} from 'node:child_process';
 import {buildArgs} from '../../../../workers/ai-broker/lib/args.mjs';
 import {weeklyWindow} from '../../../../workers/ai-broker/container/weekly.mjs';
 import {readTurn, threadTable, turnUsage} from '../../../../workers/ai-broker/container/threads.mjs';
-import {CLAUDE_TIMEOUT_MS, claudeArgs, claudeInput, readClaude} from '../../../../workers/ai-broker/container/claude.mjs';
+import {CLAUDE_TIMEOUT_MS, claudeArgs, claudeEnv, claudeInput, readClaude} from '../../../../workers/ai-broker/container/claude.mjs';
 import {kindOf} from '../../../../workers/ai-broker/container/kinds.mjs';
 
 // The stand-in "claude": reads its prompt and prints a result line the way CLI 2.1.316 does (trimmed to the fields readClaude reads).
@@ -28,7 +28,7 @@ function server(dir, seen) {
   };
   vm.runInNewContext(fs.readFileSync(new URL('../../../../workers/ai-broker/container/server.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, ''), {
     http: {createServer(fn) { handler = fn; return {listen() {}}; }},
-    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, turnUsage, kindOf, CLAUDE_TIMEOUT_MS, claudeArgs, claudeInput, readClaude, Buffer, setTimeout, clearTimeout, setInterval,
+    fs, os: {tmpdir: () => dir}, path, spawn, buildArgs, weeklyWindow, readTurn, threadTable, turnUsage, kindOf, CLAUDE_TIMEOUT_MS, claudeArgs, claudeEnv, claudeInput, readClaude, Buffer, setTimeout, clearTimeout, setInterval,
     process: {on() {}, env: {CODEX_HOME: path.join(dir, 'home'), HOME: dir, PATH: process.env.PATH}, kill: (pid, signal) => process.kill(pid, signal)},
   });
   return body => new Promise(resolve => {

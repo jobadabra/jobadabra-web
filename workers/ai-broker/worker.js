@@ -23,6 +23,7 @@ import {demotedNow, recordPerf} from './lib/adapt.mjs';
 import {addCall, addJobCall, jobKey, recentDays, tokensOf, workflowKey, workflowOf} from './lib/tally.mjs';
 import {countedOf, keyedLock, markGap, planOf, sessionKey, sessionKeyOf, settle} from './lib/sessions.mjs';
 import {brokerLines} from './lib/cap-notes.mjs';
+import {paidAllowed, paidClaude} from './lib/paid-claude.mjs';
 
 // Why (11 Nov 2026, as; owner: "Let's increase the AI Broker's slot limit"): at 4 one Find jobs measure person already queued (after-1 run 43069240532: 55 of 303
 // calls waited over 5 s, p90 wait 7.9 s, all 4 busy 29% of the time). On the 1 vCPU / 3 GiB container (#554) 4 at once peaked at 1.27 GiB and 0.52 CPU per minute
@@ -51,7 +52,7 @@ export class AiBroker extends doContainer(DurableObject) {
     super(ctx, env);
     this.brokerEnv = env;
     // Why (1 Nov 2026): the Claude subscription's token reaches the container as an environment variable and only the Claude call reads it (container/server.mjs passes explicit environments to every child); it is never in the image, a reply or a log.
-    this.envVars = env.CLAUDE_CODE_OAUTH_TOKEN ? {CLAUDE_CODE_OAUTH_TOKEN: env.CLAUDE_CODE_OAUTH_TOKEN} : {};
+    this.envVars = {...(env.CLAUDE_CODE_OAUTH_TOKEN ? {CLAUDE_CODE_OAUTH_TOKEN: env.CLAUDE_CODE_OAUTH_TOKEN} : {}), ...(env.CLAUDE_API_KEY ? {CLAUDE_API_KEY: env.CLAUDE_API_KEY} : {})};   // the paid key: read by a paid call only (container/claude.mjs claudeEnv; lib/paid-claude.mjs)
   }
   defaultPort = 8080;
   allowedHosts = HOSTS;   // lib/do-container.mjs intercepts each through AllowHosts; the internet is off otherwise
@@ -62,7 +63,7 @@ export class AiBroker extends doContainer(DurableObject) {
   limits = null;   // the last whole-week reading from Codex: {usedPercent, resetsAt}
 
   /** The broker's own login values (the stored Codex auth.json, the Claude token) for the reply guard (lib/guard.mjs); read fresh, so a rotated token is guarded at once. Never logged or returned. */
-  async login() { return loginValues(await this.ctx.storage.get('login'), this.brokerEnv.CLAUDE_CODE_OAUTH_TOKEN); }
+  async login() { return [...loginValues(await this.ctx.storage.get('login'), this.brokerEnv.CLAUDE_CODE_OAUTH_TOKEN), ...(this.brokerEnv.CLAUDE_API_KEY ? [this.brokerEnv.CLAUDE_API_KEY] : [])]; }
 
   // Start (and every restart after a sleep): put the stored login back into CODEX_HOME. `send` reaches the container being started (AiBroker passes its port: its containerFetch waits for this start).
   async onStart(send = (url, init) => this.containerFetch(url, init)) {
@@ -192,7 +193,7 @@ export class AiBroker extends doContainer(DurableObject) {
     await this.weekReading();
     // Why (8 Nov 2026, owner: "Actually, codex up to 100%, Claude up to 90%"; replaces the 5 Nov line that kept held lanes and by-hand checks off Claude): every lane passes on to Claude when Codex refuses, until Claude's own seven-day window reads 90% used. Past that no lane starts a Claude call, a call that names Claude included: Free AI answers, or the call gets `budget:claude-week`. The reading is the CLI's, stored with each Claude call (`claude:state`); an unknown or reset window is not a reason to stop.
     const claudeCheck = await this.claudeLine();
-    const claudeShut = !claudeCheck.ok && asked.includes('claude') && configured('claude', env);
+    const claudeShut = !claudeCheck.ok && asked.includes('claude') && configured('claude', env) && !paidAllowed(env, body);   // a Claude-only call may go on to the paid key (lib/paid-claude.mjs)
     // Why (5 Nov 2026, owner's brief: "A job refused here gets the normal refusal, and its items wait for the next run"; review; carried to the Claude line on 8 Nov 2026): with Claude shut a search or an image has nobody left, Free AI takes neither, so it is the line's own `budget:` refusal (ending), never `fallback:*`, which clients show red. A Free AI that really failed keeps its reason (owner, 4 Nov 2026: a fallback that cannot answer is a failure the job shows).
     const freeAiCannot = body.search === true || body.images?.length > 0;
     const chain = claudeShut ? asked.filter(engine => engine !== 'claude' && !(engine === 'free-ai' && freeAiCannot)) : asked;   // Why (8 Nov 2026, Gitar on #492): the engines left out are left out of the walk too, so Codex failing at runtime keeps its own 502 and Free AI never answers a search or an image with a red `fallback:unsupported`
@@ -368,7 +369,7 @@ export class AiBroker extends doContainer(DurableObject) {
     if (!env.CLAUDE_CODE_OAUTH_TOKEN) return null;   // no token = not configured (search is Claude's too since 2 Nov 2026: the WebSearch tool)
     const now = Date.now(), state = (await storage.get('claude:state')) || {};
     if ((state.invalidUntil || 0) > now) return unavailable('token-invalid', '', false);
-    if ((state.limitUntil || 0) > now) return unavailable('ran-out', '', false);
+    if ((state.limitUntil || 0) > now) return paidAllowed(env, body) ? paidClaude(this, lane, body, waitMs, 'ran-out') : unavailable('ran-out', '', false);
     const model = CLAUDE_MODELS[body.tier ?? 'mid'];
     waiting(body, 'claude');
     const release = await this.gate.acquire(queueOf(lane), waitMs);
@@ -377,7 +378,7 @@ export class AiBroker extends doContainer(DurableObject) {
     try {
       // Why (8 Nov 2026, code-review): the line was read when the call came in, and a call waits for a slot with no deadline (searches, the retry turn); a Claude call that finished meanwhile may have moved the week to 90%. Read it again with the slot in hand, so no call starts past the line.
       const late = await this.claudeLine();
-      if (!late.ok) return unavailable('budget', late.why, false);
+      if (!late.ok) return paidAllowed(env, body) ? await paidClaude(this, lane, body, waitMs, 'budget', {held: true}) : unavailable('budget', late.why, false);
       let reply;
       try { reply = await this.toContainer('/claude', JSON.stringify({prompt: body.prompt, schema: body.schema, images: body.images, model, ...(body.search === true ? {search: true} : {}), ...(body.effort ? {effort: body.effort} : {})})); }
       catch (error) { return await this.claudeFailure(`call: ${String(error?.message || error)}`, 'cut'); }   // as Codex's step: a call cut by a restart is a failed turn that goes on, never an engine failure (12 Nov 2026, ba)
@@ -400,7 +401,7 @@ export class AiBroker extends doContainer(DurableObject) {
         if (kind === 'out-of-quota') {
           const until = answer.resetsAt ? answer.resetsAt * 1000 : now + 600_000;   // the CLI's reset time, else ten minutes
           await storage.put('claude:state', {...((await storage.get('claude:state')) || {}), limitUntil: Math.max(until, now + 60_000)});
-          return unavailable('ran-out');
+          return paidAllowed(env, body) ? await paidClaude(this, lane, body, waitMs, 'ran-out', {held: true}) : unavailable('ran-out');
         }
         return await this.claudeFailure(String(answer.error || ''));
       }

@@ -193,6 +193,7 @@ The broker is already deployed; this is for a fresh account or a rebuild.
 |---|---|
 | `BROKER_ADMIN_TOKEN` | the `/admin/*` routes (Keychain `jobadabra.codex-broker.admin_token`) |
 | `CLAUDE_CODE_OAUTH_TOKEN` | the Claude engine; made with `claude setup-token`. Without it Claude is skipped |
+| `CLAUDE_API_KEY` | optional: the broker's own Anthropic API key (Keychain `jobadabra.ai-broker.claude_api_key`). Answers a Claude-only call (`engine: 'claude', only: true`) when the plan is out, marked `paid: true`, up to `CLAUDE_API_DAY_USD` ($10) a day and `CLAUDE_API_MONTH_USD` ($100) a month (owner, 13 Nov 2026). Without it nothing changes (`lib/paid-claude.mjs`) |
 | `SELFHEAL_PUBLISH_KEY` | the notes to the owner (Claude token gone bad, an engine moved back, Free AI's cap): posted to the site's `/ops/notify` through the `SITE` service binding, so Admin → Notifications routes and mutes them (Engineering). Same key as every CI upload. No Telegram secret here |
 
 **Vars** (`wrangler.jsonc`)
