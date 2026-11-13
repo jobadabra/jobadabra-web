@@ -16,6 +16,7 @@ import {dropKept, jobsWithKept, keptPut, keptKey, videoGet} from './ready-kept.j
 import {mailNight} from './ready-mail.js';
 import {checkRead, keepRead, takeReads, taskOf} from './ready-read.js';
 import {autoRefusal, checkItem, checkSubmit, claimAttempt, keepSubmit, kitOf, reserve, takeSubmits} from './ready-auto.js';
+import {installHit} from '../shared/install-caps.js';
 import {MICRO_PER_SECOND, addMicro, chargeContainer, claimedRefusal, creditRefusal, isPro, proofOf, publicHost, readerOf, reserveOwn, reserveReads, strictNow} from './ready-read-access.js';
 export {readyToken};
 
@@ -175,6 +176,7 @@ async function result(request, env, now) {
     }
   }
   const total = row.cost_micro + micro, capped = total >= cap(env) || spent;
+  await installHit(env, 'night-cost', row.install, total, cap(env), {now});   // Why (13 Nov 2026, owner, "Grouped hourly (Recommended)"): a night near or at its cost cap, on the hourly card (shared/install-caps.js); never throws
   if (cloud && capped) await env.STATS.prepare(`UPDATE ready_jobs SET state = ${ENDED}, wall = 'cap', at = ? WHERE batch = ? AND cleared_at IS NULL AND state IN ${LIVE}`).bind(stamp(now), row.id).run();   // a read the cap kept from starting is told to the app as a form it could not read, never left "reading"
   const waiting = (await env.STATS.prepare(`SELECT COUNT(*) AS n FROM ready_jobs WHERE batch = ? AND state IN ${LIVE}`).bind(row.id).first()).n;
   const next = capped && !cloud ? 'capped' : waiting ? row.state : 'finished';

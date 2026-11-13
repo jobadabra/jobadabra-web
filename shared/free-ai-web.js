@@ -8,6 +8,7 @@
 import PROMPT from '../config/board_web_search.json' with {type: 'json'};
 import {record as recordCost} from './aicost.js';
 import {capCheck} from './cap-alerts.js';
+import {installHit} from './install-caps.js';
 
 export const WEB_ACTION = 'web_search';
 // Haiku 5.5's price per million tokens (src/ai/cost.py) and the web search tool at $10 per 1,000 searches: 0.035 USD a cell.
@@ -69,6 +70,9 @@ export async function webSearch(request, env, access, now = new Date(), ctx = nu
     ctx?.waitUntil ? ctx.waitUntil(told) : await told;
     return error(503, 'The web search for Free AI is used up this month. It comes back next month.');
   }
+  // Why (13 Nov 2026, owner, "Grouped hourly (Recommended)"): an install that used its searches is counted for the hourly card (shared/install-caps.js), at its last search and at a refusal.
+  const mine = installHit(env, 'web-search-day', access.who, installToday + 1, WEB.installPerDay, {now});
+  ctx?.waitUntil ? ctx.waitUntil(mine) : await mine;
   if (installToday >= WEB.installPerDay) return error(429, 'The web search ran its searches for today. It runs again tomorrow.', 'rate_limit_error');
   // Counted before the call, so a failing search is not retried in a loop and parallel asks from one install stop at the day's number.
   await kv.put(keys.install(access.who, day), String(installToday + 1), {expirationTtl: 2 * 86400});

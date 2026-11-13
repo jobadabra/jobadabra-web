@@ -49,7 +49,8 @@ export async function capCheck(env, name, used, {now = new Date(), fetcher = fet
 
 // The one send: the switchboard first, the Brain bot when it cannot deliver. -> true when the alert is done (sent, held on purpose by the switchboard, or nothing is configured at all).
 // Why (5 Nov 2026, nt 2/4; kept from free-ai.js tellSpend): nothing configured (no bot, no store) is not a failed send: keeping the flag stops every later call from redoing the write (Gitar on #429).
-async function send(env, event, level, text, fetcher) {
+/** One cap card through the switchboard. -> true when done: sent, or nothing configured to send with (no bot, no channel, no store). Never rejects. */
+export async function send(env, event, level, text, fetcher) {
   const told = await alertOwner(env, event, {text, html: true, fetcher, level: 'problem', state: level,
     legacy: env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null}).catch(() => null);
   const unconfigured = told?.via === 'none' && (told.why === 'no-bot' || told.why === 'channel-not-connected' || told.why === 'no-store');
