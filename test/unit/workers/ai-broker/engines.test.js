@@ -199,7 +199,7 @@ test('the subscription used up: it waits for the reset time the CLI reported, th
   assert.equal(health.chain[0].failedToday, 2); assert.equal(health.chain[0].ranOutToday, 0); assert.equal(health.chain[0].state, 'ready');
 });
 
-test('search: Codex first while it has allowance; when it is used up Claude searches (owner, 2 Nov 2026: every Search check read 0 jobs); a token-shaped Claude reply never reaches the caller, and six parallel Claude calls run at most three at a time', async t => {
+test('search: Codex first while it has allowance; when it is used up Claude searches (owner, 2 Nov 2026: every Search check read 0 jobs); a token-shaped Claude reply never reaches the caller, and twelve parallel Claude calls run at most six at a time (the default since 13 Nov 2026; owner via sa: "Yes, 3 to 6 (Recommended)")', async t => {
   const first = world(t, 'codex', withToken);
   assert.equal(await answered(await first.broker.call('pr', {...body, search: true})), 'codex'); assert.equal(first.calls.claudeCli, 0);
   const out = world(t, 'codex', withToken);
@@ -215,8 +215,8 @@ test('search: Codex first while it has allowance; when it is used up Claude sear
   const leaky = world(t, 'claude', {...withToken, claude: () => new Response(JSON.stringify({reply: 'sk-' + 'a'.repeat(30), tokens: {input: 1, output: 1}, ms: 1}))});
   assert.equal(await answered(await leaky.broker.call('pr', body)), 'codex');   // the guard refuses it and Codex, not yet run, answers
   const slow = world(t, 'claude', {...withToken, claude: async () => { await new Promise(resolve => setTimeout(resolve, 10)); return claudeOk(); }});
-  assert.equal((await Promise.all(Array.from({length: 6}, () => slow.broker.call('pr', body)))).filter(r => r.status === 200).length, 6);
-  assert.equal(slow.calls.claudeMax, 3);
+  assert.equal((await Promise.all(Array.from({length: 12}, () => slow.broker.call('pr', body)))).filter(r => r.status === 200).length, 12);
+  assert.equal(slow.calls.claudeMax, 6);
 });
 
 // JOB-202 (owner, 1 Nov 2026: "adapt or report if one is doing worse than the other"): an engine that fails half of its last calls goes behind the other subscription for 30 minutes.
