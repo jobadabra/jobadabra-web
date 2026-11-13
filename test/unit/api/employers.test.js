@@ -406,6 +406,17 @@ test('a measured board keeps the layout board discovery learned, only in the fix
   assert.deepEqual((await agreedSites(e)).find(fact => fact.host === 'links.example').recipe, {countries: ['md']});
 });
 
+// A layout's depth (13 Nov 2026, owner: "Yes, add depth (Recommended)"): boards whose job links sit 2 or 3 folders under the prefix (/oferta/<id>/<slug>).
+test('a links layout may carry a depth of 2 or 3; depth 1 is served with no field, so installs older than depth keep reading it', async () => {
+  const {recipeOf} = await import('../../../api/employers.js');
+  assert.deepEqual(recipeOf({kind: 'links', prefix: '/oferta', depth: 2}), {kind: 'links', prefix: '/oferta', depth: 2});
+  assert.deepEqual(recipeOf({kind: 'links', prefix: '', depth: 3}), {kind: 'links', prefix: '', depth: 3}, 'the jobs sit under the root');
+  assert.deepEqual(recipeOf({kind: 'links', prefix: '/job', depth: 1}), {kind: 'links', prefix: '/job'}, 'depth 1 is today\'s shape');
+  assert.deepEqual(recipeOf({kind: 'links', prefix: '/job'}), {kind: 'links', prefix: '/job'}, 'a layout without depth is unchanged');
+  for (const depth of [0, 4, 2.5, '2', null, -1]) assert.equal(recipeOf({kind: 'links', prefix: '/job', depth}), null, `depth ${JSON.stringify(depth)}`);
+  assert.equal(recipeOf({kind: 'tag', tag: 'h3', class: 'job', depth: 2}), null, 'only a links layout has a depth');
+});
+
 // 2 Nov 2026: the scout lost its cache and published 3,871 of 6,833 feeds, and no old copy existed to go back to (owner, 5 Nov 2026: "Find root cause, and preven this happening again").
 const keeping = (fails = false) => {
   const kept = new Map();

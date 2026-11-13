@@ -37,7 +37,13 @@ const TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'a', 'strong', 'b', 'spa
 export function recipeOf(recipe) {
   if (!recipe || typeof recipe !== 'object') return null;
   const keys = Object.keys(recipe).sort().join(',');
-  if (recipe.kind === 'links' && keys === 'kind,prefix' && typeof recipe.prefix === 'string' && /^(\/[\w.%~-]+){0,6}$/.test(recipe.prefix)) return {kind: 'links', prefix: recipe.prefix};
+  // Why (13 Nov 2026, owner: "Yes, add depth (Recommended)"): some boards put each job 2 or 3 folders under the prefix (/oferta/<id>/<slug>); depth 1 is
+  // served with no field, as before. An install older than depth refuses {kind, prefix, depth} (page_recipes.valid wants exactly kind and prefix): it asks the AI, never misreads.
+  if (recipe.kind === 'links' && (keys === 'kind,prefix' || keys === 'depth,kind,prefix') && typeof recipe.prefix === 'string' && /^(\/[\w.%~-]+){0,6}$/.test(recipe.prefix)) {
+    const depth = 'depth' in recipe ? recipe.depth : 1;
+    if (!Number.isInteger(depth) || depth < 1 || depth > 3) return null;
+    return depth === 1 ? {kind: 'links', prefix: recipe.prefix} : {kind: 'links', prefix: recipe.prefix, depth};
+  }
   if (recipe.kind === 'tag' && keys === 'class,kind,tag' && TAGS.includes(recipe.tag) && typeof recipe.class === 'string' && /^[\w -]{1,60}$/.test(recipe.class)) return {kind: 'tag', tag: recipe.tag, class: recipe.class};
   // Why (13 Nov 2026, bl): the engine's third kind (the list in the page's JSON state, page_recipes.valid) was missing here, so a careers feed's state recipe was dropped.
   if (recipe.kind === 'state' && keys === 'kind,path' && typeof recipe.path === 'string' && /^\d{1,2}(\.[\w$-]{1,40}){0,12}$/.test(recipe.path)) return {kind: 'state', path: recipe.path};
