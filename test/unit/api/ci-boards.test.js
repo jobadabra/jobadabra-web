@@ -5,7 +5,7 @@ import {existsSync, readFileSync, readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {agreedSites} from '../../../api/employers.js';
-import {CI_DAYS, DAILY_ROWS, MAX_CI_BOARDS, MAX_COUNTRIES, MAX_LOCAL, PER_HOUR} from '../../../api/ci-boards.js';
+import {CI_DAYS, DAILY_ROWS, MAX_CI_BOARDS, MAX_COUNTRIES, MAX_LOCAL, PER_HOUR, searchAddress} from '../../../api/ci-boards.js';
 import {contribute} from '../../../api/pool.js';
 import {reportedBoards} from '../../../api/scout-memory.js';
 
@@ -124,4 +124,56 @@ test('the Scout list carries local: the most over the host\'s rows for a CI boar
   const byHost = Object.fromEntries((await reportedBoards(e.STATS, NOW)).map(board => [board.host, board.local]));
   assert.deepEqual(byHost, {'plain.example': 0, 'both.example': 7, 'jobeka.es': 19, 'trabajo.org': 0});
   assert.ok(!/ci-search|install-1|"install"/.test(JSON.stringify(await reportedBoards(e.STATS, NOW))));
+});
+
+// Why (14 Nov 2026, owner via sa, asked via AskUserQuestion: "CI report carries it (Recommended)"): discovery runs 43524652066 (es) and 43526430106 (md): the Scout read a reported board by its home page
+// (https://jobeka.com/, 0 rows) where the CI search had read https://es.jobeka.com/empleos-{role}-provincia-de-{place} (20 jobs, 28 relevant). The door keeps that address, as a template, after a validator.
+const ADDRESS = 'https://es.jobeka.example/empleos-{role}-provincia-de-{place}';
+const urlsOf = e => Object.fromEntries(rows(e, 'ci_boards').map(row => [`${row.host}|${row.country}`, row.url]));
+test('the played case: a board read at a country subdomain with the two blanks is stored and served per country, the home page stays for a board without one', async () => {
+  const e = env();
+  await share(e, {ci_boards: [{host: 'jobeka.example', countries: ['es'], local: 19, url: ADDRESS}, {host: 'trabajo.example', countries: ['es'], local: 16}]});
+  assert.deepEqual(urlsOf(e), {'jobeka.example|es': ADDRESS, 'trabajo.example|es': null});
+  const list = await reportedBoards(e.STATS, NOW);
+  assert.deepEqual(list, [{host: 'jobeka.example', url: null, countries: ['es'], installs: 0, local: 19, ci: true, ci_urls: {es: ADDRESS}}, {host: 'trabajo.example', url: null, countries: ['es'], installs: 0, local: 16, ci: true}]);
+  assert.ok(!/ci-search|"install"/.test(JSON.stringify(list)), 'no id');
+});
+
+test('searchAddress: https, the reported board or a subdomain of it, {role} and {place} the only blanks, a fixed character set; anything else is null and the board stays a host-only candidate', () => {
+  const ok = (url, host = 'jobeka.example') => searchAddress(url, host);
+  assert.equal(ok(ADDRESS), ADDRESS);
+  assert.equal(ok('https://jobeka.example/search?q={role}&l={place}'), 'https://jobeka.example/search?q={role}&l={place}');
+  assert.equal(ok('https://jobs.uk.jobeka.example/s/{role}'), 'https://jobs.uk.jobeka.example/s/{role}', 'a deeper subdomain of the board');
+  for (const bad of ['http://jobeka.example/s/{role}', 'https://evil.example/s/{role}', 'https://notjobeka.example/s/{role}', 'https://jobeka.example.evil.example/s/{role}',
+    'https://user@jobeka.example/s/{role}', 'https://user:pw@jobeka.example/s/{role}', 'https://jobeka.example:8443/s/{role}', 'https://jobeka.example/s/{role}#top',
+    'https://jobeka.example/s/{role}/{city}', 'https://jobeka.example/s/{}', 'https://jobeka.example/s/{role', 'https://jobeka.example/s/{{role}}',
+    'https://jobeka.example/s/electrician-madrid', 'https://jobeka.example/s/{place}', 'https://jobeka.example/s/{role}?name=An%20Person', 'https://jobeka.example/s/{role}?x=a b', 'https://jobeka.example/s/{role}/ñandú',
+    'https://jobeka.example/' + 'a'.repeat(250) + '{role}', 'https://JOBEKA.example/s/{role}', 'https://jobeka.example/s/{role}\n', 'javascript:alert({role})', '', null, 7, {}]) {
+    assert.equal(ok(bad), null, String(bad));
+  }
+  assert.equal(searchAddress(ADDRESS, 'jobeka.example.evil.example'), null, 'not the reported host');
+  assert.equal(searchAddress(ADDRESS, 'bad host'), null);
+});
+
+test('an invalid address never rejects the share or the board; the latest valid one replaces the older, an invalid or missing one never erases it', async () => {
+  const e = env();
+  const send = async (url, run, extra = {}) => share(e, {ci_boards: [{host: 'jobeka.example', countries: ['es'], local: 5, ...(url === undefined ? {} : {url}), ...extra}]}, `ci-search-${run}`);
+  assert.equal((await send('http://jobeka.example/s/{role}', 'a')).status, 200);
+  assert.deepEqual(urlsOf(e), {'jobeka.example|es': null}, 'an invalid address: the board is stored host-only');
+  await send(ADDRESS, 'b');
+  await send('https://evil.example/s/{role}', 'c');
+  await send(undefined, 'd');
+  assert.equal(urlsOf(e)['jobeka.example|es'], ADDRESS, 'invalid and missing ones never erase it');
+  await send('https://jobeka.example/search?q={role}', 'e');
+  assert.equal(urlsOf(e)['jobeka.example|es'], 'https://jobeka.example/search?q={role}', 'the latest valid address wins (a board changes its address; the newest read is the freshest)');
+  assert.equal(rows(e, 'ci_boards').length, 1);
+  await share(e, {ci_boards: [{host: 'jobeka.example', countries: ['es'], url: ADDRESS}, {host: 'jobeka.example', countries: ['es'], url: 'https://jobeka.example/s/{role}'}]}, 'ci-search-f');
+  assert.equal(urlsOf(e)['jobeka.example|es'], 'https://jobeka.example/s/{role}', 'inside one share the later valid item wins');
+});
+
+test('a served address is checked again on the way out: a bad value in the table is not handed to the Scout', async () => {
+  const e = env();
+  e.STATS.db.prepare("INSERT INTO ci_boards (host, country, day, url) VALUES ('jobeka.example', 'es', '2026-11-12', 'https://evil.example/s/{role}'), ('jobeka.example', 'pt', '2026-11-12', 'https://pt.jobeka.example/s/{role}')").run();
+  const [board] = await reportedBoards(e.STATS, NOW);
+  assert.deepEqual(board.ci_urls, {pt: 'https://pt.jobeka.example/s/{role}'});
 });

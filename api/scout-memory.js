@@ -4,7 +4,7 @@
 // so no new secret. Never served to installs, never on a page: private learned data. Brief: ~/.claude/coordinator-briefs/brief-gi-scout-memory-r2.md. Guard: test/unit/api/scout-memory.test.js.
 import {equal} from '../shared/guard.js';
 import {COUNTRIES} from '../shared/pool-tags.js';
-import {MAX_CI_ROWS, localCount} from './ci-boards.js';
+import {MAX_CI_ROWS, localCount, searchAddress} from './ci-boards.js';
 
 // Why (6 Nov 2026, brief): the tar is about 3 MB today; 50 MB leaves room to grow and stays well under the Worker's 100 MB request body and 128 MB memory.
 export const MAX_BYTES = 50 * 1024 * 1024;
@@ -73,8 +73,8 @@ async function latest(bucket) {
 export const REPORT_DAYS = 90, MAX_REPORTED = 1500, SCOUT_PREFIX = 'central-scout-';
 const HOST = /^[a-z0-9.-]+\.[a-z]{2,}$/;
 
-/** [{host, url, countries, installs, local, ci?}] of the boards at least one install reported in the last REPORT_DAYS, most installs first; then the boards only our CI searches read
- * (api/ci-boards.js: url null, installs 0, ci true). `installs` counts real installs only; `ci: true` marks a board our CI read too; `local` is the most jobs a CI search kept from it (0..999, 0 for none; a count, never a person or a run). */
+/** [{host, url, countries, installs, local, ci?, ci_urls?}] of the boards at least one install reported in the last REPORT_DAYS, most installs first; then the boards only our CI searches read
+ * (api/ci-boards.js: url null, installs 0, ci true). `installs` counts real installs only; `ci: true` marks a board our CI read too; `local` is the most jobs a CI search kept from it (0..999, 0 for none; a count, never a person or a run); `ci_urls` {country: address template} is where a CI search read the board in that country (api/ci-boards.js searchAddress, checked again here), absent with none. */
 export async function reportedBoards(db, now = new Date()) {
   const since = new Date(now.getTime() - REPORT_DAYS * DAY).toISOString().slice(0, 10);
   const rows = (await db.prepare(`SELECT host, url, body, COUNT(DISTINCT install) AS installs FROM sitefacts WHERE kind = 'board' AND day >= ? AND install NOT LIKE ?
@@ -88,15 +88,17 @@ export async function reportedBoards(db, now = new Date()) {
     out.push({host: row.host, url, countries: [...new Set(countries)].sort(), installs: Number(row.installs) || 1, local: 0});
   }
   // Why (13 Nov 2026, owner via sa: "Any install + our CI searches (Recommended)"): CI-read boards are candidates too, marked `ci`, never counted as installs; CI-only ones come last.
-  const ci = new Map(), best = new Map();
-  for (const row of (await db.prepare('SELECT host, country, local FROM ci_boards WHERE day >= ? ORDER BY host, country LIMIT ?').bind(since, MAX_CI_ROWS).all()).results || []) {
+  const ci = new Map(), best = new Map(), addresses = new Map();
+  for (const row of (await db.prepare('SELECT host, country, local, url FROM ci_boards WHERE day >= ? ORDER BY host, country LIMIT ?').bind(since, MAX_CI_ROWS).all()).results || []) {
     if (HOST.test(String(row.host)) && COUNTRIES.includes(row.country)) {
       ci.set(row.host, [...(ci.get(row.host) || []), row.country]);
       best.set(row.host, Math.max(best.get(row.host) || 0, localCount(row.local)));
+      const address = searchAddress(row.url, row.host);
+      if (address) addresses.set(row.host, {...addresses.get(row.host), [row.country]: address});
     }
   }
-  for (const item of out) if (ci.has(item.host)) { item.ci = true; item.local = best.get(item.host); item.countries = [...new Set([...item.countries, ...ci.get(item.host)])].sort(); ci.delete(item.host); }
-  for (const [host, countries] of ci) out.push({host, url: null, countries, installs: 0, local: best.get(host), ci: true});
+  for (const item of out) if (ci.has(item.host)) { item.ci = true; item.local = best.get(item.host); if (addresses.has(item.host)) item.ci_urls = addresses.get(item.host); item.countries = [...new Set([...item.countries, ...ci.get(item.host)])].sort(); ci.delete(item.host); }
+  for (const [host, countries] of ci) out.push({host, url: null, countries, installs: 0, local: best.get(host), ci: true, ...(addresses.has(host) ? {ci_urls: addresses.get(host)} : {})});
   return out.slice(0, MAX_REPORTED);
 }
 
