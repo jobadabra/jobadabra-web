@@ -29,10 +29,10 @@ const insert = (env, rows) => { for (const r of rows) env.STATS.db.prepare('INSE
 const seed = async env => {
   insert(env, FORM_ROWS);
   const snap = await formSnapshot(env.STATS); await env.STATS.prepare('INSERT INTO benchmark_snapshot (id, at, body) VALUES (1, ?, ?)').bind(snap.at, JSON.stringify(snap)).run();
-  const runs = [['Ours', 1, [20, 10]], ['Ours with every source', 0, [30, 15]], ['Tool A', 0, [12, 6]]].flatMap(([tool, ours, found]) => ['Nurse · Town', 'Cook · Port'].map((persona, i) => ({id: `${tool}/${i}`, at: '2026-11-12T10:00:00Z', round: '2026-11-12', persona, kind: 'non-tech', country: 'Land', tool, ours,
-    build: ours ? 'b7' : '', found: found[i], place: found[i] - 1, role: found[i] - 2, relevant: found[i] - 3, employers: 3, seconds: 0, cents: 0, missed: '{}', beyond: tool === 'Ours with every source' ? '{"Tool A": 4}' : '{}'})));
-  for (const r of runs) env.STATS.db.prepare('INSERT INTO benchmark_search_runs (id, at, round, persona, kind, country, tool, ours, build, found, place, role, relevant, employers, seconds, cents, missed, beyond) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(r.id, r.at, r.round, r.persona, r.kind, r.country, r.tool, r.ours, r.build, r.found, r.place, r.role, r.relevant, r.employers, r.seconds, r.cents, r.missed, r.beyond);
+  const runs = [['Ours', 1, [20, 10]], ['Tool A', 0, [12, 6]]].flatMap(([tool, ours, found]) => ['Nurse · Town', 'Cook · Port'].map((persona, i) => ({id: `${tool}/${i}`, at: '2026-11-12T10:00:00Z', round: '2026-11-12', persona, kind: 'non-tech', country: 'Land', tool, ours,
+    build: ours ? 'b7' : '', found: found[i], place: found[i] - 1, role: found[i] - 2, relevant: found[i] - 3, employers: 3, seconds: 0, cents: 0, missed: '{}'})));
+  for (const r of runs) env.STATS.db.prepare('INSERT INTO benchmark_search_runs (id, at, round, persona, kind, country, tool, ours, build, found, place, role, relevant, employers, seconds, cents, missed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(r.id, r.at, r.round, r.persona, r.kind, r.country, r.tool, r.ours, r.build, r.found, r.place, r.role, r.relevant, r.employers, r.seconds, r.cents, r.missed);
   const ss = await searchSnapshot(env.STATS); await env.STATS.prepare('INSERT INTO benchmark_search_snapshot (id, at, body) VALUES (1, ?, ?)').bind(ss.at, JSON.stringify(ss)).run();
 };
 const press = (env, fields, {path = '/admin/form-filling/benchmark/publish', headers = {Authorization: 'Bearer owner-key', Origin: ORIGIN}} = {}) => publishPress(new Request(`${ORIGIN}${path}`, {method: 'POST', headers, body: new URLSearchParams(fields)}), env);
@@ -49,7 +49,7 @@ test('the form table counts only the forms every tool ran, says which was left o
   assert.deepEqual(section.tools.map(t => t.name), ['Jobadabra', 'Tool X'], 'best score first');
 });
 
-test('a search round publishes ours (rivals\' sources off) and every rival, never the "with every source" line, with absent splits as null not zero', async () => {
+test('a search round publishes ours and every rival, with absent splits as null not zero', async () => {
   const env = setup(); await seed(env);
   const snap = await searchSnapshot(env.STATS), part = searchSection('2026-11-12', snap.rounds['2026-11-12'], snap.at);
   assert.deepEqual(part.tools.map(t => t.name), ['Jobadabra', 'Tool A']);
@@ -104,7 +104,8 @@ test('the Admin pages show what is public now, the button, and on the first pres
   assert.match(plain, /starting snapshot of 27 Oct 2026/); assert.match(plain, /Publish to website/); assert.doesNotMatch(plain, /The public page will say/);
   assert.match(ask, /The public page will say/); assert.match(ask, /Form 104 not run for Jobadabra \(Ashby bot check\)/); assert.match(ask, /Publish now/);
   const ss = JSON.parse(env.STATS.db.prepare('SELECT body FROM benchmark_search_snapshot WHERE id = 1').get().body);
-  assert.match(searchPage(ss, {published, confirm: 'publish'}), /The public page will say[\s\S]*Jobadabra with every source" stays in Admin only/);
+  assert.match(searchPage(ss, {published, confirm: 'publish'}), /The public page will say/);
+  assert.doesNotMatch(searchPage(ss, {published, confirm: 'publish'}), /with every source|stays in Admin only/i);
   await press(env, {kind: 'form', round: 'fixed', action: 'publish', confirmed: '1'});
   const live = formPage(snap, {published: await state(env.STATS)});
   assert.match(live, /Public now: round <b>fixed<\/b>/); assert.match(live, /This round is the one on the website/); assert.match(live, /Unpublish/); assert.match(live, /brings back the starting snapshot/);
