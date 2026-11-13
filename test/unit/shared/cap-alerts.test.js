@@ -71,23 +71,31 @@ test('both cloud runners: max_instances in wrangler.jsonc is RUNNER_CEILING, and
   }
 });
 
-test('the 5-minute runner check: nothing at 79 live, 🟠 at 80, 🔴 at 100 (a full runner refuses the next start), each runner on its own', async () => {
-  const counts = {'hosted_runs': 0, 'ready_batches': 0};
-  const e = {...env(), STATS: {prepare: sql => ({bind: () => ({first: async () => ({n: counts[sql.match(/FROM (\w+)/)[1]]})})})}};
+// Why (Gitar on #635; owner, 13 Nov 2026: "please resolve the suggestions in the next PR"): 🔴 comes from a start that was refused, never from a count alone.
+test('the 5-minute runner check: nothing at 79, 🟠 at 80, no 🔴 at 100 while every run started, 🔴 when the runner is full and a run never started, each runner on its own', async () => {
+  const counts = {hosted_runs: {live: 0, waiting: 0}, ready_batches: {live: 0, waiting: 0}};
+  const read = sql => counts[sql.match(/FROM (\w+)/)[1]][/read_at IS NULL|NOT EXISTS/.test(sql) ? 'waiting' : 'live'];
+  const e = {...env(), STATS: {prepare: sql => ({bind: () => ({first: async () => ({n: read(sql)})})})}};
   const sent = [], fetcher = posting(sent);
-  counts.hosted_runs = RUNNER_CEILING * 0.8 - 1;
-  assert.deepEqual(await runnerCheck(e, {now: DAY, fetcher}), {'find-jobs-runner': 79, 'apply-runner': 0});
+  counts.hosted_runs.live = RUNNER_CEILING * 0.8 - 1;
+  assert.deepEqual(await runnerCheck(e, {now: DAY, fetcher}), {'find-jobs-runner': {live: 79, waiting: 0}, 'apply-runner': {live: 0, waiting: 0}});
   assert.equal(sent.length, 0);
-  counts.hosted_runs = RUNNER_CEILING * 0.8;
+  counts.hosted_runs.live = RUNNER_CEILING * 0.8;
   await runnerCheck(e, {now: DAY, fetcher});
   assert.equal(sent.length, 1); assert.match(sent[0], /^🟠[^]*Find jobs runner/);
-  counts.hosted_runs = RUNNER_CEILING;
+  counts.hosted_runs.live = RUNNER_CEILING;
   await runnerCheck(e, {now: DAY, fetcher});
-  assert.equal(sent.length, 2); assert.match(sent[1], /^🔴[^]*Find jobs runner/);
-  counts.ready_batches = RUNNER_CEILING;
+  assert.equal(sent.length, 1, 'full, but every run started: nothing was refused, no 🔴');
+  counts.hosted_runs.waiting = 1;
   await runnerCheck(e, {now: DAY, fetcher});
-  assert.deepEqual(sent.slice(2).map(text => text.slice(0, 2)), ['🔴'], 'the Apply runner tells on its own');
-  assert.match(sent[2], /Apply runner/);
+  assert.equal(sent.length, 2); assert.match(sent[1], /^🔴[^]*Find jobs runner[^]*refused a start/);
+  counts.ready_batches = {live: RUNNER_CEILING - 1, waiting: 3};
+  await runnerCheck(e, {now: DAY, fetcher});
+  assert.equal(sent.length, 3, 'a night that did not start while the runner has room is not a refusal: 🟠 only');
+  assert.match(sent[2], /^🟠[^]*Apply runner/);
+  counts.ready_batches.live = RUNNER_CEILING;
+  await runnerCheck(e, {now: DAY, fetcher});
+  assert.match(sent[3], /^🔴[^]*Apply runner/);
   const broken = {...e, STATS: {prepare: () => { throw new Error('D1 down'); }}};
   assert.deepEqual(await runnerCheck(broken, {now: NEXT_DAY, fetcher}), {'find-jobs-runner': null, 'apply-runner': null}, 'a failed count never fails the tick');
 });

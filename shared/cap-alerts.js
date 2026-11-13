@@ -10,10 +10,13 @@ import {ALL_BYTES_PER_DAY, ALL_REPORTS_PER_DAY} from './report-form.js';
 
 /** Containers each cloud runner may run at once (workers/hosted-runner and workers/ready-runner wrangler.jsonc max_instances). */
 export const RUNNER_CEILING = 100;
-// Runs live now, per runner: a container per open run (hosted_runs) or per running night (ready_batches); `?` = now.
+// Per runner: `live` = containers running now (an open run, a running night); `waiting` = ones opened 5+ minutes ago whose container never started (no first read of the run's
+// profile; no job of the night begun): the trace a start Cloudflare refused leaves. `?` = now, then now minus 5 minutes.
 export const RUNNER_LIVE = {
-  'find-jobs-runner': 'SELECT COUNT(*) AS n FROM hosted_runs WHERE finished_at IS NULL AND expires_at > ?',
-  'apply-runner': "SELECT COUNT(*) AS n FROM ready_batches WHERE state = 'running' AND expires_at > ?",
+  'find-jobs-runner': {live: 'SELECT COUNT(*) AS n FROM hosted_runs WHERE finished_at IS NULL AND expires_at > ?',
+    waiting: 'SELECT COUNT(*) AS n FROM hosted_runs WHERE finished_at IS NULL AND expires_at > ? AND read_at IS NULL AND started_at < ?'},
+  'apply-runner': {live: "SELECT COUNT(*) AS n FROM ready_batches WHERE state = 'running' AND expires_at > ?",
+    waiting: "SELECT COUNT(*) AS n FROM ready_batches b WHERE b.state = 'running' AND b.expires_at > ? AND COALESCE(b.fill_at, b.created_at) < ? AND NOT EXISTS (SELECT 1 FROM ready_jobs j WHERE j.batch = b.id AND j.started_at IS NOT NULL)"},
 };
 const num = (value, fallback) => (Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback);
 const BUSY_TODAY = 'every Free install sees "Free AI is busy today" until 00:00 UTC';
@@ -46,10 +49,10 @@ export const CAPS = {
   // both runners' wrangler.jsonc max_instances to it.
   'find-jobs-runner': {title: 'Find jobs runner (Always on searches running now)', event: 'runner-capacity', period: 'day', unit: 'containers',
     line: () => RUNNER_CEILING, approach: () => RUNNER_CEILING * 0.8,
-    sees: 'at the ceiling the runner is full: Cloudflare refuses the next person\'s Always on search until a run ends', fix: 'raise max_instances in workers/hosted-runner/wrangler.jsonc and RUNNER_CEILING'},
+    sees: 'the runner is full and Cloudflare refused a start: a person\'s Always on search did not run', fix: 'raise max_instances in workers/hosted-runner/wrangler.jsonc and RUNNER_CEILING'},
   'apply-runner': {title: 'Apply runner (Ready to send nights and Full automation running now)', event: 'runner-capacity', period: 'day', unit: 'containers',
     line: () => RUNNER_CEILING, approach: () => RUNNER_CEILING * 0.8,
-    sees: 'at the ceiling the runner is full: Cloudflare refuses the next person\'s night or Full automation batch until one ends', fix: 'raise max_instances in workers/ready-runner/wrangler.jsonc and RUNNER_CEILING'},
+    sees: 'the runner is full and Cloudflare refused a start: a person\'s night or Full automation batch did not run', fix: 'raise max_instances in workers/ready-runner/wrangler.jsonc and RUNNER_CEILING'},
 };
 for (const [name, cap] of Object.entries(CAPS)) cap.name = name;
 
@@ -74,16 +77,18 @@ export async function send(env, event, level, text, fetcher) {
 }
 
 /**
- * The 5-minute tick's look at the two cloud runners: counts the runs live now and tells the owner through the cap alert (🟠 at 80% of RUNNER_CEILING, 🔴 at the ceiling, each once a day).
- * A full runner counts as reached (owner, 13 Nov 2026: "80% warning and 100% critical"): unlike a spend line, a count at max_instances is itself the refusal, Cloudflare errors the next start. -> {name: live} for the log. Never rejects.
+ * The 5-minute tick's look at the two cloud runners: counts the containers live now and tells the owner through the cap alert, 🟠 at 80% of RUNNER_CEILING and 🔴 at the ceiling,
+ * each once a day. Why (Gitar on #635; owner, 13 Nov 2026: "please resolve the suggestions in the next PR"): 🔴 needs a refused start, not a count (shared/cap-check.js:5-6), so it
+ * comes only when the runner is full AND a run opened 5+ minutes ago never started. -> {name: {live, waiting}} for the log (null where D1 failed). Never rejects.
  */
 export async function runnerCheck(env, {now = new Date(), fetcher = fetch} = {}) {
-  const live = {};
+  const out = {}, at = now.toISOString(), before = new Date(now - 5 * 60000).toISOString();
   for (const [name, sql] of Object.entries(RUNNER_LIVE)) {
     try {
-      live[name] = Number((await env.STATS.prepare(sql).bind(now.toISOString()).first())?.n) || 0;
-      await capCheck(env, name, live[name], {now, fetcher, reached: live[name] >= CAPS[name].line(env)});
-    } catch { live[name] = null; }
+      const live = Number((await env.STATS.prepare(sql.live).bind(at).first())?.n) || 0, waiting = Number((await env.STATS.prepare(sql.waiting).bind(at, before).first())?.n) || 0;
+      out[name] = {live, waiting};
+      await capCheck(env, name, live, {now, fetcher, reached: waiting > 0 && live >= CAPS[name].line(env)});
+    } catch { out[name] = null; }
   }
-  return live;
+  return out;
 }
