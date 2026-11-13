@@ -213,7 +213,9 @@ export class AiBroker extends doContainer(DurableObject) {
       if (check.ok) await storage.put('meter', recordCall(meter, lane, now));
       return check;
     });
-    const refused = {codex: !!verdict.quota, claude: !claudeCheck.ok && asked.includes('claude'), drift: lane === 'drift' && !verdict.ok && /^budget:daily/.test(verdict.why || '')};   // 🔴 only for a line that refused this call
+    // 🔴 only for a line that turned its engine (or the lane) away for this call. Codex's week at its line turns Codex away even when Claude then answers (its card says calls pass to
+    // Claude). The Claude week counts only when it shut Claude for this call (claudeShut), not when the paid key answers in its place (Gitar on #630).
+    const refused = {codex: !!verdict.quota, claude: claudeShut, drift: lane === 'drift' && !verdict.ok && /^budget:daily/.test(verdict.why || '')};
     const lines = brokerLines(this.ctx.storage, env, this.limits, refused); this.ctx.waitUntil?.(lines);   // 🟠/🔴 on the week lines and the drift lane (lib/cap-notes.mjs); never delays the call
     if (!verdict.ok && !verdict.ranOut) return {refusal: json(429, {why: claudeShut && verdict.quota ? claudeCheck.why : verdict.why})};   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
     return {model, chain, first: asked[0], env, verdict, claudeCheck, claudeShut, freeAiCannot, hasLater};
