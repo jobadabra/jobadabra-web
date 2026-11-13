@@ -53,8 +53,9 @@ test('the "Benchmark · right jobs" tile marks the break and says the rounds are
 
 test('Admin: the round links say which AI, and a round on a new AI says the earlier ones are not comparable', () => {
   const html = page(snapshot(), {round: '2026-11-13'});
-  assert.match(html, /2026-11-13 · App tiers/);
-  assert.match(html, /2026-11-11 · Haiku/);
+  // Why (13 Nov 2026, owner: "Full rounds by date + time"): 2026-11-13 has a rival's rows for the widest set of people (here 1), so it is a full round and reads as its time and AI; the others are ours alone, test runs, each saying what it is with the key last.
+  assert.match(html, /2026-11-13 10:00 UTC · App tiers</);
+  assert.match(html, /2026-11-11 10:00 UTC · ours only · 1 person · Haiku · 2026-11-11/);
   assert.match(html, /AI changed: Haiku → app tiers, not comparable with the rounds before/);
   assert.match(page(snapshot(), {round: '2026-11-10'}), /Ours ran on Haiku only in this round/);
 });

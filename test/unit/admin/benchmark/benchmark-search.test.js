@@ -84,7 +84,9 @@ test('the page says so when there is no data, and shows an older round when aske
   assert.match(page(null), /No data yet/);
   const snapshot = {...summarize(FIXTURE.map(row => ({...row, ours: row.ours ? 1 : 0}))), at: '2026-10-27T10:00:00Z'};
   assert.match(page(snapshot, {round: 'r1'}), /round r1/);
-  assert.match(page(snapshot), /round r2/);
+  // Why (13 Nov 2026, owner: "Full rounds by date + time"): r1 has a rival's rows for the widest set of people (a full round), r2 is ours alone on one person (a test run), so the page opens on r1, the newest FULL round; the old rule opened on r2, the newest key.
+  assert.match(page(snapshot), /round r1/);
+  assert.match(page(snapshot, {round: 'r2'}), /round r2/);
 });
 
 test('the "Jobadabra (with every source)" line is gone: a sent `beyond` is not stored, and no card, tool row or note shows it', async () => {

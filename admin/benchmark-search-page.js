@@ -7,13 +7,13 @@ import {figure, VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 import {shareTone} from './applying-tiles.js';
 import {PUBLISH_STYLE, panel, searchSection} from './benchmark-publish.js';
 import {AIS, aiOf, changes} from './benchmark-ai.js';
-import {ROUND_STYLE, roundChoices, roundPicker} from './benchmark-rounds.js';
+import {ROUND_STYLE, clockOf, roundChoices, roundPicker} from './benchmark-rounds.js';
 
 const pct = value => (value == null ? '–' : `${value}%`);
 const clock = seconds => (seconds == null ? '–' : seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
 const money = cents => `$${(cents / 100).toFixed(2)}`;
-// The round to show: the one asked for, else the newest real round (not a side check, see benchmark-rounds.js).
-export const pickRound = (snapshot, asked) => roundChoices(Object.keys(snapshot?.rounds || {}), asked).current;
+// The round to show: the one asked for, else the newest full round (not a test run, see benchmark-rounds.js).
+export const pickRound = (snapshot, asked) => roundChoices(snapshot?.rounds, asked).current;
 
 const CSS = `:root{--card:#14181d;--line:#262c33;--text:#f4efe3;--muted:#8d949c;--amber:#f5b54a;--green:#5ec47a;--red:#e5484d}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;margin:0 0 16px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
@@ -64,8 +64,10 @@ const METHOD = `<section class="card"><details><summary>How this is measured</su
 <li>Biases: the other tool's example config leans to AI and tech; keywords are the English job title; single runs.</li></ul></details></section>`;
 
 export function page(snapshot, {round, published, confirm} = {}) {
-  const key = pickRound(snapshot, round), view = key ? snapshot.rounds[key] : null, choices = roundChoices(Object.keys(snapshot?.rounds || {}), round), live = published?.search?.now?.round;
-  const label = k => [k, `${k} · ${AIS[aiOf(snapshot.rounds[k].ai)].short}${k === live ? ' · public' : ''}`];
+  const key = pickRound(snapshot, round), view = key ? snapshot.rounds[key] : null, choices = roundChoices(snapshot?.rounds, round), live = published?.search?.now?.round;
+  // A full round reads as its time ("2026-11-13 17:16 UTC · App tiers · public"); a test run says what it is from its data (ours only or with rivals, how many people) and keeps its key as the small last part.
+  const label = k => { const v = snapshot.rounds[k], ai = AIS[aiOf(v.ai)].short, full = choices.real.includes(k);
+    return [k, full ? `${clockOf(k, v)} · ${ai}${k === live ? ' · public' : ''}` : `${clockOf(k, v)} · ${v.tools.some(t => !t.ours) ? 'with rivals' : 'ours only'} · ${v.personas.length} ${v.personas.length === 1 ? 'person' : 'people'} · ${ai} · ${k}${k === live ? ' · public' : ''}`]; };
   const body = !view ? `<section class="card"><h2>No data yet</h2><p class="muted">The bake-off's search-bench publish step sends every scored round here (<code>PUT /benchmark-search/data</code>); the first round fills this page.</p></section>`
     : `${published ? panel({kind: 'search', round: key, part: searchSection(key, view, snapshot.at), published, ask: confirm === 'publish'}) : ''}${roundPicker({real: choices.real.map(label), side: choices.side.map(label), current: key})}${aiNote(snapshot, key)}${tiles(view)}${scoreboard(view)}${grid(view)}${kinds(view)}${missed(view)}${METHOD}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Benchmark Job Search · Admin</title>
