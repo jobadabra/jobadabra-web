@@ -6,12 +6,11 @@ import {authorize, digestOf} from './guard.js';
 import {verifyLicense} from './license.js';
 import {asStream, fromWorkersAi, toWorkersAi, Unsupported} from './free-ai-translate.js';
 import {accountNeurons} from './free-ai-usage.js';
-import {freeAiCard} from './owner-cards.js';
 import {FREE_NEURONS_PER_DAY, costUsd, modelFor, neuronsOf} from './free-ai-models.js';
 import {PRO_PER_MINUTE, chargeCall, proLane} from './pro-ai.js';
 import {claudeCall, proRoute} from './pro-claude.js';
 import {aiAccess} from './hosted-budget.js';
-import {alertOwner} from './notify-send.js';
+import {capCheck} from './cap-alerts.js';
 import {tally} from './free-ai-alert.js';
 import {runOf} from './hosted.js';
 import {WEB_ACTION, webSearch} from './free-ai-web.js';
@@ -99,7 +98,8 @@ async function answerCall(request, env, now, ctx, fetcher, trace) {
   const allowance = allowanceOf(env);
   const account = pro ? null : await accountNeurons(env, kv, day, now, fetcher), seen = Math.max(neurons, account ?? 0);   // the account's own count includes every caller
   const busy = pro ? null : busyCap(lines, {microUsd, globalMonth, seen, allowance});
-  if (busy) return error(busy.status, busy.message);
+  // Why (13 Nov 2026, owner: "...another one, ciritical, when we reached it"): a refusal makes sure the 🔴 card went out, also when the line was crossed by spend this route never counted (a hosted run's compute, shared/hosted-budget.js).
+  if (busy) { await later(ctx, spendLines(env, now, fetcher, {day: microUsd, month: globalMonth, neurons: seen})); return error(busy.status, busy.message); }
   if (perMinute >= (pro ? PRO_PER_MINUTE : lines.perMinute)) return error(429, 'Free AI: too many requests in a minute. Jobadabra will retry.', 'rate_limit_error');
   const mine = pro ? null : installCap(lines, access, {life, installMonth, installDay, tokens});
   if (mine) return error(mine.status, mine.message, 'rate_limit_error');
@@ -131,7 +131,7 @@ async function answerCall(request, env, now, ctx, fetcher, trace) {
       result = {...again, usage: {prompt_tokens: (again.usage?.prompt_tokens || 0) + first.input_tokens, completion_tokens: (again.usage?.completion_tokens || 0) + first.output_tokens}};
     }
   } catch (caught) {
-    if (/daily free allocation|4006/i.test(String(caught?.message))) return error(503, BUSY);
+    if (/daily free allocation|4006/i.test(String(caught?.message))) { await later(ctx, capCheck(env, 'free-ai-neurons', null, {now, fetcher, reached: true})); return error(503, BUSY); }
     if (caught instanceof Unsupported) return error(422, `${caught.message} Add your own key in Settings → Connections → AI for this step.`, 'invalid_request_error');
     return failed(`Workers AI failed: ${String(caught?.message || caught).slice(0, 200)}`);
   }
@@ -143,48 +143,16 @@ async function answerCall(request, env, now, ctx, fetcher, trace) {
     kv.put(keys.tokens, String(tokens + used), {expirationTtl: 2 * 86400}), kv.put(keys.usd, String(microUsd + freeAfter), {expirationTtl: 2 * 86400}), kv.put(keys.neurons, String(Math.round(neurons + neuronsOf(freeUsd))), {expirationTtl: 2 * 86400}),
     recordCost(env, access.who, request.headers.get('x-jp-action'), model, message.usage, usd, now),
     chargeCall(env, pro, after, request.headers.get('x-jp-action'), now),
-    alertOnce(env, kv, day, microUsd, microUsd + freeAfter, fetcher),
-    monthAlert(env, kv, month, globalMonth, globalMonth + freeAfter, fetcher),
-    neuronAlert(env, kv, day, seen + neuronsOf(freeUsd), allowance, fetcher),
+    spendLines(env, now, fetcher, {day: microUsd + freeAfter, month: globalMonth + freeAfter, neurons: seen + neuronsOf(freeUsd)}),
   ]);
   ctx?.waitUntil ? ctx.waitUntil(work) : await work;
   if (body.stream) return new Response(asStream(message), {headers: {'content-type': 'text/event-stream', 'cache-control': 'no-cache'}});
   return Response.json(message);
 }
 
-// The one send of the three spend alerts: the switchboard (switch, channel) first, the Brain bot as before when it cannot deliver. Never throws: an alert must not fail a Free AI answer.
-// Why (5 Nov 2026, nt 2/4, code review): the day, month and neuron alerts are three different things on one event, and each already fires once through its KV flag, so the event's mode is "every"
-// (a "once a day" mode would hold the month alert behind the day one and lose it); when nothing could deliver, the flag is removed so the next call tries again.
-async function tellSpend(env, kv, flag, text, fetcher) {
-  const told = await alertOwner(env, 'free-ai-spend', {text, html: true, fetcher,
-    legacy: env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.BRAIN_BOT_TOKEN, chat: env.BRAIN_CHAT_ID} : null}).catch(() => null);
-  // Nothing configured at all (no bot, no store) is not a failed send: keep the flag, or every later call would redo the KV write and the log row (Gitar on #429).
-  const unconfigured = told?.via === 'none' && (told.why === 'no-bot' || told.why === 'channel-not-connected' || told.why === 'no-store');
-  if (!unconfigured && (!told || (!told.sent && told.via !== 'switchboard'))) await Promise.resolve(kv.delete?.(flag)).catch(() => {});
-}
-
-// One Telegram line the day the global spend first crosses the alert line.
-async function alertOnce(env, kv, day, before, after, fetcher) {
-  const line = num(env.FREE_AI_ALERT_USD, LIMITS.alertUsd) * 1e6;
-  if (before >= line || after < line || await kv.get(`freeai:alerted:${day}`)) return;
-  await kv.put(`freeai:alerted:${day}`, '1', {expirationTtl: 2 * 86400});
-  await tellSpend(env, kv, `freeai:alerted:${day}`, freeAiCard('day', {usd: line / 1e6, stop: num(env.FREE_AI_STOP_USD, LIMITS.stopUsd)}).text, fetcher);
-}
-
-// One Telegram line the month the global spend first crosses the month alert line ($40 of the $60 stop).
-async function monthAlert(env, kv, month, before, after, fetcher) {
-  const line = num(env.FREE_AI_MONTH_ALERT_USD, LIMITS.monthAlertUsd) * 1e6;
-  if (before >= line || after < line || await kv.get(`freeai:monalerted:${month}`)) return;
-  await kv.put(`freeai:monalerted:${month}`, '1', {expirationTtl: 40 * 86400});
-  await tellSpend(env, kv, `freeai:monalerted:${month}`, freeAiCard('month', {usd: line / 1e6, stop: num(env.FREE_AI_MONTH_STOP_USD, LIMITS.monthStopUsd)}).text, fetcher);
-}
-
 const isJson = text => { try { JSON.parse(text); return true; } catch { return false; } };
 
-// One Telegram line the first time today that 80% of the free plan's allowance is used (counted from the account's own usage when it can be read) (Free AI then stops at 100% until 00:00 UTC).
-async function neuronAlert(env, kv, day, after, allowance, fetcher) {
-  const line = allowance * 0.8;
-  if (!Number.isFinite(allowance) || after < line || await kv.get(`freeai:neualert:${day}`)) return;
-  await kv.put(`freeai:neualert:${day}`, '1', {expirationTtl: 2 * 86400});
-  await tellSpend(env, kv, `freeai:neualert:${day}`, freeAiCard('neurons', {used: Math.round(line), allowance}).text, fetcher);
-}
+// The three Free AI lines that stop everyone, after a counted call or at a refusal (shared/cap-alerts.js: 🟠 approaching, 🔴 reached, each once per period). Never rejects.
+const spendLines = (env, now, fetcher, used) => Promise.all([capCheck(env, 'free-ai-day', used.day, {now, fetcher}), capCheck(env, 'free-ai-month', used.month, {now, fetcher}),
+  capCheck(env, 'free-ai-neurons', used.neurons, {now, fetcher})]);
+const later = (ctx, work) => (ctx?.waitUntil ? ctx.waitUntil(work) : work);

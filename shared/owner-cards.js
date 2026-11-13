@@ -59,13 +59,15 @@ export function employerCard(kind, facts = {}) {
     verdict: {ok: false, text: 'It went through. If the scout did not mean it, restore the day before (index copies).'}});
 }
 
-/** Free AI spend: 'day' {usd, stop}, 'month' {usd, stop}, 'neurons' {used, allowance}. */
-export function freeAiCard(kind, facts) {
-  const link = {text: 'Open the AI costs', url: site('/admin/ai/costs')};
-  if (kind === 'neurons') return card({level: 'orange', headline: `Free AI used 80% of today's allowance`, bar: {done: facts.used, total: facts.allowance, doneWord: 'neurons used', restWord: 'left'}, verdict: {ok: false, text: 'It stops at 100% until 00:00 UTC.'}, link});
-  const stop = Number(facts.stop), usd = Math.round(Number(facts.usd) * 100) / 100;
-  return card({level: 'orange', headline: `Free AI spend ${kind === 'day' ? 'today' : 'this month'}: $${usd}`, bar: stop ? {done: Math.min(usd, stop), total: stop, doneWord: 'USD spent', restWord: 'USD left'} : null,
-    verdict: {ok: false, text: `It stops at $${facts.stop}.`}, link});
+/**
+ * A line that stops something for everyone (shared/cap-alerts.js): 'approaching' (🟠 medium) or 'reached' (🔴 critical).
+ * facts = {title, used, line (words, or null when unknown), done, total, word (the bar's numbers and unit), sees (what people get at the line), fix (what the owner can do, a lower-case phrase)}.
+ */
+export function capCard(level, facts) {
+  const reached = level === 'reached', measured = facts.used != null && facts.line != null;
+  return card({level: reached ? 'red' : 'orange', headline: `${facts.title} ${reached ? 'reached its stop' : 'is approaching its stop'}${measured ? `: ${facts.used} of ${facts.line}` : ''}`,
+    bar: measured && Number.isFinite(facts.total) ? {done: Math.min(facts.done, facts.total), total: facts.total, doneWord: `${facts.word} used`, restWord: 'left'} : null,
+    verdict: {ok: false, text: `${reached ? 'Now' : `At ${facts.line ?? 'the stop'}`} ${facts.sees}. ${reached ? 'To reopen it' : 'To move the stop'}: ${facts.fix}.`}, link: {text: 'Open the AI costs', url: site('/admin/ai/costs')}});
 }
 
 /**

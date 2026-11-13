@@ -66,7 +66,7 @@ test('the daily line with no bot configured anywhere: nothing is posted and the 
   const request = () => new Request('https://www.jobpilotto.top/api/ai/v1/messages', {method: 'POST', headers: {'x-api-key': apiKey}, body: JSON.stringify({max_tokens: 5, messages: [{role: 'user', content: 'x'}]})});
   await freeAi(request(), e, new Date('2026-10-16T10:00:30Z'), null, fetcher);
   assert.equal(sent.length, 0);
-  assert.equal(e.WAITLIST.m.get('freeai:alerted:2026-10-16'), '1');
+  assert.equal(e.WAITLIST.m.get('cap:free-ai-day:approaching:2026-10-16'), '1');
 });
 
 test('per install: $3 in a month is refused with the month words, and a call adds its cost to the day and the month', async () => {
@@ -320,7 +320,7 @@ test('the 80% line is read from the account too, once, and the usage is asked on
   const e = withAccount(env({BRAIN_BOT_TOKEN: 't', BRAIN_CHAT_ID: 'c'})), m = metered(8100), apiKey = await key();
   const ask = at => freeAi(new Request('https://www.jobpilotto.top/api/ai/v1/messages', {method: 'POST', headers: {'x-api-key': apiKey}, body: JSON.stringify({max_tokens: 5, messages: [{role: 'user', content: 'x'}]})}), e, new Date(at), null, m.fetcher);
   await ask('2026-10-16T10:00:10Z'); await ask('2026-10-16T10:00:40Z');
-  assert.equal(m.sent.length, 1); assert.match(m.sent[0], /80%/);
+  assert.equal(m.sent.length, 1); assert.match(m.sent[0], /^🟠.*free allowance today is approaching its stop: 81\d\d neurons of 10000/);
   assert.equal(m.graphql.length, 1, 'cached for a minute');
   await ask('2026-10-16T10:01:30Z');
   assert.equal(m.graphql.length, 2);
@@ -333,4 +333,32 @@ test('without the account settings, or when Cloudflare\'s usage cannot be read, 
   assert.equal((await ask(withAccount(env()), metered(null).fetcher)).status, 200, 'a failed read does not stop the service');
   const own = withAccount(env()); own.WAITLIST.m.set('freeai:neu:2026-10-16', '10000');
   assert.equal((await ask(own, metered(0).fetcher)).status, 503, 'the own counter still stops it');
+});
+
+// Why (13 Nov 2026, owner: "One medium when we approaching the limit/cap and another one, ciritical, when we reached it"): the $10 stop was reached in silence.
+test('the daily stop: the call that reaches it sends one 🔴 card, and the refused calls after it send nothing more', async () => {
+  const sent = [], e = env({BRAIN_BOT_TOKEN: 't', BRAIN_CHAT_ID: 'c'}), apiKey = await key();
+  e.WAITLIST.m.set('freeai:usd:2026-10-16', String(9.9999 * 1e6));
+  e.WAITLIST.m.set('cap:free-ai-day:approaching:2026-10-16', '1');   // the 🟠 card went out at $3
+  const ask = () => sendAsk(e, apiKey, sent);
+  assert.equal((await ask()).status, 200);
+  assert.equal(sent.length, 1); assert.match(sent[0], /^🔴.*Free AI today reached its stop/);
+  assert.match(sent[0], /busy today/); assert.match(sent[0], /FREE_AI_STOP_USD/);
+  assert.equal((await ask()).status, 503); assert.equal((await ask()).status, 503);
+  assert.equal(sent.length, 1, 'once a day');
+});
+
+test('a stop crossed by spend this route never counted (a hosted run) is told at the first refused call', async () => {
+  const sent = [], e = env({BRAIN_BOT_TOKEN: 't', BRAIN_CHAT_ID: 'c'}), apiKey = await key();
+  e.WAITLIST.m.set('freeai:usdm:2026-10', String(60 * 1e6));
+  const refused = await sendAsk(e, apiKey, sent);
+  assert.equal(refused.status, 503); assert.equal(e.seen.length, 0, 'the model is not asked');
+  assert.equal(sent.length, 1); assert.match(sent[0], /^🔴.*Free AI this month reached its stop/);
+});
+
+test('Cloudflare refusing the free allocation (4006) sends the allowance\'s 🔴 card once', async () => {
+  const sent = [], e = env({BRAIN_BOT_TOKEN: 't', BRAIN_CHAT_ID: 'c'}), apiKey = await key();
+  e.AI.run = async () => { throw new Error('4006: you have used up your daily free allocation of 10,000 neurons'); };
+  await sendAsk(e, apiKey, sent); await sendAsk(e, apiKey, sent);
+  assert.equal(sent.length, 1); assert.match(sent[0], /^🔴.*free allowance/);
 });
