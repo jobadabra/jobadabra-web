@@ -42,9 +42,15 @@ function lastEvents(out) {
 // Why (5 Nov 2026, a8, owner via mac-32: "record ONE timeline with timestamps on all 3 hops"; 4 tries and 3 signatures of "a persona Codex call dies around step 5-6"): the container's own log is not readable, so each call carries its own clock home: "<ms since spawn> <event>" for codex's first stderr byte, each stdout event and its end. Logging only; nothing decides on it.
 const traceOf = stamps => stamps.map(([ms, what]) => `${ms} ${what}`).join('|');
 
+// Why (13 Nov 2026, cx, sa: "go on (a)"; #614's after-numbers: 125 of 133 codex exits land on 5 s steps after spawn, never before 5.0 s, and not reproduced outside the container): codex logs each connection it opens, and the trace carries only the host's name as `host:<name>` at its time, so the next calls name the host that holds the exit. Logging only; nothing decides on it.
+// The debug lines themselves never reach `err` (the error tail the Worker shows); every other crate stays at `error`, codex's own level when RUST_LOG is unset.
+const RUST_LOG = 'error,reqwest::connect=debug,hyper_util::client::legacy::connect::dns=debug';
+const DEBUG_LINE = /^\S+\s+DEBUG\s+\S+:/;
+const hostOf = line => (/starting new connection: [a-z]+:\/\/([A-Za-z0-9.-]+)/.exec(line) || /resolving host="?([A-Za-z0-9.-]+)/.exec(line))?.[1]?.toLowerCase();
+
 function run(args, cwd, prompt) {
   return new Promise(resolve => {
-    const child = spawn('codex', args, {cwd, detached: true, stdio: ['pipe', 'pipe', 'pipe'], env: {PATH: process.env.PATH, HOME: process.env.HOME, CODEX_HOME: HOME, ...trustEnv()}});
+    const child = spawn('codex', args, {cwd, detached: true, stdio: ['pipe', 'pipe', 'pipe'], env: {PATH: process.env.PATH, HOME: process.env.HOME, CODEX_HOME: HOME, RUST_LOG, ...trustEnv()}});
     let out = '', err = '', answered = false, grace = null, killed = false;
     const t0 = Date.now(), stamps = [[0, 'spawn']], stamp = (label, last = false) => { if (last || stamps.length < 39) stamps.push([Date.now() - t0, /^[\w.:-]{1,40}$/.test(label) ? label : 'event']); };   // 39 + the end stamp; a label is a short name, never free text
     let pending = '';
@@ -53,12 +59,15 @@ function run(args, cwd, prompt) {
     const note = line => { try { const m = JSON.parse(line); if (typeof m?.type === 'string') stamp(m.type); } catch { /* not an event line */ } };
     const flush = () => { if (pending) note(pending); pending = ''; };   // a last event with no newline
     child.stdout.on('data', d => { out += d; pending += d; if (pending.length > 1e6) pending = ''; const lines = pending.split('\n'); pending = lines.pop(); lines.forEach(note); });   // a runaway stream with no newline is dropped at 1 MB, not re-split for ever
-    child.stderr.on('data', d => { if (!err) stamp('stderr'); err += d; });
+    let errPending = '';
+    const errLine = line => { if (DEBUG_LINE.test(line)) { const host = hostOf(line); if (host) stamp(`host:${host}`); return; } if (!err) stamp('stderr'); err += `${line}\n`; };
+    const errFlush = () => { const last = errPending; errPending = ''; if (last) errLine(last); };   // a last line with no newline
+    child.stderr.on('data', d => { errPending += d; if (errPending.length > 1e6) errFlush(); const lines = errPending.split('\n'); errPending = lines.pop(); lines.forEach(errLine); });
     const timer = setTimeout(() => {
       killed = true; killTree(child);
-      grace = setTimeout(() => answer({code: null, out, err, guard: guard()}), KILL_GRACE_MS);
+      grace = setTimeout(() => { errFlush(); answer({code: null, out, err, guard: guard()}); }, KILL_GRACE_MS);
     }, CALL_TIMEOUT_MS);
-    child.on('close', code => answer({code, out, err, ...(killed ? {guard: guard()} : {})}));
+    child.on('close', code => { errFlush(); answer({code, out, err, ...(killed ? {guard: guard()} : {})}); });
     child.on('error', e => answer({code: -1, out, err: `spawn: ${e.message}`}));
     child.stdin.on('error', () => {});   // an early CLI exit can close the pipe before the whole prompt is written
     child.stdin.end(String(prompt));   // EOF is required: Codex waits for the complete prompt before starting
