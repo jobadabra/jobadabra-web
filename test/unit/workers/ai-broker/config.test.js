@@ -14,7 +14,8 @@ test('the final config keeps the Worker, the class and the container application
   assert.deepEqual(final.exports, {CodexBroker: {type: 'durable-object', state: 'deleted'}, AiBroker: {type: 'durable-object', storage: 'sqlite'}});
   assert.match(source, /^export class AiBroker extends doContainer\(DurableObject\) \{$/m);
   assert.doesNotMatch(source, /class CodexBroker/);   // Cloudflare refuses a deleted tombstone whose class is still in the code
-  assert.deepEqual(final.durable_objects.bindings, [{name: 'BROKER', class_name: 'AiBroker'}]);
+  assert.deepEqual(final.durable_objects.bindings, [{name: 'BROKER_NEXT', class_name: 'AiBroker'}]);   // its live name: Cloudflare refuses the delete while CodexBroker's name BROKER is reused (#609's release, code 10086)
+  assert.match(source, /env\.BROKER_NEXT\.getByName\('broker'\)/);   // the front Worker reads the binding the config declares
   assert.deepEqual(final.containers.map(c => [c.name, c.class_name, c.scheduling_policy]), [['ai-broker-next', 'AiBroker', 'durable_object']]);   // the application name stays: a new name is a new application
   assert.equal(final.migrations, undefined);   // migrations and exports are mutually exclusive
 });

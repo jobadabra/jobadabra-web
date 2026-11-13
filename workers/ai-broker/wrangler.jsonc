@@ -22,7 +22,9 @@
   // Secret: SELFHEAL_PUBLISH_KEY (the key every CI upload uses; Bearer for /ops/notify; a Worker secret does not move with the namespace). Without it, or without this binding, a note is not sent.
   "services": [{"binding": "SITE", "service": "www"}],
   "ai": {"binding": "AI"},
-  "durable_objects": {"bindings": [{"name": "BROKER", "class_name": "AiBroker"}]},
+  // Why (13 Nov 2026, #609's release refused, code 10086): AiBroker keeps its live binding name BROKER_NEXT. Rebinding BROKER (CodexBroker's name) to AiBroker in the deploy that deletes
+  // CodexBroker is refused: "Cannot delete the Durable Object namespace ... still referenced by the binding 'BROKER'". A rename can follow once the tombstone has landed.
+  "durable_objects": {"bindings": [{"name": "BROKER_NEXT", "class_name": "AiBroker"}]},
   // Why (13 Nov 2026, plan 2/2; owner via sa: "if it is clean, ship 2/2"): CodexBroker's namespace is deleted with its storage (the copy taken at the switch, 13 Nov 01:44Z, is AiBroker's);
   // a deleted tombstone stays until a deploy reports it stale (Cloudflare: Durable Object class exports), then it may go.
   "exports": {"CodexBroker": {"type": "durable-object", "state": "deleted"}, "AiBroker": {"type": "durable-object", "storage": "sqlite"}}
