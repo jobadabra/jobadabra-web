@@ -10,8 +10,9 @@ Measured: with 16 Claude slots the 2 vCPU container peaked at 1.94-1.99 vCPU (00
 2. **2/2 Cleanup.** `AiBroker` is the only broker: the old class becomes a tombstone, its container application is deleted, `BROKER_ACTIVE` and `/old/...` go.
 
 ## Progress
-- [ ] 1/2 merged and released
-- [ ] `/next/health` up; one Claude call through `/admin/next/call`
-- [ ] `/admin/copy`; one Codex call
-- [ ] `BROKER_ACTIVE=next`; first Claude-heavy round: CPU per minute, waits, errors
-- [ ] 2/2 merged
+- [x] 1/2 merged and released (web #606, 01:34Z; release green)
+- [x] `/next/health` up; one Claude call through `/admin/next/call` (200 "OK", 12.7 s with the cold start)
+- [x] `/admin/copy`; one Codex call (200 "OK", 11.4 s)
+- [x] `BROKER_ACTIVE=next` (01:46:11Z); first Claude-heavy round: CPU per minute, waits, errors (8 searches at once: p90 13-18.8 s, 0 non-200, CPU 3.22 of 4, 2.66 GiB)
+- [x] Owner via sa, 13 Nov 2026: "I think we can stop at this configuration. 24 slots and 4 vCPU" (web #607, live 02:01:42Z); app-tier rounds on 24 slots clean (4 at once p90 under 1 s; 10 at once: see 2/2's PR)
+- [ ] 2/2 merged; then by hand: delete the old container application `ai-broker` and the Worker secret `BROKER_ACTIVE`

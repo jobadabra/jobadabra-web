@@ -231,9 +231,10 @@ test('a Claude tier keeps its Codex counterpart, and an unknown tier is refused'
 
 test('the Worker keeps its egress list and exports what the list needs (it cannot be loaded here, so its source is read)', async () => {
   const src = (await import('node:fs')).readFileSync(new URL('../../../../workers/ai-broker/worker.js', import.meta.url), 'utf8');
-  assert.match(src, /export \{ContainerProxy\} from '@cloudflare\/containers'/);   // missing: every container start fails (28 Oct 2026)
-  assert.match(src, /enableInternet = false/);
-  assert.match(src, /interceptHttps = true/);   // without it HTTPS fails with the internet off: codex timed out on chatgpt.com (28 Oct 2026)
+  const base = (await import('node:fs')).readFileSync(new URL('../../../../workers/ai-broker/lib/do-container.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /@cloudflare\/containers/);   // plan 2/2 (13 Nov 2026): the Container class is gone; lib/do-container.mjs starts the container
+  assert.match(base, /enableInternet: false/);
+  assert.match(base, /interceptOutboundHttps\(host, allow\)/);   // with the internet off only these hosts resolve, each through AllowHosts: codex timed out on chatgpt.com without an intercept (28 Oct 2026)
   assert.match(src, /allowedHosts = HOSTS/);
   assert.match(src, /HOSTS = \['chatgpt\.com', 'auth\.openai\.com', 'api\.openai\.com', 'api\.anthropic\.com'\]/);   // the Claude engine adds api.anthropic.com (1 Nov 2026) and nothing else
   assert.equal(src.match(/refuseReply\(answer\.reply, login\)/g)?.length, 2);   // the last layer against a credential in a reply, on both engines' replies, with the broker's own login

@@ -95,7 +95,7 @@ test('the Worker names the workflow from the verified token only: a caller-sent 
   const token = `${head}.${Buffer.from(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', pair.privateKey, new TextEncoder().encode(head))).toString('base64url')}`;
   t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({keys: [jwk]})));
   const seen = [];
-  const env = {BROKER: {fetch: async request => { seen.push({lane: request.headers.get('x-lane'), workflow: request.headers.get('x-workflow'), job: request.headers.get('x-job')}); return new Response('{}'); }}, BROKER_ADMIN_TOKEN: 'admin-secret'};
+  const env = {BROKER: {getByName: () => ({fetch: async request => { seen.push({lane: request.headers.get('x-lane'), workflow: request.headers.get('x-workflow'), job: request.headers.get('x-job')}); return new Response('{}'); }})}, BROKER_ADMIN_TOKEN: 'admin-secret'};
   await entry.fetch(new Request('https://broker/call', {method: 'POST', headers: {authorization: `Bearer ${token}`, 'x-workflow': 'jobadabra/someone-else.yml', 'x-lane': 'pr'}, body: JSON.stringify(body)}), env);
   await entry.fetch(new Request('https://broker/admin/call', {method: 'POST', headers: {authorization: 'Bearer admin-secret', 'x-workflow': 'jobadabra/someone-else.yml'}, body: JSON.stringify(body)}), env);
   // Per-job AI cost (5 Nov 2026): the caller's `x-jobadabra-job` is forwarded only when it has a GitHub job id's shape; a caller-sent internal `x-job` never is; the admin call has none.
@@ -175,7 +175,7 @@ test('the Worker forwards a jobadabra-benchmarks call as Claude only, and every 
   const pair = await keyPair(), jwk = {...(await crypto.subtle.exportKey('jwk', pair.publicKey)), kid: 'k1'}, enc = o => Buffer.from(JSON.stringify(o)).toString('base64url');
   const tokenFor = async repository => { const head = `${enc({alg: 'RS256', kid: 'k1'})}.${enc({iss: 'https://token.actions.githubusercontent.com', aud: 'jobadabra-ai-broker', repository, event_name: 'workflow_dispatch', exp: Math.floor(Date.now() / 1000) + 600, job_workflow_ref: ref(repository, 'form-round.yml')})}`; return `${head}.${Buffer.from(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', pair.privateKey, new TextEncoder().encode(head))).toString('base64url')}`; };
   t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({keys: [jwk]})));
-  const seen = [], env = {BROKER: {fetch: async request => { seen.push({lane: request.headers.get('x-lane'), body: JSON.parse(await request.text())}); return new Response('{}'); }}};
+  const seen = [], env = {BROKER: {getByName: () => ({fetch: async request => { seen.push({lane: request.headers.get('x-lane'), body: JSON.parse(await request.text())}); return new Response('{}'); }})}};
   const post = async (repository, payload) => entry.fetch(new Request('https://broker/call', {method: 'POST', headers: {authorization: `Bearer ${await tokenFor(repository)}`}, body: JSON.stringify(payload)}), env);
   await post('jobadabra/jobadabra-benchmarks', {tier: 'small', prompt: 'p'});
   await post('jobadabra/jobadabra-benchmarks', {tier: 'small', prompt: 'p', engine: 'codex'});

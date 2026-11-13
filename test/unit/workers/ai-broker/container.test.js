@@ -109,7 +109,7 @@ test('the container passes search through to Codex and preserves ordinary replie
 test('the image copies the server and all its local imports from its build context', () => {
   const broker = new URL('../../../../workers/ai-broker/', import.meta.url);
   const config = fs.readFileSync(new URL('wrangler.jsonc', broker), 'utf8');
-  const context = new URL(config.match(/"image_build_context": "([^"]+)"/)[1] + '/', broker);
+  const context = new URL(config.match(/"build_context": "([^"]+)"/)[1] + '/', broker);   // the durable_object policy's images.base (plan 2/2, 13 Nov 2026)
   const dockerfile = fs.readFileSync(new URL('container/Dockerfile', broker), 'utf8');
   const copied = new Map();
   for (const [, sources, destination] of dockerfile.matchAll(/^COPY (.+) (\S+)$/gm)) {
