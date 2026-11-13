@@ -35,7 +35,9 @@ export async function buildSnapshot(db, now = new Date()) {
   return {...summarize(results.map(row => ({...row}))), at: now.toISOString()};
 }
 
-// PUT /benchmark-search/data {runs: [run]}: each run once (the same id replaces its row); then the snapshot is rebuilt.
+// PUT /benchmark-search/data {runs: [run], replace?: true}: each run once (the same id replaces its row); then the snapshot is rebuilt.
+// Why (13 Nov 2026, owner: "a full round's publish replaces its round's rows, so old rows can't linger again; side checks keep adding"): the upsert alone left ten stale "ours with every source" rows
+// of round 2026-11-13 beside the new ones. `replace: true` (a full round, sent whole in ONE put, under MAX_ROWS) deletes the rows of every round it carries before the inserts, in the same batch; a side check sends no flag.
 export async function ingest(request, env, now = new Date()) {
   if (!authorized(request, env) || request.method !== 'PUT') return new Response('Not found', {status: 404});
   const body = await request.text();
@@ -47,7 +49,8 @@ export async function ingest(request, env, now = new Date()) {
   const columns = ['id', 'at', 'round', 'persona', 'kind', 'country', 'tool', 'ours', 'build', 'ai', ...NUMBERS, 'missed', 'beyond'];
   const write = env.STATS.prepare(`INSERT INTO benchmark_search_runs (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})
     ON CONFLICT(id) DO UPDATE SET ${columns.slice(1).map(column => `${column} = excluded.${column}`).join(', ')}`);
-  if (rows.length) await env.STATS.batch(rows.map(row => write.bind(...columns.map(column => row[column]))));
+  const replaced = data.replace === true ? [...new Set(rows.map(row => row.round))] : [];
+  if (rows.length) await env.STATS.batch([...replaced.map(round => env.STATS.prepare('DELETE FROM benchmark_search_runs WHERE round = ?').bind(round)), ...rows.map(row => write.bind(...columns.map(column => row[column])))]);
   await env.STATS.prepare('DELETE FROM benchmark_search_runs WHERE at < ?').bind(new Date(now.getTime() - KEEP_DAYS * 86400000).toISOString().slice(0, 10)).run();
   const snapshot = await buildSnapshot(env.STATS, now);
   await env.STATS.prepare('INSERT INTO benchmark_search_snapshot (id, at, body) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET at = excluded.at, body = excluded.body').bind(snapshot.at, JSON.stringify(snapshot)).run();
