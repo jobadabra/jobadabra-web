@@ -16,6 +16,16 @@ test('the arguments are the measured lean ones: no tools, settings, slash comman
   assert.deepEqual(claudeArgs({model: 'm', schema: {type: 'object'}}).slice(-2), ['--json-schema', '{"type":"object"}']);
 });
 
+test('an effort goes to the CLI as --effort, after the lean arguments; none asked, none sent (CLI 2.1.316 takes low, medium, high, xhigh and max)', () => {
+  for (const effort of ['low', 'medium', 'high', 'xhigh']) {
+    const args = claudeArgs({model: 'm', effort});
+    assert.deepEqual(args.slice(0, -2), claudeArgs({model: 'm'}), 'every other argument is the lean one');
+    assert.deepEqual(args.slice(-2), ['--effort', effort]);
+  }
+  assert.deepEqual(claudeArgs({model: 'm', schema: {type: 'object'}, effort: 'low'}).slice(-4), ['--json-schema', '{"type":"object"}', '--effort', 'low']);
+  assert.ok(!claudeArgs({model: 'm', effort: undefined}).includes('--effort'));
+});
+
 test('a search call gets exactly one tool, WebSearch, allowed up front; every other argument is the lean one (measured live 2 Nov 2026: 22.5 s, answer with its sources)', () => {
   const lean = claudeArgs({model: 'claude-haiku-5-5'}), search = claudeArgs({model: 'claude-haiku-5-5', search: true});
   const expected = [...lean]; expected.splice(expected.indexOf('--tools'), 2, '--tools', 'WebSearch', '--allowedTools', 'WebSearch');

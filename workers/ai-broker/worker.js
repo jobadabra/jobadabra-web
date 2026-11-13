@@ -377,7 +377,7 @@ export class AiBroker extends doContainer(DurableObject) {
       const late = await this.claudeLine();
       if (!late.ok) return unavailable('budget', late.why, false);
       let reply;
-      try { reply = await this.toContainer('/claude', JSON.stringify({prompt: body.prompt, schema: body.schema, images: body.images, model, ...(body.search === true ? {search: true} : {})})); }
+      try { reply = await this.toContainer('/claude', JSON.stringify({prompt: body.prompt, schema: body.schema, images: body.images, model, ...(body.search === true ? {search: true} : {}), ...(body.effort ? {effort: body.effort} : {})})); }
       catch (error) { return await this.claudeFailure(`call: ${String(error?.message || error)}`, 'cut'); }   // as Codex's step: a call cut by a restart is a failed turn that goes on, never an engine failure (12 Nov 2026, ba)
       let answer;
       let raw = '';

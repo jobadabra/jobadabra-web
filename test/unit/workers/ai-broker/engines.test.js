@@ -145,8 +145,12 @@ test('ENGINE=claude with a token: the Claude subscription answers at the tier\'s
   assert.deepEqual(dispatched.filter(url => url.endsWith('/call')), []);   // Codex was not asked
   assert.deepEqual(broker.envVars, {CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token'});
   for (const [tier, model] of [['small', 'claude-haiku-5-5'], ['mid', 'claude-sonnet-5-5']]) { await broker.call('pr', {...body, tier}); assert.equal(calls.claudeBodies.at(-1).model, model); }
+  for (const effort of ['low', 'medium']) {   // the app's own efforts (src/ai/engine.py effort_for: Haiku low, Sonnet medium) reach the CLI as they do in the app
+    await broker.call('pr', {...body, tier: 'small', effort});
+    assert.deepEqual(calls.claudeBodies.at(-1), {prompt: body.prompt, model: 'claude-haiku-5-5', effort});
+  }
   const health = await (await broker.health()).json(), entry = health.chain[0];
-  assert.equal(entry.name, 'claude'); assert.equal(entry.state, 'ready'); assert.equal(entry.answeredToday, 3); assert.equal(entry.avgMs !== null, true); assert.equal(entry.limits.fiveHour.utilization, 0.2);
+  assert.equal(entry.name, 'claude'); assert.equal(entry.state, 'ready'); assert.equal(entry.answeredToday, 5); assert.equal(entry.avgMs !== null, true); assert.equal(entry.limits.fiveHour.utilization, 0.2);
   assert.equal(JSON.stringify(health).includes('fixture-not-a-token'), false);
 });
 
