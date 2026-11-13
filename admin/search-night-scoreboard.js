@@ -7,7 +7,7 @@
 import {esc} from '../shared/html.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {columns, figure, line} from './viz.js';
-import {euresOf} from './search-night-judge.js';
+import {asAppOf, euresOf} from './search-night-judge.js';
 
 export const FIVE = 5;   // "enough": a person with this many right jobs or more
 const DAY = 86400000;
@@ -25,7 +25,7 @@ export function scoreOf(night) {
   const rows = night.rows || [];
   return {day: night.night || night.day, total: rows.length, right: rows.filter(row => row.kind === 'measured').length, five: rows.filter(row => row.kind === 'measured' && isNum(row.local) && row.local >= FIVE).length,
     blind: rows.filter(row => BLIND.includes(row.kind)).length, rightJobs: rows.reduce((sum, row) => sum + (row.kind === 'measured' && isNum(row.local) ? row.local : 0), 0), first: median(rows.map(row => row.counters?.firstS)),
-    engine: typeof night.engine === 'string' && night.engine ? night.engine : 'unknown', eures: euresOf(night), at: night.at || null};
+    engine: typeof night.engine === 'string' && night.engine ? night.engine : 'unknown', eures: euresOf(night), asApp: asAppOf(night), at: night.at || null};
 }
 
 const words = score => `${score.day} · ${score.right} of ${score.total} people with a right job · ${score.five} with ${FIVE} or more · ${score.blind ? `${score.blind} not measured` : 'all measured'} · ${score.rightJobs} right jobs · first job in their places ${score.first == null ? 'not counted' : `${score.first} s`} · AI ${score.engine}${score.eures === 'off' ? '' : ' · EURES on'}`;
@@ -47,7 +47,10 @@ export function series(judged, hand = []) {
 
 /** The first day a stored night ran without EURES (its own `eures` flag), or null: the chart breaks there ([oe] 1/3, jobadabra #3678: from 11 Nov 2026). */
 export const breakDay = span => span.find(item => item.night?.eures === 'off')?.day ?? null;
-const markOf = ({day, hand}, brk) => {
+/** The first day a stored night read job boards like the app (its own `asApp`), or null: the chart breaks there too (owner, 13 Nov 2026: "Yes, night reads like the app (Recommended)"). */
+export const appDay = span => span.find(item => item.night && asAppOf(item.night) === 'yes')?.day ?? null;
+const markOf = ({day, hand}, brk, app = null) => {
+  if (day === app) return {label: day === brk ? 'EURES off · reads like the app' : 'Reads like the app', tip: `${day} · from this night ${day === brk ? 'EURES is off in CI and ' : ''}each press reads job boards as the app does (pages built by scripts, and the boards that refuse plain reading in Jobadabra's browser): the nights before it are another series, never one line rising${hand.length ? `\nand a by-hand run:\n${hand.map(words).join('\n')}` : ''}`};
   if (day === brk) return {label: 'EURES off', tip: `${day} · from this night EURES is off in CI: the nights before it are another series (they read the EURES list), never one line falling${hand.length ? `\nand a by-hand run:\n${hand.map(words).join('\n')}` : ''}`};
   if (hand.length) return {label: 'by hand', tip: `${day} · by-hand run${hand.length > 1 ? 's' : ''}:\n${hand.map(words).join('\n')}`};
   return undefined;
@@ -80,12 +83,12 @@ const captioned = (caption, chart) => (chart ? `<p class="muted small" style="ma
 export function scoreboardSection(judged, hand = []) {
   const {total, span} = series(judged || [], hand);
   if (!span.length) return '';
-  const label = Math.max(1, Math.ceil(span.length / 7)), newest = [...span].reverse().find(item => item.night)?.night, brk = breakDay(span);
-  const people = span.map(item => ({day: item.day, values: item.night ? [item.night.right, item.night.five, item.night.blind] : [null, null, null], tip: item.night ? words(item.night) : `${item.day} · no night stored`, mark: markOf(item, brk)}));
+  const label = Math.max(1, Math.ceil(span.length / 7)), newest = [...span].reverse().find(item => item.night)?.night, brk = breakDay(span), app = appDay(span);
+  const people = span.map(item => ({day: item.day, values: item.night ? [item.night.right, item.night.five, item.night.blind] : [null, null, null], tip: item.night ? words(item.night) : `${item.day} · no night stored`, mark: markOf(item, brk, app)}));
   // A line carries the night's value (grey while EURES was on) and, on a day with only a by-hand run, that run as a hollow point; a by-hand run beside a night is in the table and the mark's tip.
   const point = pick => span.map(item => {
     const score = item.night || item.hand[0];
-    return {day: item.day, value: score ? pick(score) : null, muted: !!score && score.eures === 'on', hand: !item.night && !!item.hand[0], tip: score ? words(score) : `${item.day} · no night stored`, mark: markOf(item, brk)};
+    return {day: item.day, value: score ? pick(score) : null, muted: !!score && (score.eures === 'on' || (!!app && item.day < app)), hand: !item.night && !!item.hand[0], tip: score ? words(score) : `${item.day} · no night stored`, mark: markOf(item, brk, app)};
   });
   const rightJobs = point(score => score.rightJobs), first = point(score => score.first);
   const head = newest ? `${chip(`${newest.right} of ${newest.total} with a right job`, newest.right === newest.total ? 'good' : 'warn')} ${chip(`${newest.five} with ${FIVE}+`, 'off')} ${newest.blind ? chip(`${newest.blind} not measured`, 'off') : ''} ${chip(`AI ${esc(newest.engine)}`, newest.engine === 'unknown' ? 'off' : 'good')}` : '';
@@ -96,6 +99,6 @@ export function scoreboardSection(judged, hand = []) {
 ${captioned(`Right jobs found, all ${total} added up`, line(rightJobs, {tone: 's2', percent: false, whole: true, name: 'Right jobs', labelEvery: label}))}
 ${captioned(`Seconds to the first job in their places (median of the ${total})`, line(first, {tone: 's4', percent: false, whole: true, name: 'First job in their places', labelEvery: label}))}
 <p class="small" style="margin:8px 0 0">${engineStrip(span)}</p>
-<p class="sb-note">${brk ? `<b>EURES off from ${esc(brk.slice(5).replace('-', '/'))}.</b> The grey line and dots before it are nights that read the EURES list; from it our own sources stand alone.` : '<b>No night without EURES yet.</b> Every night here still read the EURES list; the first night without it breaks the lines and starts a new series.'} ${span.some(item => item.hand.length) ? '<span class="sb-hollow"></span> a hollow point is a by-hand full run, not a night.' : ''}</p>
+<p class="sb-note">${app ? `<b>Reads like the app from ${esc(app.slice(5).replace('-', '/'))}.</b> From that night each press reads job boards as the app does; the grey nights before it are another series. ` : ''}${brk ? `<b>EURES off from ${esc(brk.slice(5).replace('-', '/'))}.</b> The grey line and dots before it are nights that read the EURES list; from it our own sources stand alone.` : '<b>No night without EURES yet.</b> Every night here still read the EURES list; the first night without it breaks the lines and starts a new series.'} ${span.some(item => item.hand.length) ? '<span class="sb-hollow"></span> a hollow point is a by-hand full run, not a night.' : ''}</p>
 ${handTable(span.flatMap(item => item.hand))}</section>`;
 }

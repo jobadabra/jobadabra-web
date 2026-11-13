@@ -20,6 +20,13 @@ export const twoThirds = total => Math.ceil((2 * total) / 3);
 const isNum = value => typeof value === 'number' && Number.isFinite(value);
 /** Whether a stored night ran with EURES: 'off' or 'on' (a night stored before jobadabra [oe] 1/3 had EURES on). The one reading of the word: the judge, the trend and Report only all use it. */
 export const euresOf = night => (night?.eures === 'off' ? 'off' : 'on');
+/** Whether a stored night read job boards like the app: 'yes' or 'no' (a night stored before jobadabra hb PR 3 did not). */
+export const asAppOf = night => (night?.asApp === 'yes' ? 'yes' : 'no');
+/**
+ * A night's series: a night is compared only with nights of the same series (the judge's baseline, the trend's lines, Report only).
+ * Why (13 Nov 2026, owner, asked via AskUserQuestion by sa: "Yes, night reads like the app (Recommended)"; Gitar on #603): reading like the app is a new measure, like EURES off.
+ */
+export const seriesOf = night => `${euresOf(night)} ${asAppOf(night)}`;
 
 // The six personas' right local jobs added up; null when no row has a count (never a 0 that looks measured).
 function pooledLocal(rows) {
@@ -39,8 +46,8 @@ export const notRunOf = night => night?.state === 'not-run' || ((night?.rows || 
 export function judgeNight(night, earlier = []) {
   const rows = night.rows || [], total = rows.length, measured = rows.filter(row => row.kind === 'measured').length, local = pooledLocal(rows);
   const out = rows.filter(row => (row.ranOut || []).includes(EMPLOYER_SITES)).length, need = twoThirds(total);
-  // Only nights of the same persona count AND the same EURES switch are a baseline: a night without EURES finds fewer jobs by design, never a drop (owner, 10 Nov 2026, jobadabra [oe] 1/3).
-  const same = earlier.filter(item => (item.rows || []).length === total && euresOf(item) === euresOf(night) && !notRunOf(item)).slice(0, HISTORY);
+  // Only nights of the same persona count AND the same series are a baseline: a night without EURES finds fewer jobs by design, never a drop (owner, 10 Nov 2026, jobadabra [oe] 1/3); a night reading like the app is its own series too (seriesOf, 13 Nov 2026).
+  const same = earlier.filter(item => (item.rows || []).length === total && seriesOf(item) === seriesOf(night) && !notRunOf(item)).slice(0, HISTORY);
   const history = same.map(item => pooledLocal(item.rows || [])).filter(isNum);
   const usual = history.length >= HISTORY ? median(history) : null, floor = usual > 0 ? usual - SPREADS * spreadOf(history) : null;
   const mineOf = row => same.map(item => (item.rows || []).find(other => other.persona === row.persona));

@@ -7,7 +7,7 @@ import {test} from 'node:test';
 import {clean, engineOf, ingestRoute, nights} from '../../../../admin/search-night.js';
 import {handRuns} from '../../../../admin/search-night-hand.js';
 import {judgeAll} from '../../../../admin/search-night-judge.js';
-import {breakDay, scoreOf, scoreboardSection, series} from '../../../../admin/search-night-scoreboard.js';
+import {appDay, breakDay, scoreOf, scoreboardSection, series} from '../../../../admin/search-night-scoreboard.js';
 import {line} from '../../../../admin/viz-time.js';
 import {nightSection} from '../../../../admin/search-night-page.js';
 
@@ -103,4 +103,33 @@ test('a by-hand upload is stored apart: it never replaces a night of its date, i
   assert.deepEqual((await nights(env)).map(item => item.run), ['111'], 'the real night is untouched');
   assert.equal((await put(env, night('x'), 'night=2026-02-30&by_hand=1')).status, 400, 'a day that does not exist is refused');
   assert.equal((await ingestRoute(new Request('https://x/search-check/night?by_hand=1', {method: 'PUT', body: '{}'}), env, NOW)).status, 404, 'no key, no write');
+});
+
+test('the night it started reading like the app (owner, 13 Nov 2026, asked via AskUserQuestion: "Yes, night reads like the app (Recommended)"): kept, marked, the nights before it grey', () => {
+  assert.equal(clean({...night('x'), eures: 'off', as_app: 'yes'}, {night: '2026-11-13'}, NOW).asApp, 'yes', 'the verdict\'s as_app is stored');
+  assert.equal(clean({...night('x'), eures: 'off'}, {night: '2026-11-12'}, NOW).asApp, 'no', 'a verdict from before the switch did not read like the app');
+  assert.equal(clean({...night('x'), as_app: 'maybe'}, {night: '2026-11-12'}, NOW).asApp, 'no', 'only the fixed word');
+  const kept = [];
+  for (let i = 0; i < 4; i++) kept.push(clean({...night('x'), eures: 'off', ...(i >= 2 ? {as_app: 'yes'} : {})}, {night: `2026-11-${String(11 + i).padStart(2, '0')}`}, NOW));
+  const judged = judgeAll(kept.reverse());
+  const {span} = series(judged);
+  assert.equal(appDay(span), '2026-11-13');
+  const html = scoreboardSection(judged);
+  assert.match(html, />Reads like the app</, 'the pill sits on the first such night');
+  assert.match(html, /Reads like the app from 11\/13/, 'the note names the day and the reason');
+  assert.equal(appDay(series(judgeAll([clean({...night('x'), eures: 'off'}, {night: '2026-11-12'}, NOW)])).span), null, 'no such night: no break');
+});
+
+test('Gitar on #603: an as-app night is judged, trended and reported only against as-app nights; a same-day EURES and as-app break shows both', async () => {
+  const {seriesOf} = await import('../../../../admin/search-night-judge.js');
+  const {groups} = await import('../../../../admin/search-night-trend.js');
+  const before = clean({...night('x'), eures: 'off'}, {night: '2026-11-12'}, NOW), after = clean({...night('x'), eures: 'off', as_app: 'yes'}, {night: '2026-11-13'}, NOW);
+  assert.notEqual(seriesOf(before), seriesOf(after));
+  const judged = judgeAll([after, before]);
+  assert.equal(groups(judged).length, 2, 'two series, two trend lines');
+  assert.deepEqual(groups(judged).map(group => group.asApp), ['yes', 'no'], 'each line says its series');
+  const {groupHtml} = await import('../../../../admin/search-night-trend.js');
+  assert.match(groupHtml(groups(judged)[0]), /reads like the app/, 'and its heading names it (Gitar on #603)');
+  const both = judgeAll([clean({...night('x'), eures: 'off', as_app: 'yes'}, {night: '2026-11-13'}, NOW), clean({...night('x')}, {night: '2026-11-12'}, NOW)]);
+  assert.match(scoreboardSection(both), />EURES off · reads like the app</, 'one pill naming both breaks');
 });
