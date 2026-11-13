@@ -39,6 +39,8 @@ export function recipeOf(recipe) {
   const keys = Object.keys(recipe).sort().join(',');
   if (recipe.kind === 'links' && keys === 'kind,prefix' && typeof recipe.prefix === 'string' && /^(\/[\w.%~-]+){0,6}$/.test(recipe.prefix)) return {kind: 'links', prefix: recipe.prefix};
   if (recipe.kind === 'tag' && keys === 'class,kind,tag' && TAGS.includes(recipe.tag) && typeof recipe.class === 'string' && /^[\w -]{1,60}$/.test(recipe.class)) return {kind: 'tag', tag: recipe.tag, class: recipe.class};
+  // Why (13 Nov 2026, bl): the engine's third kind (the list in the page's JSON state, page_recipes.valid) was missing here, so a careers feed's state recipe was dropped.
+  if (recipe.kind === 'state' && keys === 'kind,path' && typeof recipe.path === 'string' && /^\d{1,2}(\.[\w$-]{1,40}){0,12}$/.test(recipe.path)) return {kind: 'state', path: recipe.path};
   return null;
 }
 // What a feed hires for: {kind: share}, fixed kinds only (src/role_kinds.py KINDS, the same as shared/pool-labels.js KINDS: test/unit/shared/role-kinds.test.js; public's tests/test_role_kinds.py reads this literal), shares 0–1.
@@ -261,6 +263,8 @@ async function download(request, env, now = new Date()) {
 // after one "install" (BOARDS_K) and installs rank them like their own. A fact not measured again within SCOUT_BOARD_DAYS leaves.
 // Why (12 Nov 2026, owner via sa: "Boards now, employers next (Recommended)"): `browser: true` (exactly true, nothing else) marks a board the plain reader
 // is refused on and the scout measured in CI's honest headless browser; it rides in the same fact's recipe, and installs read it in Jobadabra's own browser.
+// Why (13 Nov 2026, owner: "shouldn't the central scout and board discovery do that... spend those 60-90s ?"): `layout` is how the board's job cards are laid out
+// (src/sources/page_recipes.py shape, checked by recipeOf), learned once by board discovery; it rides in the same recipe and installs replay it with no AI per link.
 export const SCOUT_BOARD_PREFIX = 'central-scout-', SCOUT_BOARD_DAYS = 30, MAX_SCOUT_BOARDS = 400, MIN_LOCAL_JOBS = 3;
 export function boardFactsOf(list) {
   const out = new Map();
@@ -275,7 +279,8 @@ export function boardFactsOf(list) {
     if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host) || !url.startsWith('https://') || url.length > 300 || urlHost !== host.replace(/^www\./, '')
       || (url.match(/\{(\w*)\}/g) || []).some(token => !['{role}', '{place}'].includes(token)) || !COUNTRIES.includes(country) || !families.length
       || !(jobs >= MIN_LOCAL_JOBS)) continue;
-    out.set(`${host}\n${country}`, {host, url, country, families, local_jobs: Math.min(jobs, 5000), ...(item.browser === true ? {browser: true} : {})});
+    const layout = recipeOf(item.layout);   // how the board's job cards are laid out, learned by board discovery; a bad one is dropped, never the board
+    out.set(`${host}\n${country}`, {host, url, country, families, local_jobs: Math.min(jobs, 5000), ...(item.browser === true ? {browser: true} : {}), ...(layout ? {layout} : {})});
   }
   return [...out.values()].slice(0, MAX_SCOUT_BOARDS);
 }
@@ -284,7 +289,7 @@ async function storeBoardFacts(db, facts, date) {
   const statements = facts.map(fact => db.prepare(`INSERT INTO sitefacts (install, day, host, kind, url, body, in_places, fit70, countries, families) VALUES (?, ?, ?, 'board', ?, ?, ?, 0, ?, ?)
     ON CONFLICT(install, host, kind) DO UPDATE SET day = excluded.day, url = excluded.url, body = excluded.body, in_places = excluded.in_places, fit70 = 0,
     countries = excluded.countries, families = excluded.families`)
-    .bind(`${SCOUT_BOARD_PREFIX}${fact.country}`, date, fact.host, fact.url, JSON.stringify({countries: [fact.country], ...(fact.browser ? {browser: true} : {})}), fact.local_jobs, fact.country, fact.families.join(',')));
+    .bind(`${SCOUT_BOARD_PREFIX}${fact.country}`, date, fact.host, fact.url, JSON.stringify({countries: [fact.country], ...(fact.browser ? {browser: true} : {}), ...(fact.layout ? {layout: fact.layout} : {})}), fact.local_jobs, fact.country, fact.families.join(',')));
   if (db.batch) await db.batch(statements); else for (const statement of statements) await statement.run();
 }
 

@@ -380,6 +380,32 @@ test('the central scout\'s measured boards are served as the same board fact ins
   assert.deepEqual((await agreedSites(e)).filter(fact => fact.kind === 'board').map(f => f.host).sort(), ['delucru.md', 'needs.md', 'truthy.md'], 'a publish without board facts also lets a 30-day-old board leave');
 });
 
+// Board layouts (13 Nov 2026, owner: "shouldn't the central scout and board discovery do that... spend those 60-90s ?"): board discovery learns how a
+// board's job cards are laid out once; installs replay it with no AI question per link. The layout rides in the board fact's recipe, in page_recipes' fixed shape.
+test('a measured board keeps the layout board discovery learned, only in the fixed recipe shape; a bad one is dropped and the board kept', async () => {
+  store.clear();
+  const e = {...env(), STATS: d1sitefacts()};
+  const good = {host: 'links.example', url: 'https://links.example/search?q={role}', country: 'md', families: ['software_dev'], local_jobs: 9};
+  const board_facts = [{...good, layout: {kind: 'links', prefix: '/job'}},
+    {...good, host: 'state.example', url: 'https://state.example/?q={role}', layout: {kind: 'state', path: '0.props.jobs.items'}},
+    {...good, host: 'tag.example', url: 'https://tag.example/?q={role}', layout: {kind: 'tag', tag: 'h3', class: 'job-title'}, browser: true},
+    {...good, host: 'extra.example', url: 'https://extra.example/?q={role}', layout: {kind: 'links', prefix: '/job', selector: 'a'}},   // another field: no layout
+    {...good, host: 'regex.example', url: 'https://regex.example/?q={role}', layout: {kind: 'links', prefix: '/job/(.*)'}},             // a pattern, not a path
+    {...good, host: 'tagx.example', url: 'https://tagx.example/?q={role}', layout: {kind: 'tag', tag: 'script', class: 'x'}}];          // a tag not on the list
+  assert.equal((await (await call(e, 'PUT', auth, {feeds: [feed('a')], board_facts})).json()).board_facts, 6, 'a bad layout never costs the board');
+  const {agreedSites} = await import('../../../api/employers.js');
+  const facts = (await agreedSites(e)).filter(fact => fact.kind === 'board').sort((a, b) => a.host.localeCompare(b.host));
+  assert.deepEqual(facts.map(f => [f.host, f.recipe]), [
+    ['extra.example', {countries: ['md']}],
+    ['links.example', {countries: ['md'], layout: {kind: 'links', prefix: '/job'}}],
+    ['regex.example', {countries: ['md']}],
+    ['state.example', {countries: ['md'], layout: {kind: 'state', path: '0.props.jobs.items'}}],
+    ['tag.example', {countries: ['md'], browser: true, layout: {kind: 'tag', tag: 'h3', class: 'job-title'}}],
+    ['tagx.example', {countries: ['md']}]]);
+  await call(e, 'PUT', auth, {feeds: [feed('a')], board_facts: [good]});   // measured again with no layout learned: the old layout leaves with it
+  assert.deepEqual((await agreedSites(e)).find(fact => fact.host === 'links.example').recipe, {countries: ['md']});
+});
+
 // 2 Nov 2026: the scout lost its cache and published 3,871 of 6,833 feeds, and no old copy existed to go back to (owner, 5 Nov 2026: "Find root cause, and preven this happening again").
 const keeping = (fails = false) => {
   const kept = new Map();
