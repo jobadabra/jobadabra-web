@@ -1,9 +1,11 @@
-// Per-install lines on two hourly cards: an install approaching (🟠, 80%) or reaching (🔴) a line of its own is counted once a day per level in D1 (cap_hits, counts only),
-// and the five-minute tick's :00 run sends one 🟠 and one 🔴 card for the hours before it, only when not zero (workers/www/index.js). The global lines are shared/cap-alerts.js.
+// Per-install lines on two cards every 6 hours: an install approaching (🟠, 80%) or reaching (🔴) a line of its own is counted once a day per level in D1 (cap_hits, counts only),
+// and the five-minute tick at 00:00, 06:00, 12:00 and 18:00 UTC sends one 🟠 and one 🔴 card holding every count since the last card, only when not zero (workers/www/index.js).
+// The global lines are shared/cap-alerts.js: each sends its own card once per period at once, not on this interval.
+// Why (13 Nov 2026, owner via the coordinator sa, on #631: "hourly it's probably too much. Let it be every 6 hours, at most"): replaces his "Grouped hourly" for these cards.
 // Why (13 Nov 2026, owner, asked via AskUserQuestion: "why not doing for all of them, both approaching and reached ?", then "Grouped hourly (Recommended)"): one card per
 // install would flood Telegram, and a line that stops many people at once (too low) shows as one big count.
 // Invariants: installHit never rejects and is handed to waitUntil, so a call is never failed or slowed; the card holds line names and counts, never an install id or a person;
-// rows are deleted only after their card is done, so a failed send is told at the next :00.
+// rows are deleted only after their card is done, so a failed send is told at the next card time.
 import {send} from './cap-alerts.js';
 import {capGroupCard} from './owner-cards.js';
 
@@ -39,6 +41,10 @@ export const INSTALL_CAPS = {
 };
 
 const hourOf = now => now.toISOString().slice(0, 13);
+/** Hours between two cards (the owner's "every 6 hours, at most"). */
+export const EVERY_HOURS = 6;
+/** True at a card time: minute 0 of 00, 06, 12 and 18 UTC (the tick runs every five minutes). */
+export const isCardTime = now => now.getUTCMinutes() === 0 && now.getUTCHours() % EVERY_HOURS === 0;
 
 /**
  * One install against one of its lines: `used` and `line` in the same unit (it can only approach), `reached` = the line refused this install now (the only 🔴, shared/cap-check.js's
@@ -58,8 +64,12 @@ export async function installHit(env, name, install, used, line, {reached = fals
   } catch { return null; }
 }
 
-/** The :00 tick: one card per level for the hours before `now`, most installs first; a done card deletes its rows. -> the levels told, 'reached' first. */
-export async function sendHourly(env, now = new Date(), {fetcher = fetch} = {}) {
+/**
+ * At a card time (isCardTime) only: one card per level for every hour before `now` still held (since the last card, and any card that failed), most installs first; a done
+ * card deletes its rows. Any other time: nothing. -> the levels told, 'reached' first.
+ */
+export async function sendCards(env, now = new Date(), {fetcher = fetch} = {}) {
+  if (!isCardTime(now)) return [];
   const hour = hourOf(now), told = [];
   const {results} = await env.STATS.prepare('SELECT hour, line, level, n FROM cap_hits WHERE hour < ?').bind(hour).all();
   for (const level of ['reached', 'approaching']) {

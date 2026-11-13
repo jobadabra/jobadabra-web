@@ -71,12 +71,12 @@ export function capCard(level, facts) {
 }
 
 /**
- * The past hour's per-install lines (shared/install-caps.js), one card per level: 'approaching' (🟠) or 'reached' (🔴).
+ * The per-install lines since the last card, every 6 hours (shared/install-caps.js), one card per level: 'approaching' (🟠) or 'reached' (🔴).
  * rows = [{title, sees, fix, installs}], most installs first; a row is one line and how many installs met it (each install once a day per level).
  */
 export function capGroupCard(level, rows) {
   const reached = level === 'reached', n = rows.reduce((sum, row) => sum + row.installs, 0);
-  return card({level: reached ? 'red' : 'orange', headline: `Per-install lines ${reached ? 'reached' : 'approached'} in the last hour: ${n} install${n === 1 ? '' : 's'}`,
+  return card({level: reached ? 'red' : 'orange', headline: `Per-install lines ${reached ? 'reached' : 'approached'} since the last card (6 h): ${n} install${n === 1 ? '' : 's'}`,
     why: rows.map(row => ({icon: reached ? '🔴' : '🟠', count: row.installs, text: `${row.title}: ${row.sees}`})), whyTitle: '',
     facts: rows.slice(0, 3).map(row => `${row.title}: ${row.fix}`),
     verdict: {ok: false, text: reached ? 'Each of them sees its line now; one person is fine, many at once means a line is too low.' : 'They will see the line when they reach it; nothing to do unless many approach at once.'},
