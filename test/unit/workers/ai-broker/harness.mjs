@@ -1,27 +1,19 @@
-// The broker Worker loaded offline for tests: Cloudflare's Container runtime replaced, isolated storage and transport per test (shared by worker.test.js and engines.test.js).
+// The broker Worker loaded offline for tests: Cloudflare's Workers runtime replaced, isolated storage and transport per test (shared by worker.test.js and engines.test.js).
 import {readFileSync} from 'node:fs';
 import {kindOf} from '../../../../workers/ai-broker/container/kinds.mjs';
 
-// Node cannot load Cloudflare's Container runtime. Keep the actual Worker and its libraries;
-// substitute the runtime constructor, then provide isolated storage and transport per test.
+// Node cannot load cloudflare:workers. Keep the actual Worker and its libraries;
+// substitute the runtime's base classes, then provide isolated storage and transport per test (containerFetch is replaced per broker).
 const workerUrl = new URL('../../../../workers/ai-broker/worker.js', import.meta.url);
-const runtime = 'data:text/javascript;base64,' + Buffer.from(`
-  export class Container { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }
-  export class ContainerProxy {}
-  export const getContainer = broker => broker;
-`).toString('base64');
 const workers = 'data:text/javascript;base64,' + Buffer.from(`
   export class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }
   export class WorkerEntrypoint {}
 `).toString('base64');
 const source = readFileSync(workerUrl, 'utf8')
-  .replaceAll("'@cloudflare/containers'", JSON.stringify(runtime))
   .replaceAll("'cloudflare:workers'", JSON.stringify(workers))
   .replace(/from '(\.{1,2}\/[^']+)'/g, (_, ref) => `from '${new URL(ref, workerUrl).href}'`);
 const loaded = await import('data:text/javascript;base64,' + Buffer.from(source + `\n//# sourceURL=${workerUrl.href}`).toString('base64'));
-export const {CodexBroker, AiBroker, AllowHosts, default: entry} = loaded;
-/** The slots of the broker harness() builds (CodexBroker; Gitar on #607: each class has its own count). AiBroker's: NEXT_PARALLEL. */
-export const {OLD_PARALLEL: PARALLEL, PARALLEL: NEXT_PARALLEL} = loaded;
+export const {AiBroker, AllowHosts, PARALLEL, default: entry} = loaded;
 export const day = Date.parse('2026-10-30T23:59:59Z');
 export const body = {prompt: 'offline test', tier: 'small'};
 // A failed container reply as server.mjs sends it: the error text plus the coded `kind` (container/kinds.mjs; owner, 8 Nov 2026: "Yes, codes").
@@ -46,7 +38,7 @@ export function harness(meter, env = {}) {
     },
   };
   const restart = () => {
-    const broker = new CodexBroker({storage}, env);
+    const broker = new AiBroker({storage}, env);   // no ctx.container: containerFetch is replaced below
     broker.containerFetch = async () => success();
     return broker;
   };

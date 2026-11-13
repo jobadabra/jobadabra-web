@@ -1,6 +1,6 @@
 // Guards the AI broker's deployed config (workers/ai-broker/wrangler.jsonc). The one-time move of its Durable Object from the Worker jobadabra-codex-broker (1 Nov 2026) is done; what stays guarded:
-// Why (1 Nov 2026, owner: rename the Worker too): a wrong config creates an EMPTY namespace and the Codex login is lost (seen on the throwaway proof). The class keeps its old name `CodexBroker`:
-// Cloudflare matches the namespace by class name, and renaming it needs a migration on a live container with stored state (parked, JOB-210).
+// Why (1 Nov 2026, owner: rename the Worker too): a wrong config creates an EMPTY namespace and the Codex login is lost (seen on the throwaway proof). Since plan 2/2 (13 Nov 2026) the
+// login lives under `AiBroker` (copied from `CodexBroker` at the switch, 01:44Z); `CodexBroker` is a deleted tombstone, and AiBroker must keep its name.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -11,12 +11,11 @@ const source = readFileSync(new URL('../../../../workers/ai-broker/worker.js', i
 
 test('the final config keeps the Worker, the class and the container application the stored login lives under', () => {
   assert.equal(final.name, 'jobadabra-ai-broker');
-  assert.deepEqual(Object.keys(final.exports), ['CodexBroker', 'AiBroker']);   // the class name must not change without a migration; AiBroker is that migration's new class (13 Nov 2026, lib/move.mjs copies the state)
-  assert.match(source, /export class CodexBroker extends brokerOf\(Container, OLD_PARALLEL\)/);
-  assert.equal(final.durable_objects.bindings[0].class_name, 'CodexBroker');
-  assert.equal(final.exports.CodexBroker.container, 'ai-broker');
-  assert.equal(final.containers[0].name, 'ai-broker');
-  assert.equal(final.containers[0].class_name, undefined);   // exports names the container; class_name beside it is the legacy form
+  assert.deepEqual(final.exports, {CodexBroker: {type: 'durable-object', state: 'deleted'}, AiBroker: {type: 'durable-object', storage: 'sqlite'}});
+  assert.match(source, /^export class AiBroker extends doContainer\(DurableObject\) \{$/m);
+  assert.doesNotMatch(source, /class CodexBroker/);   // Cloudflare refuses a deleted tombstone whose class is still in the code
+  assert.deepEqual(final.durable_objects.bindings, [{name: 'BROKER', class_name: 'AiBroker'}]);
+  assert.deepEqual(final.containers.map(c => [c.name, c.class_name, c.scheduling_policy]), [['ai-broker-next', 'AiBroker', 'durable_object']]);   // the application name stays: a new name is a new application
   assert.equal(final.migrations, undefined);   // migrations and exports are mutually exclusive
 });
 

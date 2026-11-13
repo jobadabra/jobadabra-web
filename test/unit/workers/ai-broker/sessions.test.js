@@ -307,7 +307,7 @@ test('the Worker builds the conversation key from the verified token: persona ru
   const jwk = {...(await crypto.subtle.exportKey('jwk', pair.publicKey)), kid: 'k1'}, enc = o => Buffer.from(JSON.stringify(o)).toString('base64url');
   const tokenFor = async claims => { const head = `${enc({alg: 'RS256', kid: 'k1'})}.${enc({iss: 'https://token.actions.githubusercontent.com', aud: 'jobadabra-ai-broker', event_name: 'schedule', exp: Math.floor(Date.now() / 1000) + 600, ...claims})}`; return `${head}.${Buffer.from(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', pair.privateKey, new TextEncoder().encode(head))).toString('base64url')}`; };
   t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({keys: [jwk]})));
-  const seen = [], env = {BROKER: {fetch: async request => { seen.push(request.headers.get('x-session')); return new Response('{}'); }}};
+  const seen = [], env = {BROKER: {getByName: () => ({fetch: async request => { seen.push(request.headers.get('x-session')); return new Response('{}'); }})}};
   const post = async (claims, payload, headers = {}) => entry.fetch(new Request('https://broker/call', {method: 'POST', headers: {authorization: `Bearer ${await tokenFor(claims)}`, ...headers}, body: typeof payload === 'string' ? payload : JSON.stringify(payload)}), env);
   await post(PERSONA, {...body, session: 'agent-g1'});
   await post({...PERSONA, job_workflow_ref: ref('jobadabra/jobadabra', 'ui-findings.yml')}, {...body, session: 'agent-g1'}, {'x-session': KEY});

@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {AiBroker, AllowHosts, body, success, entry, harness, PARALLEL, NEXT_PARALLEL} from './harness.mjs';
+import {AiBroker, AllowHosts, body, success, entry, harness, PARALLEL} from './harness.mjs';
 import {INSTANCE} from '../../../../workers/ai-broker/lib/do-container.mjs';
 
 const config = JSON.parse(readFileSync(new URL('../../../../workers/ai-broker/wrangler.jsonc', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
@@ -96,48 +96,18 @@ test('AllowHosts passes only the AI hosts on', async t => {
   assert.deepEqual(passed, ['api.anthropic.com']);
 });
 
-test('the front Worker sends /next/health and /admin/next/* to AiBroker and everything else to CodexBroker; wrangler binds both, AiBroker on the durable_object policy', async t => {
+test('the front Worker sends /health, /call and /admin/* to the one AiBroker object; the move routes (/next, /old, /admin/copy) are gone (plan 2/2)', async t => {
   const seen = [];
-  const env = {BROKER_ADMIN_TOKEN: 'admin', BROKER: {fetch: async request => { seen.push(['old', new URL(request.url).pathname]); return Response.json({}); }},
-    BROKER_NEXT: {getByName: name => ({fetch: async request => { seen.push(['next', name, new URL(request.url).pathname]); return Response.json({}); }})}};
+  const env = {BROKER_ADMIN_TOKEN: 'admin', BROKER: {getByName: name => ({fetch: async request => { seen.push([name, new URL(request.url).pathname]); return Response.json({}); }})}};
   await entry.fetch(new Request('https://broker/health'), env);
-  await entry.fetch(new Request('https://broker/next/health'), env);
-  await entry.fetch(new Request('https://broker/admin/next/call', {method: 'POST', body: '{}', headers: {authorization: 'Bearer admin'}}), env);
-  assert.equal((await entry.fetch(new Request('https://broker/admin/next/call', {method: 'POST', body: '{}'}), env)).status, 401, 'admin only');
-  assert.deepEqual(seen, [['old', '/health'], ['next', 'broker', '/health'], ['next', 'broker', '/call']]);
-  const next = config.containers.find(c => c.class_name === 'AiBroker');
-  assert.deepEqual([next?.scheduling_policy, next?.images?.base?.dockerfile], ['durable_object', './container/Dockerfile']);
-  assert.ok(config.durable_objects.bindings.some(b => b.name === 'BROKER_NEXT' && b.class_name === 'AiBroker'));
-  assert.deepEqual(config.exports.AiBroker, {type: 'durable-object', storage: 'sqlite'});
-  assert.ok(config.containers.some(c => c.name === 'ai-broker' && c.max_instances === 1), 'the broker CI uses today is unchanged');
-});
-
-test('the switch: BROKER_ACTIVE=next sends /health, /call and /admin/* to AiBroker; /old/... still reaches CodexBroker for a rollback check', async t => {
-  const seen = [];
-  const env = {BROKER_ACTIVE: 'next', BROKER_ADMIN_TOKEN: 'admin', BROKER: {fetch: async request => { seen.push(['old', new URL(request.url).pathname]); return Response.json({}); }},
-    BROKER_NEXT: {getByName: () => ({fetch: async request => { seen.push(['next', new URL(request.url).pathname]); return Response.json({}); }})}};
-  await entry.fetch(new Request('https://broker/health'), env);
-  await entry.fetch(new Request('https://broker/old/health'), env);
   await entry.fetch(new Request('https://broker/admin/stop', {method: 'POST', headers: {authorization: 'Bearer admin'}}), env);
-  assert.deepEqual(seen, [['next', '/health'], ['old', '/health'], ['next', '/stop']]);
-  assert.equal((await entry.fetch(new Request('https://broker/call', {method: 'POST', body: '{}'}), env)).status, 401, 'CI calls still need their run token');
-});
-
-test('/admin/copy moves the old broker\'s state into the new one (the login among it, never in the reply); per-container keys stay behind, and the new broker proves its login again', async t => {
-  const from = broker(t, box(), {meter: {tokens: {pr: 5}}, 'claude:state': {limits: {status: 'allowed'}}, answered: true, startError: {at: 1}, containerImage: 'old'});
-  const to = broker(t, box(), {});
-  for (const key of ['login', 'answered', 'limits']) await to.storage.delete(key);
-  const env = {BROKER_ADMIN_TOKEN: 'admin', BROKER: {fetch: request => from.made.fetch(request)}, BROKER_NEXT: {getByName: () => ({fetch: request => to.made.fetch(request)})}};
-  const reply = await entry.fetch(new Request('https://broker/admin/copy', {method: 'POST', headers: {authorization: 'Bearer admin'}}), env);
-  assert.equal(reply.status, 200);
-  const text = await reply.text();
-  assert.doesNotMatch(text, /tokens/, 'key names only, never a value');
-  assert.deepEqual(JSON.parse(text).copied.sort(), ['claude:state', 'limits', 'login', 'meter']);
-  assert.equal(await to.storage.get('login'), '{"tokens":{}}');
-  assert.deepEqual(await to.storage.get('meter'), {tokens: {pr: 5}});
-  assert.equal(await to.storage.get('answered'), false);
-  assert.equal(await to.storage.get('containerImage'), undefined);
-  assert.equal((await entry.fetch(new Request('https://broker/admin/copy', {method: 'POST'}), env)).status, 401);
+  assert.deepEqual(seen, [['broker', '/health'], ['broker', '/stop']]);
+  assert.equal((await entry.fetch(new Request('https://broker/admin/call', {method: 'POST', body: '{}'}), env)).status, 401, 'admin only');
+  assert.equal((await entry.fetch(new Request('https://broker/call', {method: 'POST', body: '{}'}), env)).status, 401, 'CI calls need their run token');
+  for (const gone of ['/admin/copy', '/admin/next/call']) assert.equal((await entry.fetch(new Request(`https://broker${gone}`, {method: 'POST', headers: {authorization: 'Bearer admin'}}), env)).status, 404, gone);
+  assert.equal(seen.length, 2);
+  const [only] = config.containers;
+  assert.deepEqual([config.containers.length, only.class_name, only.scheduling_policy, only.images?.base?.dockerfile], [1, 'AiBroker', 'durable_object', './container/Dockerfile']);
 });
 
 test('Gitar on #606: every call renews the 10-minute sleep, and a start whose login restore fails is destroyed, so the next call starts over instead of using a container without the login', async t => {
@@ -157,8 +127,7 @@ test('Gitar on #606: every call renews the 10-minute sleep, and a start whose lo
   assert.equal(failing.log.filter(([what]) => what === 'start').length, 2, 'the next call started a new container, with its login');
 });
 
-test('Gitar on #607: the 4 vCPU AiBroker runs 24 calls at once and the 2 vCPU CodexBroker keeps 16, so a rollback (BROKER_ACTIVE unset) never puts 24 on 2 vCPU', t => {
+test('the broker runs PARALLEL (24) calls at once on its 4 vCPU (owner, 13 Nov 2026: "24 slots and 4 vCPU")', t => {
   const {made} = broker(t, box());
-  assert.deepEqual([made.gate.stats().slots, NEXT_PARALLEL], [24, 24]);
-  assert.deepEqual([harness().broker.gate.stats().slots, PARALLEL], [16, 16]);
+  assert.deepEqual([made.gate.stats().slots, PARALLEL, harness().broker.gate.stats().slots], [24, 24, 24]);
 });

@@ -1,11 +1,9 @@
 // The AI broker (specs docs/superpowers/specs/2026-11-01-ai-broker-design.md here and 2026-10-28-ci-on-codex-subscription-design.md in the public repo): every CI, scheduled and benchmark AI call runs here, today on the owner's one ChatGPT/Codex login.
-// Why (1 Nov 2026, owner): renamed from codex-broker. The Durable Object class is still `CodexBroker`: the namespace transfer from the old Worker needs the same class name on both sides (proven on a throwaway pair); the class is renamed in the cleanup PR.
+// Why (13 Nov 2026, owner: "the 2nd one will do the cleanup"; plan docs/superpowers/plans/2026-11-13-ai-broker-4vcpu.md 2/2): the broker is one Durable Object class, `AiBroker`, on the durable_object policy at 4 vCPU / 6 GiB; the old `CodexBroker` (the Container class, 2 vCPU) is a deleted tombstone in wrangler.jsonc. Its state was copied across before the switch (13 Nov 01:44Z).
 // A job proves itself with GitHub's per-run OIDC token (lib/oidc.mjs); the login lives only in this Durable Object's storage and is written through after every call, before the reply is sent.
 // One `ENGINE` var names the engine that answers first (codex by default); the others follow in a fixed order and answer only when the one before ran out or is not configured (lib/engines.mjs); Claude answers only while its seven-day window reads under 90% (lib/budget.mjs). Other refusals retain their existing controls.
-import {Container, getContainer} from '@cloudflare/containers';
 import {DurableObject, WorkerEntrypoint} from 'cloudflare:workers';
 import {doContainer, allowHosts} from './lib/do-container.mjs';
-import {exportState, importState, copyState, nextActive} from './lib/move.mjs';
 import {verifyRunToken, githubJwks} from './lib/oidc.mjs';
 import {claudeOnly, laneOf, queueOf, LANES} from './lib/lanes.mjs';
 import {allow, linesOf, claudeAllow, claudeWeekPercent, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
@@ -24,8 +22,6 @@ import {demotedNow, recordPerf} from './lib/adapt.mjs';
 import {addCall, addJobCall, jobKey, recentDays, tokensOf, workflowKey, workflowOf} from './lib/tally.mjs';
 import {countedOf, keyedLock, markGap, planOf, sessionKey, sessionKeyOf, settle} from './lib/sessions.mjs';
 
-export {ContainerProxy} from '@cloudflare/containers';   // required by the outbound host list below: without it every start fails with "ctx.exports.ContainerProxy is undefined" (28 Oct 2026)
-
 // Why (11 Nov 2026, as; owner: "Let's increase the AI Broker's slot limit"): at 4 one Find jobs measure person already queued (after-1 run 43069240532: 55 of 303
 // calls waited over 5 s, p90 wait 7.9 s, all 4 busy 29% of the time). On the 1 vCPU / 3 GiB container (#554) 4 at once peaked at 1.27 GiB and 0.52 CPU per minute
 // (idle 0.53 GiB, so ~185 MiB a running call; Cloudflare container metrics, same window): 8 fits (~2.0 GiB); 12 (~2.75 GiB) left no room in 3 GiB. PR 0 (28 Oct 2026) measured 4.
@@ -34,10 +30,10 @@ export {ContainerProxy} from '@cloudflare/containers';   // required by the outb
 // slots are full, and the waits came in bursts (15-16Z p90 23-31 s, scheduled lane 87% of all waiting) while the container's CPU stayed at most 0.46-0.60 (median 0.18-0.26)
 // and memory at most 2.1 of 6 GiB; hours that peaked at 0.93-0.96 CPU had no waits (slots not full, so more slots add no load there). Read the waits and CPU per minute on
 // the first by-hand Search check after this deploy: back to 12 if the CPU passes ~0.9 in minutes that still wait.
-/** How many calls run in the 4 vCPU AiBroker's container at once, every engine together (the one gate below); OLD_PARALLEL is the 2 vCPU CodexBroker's, kept for a rollback (BROKER_ACTIVE unset) until plan 2/2 removes it. */
-export const PARALLEL = 24, OLD_PARALLEL = 16;
+/** How many calls run in the container at once, every engine together (the one gate below). */
+export const PARALLEL = 24;
 // Why 24 (13 Nov 2026, owner, asked via AskUserQuestion by sa: "24 slots now, measure (Recommended)"): 16 slots fit ~2.5 parallel searches; 2 searches waited p90 11-16 s,
-// 4 searches + board discovery p90 ~110 s (all 16 busy, up to 27 waiting, 2 vCPU at 1.92-1.99). 24 runs on 4 vCPU (#606) only: Gitar on #607, a rollback to the 2 vCPU broker keeps its 16; 24 Claude calls at ~210 MB = ~5.2 GiB of 6 (no paid memory).
+// 4 searches + board discovery p90 ~110 s (all 16 busy, up to 27 waiting, 2 vCPU at 1.92-1.99). 24 runs on 4 vCPU (#606); 24 Claude calls at ~210 MB = ~5.2 GiB of 6 (no paid memory).
 // Design (13 Nov 2026, owner: "make the claude limit to be an unified slot cap which is 16" · "no isolate claude cap"): one gate of PARALLEL slots, owned by this class, for
 // every engine. A call holds one slot from its engine's turn to the reply, whatever the engine; nothing else limits how many calls of one engine run. Third change of the Claude
 // cap in a day (3 -> 6 #604 -> Worker variable 16 -> one gate), so the separate gate is gone rather than tuned: at 3 the Claude-only benchmark (639 calls, 12 Nov 23:20-23:55Z)
@@ -45,11 +41,10 @@ export const PARALLEL = 24, OLD_PARALLEL = 16;
 const CALLER_WAIT_MS = 180_000, CODEX_GUARD_MS = 100_000, START_MS = 10_000;   // the callers' own wait (desktop/e2e/lib/broker-client.mjs: AbortSignal.timeout(180000), an abort is not retried), the container's Codex guard (container/server.mjs), a cold start
 const DRAIN_WAIT_MS = CALLER_WAIT_MS - CODEX_GUARD_MS - START_MS;   // Why (8 Nov 2026, Gitar on #501): a call that waits for the next container must still have time to run in it before its caller gives up, or the hand-over only moves the loss; past this it is passed on like any start-up failure (Claude, Free AI) instead of answered to nobody. Calls the old container is still finishing are guarded at 100 s (Codex) and 150 s (Claude), so a drain longer than this wait costs the refused call its Codex turn, as every deploy did before
 const HOSTS = ['chatgpt.com', 'auth.openai.com', 'api.openai.com', 'api.anthropic.com'];   // the only hosts the container may reach (the reply is the only way out); api.anthropic.com is the Claude engine's (1 Nov 2026), measured: telemetry is off, so nothing else is needed
-const pass = req => fetch(req);
 const json = (status, body) => new Response(JSON.stringify(body), {status, headers: {'content-type': 'application/json'}});
 
-// The broker, on either container runtime: CodexBroker (the Container class, today's policy) and AiBroker (durable_object policy, lib/do-container.mjs).
-const brokerOf = (Base, parallel) => class extends Base {
+/** The broker: one Durable Object whose container (lib/do-container.mjs, durable_object policy, 4 vCPU / 6 GiB) runs the Codex and Claude CLIs; the front Worker below names one object ("broker"). */
+export class AiBroker extends doContainer(DurableObject) {
   constructor(ctx, env) {
     super(ctx, env);
     this.brokerEnv = env;
@@ -57,13 +52,8 @@ const brokerOf = (Base, parallel) => class extends Base {
     this.envVars = env.CLAUDE_CODE_OAUTH_TOKEN ? {CLAUDE_CODE_OAUTH_TOKEN: env.CLAUDE_CODE_OAUTH_TOKEN} : {};
   }
   defaultPort = 8080;
-  sleepAfter = '10m';
-  enableInternet = false;
-  // Why (28 Oct 2026, Cloudflare docs): with the internet off, HTTPS fails unless it is intercepted; allowedHosts makes the list deny-by-default. The container trusts the platform CA (server.mjs builds the bundle).
-  interceptHttps = true;
-  allowedHosts = HOSTS;
-  static outboundByHost = Object.fromEntries(HOSTS.map(h => [h, pass]));
-  gate = slots(parallel);
+  allowedHosts = HOSTS;   // lib/do-container.mjs intercepts each through AllowHosts; the internet is off otherwise
+  gate = slots(PARALLEL);
   turns = keyedLock();   // one turn at a time per Codex conversation (lib/sessions.mjs); other keys and plain calls never wait
   drainWaitMs = DRAIN_WAIT_MS; drainPollMs = 1000;   // how long a call waits for a stopping container to hand over (toContainer); a test shortens both
   busyMs = BUSY_MS;   // how long a call that may pass on waits for a Claude slot (lib/busy.mjs); a test shortens it
@@ -105,8 +95,6 @@ const brokerOf = (Base, parallel) => class extends Base {
     if (url.pathname === '/login' && request.method === 'POST') return this.setLogin(await request.text());
     if (url.pathname === '/health') return this.health();
     if (url.pathname === '/call' && request.method === 'POST') return this.call(request.headers.get('x-lane'), await request.json(), workflowKey(request.headers.get('x-workflow')), jobKey(request.headers.get('x-job')), sessionKey(request.headers.get('x-session')), request.signal);
-    if (url.pathname === '/export' && request.method === 'POST') return json(200, await exportState(this.ctx.storage));   // reached only through /admin/copy (lib/move.mjs)
-    if (url.pathname === '/import' && request.method === 'POST') return json(200, {copied: await importState(this.ctx.storage, await request.json())});
     if (url.pathname === '/stop' && request.method === 'POST') { await this.stop(); return json(200, {stopped: true}); }   // the owner's kill test (admin route in front)
     return json(404, {error: 'not found'});
   }
@@ -163,7 +151,7 @@ const brokerOf = (Base, parallel) => class extends Base {
 
   // One slot wait into its engine's wait alert (lib/waiting.mjs); never delays or changes the call.
   waited(wait) {
-    if (wait) noteWait({storage: this.ctx.storage, env: this.brokerEnv, wait, slots: parallel}).catch(error => console.log(`waiting: ${String(error?.message || error).slice(0, 200)}`));
+    if (wait) noteWait({storage: this.ctx.storage, env: this.brokerEnv, wait, slots: PARALLEL}).catch(error => console.log(`waiting: ${String(error?.message || error).slice(0, 200)}`));
   }
 
   // Reads the finished reply's own tokens, engine and time (a refusal has none and still counts as a call), then adds them to today's row in one transaction.
@@ -418,12 +406,8 @@ const brokerOf = (Base, parallel) => class extends Base {
     } catch (e) { return await this.claudeFailure('call: ' + String(e?.message || e)); }
     finally { release(); }
   }
-};
+}
 
-/** The broker CI calls reach today: the Container class, 2 vCPU / 6 GiB (wrangler.jsonc). */
-export class CodexBroker extends brokerOf(Container, OLD_PARALLEL) {}
-/** The same broker on the durable_object policy at 4 vCPU / 6 GiB (lib/do-container.mjs; plan 1/3, 13 Nov 2026): only /admin/next/* and /next/health reach it until the switch (2/3). */
-export class AiBroker extends brokerOf(doContainer(DurableObject), PARALLEL) {}
 /** AiBroker's container's only way out: the AI hosts (lib/do-container.mjs registers it for each). */
 export class AllowHosts extends allowHosts(WorkerEntrypoint, HOSTS) {}
 
@@ -432,13 +416,10 @@ const kindOfReply = answer => answer?.kind ?? kindOf(answer?.error);
 
 export default {
   async fetch(request, env) {
-    // Which broker: /next/... and /admin/next/... AiBroker, /old/... and /admin/old/... CodexBroker, everything else the active one (lib/move.mjs nextActive: the BROKER_ACTIVE setting).
-    const url = new URL(request.url), [, pick] = url.pathname.match(/^(?:\/admin)?\/(next|old)(\/.*)$/) || [], path = pick ? url.pathname.replace(`/${pick}/`, '/') : url.pathname;
-    const old = () => getContainer(env.BROKER), next = () => env.BROKER_NEXT.getByName('broker'), broker = (pick ? pick === 'next' : nextActive(env)) ? next() : old();
+    const path = new URL(request.url).pathname, broker = env.BROKER.getByName('broker');   // one broker object: one login, one refresher
     if (path === '/health') return broker.fetch(new Request('http://c/health'));   // counts and states only, no secret
     if (path.startsWith('/admin/') && request.method === 'POST') {
       if (!env.BROKER_ADMIN_TOKEN || request.headers.get('authorization') !== `Bearer ${env.BROKER_ADMIN_TOKEN}`) return json(401, {error: 'admin only'});
-      if (path === '/admin/copy') { const {status, body} = await copyState(old(), next()); return json(status, body); }   // the old broker's state into the new one, inside Cloudflare
       // login = the one-time upload; call = a smoke call from the owner's Mac (lane x-lane, default scheduled); stop = kill the container to prove the login survives it
       const inner = {'/admin/login': '/login', '/admin/call': '/call', '/admin/stop': '/stop'}[path];
       if (!inner) return json(404, {error: 'not found'});
