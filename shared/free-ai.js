@@ -43,9 +43,9 @@ export const keysOf = (who, day, month, minute) => ({minute: `freeai:min:${who}:
 // The lines a call is past, in the order the route checks them (also read by GET /api/ai/caps, shared/free-ai-caps.js) -> null or {capped, status, message}.
 // Global: the day's or month's stop, or the daily Workers AI allowance (every install waits). Per install: the trial, then the month, then the day.
 export function busyCap(lines, {microUsd, globalMonth, seen, allowance}) {
-  if (microUsd >= lines.stopUsd * 1e6) return {capped: 'busy', status: 503, message: BUSY};
-  if (globalMonth >= lines.monthStopUsd * 1e6) return {capped: 'busy-month', status: 503, message: BUSY_MONTH};
-  if (seen >= allowance) return {capped: 'busy', status: 503, message: BUSY};
+  if (microUsd >= lines.stopUsd * 1e6) return {capped: 'busy', status: 503, message: BUSY, line: 'free-ai-day', used: microUsd};   // line: its entry in shared/cap-alerts.js
+  if (globalMonth >= lines.monthStopUsd * 1e6) return {capped: 'busy-month', status: 503, message: BUSY_MONTH, line: 'free-ai-month', used: globalMonth};
+  if (seen >= allowance) return {capped: 'busy', status: 503, message: BUSY, line: 'free-ai-neurons', used: seen};
   return null;
 }
 export function installCap(lines, access, {life, installMonth, installDay, tokens}) {
@@ -98,8 +98,9 @@ async function answerCall(request, env, now, ctx, fetcher, trace) {
   const allowance = allowanceOf(env);
   const account = pro ? null : await accountNeurons(env, kv, day, now, fetcher), seen = Math.max(neurons, account ?? 0);   // the account's own count includes every caller
   const busy = pro ? null : busyCap(lines, {microUsd, globalMonth, seen, allowance});
-  // Why (13 Nov 2026, owner: "...another one, ciritical, when we reached it"): a refusal makes sure the 🔴 card went out, also when the line was crossed by spend this route never counted (a hosted run's compute, shared/hosted-budget.js).
-  if (busy) { await later(ctx, spendLines(env, now, fetcher, {day: microUsd, month: globalMonth, neurons: seen})); return error(busy.status, busy.message); }
+  // Why (13 Nov 2026, owner: "...another one, ciritical, when we reached it"): a refusal makes sure the 🔴 card of the line that refused went out, also when the line was crossed by spend
+  // this route never counted (a hosted run's compute, shared/hosted-budget.js). Only that line, forced reached (Gitar on #622: one KV read, and a cached count cannot hide it).
+  if (busy) { await later(ctx, capCheck(env, busy.line, busy.used, {now, fetcher, reached: true})); return error(busy.status, busy.message); }
   if (perMinute >= (pro ? PRO_PER_MINUTE : lines.perMinute)) return error(429, 'Free AI: too many requests in a minute. Jobadabra will retry.', 'rate_limit_error');
   const mine = pro ? null : installCap(lines, access, {life, installMonth, installDay, tokens});
   if (mine) return error(mine.status, mine.message, 'rate_limit_error');
@@ -152,7 +153,7 @@ async function answerCall(request, env, now, ctx, fetcher, trace) {
 
 const isJson = text => { try { JSON.parse(text); return true; } catch { return false; } };
 
-// The three Free AI lines that stop everyone, after a counted call or at a refusal (shared/cap-alerts.js: 🟠 approaching, 🔴 reached, each once per period). Never rejects.
+// The three Free AI lines that stop everyone, after a counted call (shared/cap-alerts.js: 🟠 approaching, 🔴 reached, each once per period). Never rejects.
 const spendLines = (env, now, fetcher, used) => Promise.all([capCheck(env, 'free-ai-day', used.day, {now, fetcher}), capCheck(env, 'free-ai-month', used.month, {now, fetcher}),
   capCheck(env, 'free-ai-neurons', used.neurons, {now, fetcher})]);
 const later = (ctx, work) => (ctx?.waitUntil ? ctx.waitUntil(work) : work);
