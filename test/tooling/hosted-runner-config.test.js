@@ -46,7 +46,8 @@ test('the deploy workflow is started by public-watch for production or by hand, 
   assert.ok(/queues create hosted-runs-staging/.test(flow), 'the staging queue is made when missing');
   const watch = readFileSync(new URL('.github/workflows/public-watch.yml', ROOT), 'utf8');
   assert.match(watch, /public-watch\.sh "\$GITHUB_WORKSPACE" hosted src config templates requirements\.txt requirements-render\.txt/, 'the watch follows every engine path the image COPYs');
-  assert.match(watch, /gh workflow run release-hosted-runner\.yml -f target=production/, 'a changed engine starts the production deploy');
+  assert.match(watch, /start "\$\{\{ steps\.change\.outputs\.hosted \}\}" "\.public-hosted \.public-hosted-own" release-hosted-runner\.yml -f target=production/, 'a changed engine starts the production deploy');
+  assert.match(watch, /gh workflow run "\$@"/, 'start() dispatches what it is given');
   assert.match(watch, /\.public-hosted \.public-hosted-own/, 'both records are kept, or the next watch deploys again');
 });
 
