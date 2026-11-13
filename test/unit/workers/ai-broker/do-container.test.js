@@ -98,7 +98,7 @@ test('AllowHosts passes only the AI hosts on', async t => {
 
 test('the front Worker sends /health, /call and /admin/* to the one AiBroker object; the move routes (/next, /old, /admin/copy) are gone (plan 2/2)', async t => {
   const seen = [];
-  const env = {BROKER_ADMIN_TOKEN: 'admin', BROKER: {getByName: name => ({fetch: async request => { seen.push([name, new URL(request.url).pathname]); return Response.json({}); }})}};
+  const env = {BROKER_ADMIN_TOKEN: 'admin', BROKER_NEXT: {getByName: name => ({fetch: async request => { seen.push([name, new URL(request.url).pathname]); return Response.json({}); }})}};
   await entry.fetch(new Request('https://broker/health'), env);
   await entry.fetch(new Request('https://broker/admin/stop', {method: 'POST', headers: {authorization: 'Bearer admin'}}), env);
   assert.deepEqual(seen, [['broker', '/health'], ['broker', '/stop']]);

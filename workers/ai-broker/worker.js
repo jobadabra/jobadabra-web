@@ -416,7 +416,7 @@ const kindOfReply = answer => answer?.kind ?? kindOf(answer?.error);
 
 export default {
   async fetch(request, env) {
-    const path = new URL(request.url).pathname, broker = env.BROKER.getByName('broker');   // one broker object: one login, one refresher
+    const path = new URL(request.url).pathname, broker = env.BROKER_NEXT.getByName('broker');   // one broker object: one login, one refresher
     if (path === '/health') return broker.fetch(new Request('http://c/health'));   // counts and states only, no secret
     if (path.startsWith('/admin/') && request.method === 'POST') {
       if (!env.BROKER_ADMIN_TOKEN || request.headers.get('authorization') !== `Bearer ${env.BROKER_ADMIN_TOKEN}`) return json(401, {error: 'admin only'});
