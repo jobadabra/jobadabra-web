@@ -34,7 +34,21 @@ async function fill(env, ai = '') {
   return {form, search};
 }
 
+// 13 Nov 2026 (round picker): the live card plus ~45 search rounds like the owner's screenshot (6 real dates, the rest side checks beside them) and two weekly form rounds, copied from the 12 Nov ones.
+const SIDE = ['sonnet-1', 'sonnet-2', 'sab-1', 'sab-2', 'sab-3', 'rsb2-1', 'rsb2-2', 'p3956-main', 'p3956-br-1', 'p3957-main', 'p3957-br-1', 'p3958-main', 'ours-16', 'ours-main', 'ours-main2', 'full', 'full-a-g1', 'full-a-g2', 'diag-1', 'diag-2'];
+async function manyRounds(env) {
+  const real = ['2026-11-13', '2026-11-09', '2026-11-05', '2026-10-27', '2026-10-20'], keys = [...real, ...real.slice(0, 3).flatMap((day, i) => SIDE.slice(i * 7, i * 7 + 14).map(side => `${day}-${side}`)), '2026-11-13-sonnet-1', '2026-11-13-diag-1'];
+  const columns = 'at, persona, kind, country, tool, ours, build, ai, found, place, role, relevant, employers, seconds, cents, missed, beyond';
+  for (const key of new Set(keys)) await env.STATS.prepare(`INSERT OR IGNORE INTO benchmark_search_runs (id, round, ${columns}) SELECT ? || id, ?, ${columns} FROM benchmark_search_runs WHERE round = '2026-11-12'`).bind(`${key}/`, key).run();
+  const formColumns = 'at, applicant, mode, tool, ours, build, form, heldout, fixes, required, right, wrong, empty, unans, holds, dups, rep, unreached';
+  for (const week of ['week-2026-W45', 'week-2026-W46']) await env.STATS.prepare(`INSERT OR IGNORE INTO benchmark_runs (id, round, ${formColumns}) SELECT ? || id, ?, ${formColumns} FROM benchmark_runs WHERE round = 'fixed'`).bind(`${week}/`, week).run();
+  const form = await formSnapshot(env.STATS), search = await searchSnapshot(env.STATS);
+  await env.STATS.prepare('INSERT OR REPLACE INTO benchmark_snapshot (id, at, body) VALUES (1, ?, ?)').bind(form.at, JSON.stringify(form)).run();
+  await env.STATS.prepare('INSERT OR REPLACE INTO benchmark_search_snapshot (id, at, body) VALUES (1, ?, ?)').bind(search.at, JSON.stringify(search)).run();
+}
+
 export const publishSeeds = {
+  'benchmark-publish-rounds': async ({env}) => { await publishSeeds['benchmark-publish-live']({env}); await manyRounds(env); },
   'benchmark-publish': async ({env}) => { await fill(env); },
   // 13 Nov 2026: the same live card with ours on the app's tiers (the round after the AI switch).
   'benchmark-publish-live-app': async ({env}) => { await publishSeeds['benchmark-publish-live']({env}, 'app'); },

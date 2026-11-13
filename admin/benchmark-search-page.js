@@ -1,19 +1,19 @@
 // The page of /admin/job-search/benchmark (owner, 20 Oct 2026): our job search against other tools on the same random role × city searches, read from ONE snapshot. Every tool, persona and job-system name is data;
 // none is written here. Colours are the shared rule (admin/applying-tiles.js). Guard: test/unit/admin/benchmark/benchmark-search.test.js.
 import {esc} from '../shared/html.js';
-import {filterLinks} from './admin.js';
 import {CHIP_STYLE, chip} from './chip.js';
 import {kindsChart} from './jobsearch-charts.js';
 import {figure, VIZ_STYLE, VIZ_TOOLTIP} from './viz.js';
 import {shareTone} from './applying-tiles.js';
 import {PUBLISH_STYLE, panel, searchSection} from './benchmark-publish.js';
 import {AIS, aiOf, changes} from './benchmark-ai.js';
+import {ROUND_STYLE, roundChoices, roundPicker} from './benchmark-rounds.js';
 
 const pct = value => (value == null ? '–' : `${value}%`);
 const clock = seconds => (seconds == null ? '–' : seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
 const money = cents => `$${(cents / 100).toFixed(2)}`;
-// The round to show: the one asked for, else the newest.
-export const pickRound = (snapshot, asked) => { const keys = Object.keys(snapshot?.rounds || {}).sort(); return keys.includes(asked) ? asked : keys.at(-1) || null; };
+// The round to show: the one asked for, else the newest real round (not a side check, see benchmark-rounds.js).
+export const pickRound = (snapshot, asked) => roundChoices(Object.keys(snapshot?.rounds || {}), asked).current;
 
 const CSS = `:root{--card:#14181d;--line:#262c33;--text:#f4efe3;--muted:#8d949c;--amber:#f5b54a;--green:#5ec47a;--red:#e5484d}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;margin:0 0 16px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
@@ -66,11 +66,12 @@ const METHOD = `<section class="card"><details><summary>How this is measured</su
 <li>Biases: the other tool's example config leans to AI and tech; keywords are the English job title; single runs.</li></ul></details></section>`;
 
 export function page(snapshot, {round, published, confirm} = {}) {
-  const key = pickRound(snapshot, round), view = key ? snapshot.rounds[key] : null, keys = Object.keys(snapshot?.rounds || {}).sort().reverse();
+  const key = pickRound(snapshot, round), view = key ? snapshot.rounds[key] : null, choices = roundChoices(Object.keys(snapshot?.rounds || {}), round), live = published?.search?.now?.round;
+  const label = k => [k, `${k} · ${AIS[aiOf(snapshot.rounds[k].ai)].short}${k === live ? ' · public' : ''}`];
   const body = !view ? `<section class="card"><h2>No data yet</h2><p class="muted">The bake-off's search-bench publish step sends every scored round here (<code>PUT /benchmark-search/data</code>); the first round fills this page.</p></section>`
-    : `${published ? panel({kind: 'search', round: key, part: searchSection(key, view, snapshot.at), published, ask: confirm === 'publish'}) : ''}${keys.length > 1 ? filterLinks(keys.map(k => [k, `${k} · ${AIS[aiOf(snapshot.rounds[k].ai)].short}`, `?round=${encodeURIComponent(k)}`]), key) : ''}${aiNote(snapshot, key)}${tiles(view)}${scoreboard(view)}${grid(view)}${kinds(view)}${missed(view)}${beyond(view)}${METHOD}`;
+    : `${published ? panel({kind: 'search', round: key, part: searchSection(key, view, snapshot.at), published, ask: confirm === 'publish'}) : ''}${roundPicker({real: choices.real.map(label), side: choices.side.map(label), current: key})}${aiNote(snapshot, key)}${tiles(view)}${scoreboard(view)}${grid(view)}${kinds(view)}${missed(view)}${beyond(view)}${METHOD}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Benchmark Job Search · Admin</title>
-<link rel="icon" href="/favicon-32.png"><style>${CSS}${PUBLISH_STYLE}${CHIP_STYLE}${VIZ_STYLE}</style></head><body><main>
+<link rel="icon" href="/favicon-32.png"><style>${CSS}${ROUND_STYLE}${PUBLISH_STYLE}${CHIP_STYLE}${VIZ_STYLE}</style></head><body><main>
 <header><h1>🏁 Benchmark Job Search</h1><span class="muted">${snapshot ? `as of ${esc(snapshot.at.slice(0, 16).replace('T', ' '))} UTC${key ? ` · round ${esc(key)}` : ''}` : ''}</span></header>
 ${body}</main>${VIZ_TOOLTIP}</body></html>`;
 }
