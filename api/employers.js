@@ -35,6 +35,7 @@ const number = (value, max) => Number.isFinite(value) ? Math.max(0, Math.min(max
 // Who a feed fits (fixed lists only): the scout publishes a tag only when many installs agree.
 // How to read a careers page without AI (src/sources/page_recipes.py), checked to the same fixed shape: never a pattern, only a path or a tag and class.
 const TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'a', 'strong', 'b', 'span', 'div', 'p', 'td', 'dt'];
+const PATH_TAGS = ['a', 'div', 'ul', 'ol', 'li', 'article', 'section', 'main', 'span', 'p', 'td', 'tr', 'dl', 'dt', 'dd', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'];   // the tags a path layout may name: the same fixed list as src/sources/page_paths.py PATH_TAGS
 const LINK_TITLES = ['label', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'];   // where a card link's title is: the same fixed list as src/sources/page_recipes.py TITLES
 export function recipeOf(recipe) {
   if (!recipe || typeof recipe !== 'object') return null;
@@ -49,6 +50,14 @@ export function recipeOf(recipe) {
     if (!Number.isInteger(depth) || depth < 1 || depth > 3) return null;
     if ('title' in recipe && !LINK_TITLES.includes(recipe.title)) return null;
     return {kind: 'links', prefix: recipe.prefix, ...(depth === 1 ? {} : {depth}), ...('title' in recipe ? {title: recipe.title} : {})};
+  }
+  // Why (13 Nov 2026, bl for sa, the owner's approved fix #1 design; ot measured open-source readers): the engine's fourth kind, a job link found by the tags and classes above it
+  // (page_recipes.valid 'path': 1-5 [tag, class] entries ending in the link itself, `max` 1-1000, an optional title from the same fixed list). An install older than paths refuses the kind and asks the AI.
+  if (recipe.kind === 'path' && ['chain,kind,max', 'chain,kind,max,title'].includes(keys) && Array.isArray(recipe.chain) && recipe.chain.length >= 1 && recipe.chain.length <= 5
+      && recipe.chain.every(entry => Array.isArray(entry) && entry.length === 2 && PATH_TAGS.includes(entry[0]) && typeof entry[1] === 'string' && (entry[1] === '' || /^[\w-]{1,40}$/.test(entry[1])))
+      && recipe.chain[recipe.chain.length - 1][0] === 'a' && Number.isInteger(recipe.max) && recipe.max >= 1 && recipe.max <= 1000
+      && (!('title' in recipe) || LINK_TITLES.includes(recipe.title))) {
+    return {kind: 'path', chain: recipe.chain.map(([tag, css]) => [tag, css]), max: recipe.max, ...('title' in recipe ? {title: recipe.title} : {})};
   }
   if (recipe.kind === 'tag' && keys === 'class,kind,tag' && TAGS.includes(recipe.tag) && typeof recipe.class === 'string' && /^[\w -]{1,60}$/.test(recipe.class)) return {kind: 'tag', tag: recipe.tag, class: recipe.class};
   // Why (13 Nov 2026, bl): the engine's third kind (the list in the page's JSON state, page_recipes.valid) was missing here, so a careers feed's state recipe was dropped.

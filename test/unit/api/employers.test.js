@@ -407,6 +407,19 @@ test('a measured board keeps the layout board discovery learned, only in the fix
   assert.deepEqual((await agreedSites(e)).find(fact => fact.host === 'links.example').recipe, {countries: ['md']});
 });
 
+// A path layout (13 Nov 2026, bl for sa): a job link found by the tags and classes above it; a fixed shape, never a selector string.
+test('a path layout is served in its fixed shape and refuses anything else', async () => {
+  const {recipeOf} = await import('../../../api/employers.js');
+  const good = {kind: 'path', chain: [['li', 'job'], ['a', 'title-link']], max: 9};
+  assert.deepEqual(recipeOf(good), good);
+  assert.deepEqual(recipeOf({...good, title: 'h4'}), {...good, title: 'h4'});
+  assert.deepEqual(recipeOf({kind: 'path', chain: [['a', '']], max: 1000}), {kind: 'path', chain: [['a', '']], max: 1000}, 'a link alone, no class');
+  for (const bad of [{...good, x: 1}, {...good, title: 'script'}, {...good, max: 0}, {...good, max: 1001}, {...good, max: 2.5}, {...good, chain: []},
+    {...good, chain: [['li', 'job']]}, {...good, chain: [['script', ''], ['a', '']]}, {...good, chain: [['li', 'a b'], ['a', '']]}, {...good, chain: [['li', '(a)+'], ['a', '']]},
+    {...good, chain: [['li', ''], ['li', ''], ['li', ''], ['li', ''], ['li', ''], ['a', '']]}, {...good, chain: [['li', 1], ['a', '']]}, {...good, chain: 'li>a'},
+    {kind: 'path', chain: good.chain}, {...good, kind: 'paths'}]) assert.equal(recipeOf(bad), null, JSON.stringify(bad));
+});
+
 // A layout's depth (13 Nov 2026, owner: "Yes, add depth (Recommended)"): boards whose job links sit 2 or 3 folders under the prefix (/oferta/<id>/<slug>).
 test('a links layout may carry a depth of 2 or 3; depth 1 is served with no field, so installs older than depth keep reading it', async () => {
   const {recipeOf} = await import('../../../api/employers.js');
