@@ -32,14 +32,29 @@ const priced = (model, tokens = {}) => {
 // What a call is held at before it runs: its prompt (about 3 characters a token) plus the CLI's own context, and a long answer. Settled to the real price after.
 const estimateOf = (model, body) => claudeUsd(model, {input_tokens: Math.ceil(String(body.prompt || '').length / 3) + 5000, output_tokens: 8000});
 const round = usd => Math.round(usd * 1e6) / 1e6;
-// Adds `usd` (may be negative: a settlement) to the day and the month, in one transaction. `limit` = refuse when either would pass its cap. -> {day, month} after, or {over: 'day' | 'month'}.
-const book = (storage, env, now, usd, limit = false) => storage.transaction(async tx => {
+// Adds `usd` (may be negative: a settlement) to the day and the month, in one transaction. `limit` = a reservation: refused when either would pass its cap, else one more call.
+// A settlement: `failure` = {why, at} of a call that failed (a kind word, never the text); `unsent` = the call never reached the container (its reservation's call is taken back).
+// -> {day, month} after, or {over: 'day' | 'month'}.
+const book = (storage, env, now, usd, limit = false, {failure = null, unsent = false} = {}) => storage.transaction(async tx => {
   const dk = `paid:${dayOf(now)}`, mk = monthKey(now), day = (await tx.get(dk)) || {usd: 0}, month = (await tx.get(mk)) || {usd: 0};
   if (limit && day.usd + usd > paidCap(env)) return {over: 'day'};
   if (limit && month.usd + usd > paidMonthCap(env)) return {over: 'month'};
-  await tx.put(dk, {usd: round(day.usd + usd)}); await tx.put(mk, {usd: round(month.usd + usd)});
+  const step = limit ? 1 : unsent ? -1 : 0, calls = Math.max(0, (day.calls || 0) + step), failed = (day.failed || 0) + (failure ? 1 : 0), monthCalls = Math.max(0, (month.calls || 0) + step);
+  await tx.put(dk, {...day, usd: round(day.usd + usd), calls, failed, ...(failure ? {lastFailure: failure} : {})});
+  await tx.put(mk, {...month, usd: round(month.usd + usd), calls: monthCalls});
   return {day: round(day.usd + usd), month: round(month.usd + usd)};
 });
+
+/**
+ * The paid lane as /health shows it: whether the key is set, the day's and the month's spend against their lines, the calls sent and failed today, and the last failure's kind and time.
+ * Why (13 Nov 2026, coordinator sa: "where can the owner and I READ the paid lane's spend so far today and this month (dollars, calls)? … add it to /health"): the owner got Anthropic's $5 notice
+ * and the broker's own reckoning was only in Durable Object storage. Spend is the broker's: answered calls at their tokens, a failed one at its estimate; Anthropic's console is the bill.
+ */
+export async function paidHealth(storage, env, now = new Date(Date.now())) {
+  const day = (await storage.get(`paid:${dayOf(now)}`)) || {}, month = (await storage.get(monthKey(now))) || {};
+  return {configured: Boolean(env?.CLAUDE_API_KEY), day: {usd: day.usd || 0, line: paidCap(env), calls: day.calls || 0, failed: day.failed || 0}, month: {usd: month.usd || 0, line: paidMonthCap(env), calls: month.calls || 0},
+    ...(day.lastFailure ? {lastFailure: day.lastFailure} : {})};
+}
 
 /**
  * One call on the key, in place of the plan's `why` ('ran-out' or 'budget'). `held` = the caller already holds a container slot (it releases it). -> a walk verdict.
@@ -52,24 +67,25 @@ export async function paidClaude(broker, lane, body, waitMs, why, {held = false}
   const model = CLAUDE_MODELS[body.tier ?? 'mid'], estimate = estimateOf(model, body);
   const reserved = await book(storage, env, now, estimate, true);
   if (reserved.over) { await brokerCap(storage, env, `broker-claude-api-${reserved.over}`, null, {reached: true, now}); return unavailable(why, `paid lane at its ${reserved.over} cap`, false); }
-  let usd = estimate, release = null;
+  let usd = estimate, release = null, failure = null, unsent = false;
+  const fail = (why, verdict) => { failure = {why, at: now.toISOString()}; return verdict; };
   try {
     release = held ? () => {} : await broker.gate.acquire(queueOf(lane), waitMs);
-    if (!release) { usd = 0; return unavailable('busy'); }   // never sent: nothing to pay
+    if (!release) { usd = 0; unsent = true; return unavailable('busy'); }   // never sent: nothing to pay
     let reply, answer;
     try {
       reply = await broker.toContainer('/claude', JSON.stringify({prompt: body.prompt, schema: body.schema, images: body.images, model, paid: true, ...(body.search === true ? {search: true} : {}), ...(body.effort ? {effort: body.effort} : {})}));
       answer = JSON.parse(await reply.text());
-    } catch { return failed('paid-failed', 'the paid call did not answer'); }
+    } catch { return fail('no-answer', failed('paid-failed', 'the paid call did not answer')); }
     if (answer?.tokens) usd = priced(model, answer.tokens);
-    if (!reply.ok) return failed('paid-failed', String(answer?.kind || 'failed').slice(0, 40));   // the kind only: an error tail is never passed on from this lane
+    if (!reply.ok) return fail(String(answer?.kind || 'failed').slice(0, 40), failed('paid-failed', String(answer?.kind || 'failed').slice(0, 40)));   // the kind only: an error tail is never passed on from this lane
     const bad = refuseReply(answer.reply, await broker.login());
-    if (bad) return failed('bad-answer', '', json(422, {why: bad}));
+    if (bad) return fail('bad-answer', failed('bad-answer', '', json(422, {why: bad})));
     await noteOnce(storage, env, dayOf(now), 'claude-api-paid', 'ai-broker-claude-api', `💳 AI broker: the Claude plan is out, and a Claude-only call was answered on the broker's API key (paid; up to $${cap} a day and $${paidMonthCap(env)} a month). This is the first today.`).catch(() => {});
     return answered(json(200, {reply: answer.reply, tokens: answer.tokens, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, engine: 'claude', paid: true, usd: Math.round(usd * 1e4) / 1e4}));
   } finally {
     release?.();
-    const after = await book(storage, env, now, usd - estimate).catch(() => null);   // the settlement: the reservation becomes the real price
+    const after = await book(storage, env, now, usd - estimate, false, {failure, unsent}).catch(() => null);   // the settlement: the reservation becomes the real price
     if (after) await Promise.all([brokerCap(storage, env, 'broker-claude-api-day', after.day * 1e6, {now}), brokerCap(storage, env, 'broker-claude-api-month', after.month * 1e6, {now})]);
   }
 }
