@@ -3,6 +3,9 @@
 // A job proves itself with GitHub's per-run OIDC token (lib/oidc.mjs); the login lives only in this Durable Object's storage and is written through after every call, before the reply is sent.
 // One `ENGINE` var names the engine that answers first (codex by default); the others follow in a fixed order and answer only when the one before ran out or is not configured (lib/engines.mjs); Claude answers only while its seven-day window reads under 90% (lib/budget.mjs). Other refusals retain their existing controls.
 import {Container, getContainer} from '@cloudflare/containers';
+import {DurableObject, WorkerEntrypoint} from 'cloudflare:workers';
+import {doContainer, allowHosts} from './lib/do-container.mjs';
+import {exportState, importState, copyState, nextActive} from './lib/move.mjs';
 import {verifyRunToken, githubJwks} from './lib/oidc.mjs';
 import {claudeOnly, laneOf, queueOf, LANES} from './lib/lanes.mjs';
 import {allow, linesOf, claudeAllow, claudeWeekPercent, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
@@ -43,7 +46,8 @@ const HOSTS = ['chatgpt.com', 'auth.openai.com', 'api.openai.com', 'api.anthropi
 const pass = req => fetch(req);
 const json = (status, body) => new Response(JSON.stringify(body), {status, headers: {'content-type': 'application/json'}});
 
-export class CodexBroker extends Container {
+// The broker, on either container runtime: CodexBroker (the Container class, today's policy) and AiBroker (durable_object policy, lib/do-container.mjs).
+const brokerOf = Base => class extends Base {
   constructor(ctx, env) {
     super(ctx, env);
     this.brokerEnv = env;
@@ -66,13 +70,13 @@ export class CodexBroker extends Container {
   /** The broker's own login values (the stored Codex auth.json, the Claude token) for the reply guard (lib/guard.mjs); read fresh, so a rotated token is guarded at once. Never logged or returned. */
   async login() { return loginValues(await this.ctx.storage.get('login'), this.brokerEnv.CLAUDE_CODE_OAUTH_TOKEN); }
 
-  // Start (and every restart after a sleep): put the stored login back into CODEX_HOME.
-  async onStart() {
+  // Start (and every restart after a sleep): put the stored login back into CODEX_HOME. `send` reaches the container being started (AiBroker passes its port: its containerFetch waits for this start).
+  async onStart(send = (url, init) => this.containerFetch(url, init)) {
     const login = await this.ctx.storage.get('login');
     // Why (#285, 5 Nov 2026, owner: "Fix readiness"; reworked the same day, owner: "pass on while starting"): a new container has answered nothing yet, so /health says `starting` until a real Codex call is answered (markIfAnswered), and until then a failed call is also recorded as `startError`. Since 8 Nov 2026 (bd, the walk) every failed Codex call goes to the next engine, proven container or not; "starting" only decides what /health shows. No start-up call of our own: it added a Codex call per start and protected no user.
     await this.ctx.storage.put('answered', false);
     await this.ctx.storage.put('startError', null);   // the last container's failure is not this one's
-    if (login) await this.containerFetch('http://c/auth', {method: 'POST', body: login});
+    if (login) await send('http://c/auth', {method: 'POST', body: login});
   }
 
   // A failed Codex turn as a verdict (lib/walk.mjs): the next engine answers, and if nobody does the call ends with this 502.
@@ -99,6 +103,8 @@ export class CodexBroker extends Container {
     if (url.pathname === '/login' && request.method === 'POST') return this.setLogin(await request.text());
     if (url.pathname === '/health') return this.health();
     if (url.pathname === '/call' && request.method === 'POST') return this.call(request.headers.get('x-lane'), await request.json(), workflowKey(request.headers.get('x-workflow')), jobKey(request.headers.get('x-job')), sessionKey(request.headers.get('x-session')), request.signal);
+    if (url.pathname === '/export' && request.method === 'POST') return json(200, await exportState(this.ctx.storage));   // reached only through /admin/copy (lib/move.mjs)
+    if (url.pathname === '/import' && request.method === 'POST') return json(200, {copied: await importState(this.ctx.storage, await request.json())});
     if (url.pathname === '/stop' && request.method === 'POST') { await this.stop(); return json(200, {stopped: true}); }   // the owner's kill test (admin route in front)
     return json(404, {error: 'not found'});
   }
@@ -410,23 +416,33 @@ export class CodexBroker extends Container {
     } catch (e) { return await this.claudeFailure('call: ' + String(e?.message || e)); }
     finally { release(); }
   }
-}
+};
+
+/** The broker CI calls reach today: the Container class, 2 vCPU / 6 GiB (wrangler.jsonc). */
+export class CodexBroker extends brokerOf(Container) {}
+/** The same broker on the durable_object policy at 4 vCPU / 6 GiB (lib/do-container.mjs; plan 1/3, 13 Nov 2026): only /admin/next/* and /next/health reach it until the switch (2/3). */
+export class AiBroker extends brokerOf(doContainer(DurableObject)) {}
+/** AiBroker's container's only way out: the AI hosts (lib/do-container.mjs registers it for each). */
+export class AllowHosts extends allowHosts(WorkerEntrypoint, HOSTS) {}
 
 /** The container's coded kind; an older container image (a deploy in flight) sends none, so the text is read the same way. */
 const kindOfReply = answer => answer?.kind ?? kindOf(answer?.error);
 
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url), broker = getContainer(env.BROKER);
-    if (url.pathname === '/health') return broker.fetch(request);   // counts and states only, no secret
-    if (url.pathname.startsWith('/admin/') && request.method === 'POST') {
+    // Which broker: /next/... and /admin/next/... AiBroker, /old/... and /admin/old/... CodexBroker, everything else the active one (lib/move.mjs nextActive: the BROKER_ACTIVE setting).
+    const url = new URL(request.url), [, pick] = url.pathname.match(/^(?:\/admin)?\/(next|old)(\/.*)$/) || [], path = pick ? url.pathname.replace(`/${pick}/`, '/') : url.pathname;
+    const old = () => getContainer(env.BROKER), next = () => env.BROKER_NEXT.getByName('broker'), broker = (pick ? pick === 'next' : nextActive(env)) ? next() : old();
+    if (path === '/health') return broker.fetch(new Request('http://c/health'));   // counts and states only, no secret
+    if (path.startsWith('/admin/') && request.method === 'POST') {
       if (!env.BROKER_ADMIN_TOKEN || request.headers.get('authorization') !== `Bearer ${env.BROKER_ADMIN_TOKEN}`) return json(401, {error: 'admin only'});
+      if (path === '/admin/copy') { const {status, body} = await copyState(old(), next()); return json(status, body); }   // the old broker's state into the new one, inside Cloudflare
       // login = the one-time upload; call = a smoke call from the owner's Mac (lane x-lane, default scheduled); stop = kill the container to prove the login survives it
-      const inner = {'/admin/login': '/login', '/admin/call': '/call', '/admin/stop': '/stop'}[url.pathname];
+      const inner = {'/admin/login': '/login', '/admin/call': '/call', '/admin/stop': '/stop'}[path];
       if (!inner) return json(404, {error: 'not found'});
       return broker.fetch(new Request(`http://c${inner}`, {method: 'POST', body: await request.text(), headers: {'x-lane': request.headers.get('x-lane') || 'scheduled', 'x-workflow': 'admin'}}));
     }
-    if (url.pathname === '/call' && request.method === 'POST') {
+    if (path === '/call' && request.method === 'POST') {
       let claims;
       try { claims = await verifyRunToken((request.headers.get('authorization') || '').replace(/^Bearer /, ''), {jwks: jwks(env), audience: audiences(env), repository: repositories(env)}); }
       catch (e) { return json(401, {why: String(e.message)}); }
