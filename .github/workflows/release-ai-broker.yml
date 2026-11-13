@@ -20,13 +20,14 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  id-token: write   # the room claim below (tools/persona-search/claim.py asks the broker with this job's GitHub run token)
 concurrency:
   group: ai-broker-deploy
   cancel-in-progress: false   # a started run finishes and the next waits: a cancelled run is a red cross on main (tests/test_main_runs_finish.py)
 jobs:
   deploy:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 75   # up to 45 min in line for the room + 7 min holding it after the deploy + the deploy itself
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -54,7 +55,31 @@ jobs:
       - name: The broker's own tests first
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: node --test test/unit/workers/ai-broker/*.test.js
+      # Why (13 Nov 2026, cx; sa: "go on (a)"): a deploy resets the broker's Durable Object 4.5-5 min later ("Durable Object reset because its code was updated": 04:00 x30,
+      # 04:17 x19, 04:26 x49 after the deploys of 03:55, 04:12 and 04:21Z), and the reset cuts every call in flight; at 04:17:50Z it cut 20 calls of tr's 30-profile round, each
+      # waiting 40-46 s (the relay asks a cut call again after 30 s). #501's drain covers a container swap, not this reset. So the release takes the whole room the searches claim
+      # (lib/claims.mjs CAPACITY), first come first served: it waits behind the runs that hold it, no search starts while it holds it, and it gives it back once the new code runs.
+      # Guard: test/unit/workers/ai-broker/release-room.test.js.
+      - name: Take the whole broker room
+        id: room
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: |
+          if timeout 45m python3 tools/persona-search/claim.py wait 6; then
+            nohup python3 tools/persona-search/claim.py hold 6 > "$RUNNER_TEMP/claim-hold.log" 2>&1 &
+            echo $! > "$RUNNER_TEMP/claim-hold.pid"
+            echo "held=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No broker room within 45 min (or the claim failed): deploying anyway. Calls in flight about 5 min from now are cut and asked again after 30 s."
+          fi
       - name: Deploy the broker and its image
         if: env.CLOUDFLARE_API_TOKEN != ''
         working-directory: workers/ai-broker
         run: npm install --no-audit --no-fund && ../../tools/cf-retry.sh npx --yes wrangler@4 deploy
+      - name: Keep the room until the broker runs the new code
+        if: steps.room.outputs.held == '1'
+        run: sleep 420   # the resets came 4.5-5 min after their deploy; /health names no version to wait on
+      - name: Give the room back
+        if: always() && steps.room.outputs.held == '1'
+        run: |
+          kill "$(cat "$RUNNER_TEMP/claim-hold.pid")" 2>/dev/null || true
+          python3 tools/persona-search/claim.py release
