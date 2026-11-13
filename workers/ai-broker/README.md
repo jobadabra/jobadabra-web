@@ -189,6 +189,8 @@ The broker is already deployed; this is for a fresh account or a rebuild.
 
 **Secrets** (`wrangler secret put <NAME>` in this folder; values from the Keychain, never in code)
 
+A secret put or rotated reaches the container by itself: the next wake of the broker sees its env changed (a digest is stored, never a value, `lib/do-container.mjs` `envDigest`) and drains the running container; the next call starts one with the new env. No `/admin/stop` needed.
+
 | Secret | What for |
 |---|---|
 | `BROKER_ADMIN_TOKEN` | the `/admin/*` routes (Keychain `jobadabra.codex-broker.admin_token`) |

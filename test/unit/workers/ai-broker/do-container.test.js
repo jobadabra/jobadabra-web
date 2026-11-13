@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {AiBroker, AllowHosts, body, success, entry, harness, PARALLEL} from './harness.mjs';
-import {INSTANCE} from '../../../../workers/ai-broker/lib/do-container.mjs';
+import {INSTANCE, envDigest} from '../../../../workers/ai-broker/lib/do-container.mjs';
 
 const config = JSON.parse(readFileSync(new URL('../../../../workers/ai-broker/wrangler.jsonc', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
 const HOSTS = ['chatgpt.com', 'auth.openai.com', 'api.openai.com', 'api.anthropic.com'];
@@ -31,13 +31,13 @@ function box({running = false, image = 'registry/ai-broker@sha256:new', readyAft
   return fake;
 }
 
-function broker(t, container, stored = {}) {
+function broker(t, container, stored = {}, env = {ENGINE: 'codex', CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token'}) {
   t.mock.method(globalThis, 'fetch', async () => Response.json({ok: true}));
   const values = new Map([['login', '{"tokens":{}}'], ['answered', true], ['limits', {usedPercent: 10, resetsAt: Date.now() / 1000 + 3600}], ...Object.entries(stored)]);
   const storage = {get: async key => structuredClone(values.get(key)), put: async (key, value) => { values.set(key, structuredClone(value)); }, delete: async key => values.delete(key), list: async () => new Map(structuredClone([...values])), transaction: fn => fn(storage)};
   let woke = Promise.resolve();
   const ctx = {storage, container, exports: {AllowHosts: 'the AllowHosts entrypoint'}, blockConcurrencyWhile: fn => { woke = fn(); return woke; }};
-  const made = new AiBroker(ctx, {ENGINE: 'codex', CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token'});
+  const made = new AiBroker(ctx, env);
   return {made, storage, woke: () => woke};
 }
 
@@ -63,11 +63,27 @@ test('a wake to a running container of an older image (a deploy) sends it SIGTER
   const old = box({running: true}), a = broker(t, old, {containerImage: 'registry/ai-broker@sha256:old'});
   await a.woke();
   assert.deepEqual(old.log, [['signal', 15]]);
-  const same = box({running: true}), b = broker(t, same, {containerImage: 'registry/ai-broker@sha256:new'});
+  const same = box({running: true}), b = broker(t, same, {containerImage: 'registry/ai-broker@sha256:new', containerEnv: await envDigest({CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token'})});
   await b.woke();
   assert.deepEqual(same.log, [['sleep', 600_000]]);
   assert.equal((await b.made.call('pr', {...body}, 'x.yml')).status, 200);
   assert.ok(!same.log.some(([what]) => what === 'start' || what === '/auth'), 'a running container is used as it is');
+});
+
+test('13 Nov 2026: a key added (or rotated) while the container runs drains it on the next wake; the next call starts one that has it, and only a digest is stored', async t => {
+  const before = {CLAUDE_CODE_OAUTH_TOKEN: 'fixture-not-a-token'}, KEY = 'sk-ant-api03-FIXTURExNOTxAxKEY';
+  const running = box({running: true}), w = broker(t, running, {containerImage: 'registry/ai-broker@sha256:new', containerEnv: await envDigest(before)}, {ENGINE: 'codex', ...before, CLAUDE_API_KEY: KEY});
+  await w.woke();
+  assert.deepEqual(running.log, [['signal', 15]], 'the container started without the key is told to drain');
+  running.running = false; running.log.length = 0;   // it drained away
+  assert.equal((await w.made.call('pr', {...body}, 'x.yml')).status, 200);
+  const started = running.log.find(([what]) => what === 'start');
+  assert.equal(started?.[1].env.CLAUDE_API_KEY, KEY, 'the next container has the key');
+  const stored = await w.storage.get('containerEnv');
+  assert.equal(stored, await envDigest({...before, CLAUDE_API_KEY: KEY})); assert.ok(!String(stored).includes(KEY), 'a digest, never the value');
+  const again = box({running: true}), x = broker(t, again, {containerImage: 'registry/ai-broker@sha256:new', containerEnv: stored}, {ENGINE: 'codex', ...before, CLAUDE_API_KEY: KEY});
+  await x.woke();
+  assert.deepEqual(again.log, [['sleep', 600_000]], 'the same secrets keep the container');
 });
 
 test('a container that never answers /health in time is destroyed and the next call starts a new one', async t => {
