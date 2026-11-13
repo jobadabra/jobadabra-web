@@ -64,12 +64,15 @@ jobs:
         id: room
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: |
-          if timeout 45m python3 tools/persona-search/claim.py wait 6; then
+          rc=0; timeout 45m python3 tools/persona-search/claim.py wait 6 || rc=$?
+          if [ "$rc" = 0 ]; then
             nohup python3 tools/persona-search/claim.py hold 6 > "$RUNNER_TEMP/claim-hold.log" 2>&1 &
             echo $! > "$RUNNER_TEMP/claim-hold.pid"
             echo "held=1" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::No broker room within 45 min (or the claim failed): deploying anyway. Calls in flight about 5 min from now are cut and asked again after 30 s."
+            # Why (Gitar on #618): timeout kills wait before its own release, and a place left in line could still be granted to this dead run and strand the room for 10 min.
+            python3 tools/persona-search/claim.py release || true
+            echo "::warning::No broker room (claim.py exit $rc: 1 no room in time, 2 a need the broker refuses (CAPACITY moved?), 3 broker not reached, 124 the 45 min cap): deploying anyway. Calls in flight about 5 min from now are cut and asked again after 30 s."
           fi
       - name: Deploy the broker and its image
         if: env.CLOUDFLARE_API_TOKEN != ''
@@ -79,7 +82,7 @@ jobs:
         if: steps.room.outputs.held == '1'
         run: sleep 420   # the resets came 4.5-5 min after their deploy; /health names no version to wait on
       - name: Give the room back
-        if: always() && steps.room.outputs.held == '1'
+        if: always() && steps.room.outcome != 'skipped'   # whenever the take step ran, granted or not: a release with nothing held is a no-op
         run: |
-          kill "$(cat "$RUNNER_TEMP/claim-hold.pid")" 2>/dev/null || true
+          [ -f "$RUNNER_TEMP/claim-hold.pid" ] && kill "$(cat "$RUNNER_TEMP/claim-hold.pid")" 2>/dev/null || true
           python3 tools/persona-search/claim.py release
