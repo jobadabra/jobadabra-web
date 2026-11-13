@@ -66,7 +66,7 @@ export const ALERTS = [
   // Why (12 Nov 2026, owner: "That could be real users not being able to perform actions" · "I should get alerts (medium/high criticalitiy)"): Free AI is the route the app's people use; a 5xx from it (Workers AI or the Pro Claude route failing, the global busy line) is a person whose action did not happen. The site's five-minute tick (shared/free-ai-alert.js)
   // tells once when 3 or more calls in 5 minutes are half failed, and once when it answers again. A person's own limit (429), a bad token or body, and the owner's pause (FREE_AI=off) never count. `free-ai-spend` (users channel) stays as it is: that is money, this is failure.
   a('free-ai-failing', '🔴 Free AI fails people\'s calls · 🟢 answers again', 'ai', 'changes', 'engineering', {wired: true, modes: ['every', 'changes']}),
-  a('free-ai-spend', '💸 Free AI spend over its day, month or neurons limit', 'ai', 'every', 'users', {wired: true}),
+  a('free-ai-spend', '💸 Free AI near (🟠) or at (🔴) its day, month, allowance or web-search stop', 'ai', 'every', 'users', {wired: true}),   // shared/cap-alerts.js
   a('broker-fallback', '↩️ Broker fell back to Free AI', 'ai', 'daily', 'users', {modes: ['every', 'daily'], parked: 'a once-a-day note from the broker Worker; it moves with the old bots (4/4)'}),   // Why (5 Nov 2026, coordinator): parked, not built: the note still arrives once a day at most and a new production secret on the broker is not worth it now; trigger: when the old bots retire (4/4). Listed so the page does not count it as waiting
   a('feedback-received', '💬 Feedback received', 'users', 'every', 'users', {wired: true}),
   a('form-reported', '📝 A form was reported', 'users', 'every', 'users', {wired: true}),

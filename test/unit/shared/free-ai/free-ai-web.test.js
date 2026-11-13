@@ -118,3 +118,15 @@ test('/admin/ai/costs shows the month against its line, the paid searches and th
   assert.match(html, /100 searches paid · 40 answered from the shared answers/);
   assert.match(webSection(await webMonth(store, {}, NOW)), /paused/);
 });
+
+// Why (13 Nov 2026, owner: "One medium when we approaching the limit/cap and another one, ciritical, when we reached it"): the month line stopped every search in silence (shared/cap-alerts.js).
+test('the month line tells the owner: 🟠 when a search passes 80% of it, 🔴 at the first search it refuses', async () => {
+  const told = [], {fetcher: search} = anthropic(), e = env({BRAIN_BOT_TOKEN: 't', BRAIN_CHAT_ID: 'c'});
+  const fetcher = async (url, init) => (String(url).includes('api.telegram.org') ? (told.push(JSON.parse(init.body).text), new Response('{"ok":true,"result":{"message_id":1}}')) : search(url, init));
+  e.WAITLIST.m.set(keys.month(MONTH), String(WEB.monthUsd * 0.8 * 1e6 - 1));
+  assert.equal((await call(e, fetcher)).status, 200);
+  assert.equal(told.length, 1); assert.match(told[0], /^🟠.*web search this month is approaching its stop/);
+  e.WAITLIST.m.set(keys.month(MONTH), String(WEB.monthUsd * 1e6));
+  assert.equal((await call(e, fetcher, ask(['purser']), 'install-0002')).status, 503);
+  assert.equal(told.length, 2); assert.match(told[1], /^🔴.*reached its stop/); assert.match(told[1], /FREE_AI_WEB_MONTH_USD/);
+});

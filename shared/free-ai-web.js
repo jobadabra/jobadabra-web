@@ -7,6 +7,7 @@
 // Guard: test/unit/shared/free-ai/free-ai-web.test.js. Shown on /admin/ai/costs (admin/free-ai-web-cost.js).
 import PROMPT from '../config/board_web_search.json' with {type: 'json'};
 import {record as recordCost} from './aicost.js';
+import {capCheck} from './cap-alerts.js';
 
 export const WEB_ACTION = 'web_search';
 // Haiku 5.5's price per million tokens (src/ai/cost.py) and the web search tool at $10 per 1,000 searches: 0.035 USD a cell.
@@ -63,7 +64,11 @@ export async function webSearch(request, env, access, now = new Date(), ctx = nu
   }
   if (env.FREE_AI_WEB_SEARCH === 'off' || !env.WEB_SEARCH_ANTHROPIC_KEY) return error(503, 'The web search is not available with Free AI right now.');
   const [spent, calls, installToday] = await Promise.all([count(kv, keys.month(month)), count(kv, keys.calls(month)), count(kv, keys.install(access.who, day))]);
-  if (spent >= monthLine(env) * 1e6) return error(503, 'The web search for Free AI is used up this month. It comes back next month.');
+  if (spent >= monthLine(env) * 1e6) {   // the 🔴 card once this month, also when the crossing call's alert failed (shared/cap-alerts.js)
+    const told = capCheck(env, 'free-ai-web-month', spent, {now, fetcher});
+    ctx?.waitUntil ? ctx.waitUntil(told) : await told;
+    return error(503, 'The web search for Free AI is used up this month. It comes back next month.');
+  }
   if (installToday >= WEB.installPerDay) return error(429, 'The web search ran its searches for today. It runs again tomorrow.', 'rate_limit_error');
   // Counted before the call, so a failing search is not retried in a loop and parallel asks from one install stop at the day's number.
   await kv.put(keys.install(access.who, day), String(installToday + 1), {expirationTtl: 2 * 86400});
@@ -82,6 +87,7 @@ export async function webSearch(request, env, access, now = new Date(), ctx = nu
     kv.put(keys.month(month), String(spent + micro), {expirationTtl: 40 * 86400}), kv.put(keys.calls(month), String(calls + 1), {expirationTtl: 40 * 86400}),
     ...(isBoards(text) ? [kv.put(keys.cell(cell.digest), JSON.stringify(answer), {expirationTtl: WEB.days * 86400})] : []),   // only a boards answer is shared
     recordCost(env, access.who, WEB_ACTION, WEB.model, message.usage, usd, now),
+    capCheck(env, 'free-ai-web-month', spent + micro, {now, fetcher}),
   ]);
   ctx?.waitUntil ? ctx.waitUntil(work) : await work;
   return Response.json(answer);
