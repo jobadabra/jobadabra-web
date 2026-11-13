@@ -18,11 +18,18 @@ export const UNITS = {
 const TTL = {day: 2, week: 9, month: 40};
 const periodOf = (period, now) => now.toISOString().slice(0, period === 'month' ? 7 : 10);
 const flagOf = (name, level, period) => `cap:${name}:${level}:${period}`;
+// A store with no claim of its own (KV): read, then write with a TTL. -> the flags' earlier values, or null when the first is already set.
+const claimLoose = async (store, flags, ttl) => {
+  const before = await Promise.all(flags.map(flag => store.get(flag)));
+  if (before[0]) return null;
+  await Promise.all(flags.map(flag => store.put(flag, '1', {expirationTtl: ttl})));
+  return before;
+};
 
 /**
  * Tells the owner about one cap. `cap` = {name, title, event, period: 'day' | 'week' | 'month', unit (a key of UNITS), line(env), approach(env) (in the counter's unit), sees, fix};
  * `used` in the counter's unit, or null with `reached` (a refusal with no count of ours); `period` overrides the UTC day or month key (a plan's own week: its reset time).
- * `store` = {get, put(key, value, {expirationTtl}), delete}; `send(event, level, text)` -> true when the alert is done (sent, held on purpose, or nothing configured).
+ * `store` = {get, put(key, value, {expirationTtl}), delete}, or {claim(flags, ttlSeconds) -> earlier values or null when the first is set, delete} where the store can claim atomically; `send(event, level, text)` -> true when the alert is done (sent, held on purpose, or nothing configured).
  * -> 'reached' | 'approaching' | null (what was sent). Never rejects.
  */
 export async function checkCap(env, cap, used, {now = new Date(), reached = false, period = null, store, send}) {
@@ -30,10 +37,10 @@ export async function checkCap(env, cap, used, {now = new Date(), reached = fals
     if (!cap || !store) return null;
     const line = cap.line(env), near = cap.approach(env), key = period ?? periodOf(cap.period, now);
     const level = reached || used >= line ? 'reached' : used >= near ? 'approaching' : null;
-    if (!level || await store.get(flagOf(cap.name, level, key))) return null;
-    const flags = level === 'reached' ? [flagOf(cap.name, 'reached', key), flagOf(cap.name, 'approaching', key)] : [flagOf(cap.name, level, key)];
-    const before = await Promise.all(flags.map(flag => store.get(flag)));
-    await Promise.all(flags.map(flag => store.put(flag, '1', {expirationTtl: (TTL[cap.period] || 2) * 86400})));
+    if (!level) return null;
+    const flags = level === 'reached' ? [flagOf(cap.name, 'reached', key), flagOf(cap.name, 'approaching', key)] : [flagOf(cap.name, level, key)], ttl = (TTL[cap.period] || 2) * 86400;
+    const before = await (store.claim ? store.claim(flags, ttl) : claimLoose(store, flags, ttl));
+    if (!before) return null;
     const unit = UNITS[cap.unit], done = used == null ? null : unit.amount(used), total = Number.isFinite(line) ? unit.amount(line) : null;
     const text = capCard(level, {title: cap.title, used: done == null ? null : unit.show(done), line: total == null ? null : unit.show(total), done, total, word: unit.word, sees: cap.sees, fix: cap.fix}).text;
     if (!(await send(cap.event, level, text).catch(() => false))) await Promise.all(flags.filter((_, i) => !before[i]).map(flag => Promise.resolve(store.delete?.(flag)).catch(() => {})));

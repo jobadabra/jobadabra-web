@@ -21,7 +21,21 @@ export const BROKER_CAPS = {
 };
 for (const [name, cap] of Object.entries(BROKER_CAPS)) cap.name = name;
 
-const storeOf = storage => ({get: key => storage.get(key), put: (key, value) => storage.put(key, value), delete: key => storage.delete(key)});
+// Why (#623, Gitar): Durable Object storage has no TTL and up to 24 admissions run at once, so the flags live in one record (flag -> its end, ms) claimed in a transaction,
+// and each claim drops the flags whose period ended.
+const INDEX = 'cap:index';
+const storeOf = storage => ({
+  claim: (flags, ttl) => storage.transaction(async tx => {
+    const now = Date.now(), index = (await tx.get(INDEX)) || {}, live = flag => index[flag] > now;
+    if (live(flags[0])) return null;
+    const before = flags.map(live);
+    for (const [flag, until] of Object.entries(index)) if (until <= now) delete index[flag];
+    for (const flag of flags) index[flag] = now + ttl * 1000;
+    await tx.put(INDEX, index);
+    return before;
+  }),
+  delete: flag => storage.transaction(async tx => { const index = (await tx.get(INDEX)) || {}; delete index[flag]; await tx.put(INDEX, index); }),
+});
 // -> true when the card is done: posted, or nothing to post with (no binding or key: as noteOnce).
 const sendOf = env => async (event, level, text) => {
   if (!env.SITE || !env.SELFHEAL_PUBLISH_KEY) return true;
