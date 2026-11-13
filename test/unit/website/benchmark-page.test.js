@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
-import {renderResults} from '../../../web/public/benchmark.js';
+import {renderResults, texts} from '../../../web/public/benchmark.js';
 const data = JSON.parse(readFileSync(new URL('../../../web/public/benchmark-start.json', import.meta.url)));
 
 test('renders all scored form contestants in score order including our second place', () => {
@@ -41,4 +41,11 @@ test('a location count the round did not record reads "not recorded", never "nul
   assert.match(search, /\d+ yes · other verdicts not recorded/);
   assert.match(search, /Remote: not recorded/);
   assert.match(personas, /Judged jobs not recorded/);
+});
+
+test('the job-search lede says when Jobadabra ran on the app\u2019s AI tiers, which earlier Haiku-only rounds cannot be compared with (owner, 13 Nov 2026)', () => {
+  const app = structuredClone(data);
+  app.search.ai = 'app';
+  assert.match(texts(app).text.searchLede, /app’s own AI tiers \(Haiku \+ Sonnet\).*earlier rounds ran Haiku only, so they are not comparable/);
+  assert.doesNotMatch(texts(data).text.searchLede, /not comparable/, 'the starting snapshot and any Haiku round say nothing extra');
 });

@@ -5,6 +5,7 @@
 // Public shape = allowlisted aggregates only (tool names, counts, fictional persona labels); never an answer, a listing or a URL of a job. Guard: test/unit/admin/benchmark/benchmark-publish.test.js.
 import {isOwner} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
+import {aiOf} from './benchmark-ai.js';
 
 export const KINDS = ['form', 'search'];
 export const PAGES = {form: '/admin/form-filling/benchmark', search: '/admin/job-search/benchmark'};
@@ -38,7 +39,7 @@ export function searchSection(key, view, snapshotAt = '') {
     const [title, city = ''] = String(p.persona).split(' · ');
     return {title, city, country: p.country, judgedJobs: null, tools: Object.fromEntries(shown.filter(t => grid[t.tool]?.[p.persona]).map(t => [keyOf(t.tool, t.ours, false), {...grid[t.tool][p.persona], remote: null, no: null, unknown: null}]))};
   });
-  return {kind: 'search', round: key, date: (/^\d{4}-\d{2}-\d{2}/.test(key) ? key : String(snapshotAt)).slice(0, 10), judgedJobs: null, returnedRows: tools.reduce((n, t) => n + t.found, 0), tools, personas};
+  return {kind: 'search', round: key, ai: aiOf(view.ai), date: (/^\d{4}-\d{2}-\d{2}/.test(key) ? key : String(snapshotAt)).slice(0, 10), judgedJobs: null, returnedRows: tools.reduce((n, t) => n + t.found, 0), tools, personas};
 }
 
 /** The results file the public page reads: the starting snapshot with each section replaced by the owner's newest published one. */

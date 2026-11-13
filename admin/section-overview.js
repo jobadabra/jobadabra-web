@@ -13,18 +13,18 @@ export const STATUS = {good: 'g', warn: 'w', bad: 'b', none: 'n'};
 export const groupOf = path => PAGES.find(page => page.path === path)?.group;
 export const headlinePages = group => PAGES.filter(page => page.group === group && !page.superadmin && !page.overview);
 
-// {label, value, sub, status: good|warn|bad|none, series?: weekly numbers, format?, few?, placeholder?, href}
+// {label, value, sub, status: good|warn|bad|none, series?: weekly numbers, breaks?: bar indexes where what is measured changed, mark?: the line saying so, format?, few?, placeholder?, href}
 const draw = tile => {
   const known = (tile.series || []).filter(v => v != null);
   return `<div class="tile${tile.few ? ' few' : ''}${tile.placeholder ? ' dash' : ''}"><div class="k"><span class="dot ${STATUS[tile.status] || 'n'}"></span>${esc(tile.label)}</div>
-<div class="v">${esc(tile.value)}</div>${tile.sub ? `<div class="s">${esc(tile.sub)}</div>` : ''}
-${known.length >= 2 ? `<div class="trend2">${spark(tile.series, {format: tile.format, higherIsBetter: tile.higherIsBetter !== false, width: 120, height: 26})}</div>` : ''}
+<div class="v">${esc(tile.value)}</div>${tile.sub ? `<div class="s">${esc(tile.sub)}</div>` : ''}${tile.mark ? `<div class="s warn-text">${esc(tile.mark)}</div>` : ''}
+${known.length >= 2 ? `<div class="trend2">${spark(tile.series, {format: tile.format, higherIsBetter: tile.higherIsBetter !== false, width: 120, height: 26, breaks: tile.breaks})}</div>` : ''}
 <a href="${esc(tile.href)}">${esc(tile.page)} →</a></div>`;
 };
 export const SECTION_STYLE = `.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px}
 .tile{background:#14181d;border:1px solid #262c33;border-radius:12px;padding:14px;display:grid;gap:4px;min-width:0;align-content:start}.tile.dash{border-style:dashed}
 .tile .k{font-size:12px;color:#8d949c;display:flex;gap:6px;align-items:center}.tile .v{font-size:30px;font-weight:650;line-height:1.1;font-variant-numeric:tabular-nums}.tile.few .v{color:#8d949c}
-.tile .s{font-size:12px;color:#8d949c}.tile .trend2{display:flex;align-items:center;gap:8px;font-size:12px;color:#8d949c}.tile .trend2 svg{flex:none}.tile .trend2 .up{color:#3fb68b}.tile .trend2 .down{color:#e5484d}
+.tile .s{font-size:12px;color:#8d949c}.tile .s.warn-text{color:#e0a43a}.tile .trend2{display:flex;align-items:center;gap:8px;font-size:12px;color:#8d949c}.tile .trend2 svg{flex:none}.tile .trend2 .up{color:#3fb68b}.tile .trend2 .down{color:#e5484d}
 .tile a{font-size:12px;text-decoration:none}.dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}.dot.g{background:#3fb68b}.dot.w{background:#e0a43a}.dot.b{background:#e5484d}.dot.n{background:#8d949c}`;
 
 // The tiles of every page of a section, in menu order; a loader that fails shows its page as a grey "not available" tile, never an error page.
