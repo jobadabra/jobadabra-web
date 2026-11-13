@@ -128,6 +128,7 @@ import * as hostedState from '../../api/hosted-state.js';
 import * as linkedinTurn from '../../api/linkedin-turn.js';
 import {tick as hostedTick} from '../../api/hosted-tick.js';
 import {runnerCheck} from '../../shared/cap-alerts.js';
+import {cloudHealth} from '../../shared/cloud-health.js';
 import {test as hostedTest} from '../../api/hosted-test.js';
 import {ready, sweep as readySweep} from '../../api/ready.js';
 import {tick as readyTick} from '../../api/ready-tick.js';
@@ -378,6 +379,7 @@ export default {
     if (event.cron === SENTRY_CRON) {   // every 5 minutes: only the Sentry alerts (admin/sentry-alert.js); the daily jobs below run once a day
       ctx.waitUntil(hostedTick(env).then(done => { if (done.enqueued || Object.keys(done.paused).length) console.log(`hosted tick: ${JSON.stringify(done)}`); }).catch(error => console.error(`hosted tick: ${error.message}`)));   // hosted Always on: due schedules to the Queue (api/hosted-tick.js; nothing while HOSTED_ALWAYS_ON is off)
       ctx.waitUntil(runnerCheck(env).catch(error => console.error(`runner check: ${error.message}`)));   // the two cloud runners near or at their container ceiling: 🟠 / 🔴 to the owner (shared/cap-alerts.js)
+      ctx.waitUntil(cloudHealth(env).then(done => { if (done.told.length || done.skipped.length) console.log(`cloud health: ${JSON.stringify(done)}`); }).catch(error => console.error(`cloud health: ${error.message}`)));   // memory/CPU/disk, Worker errors, failed runs: 🟠 / 🔴 (shared/cloud-health.js)
       ctx.waitUntil(readyTick(env).then(done => { if (done.started || done.finished) console.log(`ready tick: ${JSON.stringify(done)}`); }).catch(error => console.error(`ready tick: ${error.message}`)));   // Ready to send: due nights to the Queue, over-time nights finished (api/ready-tick.js; nothing while READY_TO_SEND is off)
       ctx.waitUntil(readySweep(env).catch(error => console.error(`ready sweep: ${error.message}`)));   // Ready to send: a batch older than a day loses its data (api/ready.js)
       ctx.waitUntil(sentryAlert.check(env).catch(error => console.error(`sentry alert: ${error.message}`)));

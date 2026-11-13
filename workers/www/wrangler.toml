@@ -60,6 +60,7 @@ BRAIN_REPO = "jobadabra/jobadabra-lab"
 SENTRY_TELEGRAM = "on"
 # Free AI (shared/free-ai.js): Workers AI for every install; limits in code, the daily lines here. FREE_AI = "off" is the kill switch.
 # The account whose Workers AI usage the daily allowance reads (shared/free-ai-usage.js); the read token is the Worker secret CF_ANALYTICS_TOKEN (Account Analytics: Read).
+# The 5-minute cloud health (shared/cloud-health.js) reads the same account with the Worker secret CF_HEALTH_TOKEN (Workers Containers: Read + Account Analytics: Read).
 CF_ACCOUNT_ID = "f192582d62c440f34f9ca7997558cee3"
 # Free AI limits. EARLY-ADOPTER values (owner, 16 Oct 2026: "in the first period, we can be more generous"): per install 50 calls/min, $0.50/day, $5/month;
 # global $5/day alert, $10/day stop, $200/month stop with an alert at $100 (owner, 16 Oct 2026: default-on hosted Always on for trials hits the old $100 at ~200 new installs a month). With traction go back to the TIGHT set (also the code defaults in shared/free-ai.js):

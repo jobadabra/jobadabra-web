@@ -65,9 +65,10 @@ export function employerCard(kind, facts = {}) {
  */
 export function capCard(level, facts) {
   const reached = level === 'reached', measured = facts.used != null && facts.line != null;
-  return card({level: reached ? 'red' : 'orange', headline: `${facts.title} ${reached ? 'reached its stop' : 'is approaching its stop'}${measured ? `: ${facts.used} of ${facts.line}` : ''}`,
+  const words = facts.words || {reached: 'reached its stop', approaching: 'is approaching its stop', reopen: 'To reopen it', move: 'To move the stop'};   // shared/cloud-health.js brings its own
+  return card({level: reached ? 'red' : 'orange', headline: `${facts.title} ${reached ? words.reached : words.approaching}${measured ? `: ${facts.used} of ${facts.line}` : ''}`,
     bar: measured && Number.isFinite(facts.total) ? {done: Math.min(facts.done, facts.total), total: facts.total, doneWord: `${facts.word} used`, restWord: 'left'} : null,
-    verdict: {ok: false, text: `${reached ? 'Now' : `At ${facts.line ?? 'the stop'}`} ${facts.sees}. ${reached ? 'To reopen it' : 'To move the stop'}: ${facts.fix}.`}, link: {text: 'Open the AI costs', url: site('/admin/ai/costs')}});
+    verdict: {ok: false, text: `${reached ? 'Now' : `At ${facts.line ?? 'the stop'}`} ${facts.sees}. ${reached ? words.reopen : words.move}: ${facts.fix}.`}, link: facts.link || {text: 'Open the AI costs', url: site('/admin/ai/costs')}});
 }
 
 /**
