@@ -1,7 +1,7 @@
 name: Release · Always on runner
 # Deploys the hosted Always on runner Worker and its container image (workers/hosted-runner, hosted/Dockerfile: the engine as the app runs it). Started by public-watch.yml (production, when the engine
 # or the runner's own files changed) or by hand (`staging` or `production`).
-# Why (5 Nov 2026, hr 2/6; owner: "why the Easiest not open yet?"): the Worker was written on 16 Oct and its header said site.yml deploys it; no workflow ever did, so the queue hosted-runs had
+# Why (5 Nov 2026, hr 2/6; owner: "why the Easiest not open yet?"): the Worker was written on 16 Oct and its header said site.yml deploys it; no workflow ever did, so the queue (then hosted-runs) had
 # no consumer and Always on on our servers could not run. Not on push: the engine lives in the public repo, so public-watch.yml starts production when it changes (13 Nov 2026, owner:
 # "Deploy unattended (Recommended)", replacing 5 Nov's "You, at that step" wait for the owner's yes).
 # Secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID (the same as Release · Ready to send runner). The image carries no secret and no user data.
@@ -48,7 +48,11 @@ jobs:
       - name: The staging queue, made when missing (the deploy refuses a consumer queue that does not exist)
         if: env.CLOUDFLARE_API_TOKEN != '' && inputs.target == 'staging'
         working-directory: workers/hosted-runner
-        run: npx --yes wrangler@4 queues info hosted-runs-staging >/dev/null 2>&1 || ../../tools/cf-retry.sh npx --yes wrangler@4 queues create hosted-runs-staging
+        run: npx --yes wrangler@4 queues info find-jobs-runs-staging >/dev/null 2>&1 || ../../tools/cf-retry.sh npx --yes wrangler@4 queues create find-jobs-runs-staging
+      - name: The production queue, made when missing (site.yml makes it too, before the site sends to it)
+        if: env.CLOUDFLARE_API_TOKEN != '' && inputs.target == 'production'
+        working-directory: workers/hosted-runner
+        run: npx --yes wrangler@4 queues info find-jobs-runs >/dev/null 2>&1 || ../../tools/cf-retry.sh npx --yes wrangler@4 queues create find-jobs-runs || npx --yes wrangler@4 queues info find-jobs-runs >/dev/null
       - name: Deploy the runner and its image
         if: env.CLOUDFLARE_API_TOKEN != ''
         working-directory: workers/hosted-runner

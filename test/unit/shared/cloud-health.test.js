@@ -8,7 +8,7 @@ import {INSTANCE} from '../../../workers/ai-broker/lib/do-container.mjs';
 
 const GIB = 2 ** 30, DAY = new Date('2026-11-13T19:00:00Z'), NEXT_DAY = new Date('2026-11-14T19:00:00Z');
 const kv = () => { const m = new Map(); return {get: async k => m.get(k) ?? null, put: async (k, v) => { m.set(k, v); }, delete: async k => { m.delete(k); }}; };
-const APPS = [{id: 'aaaa-1', name: 'www-hosted-runner-hostedrunner', configuration: {memory_mib: 4096}}, {id: '5375b146b9b34714b745514835ad10fc', name: 'ai-broker-next', configuration: {}}];
+const APPS = [{id: 'aaaa-1', name: 'find-jobs-runner-engine', configuration: {memory_mib: 4096}}, {id: '5375b146b9b34714b745514835ad10fc', name: 'ai-broker-next', configuration: {}}];
 
 // A stand-in for Cloudflare (app list, container metrics, Worker invocations: the last hour vs the week) and Telegram (every card's text lands in `sent`).
 function cloud({containers = [], hour = [], week = [], down = false} = {}) {
@@ -31,7 +31,7 @@ const env = extra => ({WAITLIST: kv(), BRAIN_BOT_TOKEN: 't', BRAIN_CHAT_ID: 'c',
 
 test('the AI broker\'s size in the check is the size its code starts it with', () => {
   assert.equal(SIZE_FROM_CODE['ai-broker-next'], INSTANCE.memoryMib);
-  assert.deepEqual(['www-hosted-runner-hostedrunner', 'find-jobs-runner-x', 'www-ready-runner-readyrunner', 'apply-runner-x', 'ai-broker-next'].map(label),
+  assert.deepEqual(['find-jobs-runner-engine', 'find-jobs-runner-x', 'apply-runner-browser', 'apply-runner-x', 'ai-broker-next'].map(label),
     ['Find jobs runner', 'Find jobs runner', 'Apply runner', 'Apply runner', 'AI broker']);
 });
 
@@ -41,8 +41,8 @@ test('memory, CPU, disk: nothing under 80%, 🟠 past it, 🔴 at the critical l
   assert.deepEqual((await cloudHealth(e, {now: DAY, fetcher: c.fetcher})).told, []);
   assert.equal(c.sent.length, 0);
   c = cloud({containers: [box('aaaa-1', 3.4 * GIB, 0.85, 0.5)]});
-  assert.deepEqual((await cloudHealth(e, {now: DAY, fetcher: c.fetcher})).told, ['health-memory:www-hosted-runner-hostedrunner', 'health-cpu:www-hosted-runner-hostedrunner']);
-  assert.match(c.sent[0], /^🟠[^]*Find jobs runner \(www-hosted-runner-hostedrunner\): memory passed its warning line: 85% of 95%/);
+  assert.deepEqual((await cloudHealth(e, {now: DAY, fetcher: c.fetcher})).told, ['health-memory:find-jobs-runner-engine', 'health-cpu:find-jobs-runner-engine']);
+  assert.match(c.sent[0], /^🟠[^]*Find jobs runner \(find-jobs-runner-engine\): memory passed its warning line: 85% of 95%/);
   assert.match(c.sent[0], /Open Cloudflare Observability/); assert.doesNotMatch(c.sent[0], /AI costs|reopen/);
   c = cloud({containers: [box('aaaa-1', 3.9 * GIB, 1.0, 0.96)]});
   await cloudHealth(e, {now: DAY, fetcher: c.fetcher});
@@ -57,7 +57,7 @@ test('memory, CPU, disk: nothing under 80%, 🟠 past it, 🔴 at the critical l
 
 test('a Worker\'s failed replies: judged against its own normal week, 10 failures an hour at least, our Workers only', async () => {
   const week = [...calls('www', 64000, 26), ...calls('jobadabra-ai-broker', 87000, 1150), ...calls('personal-finance-monitor', 100, 7, 'scriptThrewException'), ...calls('www-staging', 30, 30)];
-  let c = cloud({week, hour: [...calls('www', 980, 20), ...calls('jobadabra-ai-broker', 1470, 30), ...calls('personal-finance-monitor', 10, 90, 'scriptThrewException'), ...calls('www-staging', 0, 50), ...calls('www-hosted-runner', 1, 9)]});
+  let c = cloud({week, hour: [...calls('www', 980, 20), ...calls('jobadabra-ai-broker', 1470, 30), ...calls('personal-finance-monitor', 10, 90, 'scriptThrewException'), ...calls('www-staging', 0, 50), ...calls('find-jobs-runner', 1, 9)]});
   const e = env();
   assert.deepEqual((await cloudHealth(e, {now: DAY, fetcher: c.fetcher})).told, ['health-errors:www'], 'www 2% against 0.04%; the broker 2% is inside 3x its 1.3%; 9 failures is noise');
   assert.match(c.sent[0], /^🟠[^]*Worker www: failed replies in the last hour \(its normal week: 0\.04%\)[^]*2% of 10%/);

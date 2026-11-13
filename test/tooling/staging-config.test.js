@@ -17,7 +17,7 @@ test('the Hosted data is staging\'s own: D1, KV, bucket and queue', () => {
   assert.match(staging, new RegExp(`database_name = "${STAGING_DATA.d1.name}"\\ndatabase_id = "${STAGING_DATA.d1.id}"`));
   assert.ok(staging.includes(`id = "${STAGING_DATA.kv.id}"`));
   assert.ok(staging.includes(`bucket_name = "${STAGING_DATA.hostedBucket}"`) && staging.includes(`queue = "${STAGING_DATA.hostedQueue}"`));
-  for (const production of ['61f8d0f7-82c2-4afe-a6e5-508aaaf2cfa0', 'a871d4644b614266b5bfa7f1b5e811c1', 'bucket_name = "hosted-state"', 'queue = "hosted-runs"']) assert.ok(!staging.includes(production), `production's ${production} is gone`);
+  for (const production of ['61f8d0f7-82c2-4afe-a6e5-508aaaf2cfa0', 'a871d4644b614266b5bfa7f1b5e811c1', 'bucket_name = "hosted-state"', 'queue = "find-jobs-runs"']) assert.ok(!staging.includes(production), `production's ${production} is gone`);
 });
 
 test('Always on is on in staging and production, and only staging\'s runs call staging back', () => {
@@ -29,5 +29,5 @@ test('Always on is on in staging and production, and only staging\'s runs call s
 });
 
 test('a config that lost a data binding the copy rewrites fails loudly', () => {
-  assert.throws(() => stagingToml(toml.replace('queue = "hosted-runs"', 'queue = "renamed"')), /the queue was not switched/);
+  assert.throws(() => stagingToml(toml.replace('queue = "find-jobs-runs"', 'queue = "renamed"')), /the queue was not switched/);
 });

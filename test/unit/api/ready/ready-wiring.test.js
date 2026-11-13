@@ -107,11 +107,11 @@ test('the owner runs a queued night by hand: owner only, once, and only with the
 
 test('the site config binds the Queue and the runner Worker the code expects, and the runner consumes that Queue', () => {
   const config = readFileSync(new URL('../../../../workers/www/wrangler.toml', import.meta.url), 'utf8');
-  assert.match(config, /binding = "READY_QUEUE"\s+queue = "ready-runs"/);
-  assert.match(config, /binding = "READY_RUNNER"\s+service = "www-ready-runner"/);
+  assert.match(config, /binding = "READY_QUEUE"\s+queue = "apply-runs"/);
+  assert.match(config, /binding = "READY_RUNNER"\s+service = "apply-runner"/);
   const runner = readFileSync(new URL('../../../../workers/ready-runner/wrangler.jsonc', import.meta.url), 'utf8');
-  assert.match(runner, /"name": "www-ready-runner"/);
-  assert.match(runner, /"queue": "ready-runs"/);
+  assert.match(runner, /"name": "apply-runner"/);
+  assert.match(runner, /"queue": "apply-runs"/);
 });
 
 // 18 Oct 2026, the owner's app after #1429: "still Ready to send is not on for this install." A deploy dropped the held tabs; the site's call woke a fresh container

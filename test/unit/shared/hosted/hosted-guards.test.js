@@ -238,6 +238,6 @@ test('the runner Worker hands the deployed stamp to consume(), and the deploy co
 test('wrangler.toml binds the state bucket and the queue, and the runner config consumes that queue', () => {
   const toml = readFileSync(new URL('../../../../workers/www/wrangler.toml', import.meta.url), 'utf8'), runner = readFileSync(new URL('../../../../workers/hosted-runner/wrangler.jsonc', import.meta.url), 'utf8');
   assert.match(toml, /binding = "HOSTED_STATE"\nbucket_name = "hosted-state"/);
-  assert.match(toml, /binding = "HOSTED_QUEUE"\nqueue = "hosted-runs"/);
-  assert.match(runner, /"queue": "hosted-runs"/);
+  assert.match(toml, /binding = "HOSTED_QUEUE"\nqueue = "find-jobs-runs"/);
+  assert.match(runner, /"queue": "find-jobs-runs"/);
 });

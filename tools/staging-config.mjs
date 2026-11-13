@@ -1,7 +1,7 @@
 // Makes workers/www/wrangler.staging.toml from workers/www/wrangler.toml: its own Worker name, no custom domains and no cron, so a staging deploy never takes traffic or runs the scheduled jobs.
 // Usage: node tools/staging-config.mjs [name]  (default www-staging; the URL is https://<name>.jobpilotto.workers.dev).
 // Why (5 Nov 2026, hr 3/6): the staging copy used to keep production's data bindings ("staging only gets GET probes"). Always on is tested on staging with a fictional install, which writes (the schedule, the
-// profile, the queue), so the Hosted data is staging's own: D1 www-stats-staging, KV www-waitlist-staging, bucket hosted-state-staging, queue hosted-runs-staging. Always on is switched on there and its runs
+// profile, the queue), so the Hosted data is staging's own: D1 www-stats-staging, KV www-waitlist-staging, bucket hosted-state-staging, queue find-jobs-runs-staging. Always on is switched on there and its runs
 // call staging back (HOSTED_SITE). The other buckets stay shared: nothing in the hosted flow writes them.
 import {readFileSync, writeFileSync} from 'node:fs';
 
@@ -9,9 +9,9 @@ export const STAGING_DATA = {
   d1: {name: 'www-stats-staging', id: '89319eeb-0413-4f5e-9aaf-291423825d75'},
   kv: {id: 'd4bcaa1e9f0e4fb0affa897b73c5fecb'},   // www-waitlist-staging
   hostedBucket: 'hosted-state-staging',
-  hostedQueue: 'hosted-runs-staging',
+  hostedQueue: 'find-jobs-runs-staging',
 };
-const PRODUCTION = {d1Id: '61f8d0f7-82c2-4afe-a6e5-508aaaf2cfa0', kvId: 'a871d4644b614266b5bfa7f1b5e811c1', bucket: 'hosted-state', queue: 'hosted-runs'};
+const PRODUCTION = {d1Id: '61f8d0f7-82c2-4afe-a6e5-508aaaf2cfa0', kvId: 'a871d4644b614266b5bfa7f1b5e811c1', bucket: 'hosted-state', queue: 'find-jobs-runs'};
 
 /** The staging copy of wrangler.toml text: own name, no routes, no cron, its own Hosted data, Always on on. Throws when production's name, routes, cron or data would survive, or a staging value did not land. */
 export function stagingToml(toml, name = 'www-staging') {

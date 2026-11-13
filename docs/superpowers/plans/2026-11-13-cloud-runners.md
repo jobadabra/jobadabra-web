@@ -19,11 +19,17 @@ Why (13 Nov 2026, owner: "insead of 5 PRs? can't we make it in 2 or 3 ?" · "eac
 | 3/3 | Staging for Find jobs, the site and Apply: each deploys to its staging copy and is checked before production, behind one switch (repo variable `STAGING_GATE`, off until the first real users) |
 
 ## Progress
-- [x] 1/3 capacity + cloud alerts (this PR)
-- [ ] 2/3 rename + README graph
+- [x] 1/3 capacity + cloud alerts (#635)
+- [x] 2/3 rename + README graph, and the runner 🔴 from a refused start (Gitar on #635) (this PR)
 - [ ] 3/3 staging for all three (off)
 
 ## Not now (parked with a trigger)
 - Apply deploys wait while a night is held: trigger, the first Pro night.
 - A per-host pace for boards across hosted people: trigger, 5+ hosted people.
 - A staging search spends AI: which account pays is asked before the switch turns on.
+
+## 2/3 after the merge (by hand, in this order)
+0. Merge in the day (not 21:47-07:00 UTC): a night held by the old `www-ready-runner` would lose its morning tabs when the site switches to `apply-runner`.
+1. `site.yml` and `release-ready-runner.yml` start on the merge: the queues `find-jobs-runs` and `apply-runs` are made, `apply-runner` deploys, then the site (it waits for `apply-runner`).
+2. `gh workflow run release-hosted-runner.yml -f target=production` right away: `find-jobs-runner` consumes `find-jobs-runs` (runs the site queues there wait for it, well inside their 30-minute life).
+3. Once both new apps show running instances: delete the Workers `www-hosted-runner`, `www-ready-runner` (and their container apps), then the queues `hosted-runs`, `ready-runs` once empty. The staging runner `www-hosted-runner-staging` and `hosted-runs-staging` go in 3/3.

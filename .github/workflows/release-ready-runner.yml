@@ -42,6 +42,10 @@ jobs:
       - name: One night in the built image first
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: docker build -f hosted/ready-fill/Dockerfile -t ready-fill:check . && node hosted/ready-fill/image-check.mjs ready-fill:check
+      - name: The queue, made when missing (the deploy refuses a consumer queue that does not exist; site.yml may make it at the same moment)
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        working-directory: workers/ready-runner
+        run: npx --yes wrangler@4 queues info apply-runs >/dev/null 2>&1 || ../../tools/cf-retry.sh npx --yes wrangler@4 queues create apply-runs || npx --yes wrangler@4 queues info apply-runs >/dev/null
       - name: Deploy the runner and its image
         if: env.CLOUDFLARE_API_TOKEN != ''
         working-directory: workers/ready-runner

@@ -1,5 +1,5 @@
 // The hosted runner's deploy: the staging copy never shares the production Worker name or queue, and the workflow is by hand (hr 2/6, 5 Nov 2026).
-// Why: a staging runner reading the queue "hosted-runs" would take production's runs and call the wrong site; a push-triggered production deploy would skip the owner's yes.
+// Why: a staging runner reading the queue "find-jobs-runs" would take production's runs and call the wrong site; a push-triggered production deploy would skip the owner's yes.
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
@@ -11,9 +11,9 @@ import {RUNNER_CEILING} from '../../shared/cap-alerts.js';
 const ROOT = new URL('../../', import.meta.url);
 const production = readConfig(readFileSync(new URL('workers/hosted-runner/wrangler.jsonc', ROOT), 'utf8'));
 
-test('the committed config is the production one: the Worker www-hosted-runner reads the queue hosted-runs', () => {
-  assert.equal(production.name, 'www-hosted-runner');
-  assert.deepEqual(production.queues.consumers.map(consumer => consumer.queue), ['hosted-runs']);
+test('the committed config is the production one: the Worker find-jobs-runner reads the queue find-jobs-runs', () => {
+  assert.equal(production.name, 'find-jobs-runner');
+  assert.deepEqual(production.queues.consumers.map(consumer => consumer.queue), ['find-jobs-runs']);
   assert.ok(production.containers[0].image.endsWith('hosted/Dockerfile'));
 });
 
@@ -34,7 +34,7 @@ test('the runner keeps its logs (production and the staging copy), so a run that
 });
 
 test('a staging config that still names production fails loudly', () => {
-  const same = {...production, queues: {consumers: [{queue: 'hosted-runs'}]}, containers: production.containers};
+  const same = {...production, queues: {consumers: [{queue: 'find-jobs-runs'}]}, containers: production.containers};
   assert.throws(() => stagingConfig({...same, name: STAGING.name, queues: {consumers: []}}), /production name or queue/, 'an input already named like staging with no consumer cannot hide the check');
 });
 
@@ -44,7 +44,7 @@ test('the deploy workflow is started by public-watch for production or by hand, 
   assert.ok(/workflow_dispatch:/.test(flow) && !/^\s{2}(push|schedule|pull_request):/m.test(flow), 'only dispatched: by public-watch or by hand');
   assert.ok(/options: \[staging, production\]/.test(flow));
   assert.ok(/runner-config\.mjs staging/.test(flow));
-  assert.ok(/queues create hosted-runs-staging/.test(flow), 'the staging queue is made when missing');
+  assert.ok(/queues create find-jobs-runs-staging/.test(flow), 'the staging queue is made when missing');
   const watch = readFileSync(new URL('.github/workflows/public-watch.yml', ROOT), 'utf8');
   assert.match(watch, /public-watch\.sh "\$GITHUB_WORKSPACE" hosted src config templates requirements\.txt requirements-render\.txt/, 'the watch follows every engine path the image COPYs');
   assert.match(watch, /start "\$\{\{ steps\.change\.outputs\.hosted \}\}" "\.public-hosted \.public-hosted-own" release-hosted-runner\.yml -f target=production/, 'a changed engine starts the production deploy');

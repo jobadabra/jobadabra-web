@@ -1,10 +1,10 @@
 // Makes workers/hosted-runner/wrangler.<target>.jsonc from wrangler.jsonc: `staging` gets its own Worker name and its own queue, so a staging runner can never take a production run.
 // Usage: node tools/runner-config.mjs <staging|production>   (production writes nothing: the committed wrangler.jsonc is the production config)
-// Why (5 Nov 2026, hr 2/6): the committed config consumes the queue "hosted-runs", the one www fills. A staging deploy of that same file would also read it, steal production's runs and run them
+// Why (5 Nov 2026, hr 2/6): the committed config consumes the queue "find-jobs-runs", the one www fills. A staging deploy of that same file would also read it, steal production's runs and run them
 // against the wrong site. The staging file renames the Worker and the queue and caps the instances; nothing else changes (same image, same container class).
 import {readFileSync, writeFileSync} from 'node:fs';
 
-export const STAGING = {name: 'www-hosted-runner-staging', queue: 'hosted-runs-staging', maxInstances: 2};
+export const STAGING = {name: 'find-jobs-runner-staging', queue: 'find-jobs-runs-staging', maxInstances: 2};
 
 /** The committed config as an object: it is JSON with whole-line `//` comments. */
 export function readConfig(text) {
@@ -17,7 +17,7 @@ export function stagingConfig(config) {
   out.name = STAGING.name;
   out.queues = {consumers: config.queues.consumers.map(consumer => ({...consumer, queue: STAGING.queue}))};
   out.containers = config.containers.map(container => ({...container, max_instances: STAGING.maxInstances}));
-  if (out.name === config.name || out.queues.consumers.some(consumer => consumer.queue === 'hosted-runs')) throw new Error('staging runner config still has the production name or queue');
+  if (out.name === config.name || out.queues.consumers.some(consumer => consumer.queue === 'find-jobs-runs')) throw new Error('staging runner config still has the production name or queue');
   return out;
 }
 
