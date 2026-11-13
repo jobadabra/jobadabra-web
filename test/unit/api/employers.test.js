@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import worker from '../../../workers/www/index.js';
-import {MAX_NOFEED, clean} from '../../../api/employers.js';
+import {MAX_NOFEED, clean, familyJobsOf} from '../../../api/employers.js';
 
 const store = new Map();
 const env = () => ({INDEX_PUBLISH_KEY: 'k3y', ASSETS: {fetch: () => new Response('asset')},
@@ -363,12 +363,13 @@ test('the central scout\'s measured boards are served as the same board fact ins
   assert.equal(put.board_facts, 5);
   const {agreedSites} = await import('../../../api/employers.js');
   const facts = (await agreedSites(e)).filter(fact => fact.kind === 'board').sort((a, b) => a.host.localeCompare(b.host));
+  // 13 Nov 2026 (bp): these facts carry no count per family (kept before it): they prove no family, so no cell is `measured`
   assert.deepEqual(facts.map(f => [f.host, f.url, f.recipe, f.installs, f.relevant]), [
-    ['delucru.md', good.url, {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0, measured: true}]],
-    ['needs.md', 'https://needs.md/?q={role}', {countries: ['md'], browser: true}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0, measured: true}]],
-    ['rabota.md', 'https://rabota.md/jobs?q={role}&place={place}', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 22, fit70: 0, measured: true}]],
-    ['section.md', 'https://section.md/jobs/it-software', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 9, fit70: 0, measured: true}]],
-    ['truthy.md', 'https://truthy.md/?q={role}', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0, measured: true}]]]);
+    ['delucru.md', good.url, {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0}]],
+    ['needs.md', 'https://needs.md/?q={role}', {countries: ['md'], browser: true}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0}]],
+    ['rabota.md', 'https://rabota.md/jobs?q={role}&place={place}', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 22, fit70: 0}]],
+    ['section.md', 'https://section.md/jobs/it-software', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 9, fit70: 0}]],
+    ['truthy.md', 'https://truthy.md/?q={role}', {countries: ['md']}, 1, [{family: 'software_dev', country: 'md', installs: 1, in_places: 14, fit70: 0}]]]);
   await call(e, 'PUT', auth, {feeds: [feed('a')]});   // a publish without the field keeps the facts
   assert.equal((await agreedSites(e)).filter(fact => fact.kind === 'board').length, 5);
   e.STATS.db.prepare("UPDATE sitefacts SET day = '2000-01-01' WHERE host = 'rabota.md'").run();
@@ -618,4 +619,31 @@ test('an emptied D1 table is not a line of zero: the KV copy guards the next pub
   await call(e, 'PUT', auth, {feeds: some(20)});
   e.STATS.db.prepare('DELETE FROM index_feeds').run();
   assert.equal((await call(e, 'PUT', auth, {feeds: some(5)})).status, 409);
+});
+
+test('a scout board is measured for a role family only by that family\'s own jobs, served as a number with its day (13 Nov 2026, owner: "Why ? Let\'s fix it.")', async () => {
+  store.clear();
+  const e = {...env(), STATS: d1sitefacts()};
+  const airline = {host: 'airline.es', url: 'https://airline.es/jobs/in-spain', country: 'es', local_jobs: 178, families: ['electrical_mechanical', 'service_hotel', 'construction'],
+    family_jobs: {electrical_mechanical: 1, service_hotel: 150, construction: 2}};
+  const jobeka = {host: 'jobeka.es', url: 'https://jobeka.es/?q={role}', country: 'es', local_jobs: 40, families: ['electrical_mechanical', 'teaching'],
+    family_jobs: {electrical_mechanical: 19}};   // teaching: seen, never asked its own word: not measured
+  const put = await (await call(e, 'PUT', auth, {feeds: [feed('a')], board_facts: [airline, jobeka]})).json();
+  assert.equal(put.board_facts, 2);
+  const {agreedSites} = await import('../../../api/employers.js');
+  const cells = Object.fromEntries((await agreedSites(e)).filter(fact => fact.kind === 'board').map(fact => [fact.host, Object.fromEntries(fact.relevant.map(cell => [cell.family, cell]))]));
+  const day = new Date().toISOString().slice(0, 10);
+  assert.deepEqual(cells['airline.es'].electrical_mechanical, {family: 'electrical_mechanical', country: 'es', installs: 1, in_places: 1, fit70: 0, right: 1, day}, 'one electrician: a number, not measured');
+  assert.equal(cells['airline.es'].construction.measured, undefined);
+  assert.equal(cells['airline.es'].service_hotel.measured, true);
+  assert.deepEqual(cells['jobeka.es'].electrical_mechanical, {family: 'electrical_mechanical', country: 'es', installs: 1, in_places: 19, fit70: 0, right: 19, day, measured: true});
+  assert.deepEqual(cells['jobeka.es'].teaching, {family: 'teaching', country: 'es', installs: 1, in_places: 0, fit70: 0}, 'not measured: no number, never 0');
+});
+
+test('the scout\'s family counts are checked on publish: whole numbers of pool families only, a bad one drops the count and keeps the board', () => {
+  assert.deepEqual(familyJobsOf({software_dev: 5, nonsense: 3, data_ai: -1, teaching: 2.5, it_support: '4', kitchen: 99999}), {software_dev: 5, kitchen: 5000});
+  assert.deepEqual(familyJobsOf({}), {}, 'asked, found none anywhere: measured empty');
+  assert.equal(familyJobsOf(undefined), undefined);
+  assert.equal(familyJobsOf([3]), undefined);
+  assert.equal(familyJobsOf('{"software_dev": 5}'), undefined);
 });
