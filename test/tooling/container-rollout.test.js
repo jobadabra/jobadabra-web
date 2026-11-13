@@ -39,6 +39,15 @@ test('rolled out only when the rollout to the pushed version completed AND every
   assert.equal(rolledOut(versions, [rollout(4, 'completed')], [], 'sha256:bbb').done, true);   // no instance yet: the next one starts on it
 });
 
+// Why (13 Nov 2026, web #638 run 43493632676): the renamed runner's first deploy made a new application whose only version is 1, with no rollout ever; the wait timed out red after 10 min
+// while version 1 held the pushed image. A first version is the application as created: nothing to roll from.
+test('a new application: its only version, version 1, holds the pushed image and has no rollout: rolled out, not 10 minutes of waiting', () => {
+  assert.deepEqual(rolledOut([version(1, 'ccc')], [], [], 'sha256:ccc'), {done: true, why: 'version 1 (ccc) is the new application\'s first version'});
+  assert.equal(rolledOut([version(1, 'ccc')], [], [instance('ddd')], 'sha256:ccc').done, false, 'an instance on another image still waits');
+  assert.equal(rolledOut([version(2, 'eee'), version(1, 'ccc')], [], [], 'sha256:eee').done, false, 'a later version with no rollout yet still waits');
+  assert.equal(rolledOut([version(2, 'eee'), version(1, 'ccc')], [], [], 'sha256:ccc').done, false, 'version 1 of an older application is not a fresh one');
+});
+
 test('a rollout Cloudflare reverted or replaced fails the wait at once (no 10-minute wait for a rollout that will never come)', () => {
   for (const status of ['reverted', 'replaced']) {
     const answer = rolledOut([version(4, 'bbb')], [rollout(4, status)], [], 'sha256:bbb');

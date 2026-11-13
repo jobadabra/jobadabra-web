@@ -25,7 +25,13 @@ export function rolledOut(versions, rollouts, instances, expected = '') {
   const version = expected ? sorted.find(item => digestOf(item.configuration?.image) === expected) : versions.find(item => item.version === rollouts[0]?.target_version);
   if (!version) return {done: false, why: expected ? `version with the pushed image ${short(expected)} not listed yet` : 'no rollout listed yet'};
   const target = digestOf(version.configuration?.image), rollout = rollouts.find(item => item.target_version === version.version);
-  if (!rollout) return {done: false, why: `no rollout to version ${version.version} yet`};
+  // Why (13 Nov 2026, web #638 run 43493632676): a new application (a renamed Worker) is created at version 1 with no rollout, ever; its only version is what it runs.
+  const fresh = !rollout && version.version === 1 && sorted.length === 1;
+  if (!rollout && !fresh) return {done: false, why: `no rollout to version ${version.version} yet`};
+  if (fresh) {
+    const other = instances.filter(item => digestOf(item.image) !== target);
+    return other.length ? {done: false, why: `version 1 is new, ${other.length} instance(s) on another image`} : {done: true, why: `version 1 (${short(target)}) is the new application's first version`};
+  }
   if (rollout.status === 'reverted' || rollout.status === 'replaced') {
     // Why (5 Nov 2026, Gitar on #383): a redeploy of an image an older version used (a revert) finds that version before its own is listed; only the newest is final.
     if (version !== sorted[0]) return {done: false, why: `version ${version.version} with the pushed image is an old one; waiting for the new version`};
