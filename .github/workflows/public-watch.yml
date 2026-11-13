@@ -1,5 +1,6 @@
 name: Release · Watch the public repo
-# A deploy here bundles or builds from files of the public repo (the Worker imports ../../extension/recipe-schema.js, the Ready to send image builds hosted/ready-fill and extension/).
+# A deploy here bundles or builds from files of the public repo (the Worker imports ../../extension/recipe-schema.js, the Ready to send image builds hosted/ready-fill and extension/, the Always on
+# runner's image is the engine: src, config, templates, requirements).
 # The public repo cannot start a workflow here, so this one looks every hour: when those files changed since the last record (.public-site, .public-ready), it starts the deploy.
 # Why (2 Nov 2026, go; owner: "let's use tags not branches for storing things. Otherwise, they keep popping up like that"): the records live under the tag public-watch-state, not on main and not on a
 # branch. Main carries the org ruleset (pull requests only), which refuses a direct push, and the old push, which ended in a swallowed error, would have hidden that refusal. A pushed branch also made
@@ -11,7 +12,7 @@ on:
 
 permissions:
   contents: write   # moves the tag public-watch-state (never main, never a branch)
-  actions: write    # starts the two deploys
+  actions: write    # starts the three deploys
 
 concurrency:
   group: public-watch
@@ -40,14 +41,20 @@ jobs:
         run: |
           site=$(tools/public-watch.sh "$GITHUB_WORKSPACE" site app-core/src worker/src extension desktop/lib desktop/e2e/lib config)
           ready=$(tools/public-watch.sh "$GITHUB_WORKSPACE" ready hosted/ready-fill desktop/ready-fill extension app-core/src worker/src desktop/lib/form-address.js desktop/lib/triage-reader.js desktop/lib/triage-read.js desktop/lib/session-tab.js desktop/lib/submit-proof.js desktop/lib/apply-eligibility.js desktop/lib/form-judge.js desktop/lib/page-kind.js desktop/lib/account-judge.js desktop/lib/confirmation-judge.js desktop/lib/ladder/value-class.js desktop/lib/ladder/rung1-kept.js desktop/lib/ladder/rung2-sketch.js desktop/lib/ladder/rung3-digest.js desktop/lib/ai/models.js)
-          echo "site=$site" >> "$GITHUB_OUTPUT"; echo "ready=$ready" >> "$GITHUB_OUTPUT"
-          echo "public-watch: site $site, ready-to-send $ready"
+          # Why (13 Nov 2026, owner, asked via AskUserQuestion: "Both, I do the PR (Recommended)", "Deploy unattended (Recommended)"): the Always on runner's production image was last built on
+          # 5 Nov, so every hosted Find jobs run missed 8 days of engine changes; it now follows the engine and its own files (the Worker, the consumer it imports, the Dockerfile) like the others.
+          hosted=$(tools/public-watch.sh "$GITHUB_WORKSPACE" hosted src config templates requirements.txt requirements-render.txt)
+          hosted_own=$(tools/public-watch.sh "$GITHUB_WORKSPACE/.private" hosted-own workers/hosted-runner api/hosted-consume.js ops/hosted/Dockerfile)
+          [ "$hosted_own" = changed ] && hosted=changed
+          { echo "site=$site"; echo "ready=$ready"; echo "hosted=$hosted"; } >> "$GITHUB_OUTPUT"
+          echo "public-watch: site $site, ready-to-send $ready, always-on runner $hosted"
       - name: Start the deploys that are behind, then record
-        if: steps.change.outputs.site == 'changed' || steps.change.outputs.ready == 'changed'
+        if: steps.change.outputs.site == 'changed' || steps.change.outputs.ready == 'changed' || steps.change.outputs.hosted == 'changed'
         working-directory: .private
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           [ "${{ steps.change.outputs.site }}" = changed ] && gh workflow run site.yml
           [ "${{ steps.change.outputs.ready }}" = changed ] && gh workflow run release-ready-runner.yml
-          tools/state-tag.sh write public-watch-state "$GITHUB_WORKSPACE/.state" "Record the public files the last deploy was started for" .public-site .public-ready
+          [ "${{ steps.change.outputs.hosted }}" = changed ] && gh workflow run release-hosted-runner.yml -f target=production
+          tools/state-tag.sh write public-watch-state "$GITHUB_WORKSPACE/.state" "Record the public files the last deploy was started for" .public-site .public-ready .public-hosted .public-hosted-own

@@ -37,13 +37,17 @@ test('a staging config that still names production fails loudly', () => {
   assert.throws(() => stagingConfig({...same, name: STAGING.name, queues: {consumers: []}}), /production name or queue/, 'an input already named like staging with no consumer cannot hide the check');
 });
 
-test('the deploy workflow is by hand only and picks staging or production', () => {
+test('the deploy workflow is started by public-watch for production or by hand, and picks staging or production', () => {
+  // Why (13 Nov 2026, owner: "Deploy unattended (Recommended)"): production follows the engine through public-watch, with no approval click; never on push, schedule or PR of this repo.
   const flow = readFileSync(new URL('.github/workflows/release-hosted-runner.yml', ROOT), 'utf8').replace(/^#.*$/gm, '');
-  assert.ok(/workflow_dispatch:/.test(flow) && !/^\s{2}(push|schedule|pull_request):/m.test(flow), 'no push, schedule or PR trigger: production waits for the owner');
+  assert.ok(/workflow_dispatch:/.test(flow) && !/^\s{2}(push|schedule|pull_request):/m.test(flow), 'only dispatched: by public-watch or by hand');
   assert.ok(/options: \[staging, production\]/.test(flow));
   assert.ok(/runner-config\.mjs staging/.test(flow));
-  assert.ok(/environment: \$\{\{ inputs\.target == 'production' && 'production'/.test(flow), 'production runs in its own environment, where the owner is the required reviewer');
   assert.ok(/queues create hosted-runs-staging/.test(flow), 'the staging queue is made when missing');
+  const watch = readFileSync(new URL('.github/workflows/public-watch.yml', ROOT), 'utf8');
+  assert.match(watch, /public-watch\.sh "\$GITHUB_WORKSPACE" hosted src config templates requirements\.txt requirements-render\.txt/, 'the watch follows every engine path the image COPYs');
+  assert.match(watch, /gh workflow run release-hosted-runner\.yml -f target=production/, 'a changed engine starts the production deploy');
+  assert.match(watch, /\.public-hosted \.public-hosted-own/, 'both records are kept, or the next watch deploys again');
 });
 
 test('the runner Worker parses (its tests cannot import it: @cloudflare/containers does not load under node)', () => {
