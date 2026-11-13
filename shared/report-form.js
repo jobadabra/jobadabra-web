@@ -65,7 +65,7 @@ async function upload(request, env, now, fetcher) {
     .bind(day, body.byteLength, ALL_REPORTS_PER_DAY, ALL_BYTES_PER_DAY).run();
   if (((bumped.meta ?? bumped).changes ?? 0) < 1) {
     await flag(env, 'report-limit', 'all', 'day', now);
-    await dayTotal(env, day, now, fetcher);   // the 🔴 card once today (shared/cap-alerts.js), also when the crossing upload's card failed
+    await dayTotal(env, day, now, fetcher, true);   // the 🔴 card once today (shared/cap-alerts.js), also when the crossing upload's card failed
     return bad(429, 'limit reached for today');
   }
   await env.STATS.prepare('DELETE FROM form_reports WHERE day < ?').bind(dayOf(new Date(now.getTime() - KEEP_DAYS * 86400e3))).run();
@@ -79,10 +79,11 @@ async function upload(request, env, now, fetcher) {
   return Response.json({ok: true, id});
 }
 
-// The day's total across all installs, told against its two lines (🟠 near, 🔴 at; owner, 13 Nov 2026: "Telegram alerts to all the caps/limits/stops"). -> {reports, bytes}.
-async function dayTotal(env, day, now, fetcher) {
+// The day's total across all installs, told against its two lines (🟠 near; 🔴 when `refused`, for the line that refused: owner, 13 Nov 2026: "Telegram alerts to all the caps/limits/stops"). -> {reports, bytes}.
+async function dayTotal(env, day, now, fetcher, refused = false) {
   const total = await env.STATS.prepare('SELECT reports, bytes FROM form_report_days WHERE day = ?').bind(day).first() || {reports: 1, bytes: 0};
-  await Promise.all([capCheck(env, 'form-reports-day', total.reports, {now, fetcher}), capCheck(env, 'form-report-bytes-day', total.bytes, {now, fetcher})]);
+  const full = refused && total.reports >= ALL_REPORTS_PER_DAY;   // else the upload's bytes would have passed the bytes line
+  await Promise.all([capCheck(env, 'form-reports-day', total.reports, {now, fetcher, reached: full}), capCheck(env, 'form-report-bytes-day', total.bytes, {now, fetcher, reached: refused && !full})]);
   return total;
 }
 

@@ -213,7 +213,8 @@ export class AiBroker extends doContainer(DurableObject) {
       if (check.ok) await storage.put('meter', recordCall(meter, lane, now));
       return check;
     });
-    const lines = brokerLines(this.ctx.storage, env, this.limits); this.ctx.waitUntil?.(lines);   // 🟠/🔴 on the week lines and the drift lane (lib/cap-notes.mjs); never delays the call
+    const refused = {codex: !!verdict.quota, claude: !claudeCheck.ok && asked.includes('claude'), drift: lane === 'drift' && !verdict.ok && /^budget:daily/.test(verdict.why || '')};   // 🔴 only for a line that refused this call
+    const lines = brokerLines(this.ctx.storage, env, this.limits, refused); this.ctx.waitUntil?.(lines);   // 🟠/🔴 on the week lines and the drift lane (lib/cap-notes.mjs); never delays the call
     if (!verdict.ok && !verdict.ranOut) return {refusal: json(429, {why: claudeShut && verdict.quota ? claudeCheck.why : verdict.why})};   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
     return {model, chain, first: asked[0], env, verdict, claudeCheck, claudeShut, freeAiCannot, hasLater};
   }

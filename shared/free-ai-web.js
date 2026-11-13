@@ -66,12 +66,12 @@ export async function webSearch(request, env, access, now = new Date(), ctx = nu
   if (env.FREE_AI_WEB_SEARCH === 'off' || !env.WEB_SEARCH_ANTHROPIC_KEY) return error(503, 'The web search is not available with Free AI right now.');
   const [spent, calls, installToday] = await Promise.all([count(kv, keys.month(month)), count(kv, keys.calls(month)), count(kv, keys.install(access.who, day))]);
   if (spent >= monthLine(env) * 1e6) {   // the 🔴 card once this month, also when the crossing call's alert failed (shared/cap-alerts.js)
-    const told = capCheck(env, 'free-ai-web-month', spent, {now, fetcher});
+    const told = capCheck(env, 'free-ai-web-month', spent, {now, fetcher, reached: true});
     ctx?.waitUntil ? ctx.waitUntil(told) : await told;
     return error(503, 'The web search for Free AI is used up this month. It comes back next month.');
   }
   // Why (13 Nov 2026, owner, "Grouped hourly (Recommended)"): an install that used its searches is counted for the hourly card (shared/install-caps.js), at its last search and at a refusal.
-  const mine = installHit(env, 'web-search-day', access.who, installToday + 1, WEB.installPerDay, {now});
+  const mine = installHit(env, 'web-search-day', access.who, installToday + 1, WEB.installPerDay, {now, reached: installToday >= WEB.installPerDay});
   ctx?.waitUntil ? ctx.waitUntil(mine) : await mine;
   if (installToday >= WEB.installPerDay) return error(429, 'The web search ran its searches for today. It runs again tomorrow.', 'rate_limit_error');
   // Counted before the call, so a failing search is not retried in a loop and parallel asks from one install stop at the day's number.

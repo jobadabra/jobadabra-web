@@ -1,5 +1,5 @@
 // Guard: money — a stop that everyone hits in silence costs the owner users (they see "Free AI is busy today" and he is not told), and an alert that fails a call costs the call.
-// Every cap of the registry (shared/cap-alerts.js): approaching -> one 🟠 card, reached -> one 🔴 card, a second crossing in the same period -> nothing, a failed send never fails the caller.
+// Every cap of the registry (shared/cap-alerts.js): approaching -> one 🟠 card, a refusal (`reached`) -> one 🔴 card, a count past the line alone -> no 🔴 (13 Nov 2026, the drift card), a second crossing in the same period -> nothing, a failed send never fails the caller.
 // Why (13 Nov 2026, owner: "Let's add Telegram alerts to all the caps/limits/stops.. One medium when we approaching the limit/cap and another one, ciritical, when we reached it").
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -11,7 +11,7 @@ const env = () => ({WAITLIST: kv(), BRAIN_BOT_TOKEN: 't', BRAIN_CHAT_ID: 'c', FR
 const posting = sent => async (url, init) => { sent.push(JSON.parse(init.body).text); return new Response('{"ok":true,"result":{"message_id":1}}'); };
 const DAY = new Date('2026-11-13T10:00:00Z'), NEXT_DAY = new Date('2026-11-14T10:00:00Z'), NEXT_MONTH = new Date('2026-12-01T10:00:00Z');
 
-test('every cap: 🟠 once when approaching, 🔴 once when reached, nothing more in the same period, both again in the next one', async () => {
+test('every cap: 🟠 once when approaching, 🔴 once when the line refuses, nothing more in the same period, both again in the next one', async () => {
   assert.ok(Object.keys(CAPS).length >= 4, 'positive control: the registry holds the Free AI lines');
   for (const [name, cap] of Object.entries(CAPS)) {
     const e = env(), sent = [], fetcher = posting(sent), line = cap.line(e), near = cap.approach(e);
@@ -21,16 +21,18 @@ test('every cap: 🟠 once when approaching, 🔴 once when reached, nothing mor
     await capCheck(e, name, near, {now: DAY, fetcher}); await capCheck(e, name, near + 1, {now: DAY, fetcher});
     assert.equal(sent.length, 1, `${name}: one medium card`); assert.match(sent[0], /^🟠/, `${name}: medium is orange\n${sent[0]}`);
     await capCheck(e, name, line, {now: DAY, fetcher}); await capCheck(e, name, line * 2, {now: DAY, fetcher});
+    assert.equal(sent.length, 1, `${name}: a count at or past the line refused nothing: no critical card`);
+    await capCheck(e, name, line, {now: DAY, fetcher, reached: true}); await capCheck(e, name, null, {now: DAY, fetcher, reached: true});
     assert.equal(sent.length, 2, `${name}: one critical card`); assert.match(sent[1], /^🔴/, `${name}: critical is red\n${sent[1]}`);
     assert.match(sent[1], new RegExp(cap.fix.split(' ')[1]), `${name}: the card says what to raise`);
-    await capCheck(e, name, line, {now: cap.period === 'day' ? NEXT_DAY : NEXT_MONTH, fetcher});
+    await capCheck(e, name, line, {now: cap.period === 'day' ? NEXT_DAY : NEXT_MONTH, fetcher, reached: true});
     assert.equal(sent.length, 3, `${name}: a new period tells again`); assert.match(sent[2], /^🔴/);
   }
 });
 
-test('a line reached with no approach card yet sends the critical card only', async () => {
+test('a line that refuses with no approach card yet sends the critical card only', async () => {
   const e = env(), sent = [];
-  await capCheck(e, 'free-ai-day', CAPS['free-ai-day'].line(e), {now: DAY, fetcher: posting(sent)});
+  await capCheck(e, 'free-ai-day', CAPS['free-ai-day'].line(e), {now: DAY, fetcher: posting(sent), reached: true});
   await capCheck(e, 'free-ai-day', CAPS['free-ai-day'].approach(e), {now: DAY, fetcher: posting(sent)});
   assert.deepEqual(sent.map(text => text.slice(0, 2)), ['🔴']);
 });

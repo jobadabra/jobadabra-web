@@ -90,7 +90,7 @@ test('the owner\'s caps by default: $10 a day and $100 a month', () => {
   assert.deepEqual([paidCap(config.vars), paidMonthCap(config.vars)], [10, 100], 'wrangler.jsonc says the same');
 });
 
-test('the month cap: past $100 this month the lane answers as if the key were absent, with 🔴 for the month', async t => {
+test('the month cap: past $100 this month the lane answers as if the key were absent; 🟠 at the spend, 🔴 only at the refusal', async t => {
   const w = world(t, {env: {CLAUDE_API_KEY: KEY}});
   await planOut(w.storage);
   await w.storage.put('paid-month:2026-11', {usd: 98});
@@ -98,7 +98,7 @@ test('the month cap: past $100 this month the lane answers as if the key were ab
   assert.notEqual((await w.broker.call('bench', claudeOnly, 'jobadabra-benchmarks/search-ours.yml')).status, 200);
   assert.equal(w.claude.length, 1);
   const month = w.sent.filter(note => note.event === 'ai-broker-cap' && /this month/.test(note.text)).map(note => note.text.slice(0, 2));
-  assert.deepEqual(month, ['🔴']);
+  assert.deepEqual(month, ['🟠', '🔴'], 'the $101 settlement refused nothing (🟠); the next call was refused (🔴)');
 });
 
 test('calls arriving at once near the cap: each reserves its estimate first, so none is sent past the line (Gitar on #626)', async t => {

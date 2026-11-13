@@ -2,6 +2,8 @@
 // The caller brings where the once-per-period flags live (`store`: KV on the site, Durable Object storage in the AI broker) and how a card is sent (`send`: alertOwner on the site,
 // POST /ops/notify from the broker), so both Workers share one rule and one card. Registries: shared/cap-alerts.js (the site's lines), workers/ai-broker/lib/cap-notes.mjs (the broker's).
 // Why (13 Nov 2026, owner: "Let's add Telegram alerts to all the caps/limits/stops.. One medium when we approaching the limit/cap and another one, ciritical, when we reached it").
+// Why (13 Nov 2026, coordinator mac-95 via sa, try 1: "CI's drift lane today reached its stop: 24 calls of 24" fired every healthy night): a line is reached only when something was
+// REFUSED, so 🔴 comes only from the caller's `reached` (passed at the refusal); a count at or past the line is at most 🟠. A lane whose normal run is its line sets no approach (Infinity).
 // Invariants: never rejects, so an alert cannot fail a call; a reached card is sent once even when no approach card came, and no approach card follows it; a failed send gives
 // its flags back so the next crossing tries again; the text holds counts and setting names only, never a person.
 import {capCard} from './owner-cards.js';
@@ -28,7 +30,7 @@ const claimLoose = async (store, flags, ttl) => {
 
 /**
  * Tells the owner about one cap. `cap` = {name, title, event, period: 'day' | 'week' | 'month', unit (a key of UNITS), line(env), approach(env) (in the counter's unit), sees, fix};
- * `used` in the counter's unit, or null with `reached` (a refusal with no count of ours); `period` overrides the UTC day or month key (a plan's own week: its reset time).
+ * `used` in the counter's unit (it can only approach); `reached` = the line refused something now (the only 🔴); `period` overrides the UTC day or month key (a plan's own week: its reset time).
  * `store` = {get, put(key, value, {expirationTtl}), delete}, or {claim(flags, ttlSeconds) -> earlier values or null when the first is set, delete} where the store can claim atomically; `send(event, level, text)` -> true when the alert is done (sent, held on purpose, or nothing configured).
  * -> 'reached' | 'approaching' | null (what was sent). Never rejects.
  */
@@ -36,7 +38,7 @@ export async function checkCap(env, cap, used, {now = new Date(), reached = fals
   try {
     if (!cap || !store) return null;
     const line = cap.line(env), near = cap.approach(env), key = period ?? periodOf(cap.period, now);
-    const level = reached || used >= line ? 'reached' : used >= near ? 'approaching' : null;
+    const level = reached ? 'reached' : used != null && used >= near ? 'approaching' : null;
     if (!level) return null;
     const flags = level === 'reached' ? [flagOf(cap.name, 'reached', key), flagOf(cap.name, 'approaching', key)] : [flagOf(cap.name, level, key)], ttl = (TTL[cap.period] || 2) * 86400;
     const before = await (store.claim ? store.claim(flags, ttl) : claimLoose(store, flags, ttl));
