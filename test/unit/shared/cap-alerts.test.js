@@ -3,7 +3,8 @@
 // Why (13 Nov 2026, owner: "Let's add Telegram alerts to all the caps/limits/stops.. One medium when we approaching the limit/cap and another one, ciritical, when we reached it").
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {CAPS, capCheck} from '../../../shared/cap-alerts.js';
+import {readFileSync} from 'node:fs';
+import {CAPS, RUNNER_CEILING, capCheck, runnerCheck} from '../../../shared/cap-alerts.js';
 
 const kv = () => { const m = new Map(); return {m, get: async k => m.get(k) ?? null, put: async (k, v) => { m.set(k, v); }, delete: async k => { m.delete(k); }}; };
 // The vars as in force (workers/www/wrangler.toml) plus a Workers AI allowance, so the neuron line is a number; the old bot is the only way out (no switchboard in a unit test).
@@ -56,4 +57,37 @@ test('a failed send never throws and gives the flag back, so the next crossing t
 test('an unknown cap or a missing store is a no-op, never a throw', async () => {
   await assert.doesNotReject(capCheck(env(), 'no-such-cap', 1, {now: DAY, fetcher: async () => { throw new Error('x'); }}));
   await assert.doesNotReject(capCheck({}, 'free-ai-day', 1e12, {now: DAY, fetcher: async () => { throw new Error('x'); }}));
+});
+
+// Why (13 Nov 2026, owner: "I should be alert if we're approaching the max_instnaces" · "80% warning and 100% critical"): the ceiling in the alert is the ceiling Cloudflare holds.
+test('both cloud runners: max_instances in wrangler.jsonc is RUNNER_CEILING, and the queue starts exactly that many at most', () => {
+  for (const runner of ['hosted-runner', 'ready-runner']) {
+    const text = readFileSync(new URL(`../../../workers/${runner}/wrangler.jsonc`, import.meta.url), 'utf8');
+    assert.equal(Number(text.match(/"max_instances":\s*(\d+)/)[1]), RUNNER_CEILING, runner);
+    const batch = Number(text.match(/"max_batch_size":\s*(\d+)/)[1]), concurrency = Number(text.match(/"max_concurrency":\s*(\d+)/)[1]);
+    // Why (Gitar on #635): each message of a batch starts its own container, so the queue can start batch x concurrency at once
+    assert.ok(batch * concurrency <= RUNNER_CEILING, `${runner}: the queue starts at most ${batch * concurrency} containers, never past the ceiling ${RUNNER_CEILING}`);
+    assert.equal(batch * concurrency, RUNNER_CEILING, `${runner}: and it can fill the ceiling`);
+  }
+});
+
+test('the 5-minute runner check: nothing at 79 live, 🟠 at 80, 🔴 at 100 (a full runner refuses the next start), each runner on its own', async () => {
+  const counts = {'hosted_runs': 0, 'ready_batches': 0};
+  const e = {...env(), STATS: {prepare: sql => ({bind: () => ({first: async () => ({n: counts[sql.match(/FROM (\w+)/)[1]]})})})}};
+  const sent = [], fetcher = posting(sent);
+  counts.hosted_runs = RUNNER_CEILING * 0.8 - 1;
+  assert.deepEqual(await runnerCheck(e, {now: DAY, fetcher}), {'find-jobs-runner': 79, 'apply-runner': 0});
+  assert.equal(sent.length, 0);
+  counts.hosted_runs = RUNNER_CEILING * 0.8;
+  await runnerCheck(e, {now: DAY, fetcher});
+  assert.equal(sent.length, 1); assert.match(sent[0], /^🟠[^]*Find jobs runner/);
+  counts.hosted_runs = RUNNER_CEILING;
+  await runnerCheck(e, {now: DAY, fetcher});
+  assert.equal(sent.length, 2); assert.match(sent[1], /^🔴[^]*Find jobs runner/);
+  counts.ready_batches = RUNNER_CEILING;
+  await runnerCheck(e, {now: DAY, fetcher});
+  assert.deepEqual(sent.slice(2).map(text => text.slice(0, 2)), ['🔴'], 'the Apply runner tells on its own');
+  assert.match(sent[2], /Apply runner/);
+  const broken = {...e, STATS: {prepare: () => { throw new Error('D1 down'); }}};
+  assert.deepEqual(await runnerCheck(broken, {now: NEXT_DAY, fetcher}), {'find-jobs-runner': null, 'apply-runner': null}, 'a failed count never fails the tick');
 });

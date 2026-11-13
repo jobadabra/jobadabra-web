@@ -1,5 +1,5 @@
 {
-  // The hosted Always on runner (see worker.js), the PRODUCTION config; the staging copy is made by tools/runner-config.mjs. Deployed by .github/workflows/release-hosted-runner.yml. standard-1 (4 GiB): measured 0.8-1.2 GB per run. max_instances is the number of runs at once.
+  // The hosted Always on runner (see worker.js), the PRODUCTION config; the staging copy is made by tools/runner-config.mjs. Deployed by .github/workflows/release-hosted-runner.yml. standard-1 (4 GiB): measured 0.8-1.2 GB per run. max_instances is the number of runs at once. 100 = shared/cap-alerts.js RUNNER_CEILING (owner, 13 Nov 2026: "100 each (Recommended)"); its alert warns at 80 and is critical at 100. Why (Gitar on #635): one message per batch, so max_concurrency 100 starts at most 100 containers (5 a batch was up to 500 starts against the ceiling).
   "name": "www-hosted-runner",
   "main": "worker.js",
   "compatibility_date": "2026-09-01",
@@ -7,9 +7,9 @@
   // Why (5 Nov 2026, hr staging proof): the first staging run never called the site back and nothing said why; consume() and the container hooks only write to the console, which is kept only when this is on.
   "observability": {"enabled": true},
   "containers": [
-    {"class_name": "HostedRunner", "image": "../../hosted/Dockerfile", "image_build_context": "../..", "instance_type": "standard-1", "max_instances": 20}
+    {"class_name": "HostedRunner", "image": "../../hosted/Dockerfile", "image_build_context": "../..", "instance_type": "standard-1", "max_instances": 100}
   ],
   "durable_objects": {"bindings": [{"name": "RUNNER", "class_name": "HostedRunner"}]},
   "migrations": [{"tag": "v1", "new_sqlite_classes": ["HostedRunner"]}],
-  "queues": {"consumers": [{"queue": "hosted-runs", "max_batch_size": 5, "max_batch_timeout": 5, "max_retries": 0, "max_concurrency": 20}]}
+  "queues": {"consumers": [{"queue": "hosted-runs", "max_batch_size": 1, "max_batch_timeout": 5, "max_retries": 0, "max_concurrency": 100}]}
 }

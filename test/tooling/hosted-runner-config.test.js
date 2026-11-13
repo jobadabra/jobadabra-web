@@ -6,6 +6,7 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 import {STAGING, readConfig, stagingConfig} from '../../tools/runner-config.mjs';
+import {RUNNER_CEILING} from '../../shared/cap-alerts.js';
 
 const ROOT = new URL('../../', import.meta.url);
 const production = readConfig(readFileSync(new URL('workers/hosted-runner/wrangler.jsonc', ROOT), 'utf8'));
@@ -22,7 +23,7 @@ test('the staging copy has its own name and queue, the same image, and few insta
   assert.deepEqual(staging.queues.consumers.map(consumer => consumer.queue), [STAGING.queue]);
   assert.equal(staging.containers[0].image, production.containers[0].image);
   assert.equal(staging.containers[0].max_instances, STAGING.maxInstances);
-  assert.equal(production.containers[0].max_instances, 20, 'the production config is not changed by making the copy');
+  assert.equal(production.containers[0].max_instances, RUNNER_CEILING, 'the production config is not changed by making the copy');
 });
 
 test('the runner keeps its logs (production and the staging copy), so a run that never starts leaves a line', () => {

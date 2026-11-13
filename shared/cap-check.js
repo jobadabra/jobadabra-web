@@ -16,6 +16,8 @@ export const UNITS = {
   calls: {amount: n => Math.round(Number(n)), show: n => `${n} calls`, word: 'calls'},
   reports: {amount: n => Math.round(Number(n)), show: n => `${n} reports`, word: 'reports'},
   bytes: {amount: n => Math.round(Number(n) / 1048576), show: n => `${n} MB`, word: 'MB'},
+  containers: {amount: n => Math.round(Number(n)), show: n => `${n} containers`, word: 'containers'},
+  share: {amount: n => Math.round(Number(n) * 10) / 10, show: n => `${n}%`, word: '%'},   // a share with one decimal (shared/cloud-health.js: 0.4% of replies failed)
 };
 const TTL = {day: 2, week: 9, month: 40};
 const periodOf = (period, now) => now.toISOString().slice(0, period === 'month' ? 7 : 10);
@@ -44,7 +46,7 @@ export async function checkCap(env, cap, used, {now = new Date(), reached = fals
     const before = await (store.claim ? store.claim(flags, ttl) : claimLoose(store, flags, ttl));
     if (!before) return null;
     const unit = UNITS[cap.unit], done = used == null ? null : unit.amount(used), total = Number.isFinite(line) ? unit.amount(line) : null;
-    const text = capCard(level, {title: cap.title, used: done == null ? null : unit.show(done), line: total == null ? null : unit.show(total), done, total, word: unit.word, sees: cap.sees, fix: cap.fix}).text;
+    const text = capCard(level, {title: cap.title, used: done == null ? null : unit.show(done), line: total == null ? null : unit.show(total), done, total, word: unit.word, sees: cap.sees, fix: cap.fix, words: cap.words, link: cap.link}).text;
     if (!(await send(cap.event, level, text).catch(() => false))) await Promise.all(flags.filter((_, i) => !before[i]).map(flag => Promise.resolve(store.delete?.(flag)).catch(() => {})));
     return level;
   } catch { return null; }
