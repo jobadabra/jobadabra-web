@@ -31,7 +31,8 @@ def uses(root=ROOT):
     out = []
     for path in sorted((root / '.github').rglob('*.y*ml')):
         for target in USES.findall(path.read_text(encoding='utf-8')):
-            if target.startswith(('./', 'docker://')) or '@' not in target:
+            # Why (13 Nov 2026, gl, #636): `owner/repo/.github/workflows/x.yml@ref` calls a reusable workflow, which has no action.yml and no runtime; its own steps are checked in its own repo.
+            if target.startswith(('./', 'docker://')) or '@' not in target or '/.github/workflows/' in target:
                 continue
             action, ref = target.rsplit('@', 1)
             out.append((path.relative_to(root).as_posix(), action, ref))
