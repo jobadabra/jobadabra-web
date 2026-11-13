@@ -3,6 +3,7 @@
 // still costs about a week of AI re-asking. The scout saves after each run (PUT) and reads the newest back when its cache is missing (GET). Bearer INDEX_PUBLISH_KEY, the scout's existing key,
 // so no new secret. Never served to installs, never on a page: private learned data. Brief: ~/.claude/coordinator-briefs/brief-gi-scout-memory-r2.md. Guard: test/unit/api/scout-memory.test.js.
 import {equal} from '../shared/guard.js';
+import {COUNTRIES} from '../shared/pool-tags.js';
 
 // Why (6 Nov 2026, brief): the tar is about 3 MB today; 50 MB leaves room to grow and stays well under the Worker's 100 MB request body and 128 MB memory.
 export const MAX_BYTES = 50 * 1024 * 1024;
@@ -63,13 +64,41 @@ async function latest(bucket) {
   return new Response(object.body, {headers: {'Content-Type': 'application/gzip', 'Content-Length': String(object.size), 'X-Scout-Memory': newest.key.slice(PREFIX.length, -4), 'Cache-Control': 'no-store'}});
 }
 
+// The boards installs reported, for the Central Scout only (candidates for its board pass: src/scout_board_candidates.py in jobadabra).
+// Why (13 Nov 2026, owner, asked via AskUserQuestion by sa: "Any reported board (Recommended)"; the option read: "The Scout, our own server job, counts a board even when only 1 install reported it.
+// Only the Scout's own count is served to apps, never which install reported it."): k >= 1 here, never in the employer index apps download (k >= 3 there, employers.js SITES_K). Invariant:
+// the list holds host, search template, countries and how many installs reported it; never an install id, never a yield or a user's own words (the template is boardOf's: {role}/{place} only).
+// Rows of the Scout's own (install `central-scout-*`) are not reports. Route: the Scout's existing key and endpoint (owner via sa: no new key, no new endpoint).
+export const REPORT_DAYS = 90, MAX_REPORTED = 1500, SCOUT_PREFIX = 'central-scout-';
+const HOST = /^[a-z0-9.-]+\.[a-z]{2,}$/;
+
+/** [{host, url, countries, installs}] of the boards at least one install reported in the last REPORT_DAYS, most installs first. */
+export async function reportedBoards(db, now = new Date()) {
+  const since = new Date(now.getTime() - REPORT_DAYS * DAY).toISOString().slice(0, 10);
+  const rows = (await db.prepare(`SELECT host, url, body, COUNT(DISTINCT install) AS installs FROM sitefacts WHERE kind = 'board' AND day >= ? AND install NOT LIKE ?
+    GROUP BY host, url, body ORDER BY installs DESC, host LIMIT ?`).bind(since, `${SCOUT_PREFIX}%`, MAX_REPORTED).all()).results || [];
+  const out = [];
+  for (const row of rows) {
+    let countries;
+    try { countries = (JSON.parse(row.body || '{}').countries || []).filter(code => COUNTRIES.includes(code)); } catch { continue; }
+    const url = typeof row.url === 'string' && /^https:\/\/[^\s#]{4,200}$/.test(row.url) ? row.url : null;
+    if (!HOST.test(String(row.host)) || !url || !countries.length) continue;
+    out.push({host: row.host, url, countries: [...new Set(countries)].sort(), installs: Number(row.installs) || 1});
+  }
+  return out;
+}
+
 /**
  * /api/scout-memory: PUT ?run=<GitHub run id> with the gzipped tar saves it as scout-memory/<YYYY-MM-DD>-<run>.tgz (409 under half the newest copy) and drops copies older than KEEP_DAYS; GET returns the newest
- * (header X-Scout-Memory = its date and run; 404 when none). A wrong or missing key is a 404, as the other publish keys.
+ * (header X-Scout-Memory = its date and run; 404 when none); GET ?boards=1 returns the reported boards as JSON (reportedBoards). A wrong or missing key is a 404, as the other publish keys.
  */
 export async function scoutMemory(request, env, now = new Date()) {
   const given = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   if (!(env.INDEX_PUBLISH_KEY && equal(given, env.INDEX_PUBLISH_KEY))) return new Response('Not found', {status: 404});
+  if (request.method === 'GET' && new URL(request.url).searchParams.get('boards') === '1') {   // the reported boards: JSON from the stats database, not the R2 tar
+    if (!env.STATS) return no(503, 'not configured');
+    try { return Response.json({ok: true, boards: await reportedBoards(env.STATS, now)}, {headers: {'Cache-Control': 'no-store'}}); } catch { return no(503, 'could not read the reported boards'); }
+  }
   if (!env.SCOUT_MEMORY) return no(503, 'not configured');
   if (request.method === 'GET') return latest(env.SCOUT_MEMORY);
   if (request.method === 'PUT') return save(request, env.SCOUT_MEMORY, now);
