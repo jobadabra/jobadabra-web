@@ -35,15 +35,20 @@ const number = (value, max) => Number.isFinite(value) ? Math.max(0, Math.min(max
 // Who a feed fits (fixed lists only): the scout publishes a tag only when many installs agree.
 // How to read a careers page without AI (src/sources/page_recipes.py), checked to the same fixed shape: never a pattern, only a path or a tag and class.
 const TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'a', 'strong', 'b', 'span', 'div', 'p', 'td', 'dt'];
+const LINK_TITLES = ['label', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'];   // where a card link's title is: the same fixed list as src/sources/page_recipes.py TITLES
 export function recipeOf(recipe) {
   if (!recipe || typeof recipe !== 'object') return null;
   const keys = Object.keys(recipe).sort().join(',');
   // Why (13 Nov 2026, owner: "Yes, add depth (Recommended)"): some boards put each job 2 or 3 folders under the prefix (/oferta/<id>/<slug>); depth 1 is
   // served with no field, as before. An install older than depth refuses {kind, prefix, depth} (page_recipes.valid wants exactly kind and prefix): it asks the AI, never misreads.
-  if (recipe.kind === 'links' && (keys === 'kind,prefix' || keys === 'depth,kind,prefix') && typeof recipe.prefix === 'string' && /^(\/[\w.%~-]+){0,6}$/.test(recipe.prefix)) {
+  // Why (13 Nov 2026, bl for sa, the owner's approved fix #1 design): a job card's link holds the whole card or no text, so its title is the link's own
+  // label ('label': aria-label, else title) or the first heading inside it (page_recipes.TITLES); an install older than titles refuses the field and asks the AI.
+  if (recipe.kind === 'links' && ['kind,prefix', 'depth,kind,prefix', 'kind,prefix,title', 'depth,kind,prefix,title'].includes(keys)
+      && typeof recipe.prefix === 'string' && /^(\/[\w.%~-]+){0,6}$/.test(recipe.prefix)) {
     const depth = 'depth' in recipe ? recipe.depth : 1;
     if (!Number.isInteger(depth) || depth < 1 || depth > 3) return null;
-    return depth === 1 ? {kind: 'links', prefix: recipe.prefix} : {kind: 'links', prefix: recipe.prefix, depth};
+    if ('title' in recipe && !LINK_TITLES.includes(recipe.title)) return null;
+    return {kind: 'links', prefix: recipe.prefix, ...(depth === 1 ? {} : {depth}), ...('title' in recipe ? {title: recipe.title} : {})};
   }
   if (recipe.kind === 'tag' && keys === 'class,kind,tag' && TAGS.includes(recipe.tag) && typeof recipe.class === 'string' && /^[\w -]{1,60}$/.test(recipe.class)) return {kind: 'tag', tag: recipe.tag, class: recipe.class};
   // Why (13 Nov 2026, bl): the engine's third kind (the list in the page's JSON state, page_recipes.valid) was missing here, so a careers feed's state recipe was dropped.

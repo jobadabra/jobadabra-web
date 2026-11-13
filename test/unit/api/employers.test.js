@@ -418,6 +418,17 @@ test('a links layout may carry a depth of 2 or 3; depth 1 is served with no fiel
   assert.equal(recipeOf({kind: 'tag', tag: 'h3', class: 'job', depth: 2}), null, 'only a links layout has a depth');
 });
 
+// A card's title (13 Nov 2026, bl for sa, the owner's approved fix #1 design): the link holds the whole card or no text; its label or a heading inside names the job.
+test('a links layout may name where a card link\'s title is, from the fixed list only; without it the layout is unchanged', async () => {
+  const {recipeOf} = await import('../../../api/employers.js');
+  assert.deepEqual(recipeOf({kind: 'links', prefix: '/jobs', title: 'label'}), {kind: 'links', prefix: '/jobs', title: 'label'});
+  assert.deepEqual(recipeOf({kind: 'links', prefix: '/stellen', depth: 2, title: 'h4'}), {kind: 'links', prefix: '/stellen', depth: 2, title: 'h4'});
+  assert.deepEqual(recipeOf({kind: 'links', prefix: '/job', depth: 1, title: 'h2'}), {kind: 'links', prefix: '/job', title: 'h2'}, 'depth 1 still has no field');
+  assert.deepEqual(recipeOf({kind: 'links', prefix: '/job'}), {kind: 'links', prefix: '/job'}, 'a layout without a title is unchanged');
+  for (const title of ['script', 'h7', '', null, ['h4'], 4]) assert.equal(recipeOf({kind: 'links', prefix: '/job', title}), null, `title ${JSON.stringify(title)}`);
+  assert.equal(recipeOf({kind: 'tag', tag: 'h3', class: 'job', title: 'h4'}), null, 'only a links layout has a title');
+});
+
 // 2 Nov 2026: the scout lost its cache and published 3,871 of 6,833 feeds, and no old copy existed to go back to (owner, 5 Nov 2026: "Find root cause, and preven this happening again").
 const keeping = (fails = false) => {
   const kept = new Map();
