@@ -87,30 +87,31 @@ test('the page says so when there is no data, and shows an older round when aske
   assert.match(page(snapshot), /round r2/);
 });
 
-test('a row with `beyond` is stored and the page shows the jobs "ours with every source" adds beyond each rival, without counting that line as a rival', async () => {
+test('the "Jobadabra (with every source)" line is gone: a sent `beyond` is not stored, and no card, tool row or note shows it', async () => {
   const e = env();
-  const runs = [...FIXTURE.filter(row => row.round === 'r1'),
-    run('Ours + all', 'Nurse · Town', 'non-tech', 120, 50, 90, 33, {beyond: {Other: 25, Third: 33}}), run('Ours + all', 'Coder · City', 'tech', 60, 12, 24, 1, {beyond: {Other: 1}})];
-  await put(e, {runs});
-  assert.deepEqual(JSON.parse(e.STATS.db.prepare("SELECT beyond FROM benchmark_search_runs WHERE tool = 'Ours + all' AND persona = 'Coder · City'").get().beyond), {Other: 1});
+  await put(e, {runs: [...FIXTURE.filter(row => row.round === 'r1'), run('Ours + all', 'Nurse · Town', 'non-tech', 120, 50, 90, 33, {beyond: {Other: 25, Dead: null}})]});
+  assert.equal(e.STATS.db.prepare("SELECT beyond FROM benchmark_search_runs WHERE tool = 'Ours + all'").get().beyond, '{}', 'the column stays, nothing writes it');
   const r1 = summarize(e.STATS.db.prepare('SELECT * FROM benchmark_search_runs').all().map(row => ({...row}))).rounds.r1;
-  assert.deepEqual(r1.beyond, [['Third', 33, 1], ['Other', 26, 0]], 'Third has no number for the second search: it is counted as missing, not as a smaller total');
-  assert.equal(r1.tools.find(tool => tool.tool === 'Ours + all').withAll, true);
-  assert.deepEqual(r1.missed, [['system-a', 7], ['system-b', 3]], 'the with-everything line adds nothing to the jobs we miss');
-  const html = await (await call(e, '/admin/job-search/benchmark?round=r1', owner)).text();
-  assert.match(html, /Relevant jobs we add beyond each rival/);
-  assert.match(html, /<td>Third<\/td><td class="num">33<\/td><td class="num warn">1 of 2<\/td>/);
-  assert.match(html, /<td>Other<\/td><td class="num">26<\/td><td class="num muted">–<\/td>/);
-  assert.doesNotMatch(await (await call(env(), '/admin/job-search/benchmark', owner)).text(), /we add beyond each rival/, 'no card without the data');
+  assert.equal('beyond' in r1, false);
+  assert.equal(r1.tools.some(tool => 'withAll' in tool), false);
+  for (const url of ['/admin/job-search/benchmark?round=r1', '/admin/job-search/benchmark']) {
+    const html = await (await call(e, url, owner)).text();
+    assert.doesNotMatch(html, /beyond each rival|Jobs we add|Searches not counted|stays in Admin only|with every source/i, url);
+  }
 });
 
-test('a rival that failed for EVERY search (sent as null) still shows on the card as failed, never vanishes', async () => {
+test('migration 0155 deletes the line\'s runs and the stale snapshot; the next page load rebuilds the rounds without it', async () => {
   const e = env();
-  const runs = [run('Ours + all', 'Nurse · Town', 'non-tech', 120, 50, 90, 33, {beyond: {Other: 25, Dead: null}}), run('Ours + all', 'Coder · City', 'tech', 60, 12, 24, 1, {beyond: {Other: 1, Dead: null}})];
-  await put(e, {runs});
-  assert.deepEqual(JSON.parse(e.STATS.db.prepare("SELECT beyond FROM benchmark_search_runs WHERE persona = 'Coder · City'").get().beyond), {Other: 1, Dead: null}, 'null is kept, not turned into 0');
-  const r1 = summarize(e.STATS.db.prepare('SELECT * FROM benchmark_search_runs').all().map(row => ({...row}))).rounds.r1;
-  assert.deepEqual(r1.beyond, [['Other', 26, 0], ['Dead', 0, 2]]);
+  const line = 'Jobadabra (with every source)';
+  await put(e, {runs: [...FIXTURE.filter(row => row.round === 'r1'), run(line, 'Nurse · Town', 'non-tech', 120, 50, 90, 33), run(line, 'Coder · City', 'tech', 60, 12, 24, 1)]});
+  assert.match(e.STATS.db.prepare('SELECT body FROM benchmark_search_snapshot').get().body, /with every source/, 'before: the stored snapshot lists the line');
+  e.STATS.db.exec(readFileSync(new URL('../../../../db/migrations/0155_benchmark_drop_every_source.sql', import.meta.url), 'utf8'));
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) n FROM benchmark_search_runs WHERE tool = ?').get(line).n, 0);
+  assert.equal(e.STATS.db.prepare('SELECT COUNT(*) n FROM benchmark_search_snapshot').get().n, 0);
+  const keep = e.STATS.db.prepare('SELECT COUNT(*) n FROM benchmark_search_runs').get().n;
+  assert.equal(keep, FIXTURE.filter(row => row.round === 'r1').length, 'every other run stays');
   const html = await (await call(e, '/admin/job-search/benchmark?round=r1', owner)).text();
-  assert.match(html, /<td>Dead<\/td><td class="num">–<\/td><td class="num warn">2 of 2<\/td>/);
+  assert.doesNotMatch(html, /with every source/i);
+  assert.match(html, /<td>Other<\/td>/, 'the rivals are still there');
+  assert.doesNotMatch(e.STATS.db.prepare('SELECT body FROM benchmark_search_snapshot').get().body, /with every source/, 'the rebuilt snapshot is stored for the next reader');
 });

@@ -358,11 +358,11 @@ export const seeds = {...notifySeeds, ...publishSeeds,
   'benchmark-search': async ({env, call}) => {   // made-up search round for /admin/job-search/benchmark (27 Oct 2026): ours and two other tools on 3 personas; Tool B's run time was not recorded (0)
     env.SELFHEAL_PUBLISH_KEY = 'page-shot-publish-key';
     const personas = [['Nurse · Townville', 'non-tech'], ['Coder · Cityburg', 'tech'], ['Cook · Portside', 'non-tech']];
-    const tools = [['Ours', true, [40, 10, 25], [12, 3, 8], 300], ['Ours with every source', false, [55, 18, 38], [22, 6, 15], 320], ['Tool A', false, [60, 30, 45], [30, 12, 20], 45], ['Tool B', false, [20, 8, 12], [9, 2, 5], 0]];
+    const tools = [['Ours', true, [40, 10, 25], [12, 3, 8], 300], ['Tool A', false, [60, 30, 45], [30, 12, 20], 45], ['Tool B', false, [20, 8, 12], [9, 2, 5], 0]];
     // 13 Nov 2026 (AI switch): three rounds, ours on Haiku in the first two (the 20 Oct one has no value, like every old row) and on the app's tiers in the last; rivals are the same each round.
     const rounds = [['2026-10-20', 0.7, ''], ['2026-10-27', 1, 'haiku'], ['2026-11-13', 1.6, 'app']];
-    const runs = rounds.flatMap(([round, scale, ai]) => tools.flatMap(([tool, ours, found, relevant, seconds]) => personas.map(([persona, kind], i) => { const mine = tool.startsWith('Ours'), rel = Math.round(relevant[i] * (mine ? scale : 1)); return {id: `demo/${round}/${i}/${tool}`, at: `${round}T10:00:00Z`, round, persona, kind, country: 'Land', tool, ours, build: ours ? 'abc1234' : '',
-      found: found[i], place: rel + 2, role: rel + 4, relevant: rel, employers: rel + 1, seconds, cents: 0, ...(mine && ai ? {ai} : {}), ...(tool === 'Ours with every source' ? {beyond: {...(i < 2 ? {'Tool A': 6 + i} : {}), 'Tool B': 14 + i, 'Tool C': null}} : {})}; })));   // 27 Oct 2026: the second line and what it adds beyond
+    const runs = rounds.flatMap(([round, scale, ai]) => tools.flatMap(([tool, ours, found, relevant, seconds]) => personas.map(([persona, kind], i) => { const mine = ours, rel = Math.round(relevant[i] * (mine ? scale : 1)); return {id: `demo/${round}/${i}/${tool}`, at: `${round}T10:00:00Z`, round, persona, kind, country: 'Land', tool, ours, build: ours ? 'abc1234' : '',
+      found: found[i], place: rel + 2, role: rel + 4, relevant: rel, employers: rel + 1, seconds, cents: 0, ...(mine && ai ? {ai} : {})}; })));
     await call('/benchmark-search/data', {method: 'PUT', headers: {Authorization: `Bearer ${env.SELFHEAL_PUBLISH_KEY}`, 'Content-Type': 'application/json'}, body: JSON.stringify({runs})});
   },
   'promo-codes': async ({env, call}) => {   // three codes in the list: active with uses, used up, and one made before full codes were kept

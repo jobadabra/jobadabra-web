@@ -6,6 +6,7 @@
 import {isOwner} from '../shared/auth.js';
 import {esc} from '../shared/html.js';
 import {aiOf} from './benchmark-ai.js';
+import {snapshotOf} from './benchmark-search-snapshot.js';
 
 export const KINDS = ['form', 'search'];
 export const PAGES = {form: '/admin/form-filling/benchmark', search: '/admin/job-search/benchmark'};
@@ -31,9 +32,9 @@ export function formsSection(key, round, why = '') {
   return {kind: 'form', round: key, date: String(round.at || '').slice(0, 10), model: 'claude-haiku-5-5', productBuild: build, forms: shared, leftOut, tools};
 }
 
-/** One round of Admin's search page (snapshot.rounds[key]) -> the public search section: ours (the rivals' sources off) and every rival, each with its own counts; "ours with every source" stays in Admin. */
+/** One round of Admin's search page (snapshot.rounds[key]) -> the public search section: ours and every rival, each with its own counts. */
 export function searchSection(key, view, snapshotAt = '') {
-  const shown = view.tools.filter(t => !t.withAll), grid = view.grid || {};
+  const shown = view.tools, grid = view.grid || {};
   const tools = shown.map(t => ({key: keyOf(t.tool, t.ours, false), name: nameOf(t.tool, t.ours), found: t.found, role: t.role, place: t.place, remote: null, no: null, unknown: null, relevant: t.relevant, observedPersonas: t.personas}));
   const personas = view.personas.map(p => {
     const [title, city = ''] = String(p.persona).split(' · ');
@@ -73,7 +74,7 @@ const preview = (kind, part) => (kind === 'form'
   ? `<table><tr><th>Tool</th><th class="num">Score</th><th class="num">Right</th><th class="num">Wrong</th><th class="num">Empty</th><th class="num">Not reached</th></tr>${part.tools.map(t => `<tr><td>${esc(t.name)}</td><td class="num">${t.score ?? '–'}%</td><td class="num">${t.right}</td><td class="num">${t.wrong}</td><td class="num">${t.empty}</td><td class="num">${t.notReached}</td></tr>`).join('')}</table>
 <p class="muted">Counted on ${part.forms.length} forms every tool ran (${part.forms.map(esc).join(', ')}).${part.leftOut.map(l => ` <b>Form ${esc(l.form)} not run for ${esc(l.tools.join(', '))}${l.why ? ` (${esc(l.why)})` : ''}.</b>`).join('')}</p>`
   : `<table><tr><th>Tool</th><th class="num">Shown</th><th class="num">Right role</th><th class="num">In place</th><th class="num">Relevant</th><th class="num">Searches</th></tr>${part.tools.map(t => `<tr><td>${esc(t.name)}</td><td class="num">${t.found}</td><td class="num">${t.role}</td><td class="num">${t.place}</td><td class="num">${t.relevant}</td><td class="num">${t.observedPersonas}</td></tr>`).join('')}</table>
-<p class="muted">${part.personas.length} fictional job seekers; "Jobadabra with every source" stays in Admin only.</p>`);
+<p class="muted">${part.personas.length} fictional job seekers.</p>`);
 
 /** state = state(db); part = the section built from the round on screen; ask = ?confirm=publish; note = the owner's words for a left-out form. Returns the card's HTML. */
 export function panel({kind, round, part, published, ask, note = ''}) {
@@ -98,7 +99,7 @@ export async function publishPress(request, env, now = new Date()) {
   const done = (hash = '') => new Response(null, {status: 303, headers: {Location: `${PAGES[kind]}?round=${encodeURIComponent(round)}${hash}#publish`, 'Cache-Control': 'no-store'}});
   try {
     if (action === 'unpublish') { await unpublish(env.STATS, kind); return done(); }
-    const row = await env.STATS.prepare(`SELECT body FROM ${kind === 'form' ? 'benchmark_snapshot' : 'benchmark_search_snapshot'} WHERE id = 1`).first(), snap = row ? JSON.parse(row.body) : null;
+    const row = kind === 'form' ? await env.STATS.prepare('SELECT body FROM benchmark_snapshot WHERE id = 1').first() : null, snap = kind === 'form' ? (row ? JSON.parse(row.body) : null) : await snapshotOf(env.STATS);
     const rounds = kind === 'form' ? snap?.fair?.rounds : snap?.rounds, source = rounds?.[round];
     if (!source) return new Response('That round is not in the stored data.', {status: 404});
     const body = kind === 'form' ? formsSection(round, source, form.get('note')) : searchSection(round, source, snap.at);

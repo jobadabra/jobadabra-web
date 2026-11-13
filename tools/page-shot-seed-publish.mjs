@@ -14,8 +14,8 @@ const FORMS = {
   nanobrowser: [['101', 4, 1, 6, 0], ['102', 3, 0, 7, 1], ['103', 3, 1, 6, 0], ['104', 2, 0, 6, 0], ['105', 4, 1, 5, 0], ['107', 3, 0, 3, 0]],
 };
 const PERSONAS = [['Truck Driver · Sofia', 'Bulgaria', 'non-tech'], ['HR Generalist · Cluj-Napoca', 'Romania', 'non-tech'], ['Data Analyst · Nuremberg', 'Germany', 'tech']];
-// [tool, ours, found per search, relevant per search, beyond]
-const SEARCH = [['Jobadabra', 1, [30, 22, 28], [9, 7, 11]], ['Jobadabra with every source', 0, [48, 40, 52], [15, 12, 19], '{"JobSpy": 6, "EURES": 9, "Adzuna": 11, "Jooble": 8}'], ['JobSpy', 0, [60, 55, 70], [10, 8, 14]],
+// [tool, ours, found per search, relevant per search]
+const SEARCH = [['Jobadabra', 1, [30, 22, 28], [9, 7, 11]], ['JobSpy', 0, [60, 55, 70], [10, 8, 14]],
   ['EURES', 0, [40, 35, 45], [9, 6, 12]], ['Adzuna', 0, [3, 0, 8], [1, 0, 3]], ['Jooble', 0, [25, 12, 30], [6, 3, 9]]];
 
 async function fill(env, ai = '') {
@@ -25,9 +25,9 @@ async function fill(env, ai = '') {
   }
   const form = await formSnapshot(env.STATS);
   await env.STATS.prepare('INSERT OR REPLACE INTO benchmark_snapshot (id, at, body) VALUES (1, ?, ?)').bind(form.at, JSON.stringify(form)).run();
-  for (const [tool, ours, found, relevant, beyond = '{}'] of SEARCH) for (const [i, [persona, country, kind]] of PERSONAS.entries()) {
-    await env.STATS.prepare('INSERT OR IGNORE INTO benchmark_search_runs (id, at, round, persona, kind, country, tool, ours, build, ai, found, place, role, relevant, employers, seconds, cents, missed, beyond) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)')
-      .bind(`pub/${tool}/${i}`, AT, '2026-11-12', persona, kind, country, tool, ours, ours ? 'a1b2c3d' : '', ours ? ai : '', found[i], Math.max(found[i] - 1, 0), Math.max(found[i] - 3, relevant[i]), relevant[i], relevant[i] + 2, '{}', beyond).run();
+  for (const [tool, ours, found, relevant] of SEARCH) for (const [i, [persona, country, kind]] of PERSONAS.entries()) {
+    await env.STATS.prepare('INSERT OR IGNORE INTO benchmark_search_runs (id, at, round, persona, kind, country, tool, ours, build, ai, found, place, role, relevant, employers, seconds, cents, missed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)')
+      .bind(`pub/${tool}/${i}`, AT, '2026-11-12', persona, kind, country, tool, ours, ours ? 'a1b2c3d' : '', ours ? ai : '', found[i], Math.max(found[i] - 1, 0), Math.max(found[i] - 3, relevant[i]), relevant[i], relevant[i] + 2, '{}').run();
   }
   const search = await searchSnapshot(env.STATS);
   await env.STATS.prepare('INSERT OR REPLACE INTO benchmark_search_snapshot (id, at, body) VALUES (1, ?, ?)').bind(search.at, JSON.stringify(search)).run();
@@ -38,7 +38,7 @@ async function fill(env, ai = '') {
 const SIDE = ['sonnet-1', 'sonnet-2', 'sab-1', 'sab-2', 'sab-3', 'rsb2-1', 'rsb2-2', 'p3956-main', 'p3956-br-1', 'p3957-main', 'p3957-br-1', 'p3958-main', 'ours-16', 'ours-main', 'ours-main2', 'full', 'full-a-g1', 'full-a-g2', 'diag-1', 'diag-2'];
 async function manyRounds(env) {
   const real = ['2026-11-13', '2026-11-09', '2026-11-05', '2026-10-27', '2026-10-20'], keys = [...real, ...real.slice(0, 3).flatMap((day, i) => SIDE.slice(i * 7, i * 7 + 14).map(side => `${day}-${side}`)), '2026-11-13-sonnet-1', '2026-11-13-diag-1'];
-  const columns = 'at, persona, kind, country, tool, ours, build, ai, found, place, role, relevant, employers, seconds, cents, missed, beyond';
+  const columns = 'at, persona, kind, country, tool, ours, build, ai, found, place, role, relevant, employers, seconds, cents, missed';
   for (const key of new Set(keys)) await env.STATS.prepare(`INSERT OR IGNORE INTO benchmark_search_runs (id, round, ${columns}) SELECT ? || id, ?, ${columns} FROM benchmark_search_runs WHERE round = '2026-11-12'`).bind(`${key}/`, key).run();
   const formColumns = 'at, applicant, mode, tool, ours, build, form, heldout, fixes, required, right, wrong, empty, unans, holds, dups, rep, unreached';
   for (const week of ['week-2026-W45', 'week-2026-W46']) await env.STATS.prepare(`INSERT OR IGNORE INTO benchmark_runs (id, round, ${formColumns}) SELECT ? || id, ?, ${formColumns} FROM benchmark_runs WHERE round = 'fixed'`).bind(`${week}/`, week).run();

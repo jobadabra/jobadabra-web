@@ -19,9 +19,9 @@ const ids = e => e.STATS.db.prepare('SELECT id FROM benchmark_search_runs ORDER 
 
 test('a full round with replace:true removes that round\'s older rows; other rounds stay', async () => {
   const e = env();
-  await put(e, {runs: [run('2026-11-13', 'Ours', 'p1', {ours: true}), run('2026-11-13', 'Ours (with every source)', 'p1'), run('2026-11-13', 'Ours (with every source)', 'p2'), run('2026-11-12', 'Ours', 'p1', {ours: true})]});
+  await put(e, {runs: [run('2026-11-13', 'Ours', 'p1', {ours: true}), run('2026-11-13', 'Ours (side line)', 'p1'), run('2026-11-13', 'Ours (side line)', 'p2'), run('2026-11-12', 'Ours', 'p1', {ours: true})]});
   const reply = await (await put(e, {replace: true, runs: [run('2026-11-13', 'Ours', 'p1', {ours: true}), run('2026-11-13', 'Ours + all', 'p1')]})).json();
-  assert.deepEqual(ids(e), ['2026-11-12/p1/Ours', '2026-11-13/p1/Ours', '2026-11-13/p1/Ours + all'], 'the two old with-every-source rows are gone');
+  assert.deepEqual(ids(e), ['2026-11-12/p1/Ours', '2026-11-13/p1/Ours', '2026-11-13/p1/Ours + all'], 'the two old side-line rows are gone');
   assert.equal(reply.stored, 2);
   const snapshot = JSON.parse(e.STATS.db.prepare('SELECT body FROM benchmark_search_snapshot WHERE id = 1').get().body);
   assert.deepEqual(snapshot.rounds['2026-11-13'].tools.map(tool => tool.tool).sort(), ['Ours', 'Ours + all']);

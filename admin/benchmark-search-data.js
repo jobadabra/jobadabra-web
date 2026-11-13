@@ -27,22 +27,16 @@ export function summarize(rows) {
     const mine = rows.filter(row => row.round === round);
     const tools = [...new Set(mine.map(row => row.tool))].map(tool => {
       const list = latestPerPersona(mine.filter(row => row.tool === tool));
-      return {tool, ours: list.some(row => row.ours), withAll: list.some(row => Object.keys(parse(row.beyond)).length > 0), build: list.find(row => row.ours)?.build || '', ...totals(list), rows: list};
+      return {tool, ours: list.some(row => row.ours), build: list.find(row => row.ours)?.build || '', ...totals(list), rows: list};
     }).sort((a, b) => b.ours - a.ours || b.relevant - a.relevant || a.tool.localeCompare(b.tool));
     const personas = [...new Map(mine.map(row => [row.persona, {persona: row.persona, kind: row.kind, country: row.country}])).values()].sort((a, b) => a.persona.localeCompare(b.persona, 'en', {numeric: true}));
     const grid = Object.fromEntries(tools.map(tool => [tool.tool, Object.fromEntries(tool.rows.map(row => [row.persona, {found: row.found, place: row.place, role: row.role, relevant: row.relevant}]))]));
     const kinds = Object.fromEntries(KINDS.map(kind => [kind, Object.fromEntries(tools.map(tool => [tool.tool, totals(tool.rows.filter(row => row.kind === kind))]))]));
     // The job systems of the jobs another tool shows as relevant and ours does not (each other tool's own `missed` map, summed over its personas).
     const missed = {};
-    for (const tool of tools.filter(item => !item.ours && !item.withAll)) for (const row of tool.rows) for (const [system, count] of Object.entries(parse(row.missed))) missed[system] = (missed[system] || 0) + (Number(count) || 0);
-    // What "ours with every source" adds on top of each rival (owner, 27 Oct 2026): its own `beyond` map, summed over its personas.
-    // Why (27 Oct 2026, owner via 6e): a rival whose job failed for a persona is not sent for it; that persona is counted as "not counted", never as a smaller total
-    // that looks complete. `searches` = the personas of the line; a rival's `missing` = those it has no number for.
-    const beyond = {}, seen = {}, withAllRows = tools.filter(item => item.withAll).flatMap(item => item.rows);
-    for (const row of withAllRows) for (const [rival, count] of Object.entries(parse(row.beyond))) { beyond[rival] = (beyond[rival] || 0) + (Number(count) || 0); if (count !== null) seen[rival] = (seen[rival] || 0) + 1; }   // null = the rival's job failed for that search
+    for (const tool of tools.filter(item => !item.ours)) for (const row of tool.rows) for (const [system, count] of Object.entries(parse(row.missed))) missed[system] = (missed[system] || 0) + (Number(count) || 0);
     // Why (13 Nov 2026): the AI is ours alone; 'app' if any of our lines in the round ran on it (admin/benchmark-ai.js).
-    rounds[round] = {ai: mine.some(row => row.ours && aiOf(row.ai) === 'app') ? 'app' : 'haiku', tools: tools.map(({rows: _rows, ...tool}) => tool), personas, grid, kinds, missed: Object.entries(missed).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 30),
-      beyond: Object.entries(beyond).map(([rival, jobs]) => [rival, jobs, withAllRows.length - (seen[rival] || 0)]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])), beyondSearches: withAllRows.length};
+    rounds[round] = {ai: mine.some(row => row.ours && aiOf(row.ai) === 'app') ? 'app' : 'haiku', tools: tools.map(({rows: _rows, ...tool}) => tool), personas, grid, kinds, missed: Object.entries(missed).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 30)};
   }
   return {schema: 1, rounds};
 }
