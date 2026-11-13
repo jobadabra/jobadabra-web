@@ -143,10 +143,12 @@ Public; counts and states only. Read it before a big run to see the room left.
 | `queue` | calls running now and waiting per queue |
 | `claims` | room by claim: `{capacity, used, held: [{who, need, since, expires}], waiting: [{who, need, since}]}` (see `POST /claim`) |
 | `fallback` | Free AI's spend today and its cap |
+| `paid` | the paid Claude key (`CLAUDE_API_KEY`): `configured`; `day` `{usd, line, calls, failed}` and `month` `{usd, line, calls}` (the broker's reckoning: answered calls at their tokens, a failed one at its estimate; Anthropic's console is the bill); `lastFailure` `{why, at}` (a kind word, never the text) |
 | `tally`, `jobs` | calls per workflow and per job, per day |
 
 ```sh
 curl -s https://jobadabra-ai-broker.jobpilotto.workers.dev/health | jq '{state, engine, limits, queue}'
+curl -s https://jobadabra-ai-broker.jobpilotto.workers.dev/health | jq .paid   # the paid key's spend today and this month
 ```
 
 ### `POST /admin/login`, `/admin/call`, `/admin/stop` (owner only)

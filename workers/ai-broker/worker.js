@@ -23,7 +23,7 @@ import {demotedNow, recordPerf} from './lib/adapt.mjs';
 import {addCall, addJobCall, jobKey, recentDays, tokensOf, workflowKey, workflowOf} from './lib/tally.mjs';
 import {countedOf, keyedLock, markGap, planOf, sessionKey, sessionKeyOf, settle} from './lib/sessions.mjs';
 import {brokerLines} from './lib/cap-notes.mjs';
-import {paidAllowed, paidClaude} from './lib/paid-claude.mjs';
+import {paidAllowed, paidClaude, paidHealth} from './lib/paid-claude.mjs';
 
 // Why (11 Nov 2026, as; owner: "Let's increase the AI Broker's slot limit"): at 4 one Find jobs measure person already queued (after-1 run 43069240532: 55 of 303
 // calls waited over 5 s, p90 wait 7.9 s, all 4 busy 29% of the time). On the 1 vCPU / 3 GiB container (#554) 4 at once peaked at 1.27 GiB and 0.52 CPU per minute
@@ -130,7 +130,7 @@ export class AiBroker extends doContainer(DurableObject) {
     // `ready` = a login is stored AND the container has answered since its last start (a sleeping container keeps its last proof; its next wake starts over); `starting` = login stored, nothing answered yet (readers: the release gate accepts it, nobody else reads this field). `startError` = the last Codex failure passed on while starting.
     const state = !(await this.ctx.storage.get('login')) ? 'no-login' : (await this.ctx.storage.get('lost')) ? 'login-lost' : (await this.ctx.storage.get('answered')) ? 'ready' : 'starting';
     const startError = state === 'starting' ? await this.ctx.storage.get('startError') : null;
-    return json(200, {state, ...(startError ? {startError} : {}), limits: this.limits, lines: linesOf(LANES, ((await this.ctx.storage.get('claude:state')) || {}).limits), own: meter.tokens, daily: {drift: callsToday(meter, 'drift'), byhand: callsToday(meter, 'byhand')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), claims: view(await this.ctx.storage.get('claims'), Date.now()), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
+    return json(200, {state, ...(startError ? {startError} : {}), limits: this.limits, lines: linesOf(LANES, ((await this.ctx.storage.get('claude:state')) || {}).limits), own: meter.tokens, daily: {drift: callsToday(meter, 'drift'), byhand: callsToday(meter, 'byhand')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), claims: view(await this.ctx.storage.get('claims'), Date.now()), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), paid: await paidHealth(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
   }
 
   // The owner-visible refusals of the Codex login: they stand when Codex is reached, another engine does not hide them.

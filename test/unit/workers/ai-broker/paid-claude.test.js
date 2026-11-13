@@ -126,3 +126,26 @@ test('cache reads cost a tenth of input and cache writes a quarter more, as Anth
   const answer = await (await w.broker.call('bench', claudeOnly, 'jobadabra-benchmarks/search-ours.yml')).json();
   assert.equal(answer.usd, 2.7, '1M read at $0.2 + 1M written at $2.5');
 });
+
+test('/health shows the paid lane: the day\'s and the month\'s spend against $10 and $100, calls sent and failed today, the last failure\'s kind; never the key (sa, 13 Nov 2026)', async t => {
+  let fails = false;
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}, reply: () => (fails ? Response.json({error: 'claude-failed:1 secret detail', kind: 'timeout'}, {status: 500}) : Response.json({reply: 'ok', tokens: {input: 1_000_000, cached: 0, output: 100_000}, ms: 9}))});
+  await planOut(w.storage);
+  await w.storage.put('paid-month:2026-11', {usd: 20});
+  assert.equal((await w.broker.call('bench', claudeOnly, 'jobadabra-benchmarks/search-ours.yml')).status, 200);
+  fails = true;
+  await w.broker.call('bench', claudeOnly, 'jobadabra-benchmarks/search-ours.yml');
+  const health = await (await w.broker.fetch(new Request('http://c/health'))).json();
+  assert.equal(health.paid.configured, true);
+  assert.deepEqual({...health.paid.day, usd: Math.round(health.paid.day.usd * 100) / 100}, {usd: 3.09, line: 10, calls: 2, failed: 1}, '$3 answered + a failed call\'s estimate');
+  assert.equal(health.paid.month.line, 100); assert.ok(health.paid.month.usd > 23 && health.paid.month.usd < 23.2); assert.equal(health.paid.month.calls, 2);
+  assert.deepEqual(health.paid.lastFailure, {why: 'timeout', at: new Date(T).toISOString()});
+  const text = JSON.stringify(health);
+  assert.ok(!text.includes(KEY) && !text.includes('secret detail'), 'the kind only, never the key or an error text');
+});
+
+test('/health with no key: the paid lane says not configured, at $0', async t => {
+  const w = world(t);
+  const health = await (await w.broker.fetch(new Request('http://c/health'))).json();
+  assert.deepEqual(health.paid, {configured: false, day: {usd: 0, line: 10, calls: 0, failed: 0}, month: {usd: 0, line: 100, calls: 0}});
+});
