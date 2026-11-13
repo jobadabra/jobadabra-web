@@ -17,7 +17,8 @@ export const BROKER_CAPS = {
     sees: 'CI\'s AI calls stop using Claude until the week resets', fix: `raise CLAUDE_LIMIT_PCT in workers/ai-broker/lib/budget.mjs, or wait: ${WEEK_RESET}`},
   'broker-free-ai-day': {title: 'CI\'s Free AI fallback today', event: 'ai-broker-free-cap', period: 'day', unit: 'usd', line: env => freeCap(env), approach: env => freeCap(env) * 0.8,
     sees: 'CI judgments that no other engine takes go grey until 00:00 UTC', fix: 'raise FALLBACK_FREE_AI_DAY_USD in workers/ai-broker/wrangler.jsonc'},
-  'broker-drift-day': {title: 'CI\'s drift lane today', event: 'ai-broker-cap', period: 'day', unit: 'calls', line: () => DAILY.drift, approach: () => DAILY.drift * 0.8,
+  // Why (13 Nov 2026, mac-95 via sa): a healthy night uses all 24 calls (20 prompts + 4 judges), so a count says nothing: only a refused call is told (no approach card).
+  'broker-drift-day': {title: 'CI\'s drift lane today', event: 'ai-broker-cap', period: 'day', unit: 'calls', line: () => DAILY.drift, approach: () => Infinity,
     sees: 'the drift checks are refused until 00:00 UTC', fix: 'raise DAILY.drift in workers/ai-broker/lib/budget.mjs'},
   'broker-claude-api-day': {title: 'The broker\'s paid Claude key today', event: 'ai-broker-cap', period: 'day', unit: 'usd', line: env => paidCap(env) * 1e6, approach: env => paidCap(env) * 1e6 * 0.8,
     sees: 'Claude-only calls get "ran out" again until the plan reopens or 00:00 UTC', fix: 'raise CLAUDE_API_DAY_USD in workers/ai-broker/wrangler.jsonc'},
@@ -56,16 +57,16 @@ export const brokerCap = (storage, env, name, used, {period = null, reached = fa
 
 /**
  * Every admission's look at the three lines it can read: the Codex week (`codex` = the last {usedPercent, resetsAt}), the Claude week (stored claude:state) and the drift lane's calls today.
- * Never rejects.
+ * `refused` = which of them refused this call ({codex, claude, drift}): the only 🔴; a reading alone is at most 🟠. Never rejects.
  */
-export async function brokerLines(storage, env, codex) {
+export async function brokerLines(storage, env, codex, refused = {}) {
   try {
     const now = Date.now() / 1000, claude = ((await storage.get('claude:state')) || {}).limits, meter = await storage.get('meter');
     const claudeWeek = claudeWeekPercent(claude, now);
     await Promise.all([
-      codex?.usedPercent != null && codex.resetsAt ? brokerCap(storage, env, 'broker-codex-week', codex.usedPercent, {period: `week-${codex.resetsAt}`}) : null,
-      claudeWeek != null ? brokerCap(storage, env, 'broker-claude-week', claudeWeek, {period: `week-${claude.sevenDay.resetsAt}`}) : null,
-      meter ? brokerCap(storage, env, 'broker-drift-day', callsToday(meter, 'drift', now)) : null,
+      codex?.usedPercent != null && codex.resetsAt ? brokerCap(storage, env, 'broker-codex-week', codex.usedPercent, {period: `week-${codex.resetsAt}`, reached: !!refused.codex}) : null,
+      claudeWeek != null ? brokerCap(storage, env, 'broker-claude-week', claudeWeek, {period: `week-${claude.sevenDay.resetsAt}`, reached: !!refused.claude}) : null,
+      meter ? brokerCap(storage, env, 'broker-drift-day', callsToday(meter, 'drift', now), {reached: !!refused.drift}) : null,
     ]);
   } catch { /* an alert never fails a call */ }
 }

@@ -43,6 +43,15 @@ test('every per-install line: 79% nothing, 80% counted 🟠 once per install a d
   }
 });
 
+test('the class (13 Nov 2026, the drift card): a count at or past an install\'s line refused nothing, so it is counted 🟠, never 🔴; only a refusal is 🔴', async () => {
+  for (const name of Object.keys(INSTALL_CAPS)) {
+    const e = env();
+    assert.equal(await installHit(e, name, 'i1', 100, 100, {now: H10}), 'approaching', name);
+    assert.equal(await installHit(e, name, 'i2', 250, 100, {now: H10}), 'approaching', name);
+    assert.equal(await installHit(e, name, 'i1', 100, 100, {now: H10, reached: true}), 'reached', name);
+  }
+});
+
 test('the hourly cards pass the card shape check, with many lines at once', async () => {
   const e = env(), sent = [];
   for (const name of Object.keys(INSTALL_CAPS)) { await installHit(e, name, 'i1', 100, 100, {now: H10}); await installHit(e, name, 'i2', 90, 100, {now: H10}); }
@@ -52,11 +61,11 @@ test('the hourly cards pass the card shape check, with many lines at once', asyn
 
 test('a failed send keeps the hour\'s counts for the next :00; an alert never throws', async () => {
   const e = env(), sent = [];
-  await installHit(e, 'free-ai-install-day', 'i1', 100, 100, {now: H10});
+  await installHit(e, 'free-ai-install-day', 'i1', 100, 100, {now: H10, reached: true});
   assert.deepEqual(await sendHourly(e, H11, {fetcher: posting(sent, false)}), []);
   assert.deepEqual(await sendHourly(e, H12, {fetcher: posting(sent)}), ['reached']);
-  assert.equal(await installHit({}, 'free-ai-install-day', 'i1', 100, 100, {now: H10}), null, 'no KV, no D1: nothing, no throw');
-  assert.equal(await installHit({...e, STATS: {prepare: () => { throw new Error('d1 down'); }}}, 'free-ai-install-day', 'i9', 100, 100, {now: H10}), null);
+  assert.equal(await installHit({}, 'free-ai-install-day', 'i1', 100, 100, {now: H10, reached: true}), null, 'no KV, no D1: nothing, no throw');
+  assert.equal(await installHit({...e, STATS: {prepare: () => { throw new Error('d1 down'); }}}, 'free-ai-install-day', 'i9', 100, 100, {now: H10, reached: true}), null);
 });
 
 test('every registered line is wired in the file where its line refuses, by name', () => {
@@ -73,8 +82,8 @@ test('every registered line is wired in the file where its line refuses, by name
 
 test('a count that arrives while the card is sending is kept for the next :00, not deleted unseen', async () => {
   const e = env(), sent = [];
-  await installHit(e, 'free-ai-install-day', 'i1', 100, 100, {now: H10});
-  const late = async (url, init) => { await installHit(e, 'free-ai-install-day', 'i2', 100, 100, {now: H10}); return posting(sent)(url, init); };
+  await installHit(e, 'free-ai-install-day', 'i1', 100, 100, {now: H10, reached: true});
+  const late = async (url, init) => { await installHit(e, 'free-ai-install-day', 'i2', 100, 100, {now: H10, reached: true}); return posting(sent)(url, init); };
   assert.deepEqual(await sendHourly(e, H11, {fetcher: late}), ['reached']);
   assert.match(sent[0], /1\s+Free AI per install today/);
   assert.deepEqual(await sendHourly(e, H12, {fetcher: posting(sent)}), ['reached'], 'the late install is told at the next :00');
@@ -84,7 +93,7 @@ test('a count that arrives while the card is sending is kept for the next :00, n
 test('a D1 write that fails leaves the install uncounted for the day, so its next call counts it', async () => {
   const e = env(), real = e.STATS;
   e.STATS = {prepare: () => { throw new Error('d1 down'); }};
-  assert.equal(await installHit(e, 'free-ai-install-day', 'i1', 100, 100, {now: H10}), null);
+  assert.equal(await installHit(e, 'free-ai-install-day', 'i1', 100, 100, {now: H10, reached: true}), null);
   e.STATS = real;
-  assert.equal(await installHit(e, 'free-ai-install-day', 'i1', 100, 100, {now: H10}), 'reached');
+  assert.equal(await installHit(e, 'free-ai-install-day', 'i1', 100, 100, {now: H10, reached: true}), 'reached');
 });

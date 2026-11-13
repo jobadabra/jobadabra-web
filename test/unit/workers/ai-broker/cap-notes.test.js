@@ -19,12 +19,14 @@ const storageOf = () => {   // as the harness's: transactions run one after anot
 test('every broker cap: 🟠 once when approaching, 🔴 once when reached, through /ops/notify as a wired registry event', async () => {
   assert.ok(Object.keys(BROKER_CAPS).length >= 4, 'positive control: the four broker lines are registered');
   for (const [name, cap] of Object.entries(BROKER_CAPS)) {
-    const sent = [], env = {FALLBACK_FREE_AI_DAY_USD: '2', ...switchboard(sent)}, storage = storageOf(), line = cap.line(env), near = cap.approach(env);
-    assert.ok(near > 0 && near < line, `${name}: an approach line below its line`);
+    const sent = [], env = {FALLBACK_FREE_AI_DAY_USD: '2', ...switchboard(sent)}, storage = storageOf(), line = cap.line(env), near = cap.approach(env), approaches = Number.isFinite(near);
+    assert.ok(!approaches || (near > 0 && near < line), `${name}: an approach line below its line, or none (a lane whose normal run is its line)`);
     assert.equal(alertOf(cap.event)?.wired, true, `${name}: ${cap.event} is a wired switchboard event`);
-    const at = used => brokerCap(storage, env, name, used, {period: 'p1', now: new Date(T)});
-    await at(near - 1); await at(near); await at(near); await at(line); await at(line * 2);
-    assert.deepEqual(sent.map(note => [note.event, note.state, note.text.slice(0, 2)]), [[cap.event, 'approaching', '🟠'], [cap.event, 'reached', '🔴']], name);
+    const at = (used, reached = false) => brokerCap(storage, env, name, used, {period: 'p1', now: new Date(T), reached});
+    if (approaches) { await at(near - 1); await at(near); await at(near); }
+    await at(line); await at(line * 2);   // a reading at or past the line refused nothing
+    await at(line, true); await at(null, true);
+    assert.deepEqual(sent.map(note => [note.event, note.state, note.text.slice(0, 2)]), [...(approaches ? [[cap.event, 'approaching', '🟠']] : []), [cap.event, 'reached', '🔴']], name);
     assert.equal(sent[0].url, 'https://www/ops/notify'); assert.equal(sent[0].html, true);
   }
 });
@@ -39,31 +41,32 @@ test('the Claude week at 79% of its 90% line: the next call sends one 🟠 card,
   assert.equal(week.length, 1); assert.match(week[0].text, /^🟠.*CI's Claude week is approaching its stop: 79% of 90%/);
 });
 
-test('the drift lane: its 20th call of 24 today sends 🟠, its 24th sends 🔴, the 25th is refused as before', async t => {
+// Why (13 Nov 2026, mac-95 via sa, try 1): "CI's drift lane today reached its stop: 24 calls of 24" came every healthy night; it replaces "its 20th call of 24 today sends 🟠, its 24th sends 🔴".
+test('the drift lane: a healthy night of exactly 24 calls sends no card; a refused 25th sends one 🔴', async t => {
   t.mock.method(Date, 'now', () => T);
   const sent = [], {broker} = harness(undefined, {ENGINE: 'codex', FALLBACK_FREE_AI_DAY_USD: '0', ...switchboard(sent)});
   const drift = () => sent.filter(note => note.event === 'ai-broker-cap').map(note => note.text.slice(0, 2));
-  for (let n = 1; n <= 19; n++) await broker.call('drift', {...body});
-  await quiet(); assert.deepEqual(drift(), [], '19 of 24 is below 80%');
-  await broker.call('drift', {...body}); await quiet();
-  assert.deepEqual(drift(), ['🟠']);
-  for (let n = 21; n <= 24; n++) await broker.call('drift', {...body});
-  await quiet(); assert.deepEqual(drift(), ['🟠', '🔴']);
+  for (let n = 1; n <= 24; n++) assert.equal((await broker.call('drift', {...body})).status, 200);
+  await quiet(); assert.deepEqual(drift(), [], '24 of 24 refused nothing');
   assert.equal((await broker.call('drift', {...body})).status, 429);
+  await quiet(); assert.deepEqual(drift(), ['🔴']);
+  await broker.call('drift', {...body}); await quiet();
+  assert.deepEqual(drift(), ['🔴'], 'once a day');
+  assert.match(sent.find(note => note.event === 'ai-broker-cap').text, /CI's drift lane/);
 });
 
 test('two admissions crossing the line at once send one card: the flag is claimed in a transaction', async () => {
   const sent = [], env = switchboard(sent), storage = storageOf(), cap = BROKER_CAPS['broker-drift-day'];
-  await Promise.all([1, 2, 3].map(() => brokerCap(storage, env, 'broker-drift-day', cap.line(env), {period: 'p1', now: new Date(T)})));
+  await Promise.all([1, 2, 3].map(() => brokerCap(storage, env, 'broker-drift-day', cap.line(env), {period: 'p1', now: new Date(T), reached: true})));
   assert.deepEqual(sent.map(note => note.text.slice(0, 2)), ['🔴']);
 });
 
 test('the flags of an ended period are dropped at the next claim: Durable Object storage has no TTL', async t => {
   const sent = [], env = switchboard(sent), storage = storageOf(), cap = BROKER_CAPS['broker-drift-day'];
   t.mock.method(Date, 'now', () => T);
-  await brokerCap(storage, env, 'broker-drift-day', cap.line(env), {period: '2026-11-13', now: new Date(T)});
+  await brokerCap(storage, env, 'broker-drift-day', cap.line(env), {period: '2026-11-13', now: new Date(T), reached: true});
   t.mock.method(Date, 'now', () => T + 3 * 86400e3);
-  await brokerCap(storage, env, 'broker-drift-day', cap.line(env), {period: '2026-11-16', now: new Date(T + 3 * 86400e3)});
+  await brokerCap(storage, env, 'broker-drift-day', cap.line(env), {period: '2026-11-16', now: new Date(T + 3 * 86400e3), reached: true});
   const keys = [...storage.m.keys(), ...Object.keys(storage.m.get('cap:index') || {})].filter(key => key.startsWith('cap:') && key !== 'cap:index');
   assert.deepEqual(keys.sort(), ['cap:broker-drift-day:approaching:2026-11-16', 'cap:broker-drift-day:reached:2026-11-16']);
   assert.equal(sent.length, 2, 'one 🔴 a day');

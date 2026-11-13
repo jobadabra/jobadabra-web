@@ -26,13 +26,14 @@ export const INSTALL_CAPS = {
 const hourOf = now => now.toISOString().slice(0, 13);
 
 /**
- * One install against one of its lines: `used` and `line` in the same unit, or `reached` for a refusal with no count. Counts the install once a UTC day per level.
+ * One install against one of its lines: `used` and `line` in the same unit (it can only approach), `reached` = the line refused this install now (the only 🔴, shared/cap-check.js's
+ * Why). Counts the install once a UTC day per level.
  * -> 'reached' | 'approaching' | null (what was counted). Never rejects.
  */
 export async function installHit(env, name, install, used, line, {reached = false, now = new Date()} = {}) {
   try {
     if (!INSTALL_CAPS[name] || !install || !env?.WAITLIST || !env?.STATS) return null;
-    const level = reached || used >= line ? 'reached' : used >= line * APPROACH ? 'approaching' : null;
+    const level = reached ? 'reached' : used != null && used >= line * APPROACH ? 'approaching' : null;
     if (!level) return null;
     const flag = `caph:${name}:${level}:${now.toISOString().slice(0, 10)}:${install}`;
     if (await env.WAITLIST.get(flag)) return null;

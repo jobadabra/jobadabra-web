@@ -90,7 +90,7 @@ test('the owner\'s caps by default: $10 a day and $100 a month', () => {
   assert.deepEqual([paidCap(config.vars), paidMonthCap(config.vars)], [10, 100], 'wrangler.jsonc says the same');
 });
 
-test('the month cap: past $100 this month the lane answers as if the key were absent, with 🔴 for the month', async t => {
+test('the month cap: past $100 this month the lane answers as if the key were absent; 🟠 at the spend, 🔴 only at the refusal', async t => {
   const w = world(t, {env: {CLAUDE_API_KEY: KEY}});
   await planOut(w.storage);
   await w.storage.put('paid-month:2026-11', {usd: 98});
@@ -98,7 +98,7 @@ test('the month cap: past $100 this month the lane answers as if the key were ab
   assert.notEqual((await w.broker.call('bench', claudeOnly, 'jobadabra-benchmarks/search-ours.yml')).status, 200);
   assert.equal(w.claude.length, 1);
   const month = w.sent.filter(note => note.event === 'ai-broker-cap' && /this month/.test(note.text)).map(note => note.text.slice(0, 2));
-  assert.deepEqual(month, ['🔴']);
+  assert.deepEqual(month, ['🟠', '🔴'], 'the $101 settlement refused nothing (🟠); the next call was refused (🔴)');
 });
 
 test('calls arriving at once near the cap: each reserves its estimate first, so none is sent past the line (Gitar on #626)', async t => {
@@ -148,4 +148,33 @@ test('/health with no key: the paid lane says not configured, at $0', async t =>
   const w = world(t);
   const health = await (await w.broker.fetch(new Request('http://c/health'))).json();
   assert.deepEqual(health.paid, {configured: false, day: {usd: 0, line: 10, calls: 0, failed: 0}, month: {usd: 0, line: 100, calls: 0}});
+});
+
+const settle = async () => { for (let i = 0; i < 20; i++) await new Promise(resolve => setImmediate(resolve)); };
+const weekCards = (sent, title) => sent.filter(note => note.event === 'ai-broker-cap' && note.text.includes(title)).map(note => note.state);
+
+test('the Claude week past its line while the paid key answers a Claude-only call: no 🔴 for the Claude week, nothing was refused (Gitar on #630)', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}});
+  await w.storage.put('claude:state', {limits: {sevenDay: {utilization: 0.95, resetsAt: T / 1000 + 86400}}});
+  assert.equal((await w.broker.call('bench', claudeOnly, 'jobadabra/search-profiles.yml')).status, 200);
+  await settle();
+  assert.ok(!weekCards(w.sent, 'Claude week').includes('reached'), JSON.stringify(weekCards(w.sent, 'Claude week')));
+});
+
+test('the Claude week past its line with no key: the Claude-only call is refused, and the Claude week sends its 🔴 (positive control for the one above)', async t => {
+  const w = world(t);
+  await w.storage.put('claude:state', {limits: {sevenDay: {utilization: 0.95, resetsAt: T / 1000 + 86400}}});
+  assert.notEqual((await w.broker.call('bench', claudeOnly, 'jobadabra/search-profiles.yml')).status, 200);
+  await settle();
+  assert.ok(weekCards(w.sent, 'Claude week').includes('reached'));
+});
+
+test('the Codex week used up turns Codex away even when Claude then answers: its 🔴 is sent, pinned on purpose (Gitar on #630)', async t => {
+  const w = world(t);
+  await w.storage.put('limits', {usedPercent: 100, resetsAt: T / 1000 + 3600});
+  w.broker.limits = null;
+  assert.equal((await w.broker.call('pr', {...body}, 'jobadabra/ci.yml')).status, 200);
+  await settle();
+  assert.deepEqual(weekCards(w.sent, 'Codex week'), ['reached']);
+  assert.equal(w.claude.length, 1, 'Claude answered the call');
 });

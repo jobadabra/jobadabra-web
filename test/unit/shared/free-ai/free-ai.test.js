@@ -336,15 +336,18 @@ test('without the account settings, or when Cloudflare\'s usage cannot be read, 
 });
 
 // Why (13 Nov 2026, owner: "One medium when we approaching the limit/cap and another one, ciritical, when we reached it"): the $10 stop was reached in silence.
-test('the daily stop: the call that reaches it sends one 🔴 card, and the refused calls after it send nothing more', async () => {
+// Why (13 Nov 2026, mac-95 via sa, the drift card): 🔴 only when the line refuses; it replaces "the call that reaches it sends one 🔴 card".
+test('the daily stop: the call that spends up to it sends nothing; the first refused call sends one 🔴 card, the next ones nothing more', async () => {
   const sent = [], e = env({BRAIN_BOT_TOKEN: 't', BRAIN_CHAT_ID: 'c'}), apiKey = await key();
   e.WAITLIST.m.set('freeai:usd:2026-10-16', String(9.9999 * 1e6));
   e.WAITLIST.m.set('cap:free-ai-day:approaching:2026-10-16', '1');   // the 🟠 card went out at $3
   const ask = () => sendAsk(e, apiKey, sent);
   assert.equal((await ask()).status, 200);
+  assert.equal(sent.length, 0, 'the answered call refused nobody');
+  assert.equal((await ask()).status, 503);
   assert.equal(sent.length, 1); assert.match(sent[0], /^🔴.*Free AI today reached its stop/);
   assert.match(sent[0], /busy today/); assert.match(sent[0], /FREE_AI_STOP_USD/);
-  assert.equal((await ask()).status, 503); assert.equal((await ask()).status, 503);
+  assert.equal((await ask()).status, 503);
   assert.equal(sent.length, 1, 'once a day');
 });
 
