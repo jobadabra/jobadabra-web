@@ -5,7 +5,7 @@ import {existsSync, readFileSync, readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {agreedSites} from '../../../api/employers.js';
-import {CI_DAYS} from '../../../api/ci-boards.js';
+import {CI_DAYS, DAILY_ROWS, MAX_CI_BOARDS, MAX_COUNTRIES, PER_HOUR} from '../../../api/ci-boards.js';
 import {contribute} from '../../../api/pool.js';
 import {reportedBoards} from '../../../api/scout-memory.js';
 
@@ -18,7 +18,8 @@ const d1 = () => {
     first: async () => db.prepare(sql).get(...args), exec: () => db.prepare(sql).run(...args)});
   return {db, prepare: sql => statement(sql), batch: async statements => { for (const one of statements) one.exec(); }};
 };
-const env = () => ({STATS: d1(), STATS_SALT: 's', WAITLIST: {get: async () => null, put: async () => {}}});
+const kvStore = () => { const kept = new Map(); return {kept, get: async key => kept.get(key) ?? null, put: async (key, value) => { kept.set(key, value); }}; };
+const env = () => ({STATS: d1(), STATS_SALT: 's', WAITLIST: kvStore()});
 const share = (e, body, install = 'ci-search-43498322357') => contribute(new Request('https://x.test/api/contribute', {method: 'POST', headers: {'Content-Type': 'application/json'},
   body: JSON.stringify({v: 2, install, ...body})}), e, NOW);
 const rows = (e, table) => e.STATS.db.prepare(`SELECT * FROM ${table}`).all();
@@ -62,4 +63,30 @@ test('CI rows older than the window are not served and are dropped on the next s
   assert.deepEqual(await reportedBoards(e.STATS, NOW), []);
   await share(e, {ci_boards: [{host: 'jobeka.es', countries: ['es']}]});
   assert.deepEqual(rows(e, 'ci_boards').map(row => row.host), ['jobeka.es']);
+});
+
+// Gitar on web #643: the door is public and the id can be rotated, so the limits sit on one fixed bucket, and the Scout reads every CI row.
+test('the CI door is bounded: hosts and countries per share, shares per hour and rows per day, whatever the id', async () => {
+  const e = env();
+  const many = Array.from({length: MAX_CI_BOARDS + 20}, (_, n) => ({host: `h${n}.example`, countries: ['es', 'pt', 'fr', 'de', 'it']}));
+  assert.equal((await share(e, {ci_boards: many})).status, 200);
+  assert.equal(rows(e, 'ci_boards').length, MAX_CI_BOARDS * MAX_COUNTRIES, 'at most 150 hosts and 3 countries each');
+  const f = env();
+  for (let n = 0; n < PER_HOUR; n++) assert.equal((await share(f, {ci_boards: [{host: `a${n}.example`, countries: ['es']}]}, `ci-search-rotating-${n}`)).status, 200);
+  assert.equal((await share(f, {ci_boards: [{host: 'late.example', countries: ['es']}]}, 'ci-search-yet-another')).status, 429, 'a rotated id does not get a new bucket');
+  const g = env();
+  const insert = g.STATS.db.prepare("INSERT INTO ci_boards (host, country, day) VALUES (?, 'es', '2026-11-13')");
+  for (let n = 0; n < DAILY_ROWS; n++) insert.run(`d${n}.example`);
+  assert.equal((await share(g, {ci_boards: [{host: 'over.example', countries: ['es']}]})).status, 429, 'the day\'s row cap holds');
+  assert.equal(rows(g, 'ci_boards').length, DAILY_ROWS, 'nothing was evicted or added');
+});
+
+test('the Scout reads every CI row: the last host keeps all its countries past 1500 rows', async () => {
+  const e = env();
+  const insert = e.STATS.db.prepare("INSERT INTO ci_boards (host, country, day) VALUES (?, ?, '2026-11-12')");
+  for (let n = 0; n < 1498; n++) insert.run(`a${String(n).padStart(4, '0')}.example`, 'es');
+  for (const country of ['es', 'pt', 'fr']) insert.run('zzz.example', country);   // rows 1499-1501: a row limit of 1500 would cut its third country
+  const list = await reportedBoards(e.STATS, NOW);
+  assert.equal(list.length, 1499);
+  assert.deepEqual(list.at(-1), {host: 'zzz.example', url: null, countries: ['es', 'fr', 'pt'], installs: 0, ci: true});
 });
