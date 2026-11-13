@@ -19,6 +19,8 @@ export const KEEP_HOURS = {search: 6, job: 24};
 export const BODY_MAX = 400_000;
 // What ends LinkedIn in the cloud for a day: the same stop rule as the Mac's read (src/sources/linkedin_guest.py).
 export const STOPS = new Set([401, 403, 429, 999]), STOP_WORDS = new Set(['signin', 'check', 'wall']);
+// Why (Gitar on web #627): only a body the engine marked a page (its sign-in check passed: src/sources/linkedin_guest.py) is kept; any other or no word is never served from the cache.
+export const CACHED_WORD = 'page';
 const SEARCH = '/jobs-guest/jobs/api/seeMoreJobPostings/search', VIEW = /^\/jobs\/view\/\d+\/?$/;
 const HOUR = 3600 * 1000;
 const iso = ms => new Date(ms).toISOString();
@@ -99,13 +101,15 @@ export async function answer(request, env, now = new Date()) {
   if (way !== 'hosted' && way !== 'github') return deny();
   const given = await request.json().catch(() => ({}));
   const status = Number.isInteger(given.status) ? given.status : null, word = /^[a-z0-9-]{1,20}$/.test(given.word || '') ? given.word : null;
-  const row = await env.STATS.prepare("SELECT kind, url_hash FROM linkedin_turns WHERE id = ? AND answer = 'go' AND answered_at IS NULL").bind(String(given.lease || '')).first();
-  if (!row) return Response.json({ok: false, error: 'no open lease'}, {status: 409});
-  await env.STATS.prepare('UPDATE linkedin_turns SET status = ?, word = ?, answered_at = ? WHERE id = ?').bind(status, word, now.toISOString(), given.lease).run();
+  const lease = typeof given.lease === 'string' ? given.lease : '';   // Why (Gitar on web #627): one string for the lookup and the update, so a lease is answered once
+  const row = await env.STATS.prepare("SELECT kind, url_hash FROM linkedin_turns WHERE id = ? AND answer = 'go' AND answered_at IS NULL").bind(lease).first();
+  const done = row && await env.STATS.prepare('UPDATE linkedin_turns SET status = ?, word = ?, answered_at = ? WHERE id = ? AND answered_at IS NULL').bind(status, word, now.toISOString(), lease).run();
+  if (!row || (done.meta?.changes ?? done.changes) === 0) return Response.json({ok: false, error: 'no open lease'}, {status: 409});
   if (STOPS.has(status) || STOP_WORDS.has(word)) {
-    await env.STATS.prepare('INSERT INTO linkedin_stop (id, until, why) VALUES (1, ?, ?) ON CONFLICT (id) DO UPDATE SET until = excluded.until, why = excluded.why')
+    // Why (Gitar on web #627): a later stop never shortens a running one
+    await env.STATS.prepare('INSERT INTO linkedin_stop (id, until, why) VALUES (1, ?, ?) ON CONFLICT (id) DO UPDATE SET until = MAX(until, excluded.until), why = excluded.why')
       .bind(iso(now.getTime() + STOP_HOURS * HOUR), String(status && STOPS.has(status) ? status : word)).run();
-  } else if (status === 200 && typeof given.body === 'string' && given.body.length <= BODY_MAX) {
+  } else if (status === 200 && word === CACHED_WORD && typeof given.body === 'string' && given.body.length <= BODY_MAX) {
     await env.STATS.prepare('INSERT INTO linkedin_cache (url_hash, body, kept_until) VALUES (?, ?, ?) ON CONFLICT (url_hash) DO UPDATE SET body = excluded.body, kept_until = excluded.kept_until')
       .bind(row.url_hash, given.body, iso(now.getTime() + KEEP_HOURS[row.kind] * HOUR)).run();
   }

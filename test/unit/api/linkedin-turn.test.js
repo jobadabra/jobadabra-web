@@ -99,7 +99,7 @@ test('a 429, 999 or sign-in page stops the cloud for 24 h, both ways, no retry',
 test('a 200\'s cards are served from the cache for 6 h (job pages 24 h) without a GET; a lease answers once', async () => {
   const {e, hosted, github} = await setup();
   const got = await ask(e, hosted);
-  await tell(e, hosted, {lease: got.lease, status: 200, word: 'cards', body: '<li>card</li>'}, at(1));
+  await tell(e, hosted, {lease: got.lease, status: 200, word: 'page', body: '<li>card</li>'}, at(1));
   assert.equal((await answer(post('answer', {lease: got.lease, status: 200}, hosted), e, at(2))).status, 409);
   assert.deepEqual(await ask(e, github, at(3 * 3600)), {answer: 'cached', body: '<li>card</li>'});
   assert.equal((await ask(e, github, at(6 * 3600 + 5))).answer, 'go');
@@ -114,8 +114,21 @@ test('a 200\'s cards are served from the cache for 6 h (job pages 24 h) without 
 test('the turns keep no address, no install and no page text: only a hash, the way, the status and one word', async () => {
   const {e, hosted} = await setup();
   const got = await ask(e, hosted);
-  await tell(e, hosted, {lease: got.lease, status: 200, word: 'cards', body: '<li>card</li>'}, at(1));
+  await tell(e, hosted, {lease: got.lease, status: 200, word: 'page', body: '<li>card</li>'}, at(1));
   const row = e.STATS.db.prepare('SELECT * FROM linkedin_turns').get();
   assert.deepEqual(Object.keys(row).sort(), ['answer', 'answered_at', 'asked_at', 'day', 'id', 'kind', 'status', 'url_hash', 'way', 'word']);
   assert.ok(!JSON.stringify(row).includes('Geneva') && !JSON.stringify(row).includes(OWNER));
+});
+
+test('a lease is answered once, by its string id; a body without the page word is never cached; a stop is never shortened', async () => {
+  const {e, hosted, github} = await setup();
+  const got = await ask(e, hosted);
+  for (const lease of [123, {id: got.lease}, [got.lease], null]) assert.equal((await answer(post('answer', {lease, status: 200}, hosted), e, at(1))).status, 409, JSON.stringify(lease));
+  await tell(e, hosted, {lease: got.lease, status: 200, body: '<html>sign in</html>'}, at(2));   // no word: not a page the engine checked
+  assert.equal((await ask(e, github, at(30))).answer, 'go', 'not served from the cache');
+  const {db} = e.STATS;
+  db.prepare("INSERT INTO linkedin_stop (id, until, why) VALUES (1, '2026-11-16T00:00:00.000Z', '429')").run();
+  const open = db.prepare("SELECT id FROM linkedin_turns WHERE answered_at IS NULL").get();
+  await tell(e, github, {lease: open.id, status: 999}, at(40));
+  assert.equal(db.prepare('SELECT until FROM linkedin_stop').get().until, '2026-11-16T00:00:00.000Z');
 });
