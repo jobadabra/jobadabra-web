@@ -5,7 +5,7 @@
 export const CODEX_LIMIT_PCT = 100;
 export const CLAUDE_LIMIT_PCT = 90;
 /**
- * The lines as /health says them (Why, 8 Nov 2026, gi: press-tapes.yml reads its lane's room from the broker instead of hard-coding 70%/800; owner via the coordinator: the Find jobs recordings run on Codex, then Claude up to 90%):
+ * The lines as /health says them (Why, 8 Nov 2026, gi: a by-hand run reads its lane's room from the broker instead of hard-coding 70%/800; owner via the coordinator: Codex first, then Claude up to 90%):
  * `week` = the Codex week line per lane, `daily` = the day caps, `claude` = the Claude week line, `claudeWeek` = Claude's seven-day state now ({usedPercent, resetsAt}, usedPercent null = unknown, as claudeAllow reads it). `now` is epoch seconds.
  */
 export const linesOf = (lanes, claudeLimits = null, now = Date.now() / 1000) => ({
