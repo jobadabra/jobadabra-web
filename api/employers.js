@@ -13,6 +13,7 @@ import {store as storeScouting} from '../shared/scouting.js';
 import {snapshot, storeSnapshot} from '../shared/scouting-snapshot.js';
 import {storeBoardCounts} from '../shared/board-counts.js';
 import {installHit} from '../shared/install-caps.js';
+import {listedFamiliesOf} from './board-listed.js';
 const KEY = 'index:employers';
 const NOFEED_KEY = 'index:nofeed';
 const SUMMARY_KEY = 'index:summary';   // the website's two counts, written at every publish (the old single-value copy stops once the list outgrows it)
@@ -223,8 +224,8 @@ async function boardCells(env, k) {
   } catch { return {}; }   // before migration 0094
   const cells = {}, list = text => String(text || '').split(',').filter(Boolean);
   for (const row of rows) {
-    let serves, counted;
-    try { const body = JSON.parse(row.body || '{}'); serves = body.countries || []; counted = familyJobsOf(body.family_jobs); } catch { serves = []; }
+    let serves, counted, listed;
+    try { const body = JSON.parse(row.body || '{}'); serves = body.countries || []; counted = familyJobsOf(body.family_jobs); listed = listedFamiliesOf(body.listed_families, counted); } catch { serves = []; }
     const scout = String(row.install || '').startsWith(SCOUT_BOARD_PREFIX);
     for (const family of list(row.families)) {
       for (const country of list(row.countries).filter(c => serves.includes(c))) {
@@ -241,7 +242,9 @@ async function boardCells(env, k) {
         if (scout && counted) {
           const right = counted[family];
           if (Number.isInteger(right)) { cell.right = right; cell.day = row.day; }
-          if (right >= MIN_RIGHT_JOBS) cell.measured = true;
+          // Why (13 Nov 2026, owner via sa): a count read from the board's own list is `listed`, never `measured` (absent `listed` = the board's own search gave it); `right` stays.
+          if (listed?.includes(family)) cell.listed = true;
+          else if (right >= MIN_RIGHT_JOBS) cell.measured = true;
         }
       }
     }
@@ -323,7 +326,8 @@ export function boardFactsOf(list) {
       || !(jobs >= MIN_LOCAL_JOBS)) continue;
     const layout = recipeOf(item.layout);   // how the board's job cards are laid out, learned by board discovery; a bad one is dropped, never the board
     const familyJobs = familyJobsOf(item.family_jobs);
-    out.set(`${host}\n${country}`, {host, url, country, families, local_jobs: Math.min(jobs, 5000), ...(familyJobs ? {family_jobs: familyJobs} : {}), ...(item.browser === true ? {browser: true} : {}), ...(layout ? {layout} : {})});
+    const listed = listedFamiliesOf(item.listed_families, familyJobs);
+    out.set(`${host}\n${country}`, {host, url, country, families, local_jobs: Math.min(jobs, 5000), ...(familyJobs ? {family_jobs: familyJobs} : {}), ...(listed ? {listed_families: listed} : {}), ...(item.browser === true ? {browser: true} : {}), ...(layout ? {layout} : {})});
   }
   return [...out.values()].slice(0, MAX_SCOUT_BOARDS);
 }
@@ -332,7 +336,7 @@ async function storeBoardFacts(db, facts, date) {
   const statements = facts.map(fact => db.prepare(`INSERT INTO sitefacts (install, day, host, kind, url, body, in_places, fit70, countries, families) VALUES (?, ?, ?, 'board', ?, ?, ?, 0, ?, ?)
     ON CONFLICT(install, host, kind) DO UPDATE SET day = excluded.day, url = excluded.url, body = excluded.body, in_places = excluded.in_places, fit70 = 0,
     countries = excluded.countries, families = excluded.families`)
-    .bind(`${SCOUT_BOARD_PREFIX}${fact.country}`, date, fact.host, fact.url, JSON.stringify({countries: [fact.country], ...(fact.family_jobs ? {family_jobs: fact.family_jobs} : {}), ...(fact.browser ? {browser: true} : {}), ...(fact.layout ? {layout: fact.layout} : {})}), fact.local_jobs, fact.country, fact.families.join(',')));
+    .bind(`${SCOUT_BOARD_PREFIX}${fact.country}`, date, fact.host, fact.url, JSON.stringify({countries: [fact.country], ...(fact.family_jobs ? {family_jobs: fact.family_jobs} : {}), ...(fact.listed_families ? {listed_families: fact.listed_families} : {}), ...(fact.browser ? {browser: true} : {}), ...(fact.layout ? {layout: fact.layout} : {})}), fact.local_jobs, fact.country, fact.families.join(',')));
   if (db.batch) await db.batch(statements); else for (const statement of statements) await statement.run();
 }
 
