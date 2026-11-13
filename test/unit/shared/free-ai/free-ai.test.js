@@ -362,3 +362,20 @@ test('Cloudflare refusing the free allocation (4006) sends the allowance\'s 🔴
   await sendAsk(e, apiKey, sent); await sendAsk(e, apiKey, sent);
   assert.equal(sent.length, 1); assert.match(sent[0], /^🔴.*free allowance/);
 });
+
+test('an install stopped at its own day line is on the next :00 card: one 🔴 row "Free AI per install today", no install id', async () => {
+  const {DatabaseSync} = await import('node:sqlite'), {readFileSync, readdirSync} = await import('node:fs'), {sendHourly} = await import('../../../../shared/install-caps.js');
+  const db = new DatabaseSync(':memory:'), dir = new URL('../../../../db/migrations/', import.meta.url);
+  for (const file of readdirSync(dir).filter(name => name.endsWith('.sql')).sort()) db.exec(readFileSync(new URL(file, dir), 'utf8'));
+  const statement = (sql, args = []) => ({bind: (...values) => statement(sql, values), run: async () => ({meta: {changes: Number(db.prepare(sql).run(...args).changes)}}), all: async () => ({results: db.prepare(sql).all(...args)}), first: async () => db.prepare(sql).get(...args) ?? null});
+  const sent = [], e = env({STATS: {prepare: sql => statement(sql)}, BRAIN_BOT_TOKEN: 't', BRAIN_CHAT_ID: 'c'}), apiKey = await key();
+  assert.equal((await sendAsk(e, apiKey, sent)).status, 200);
+  const id = [...e.WAITLIST.m.keys()].find(k => k.startsWith('freeai:min:')).split(':')[2];
+  e.WAITLIST.m.set(`freeai:dusd:${id}:2026-10-16`, String(LIMITS.installDayUsd * 1e6));
+  assert.equal((await sendAsk(e, apiKey, sent)).status, 429);
+  assert.equal((await sendAsk(e, apiKey, sent)).status, 429);
+  const cards = [];
+  assert.deepEqual(await sendHourly(e, new Date('2026-10-16T11:00:00Z'), {fetcher: async (url, init) => { cards.push(JSON.parse(init.body).text); return new Response('{"ok":true,"result":{"message_id":1}}'); }}), ['reached']);
+  assert.match(cards[0], /^🔴.*Per-install lines reached in the last hour: 1 install/); assert.match(cards[0], /1\s+Free AI per install today/);
+  assert.ok(!cards[0].includes(id), 'no install id on the card');
+});

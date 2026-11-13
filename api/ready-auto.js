@@ -8,6 +8,7 @@ import {keptKey} from './ready-kept.js';
 import {LIVE} from './ready-line.js';
 import {isPro} from './ready-read-access.js';
 import {notify} from '../shared/notify.js';
+import {installHit} from '../shared/install-caps.js';
 
 export const OWN_SUBMITS = 500;   // the abuse-only ceiling per install and UTC day (owner, 10 Nov 2026: "~500/day + alert")
 export const AUTO_OUTCOMES = ['submitted', 'not_submitted', 'unknown', 'failed'];   // what an auto night may report: pressed with a receipt, not pressed (why), pressed without a receipt, could not run
@@ -72,7 +73,8 @@ export async function reserve(env, row, given, now = new Date()) {
     const day = dayOf(now), max = ownSubmits(env);
     // Why (10 Nov 2026, owner "~500/day + alert"): one statement takes the slot, so two jobs cannot both slip under the ceiling; the attempt above stays used either way (a refused job is never tried again).
     const counted = await env.STATS.prepare('INSERT INTO ready_read_days (install, day, submits) VALUES (?, ?, 1) ON CONFLICT (install, day) DO UPDATE SET submits = submits + 1 WHERE submits + 1 <= ?').bind(row.install, day, max).run();
-    if (counted.meta?.changes) return {status: 200, body: {ok: true, attempt}};
+    if (counted.meta?.changes) { await submitsHit(env, row.install, day, max, now, false); return {status: 200, body: {ok: true, attempt}}; }
+    await submitsHit(env, row.install, day, max, now, true);
     const told = await env.STATS.prepare('UPDATE ready_read_days SET submits_alerted = 1 WHERE install = ? AND day = ? AND submits_alerted = 0').bind(row.install, day).run().catch(() => null);
     if (told?.meta?.changes) await notify(env, {event: 'ready-submit-ceiling', text: `☁️ A cloud Full automation install reached its abuse ceiling today (${max} submits): ${row.install.slice(0, 8)}. Cloud submits stop until 00:00 UTC; a real user does not send this many applications.`}).catch(() => {});
     return end('ceiling', 429, 'ceiling');
@@ -130,4 +132,13 @@ export async function claimAttempt(env, row, job, checked) {
   const found = await env.STATS.prepare('SELECT attempt FROM ready_jobs WHERE batch = ? AND job = ?').bind(row.id, job).first();
   if (found?.attempt && found.attempt === checked.outcome.attempt) return;
   checked.state = 'unknown'; checked.why = 'no attempt'; checked.outcome = {...checked.outcome, state: 'unknown', why: 'no attempt'};
+}
+
+// Why (13 Nov 2026, owner, "Grouped hourly (Recommended)"): an install near (80%) or at its ~500 submits is counted for the hourly card (shared/install-caps.js); the once-a-day note stays.
+// Never throws: a count must not refuse a submit.
+async function submitsHit(env, install, day, max, now, reached) {
+  try {
+    const row = reached ? null : await env.STATS.prepare('SELECT submits FROM ready_read_days WHERE install = ? AND day = ?').bind(install, day).first();
+    await installHit(env, 'cloud-submit-ceiling', install, reached ? max : row?.submits ?? 0, max, {now, reached});
+  } catch { /* an alert never refuses a submit */ }
 }

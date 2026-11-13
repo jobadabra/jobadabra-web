@@ -11,6 +11,7 @@
 // A read is never logged here. Guard: test/unit/api/ready/ready-read-access.test.js.
 import {installOf} from '../shared/hosted.js';
 import {chargeCall, proLane} from '../shared/pro-ai.js';
+import {installHit} from '../shared/install-caps.js';
 import {allowanceOf, busyCap, count, installCap, keysOf, limitsOf, who} from '../shared/free-ai.js';
 import {tokenFor} from '../shared/guard.js';
 import {notify} from '../shared/notify.js';
@@ -68,8 +69,10 @@ export async function reserveReads(env, install, n, now = new Date()) {
   const day = dayOf(now), max = dayReads(env), usd = dayMicro(env);
   const changed = n <= max && await env.STATS.prepare(`INSERT INTO ready_read_days (install, day, reads) VALUES (?, ?, ?) ON CONFLICT (install, day) DO UPDATE SET reads = reads + excluded.reads
     WHERE reads + excluded.reads <= ? AND micro < ?`).bind(install, day, n, max, usd).run();
-  if (changed?.meta?.changes) return null;
   const row = await env.STATS.prepare('SELECT reads, micro FROM ready_read_days WHERE install = ? AND day = ?').bind(install, day).first();
+  // Why (13 Nov 2026, owner, "Grouped hourly (Recommended)"): the install's share of its day (reads or money, the fuller one) is counted for the hourly card (shared/install-caps.js).
+  await installHit(env, 'cloud-checks-day', install, Math.max((row?.reads || 0) / max, (row?.micro || 0) / usd), 1, {now, reached: !changed?.meta?.changes});
+  if (changed?.meta?.changes) return null;
   const spent = (row?.micro || 0) >= usd;
   return {status: 429, limit: max, used: row?.reads || 0, error: spent ? "Today's cloud checks used their budget. They start again tomorrow (00:00 UTC)." : `Today's cloud checks are used up (${row?.reads || 0} of ${max} forms). They start again tomorrow (00:00 UTC).`};
 }
@@ -137,6 +140,8 @@ export async function claimedRefusal(env, install, key, now = new Date()) {
 export async function reserveOwn(env, install, n, now = new Date()) {
   const day = dayOf(now), max = ownReads(env);
   const changed = n <= max && await env.STATS.prepare(`INSERT INTO ready_read_days (install, day, own) VALUES (?, ?, ?) ON CONFLICT (install, day) DO UPDATE SET own = own + excluded.own WHERE own + excluded.own <= ?`).bind(install, day, n, max).run();
+  const own = changed?.meta?.changes ? await env.STATS.prepare('SELECT own FROM ready_read_days WHERE install = ? AND day = ?').bind(install, day).first() : null;
+  await installHit(env, 'cloud-read-ceiling', install, own?.own ?? max, max, {now, reached: !changed?.meta?.changes});   // the hourly card (shared/install-caps.js); the once-a-day note below stays
   if (changed?.meta?.changes) return null;
   const told = await env.STATS.prepare('UPDATE ready_read_days SET own_alerted = 1 WHERE install = ? AND day = ? AND own_alerted = 0').bind(install, day).run().catch(() => null);
   if (told?.meta?.changes) await notify(env, {event: 'ready-read-ceiling', text: `☁️ A cloud readiness install reached its abuse ceiling today (${max} reads on its own AI key): ${install.slice(0, 8)}. Reads stop until 00:00 UTC; a real user does not read this many forms.`}).catch(() => {});

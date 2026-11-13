@@ -11,6 +11,7 @@ import {PRO_PER_MINUTE, chargeCall, proLane} from './pro-ai.js';
 import {claudeCall, proRoute} from './pro-claude.js';
 import {aiAccess} from './hosted-budget.js';
 import {capCheck} from './cap-alerts.js';
+import {installHit} from './install-caps.js';
 import {tally} from './free-ai-alert.js';
 import {runOf} from './hosted.js';
 import {WEB_ACTION, webSearch} from './free-ai-web.js';
@@ -49,9 +50,9 @@ export function busyCap(lines, {microUsd, globalMonth, seen, allowance}) {
   return null;
 }
 export function installCap(lines, access, {life, installMonth, installDay, tokens}) {
-  if (!access.license && life >= lines.trialUsd * 1e6) return {capped: 'trial', status: 429, message: TRIAL_MESSAGE};
-  if (installMonth >= lines.installMonthUsd * 1e6) return {capped: 'month', status: 429, message: MONTH_MESSAGE};
-  if (installDay >= lines.installDayUsd * 1e6 || tokens >= lines.tokensPerDay) return {capped: 'day', status: 429, message: DAY_MESSAGE};
+  if (!access.license && life >= lines.trialUsd * 1e6) return {capped: 'trial', status: 429, message: TRIAL_MESSAGE, line: 'free-ai-trial'};   // line: its entry in shared/install-caps.js
+  if (installMonth >= lines.installMonthUsd * 1e6) return {capped: 'month', status: 429, message: MONTH_MESSAGE, line: 'free-ai-install-month'};
+  if (installDay >= lines.installDayUsd * 1e6 || tokens >= lines.tokensPerDay) return {capped: 'day', status: 429, message: DAY_MESSAGE, line: 'free-ai-install-day'};
   return null;
 }
 
@@ -89,7 +90,7 @@ async function answerCall(request, env, now, ctx, fetcher, trace) {
   if (path !== '/v1/messages' || request.method !== 'POST') return error(404, 'Not available with Free AI.', 'not_found_error');
   if (request.headers.get('x-jp-action') === WEB_ACTION) return webSearch(request, env, access, now, ctx, fetcher);   // the board web search: its own lane, key and month line (shared/free-ai-web.js)
   const pro = await proLane(env, access.install);   // a Pro account with credit: its own lane (shared/pro-ai.js); null = the Free rules
-  if (pro?.blocked) return error(402, pro.blocked, 'billing_error');
+  if (pro?.blocked) { await later(ctx, installHit(env, 'pro-credit', access.who, null, null, {now, reached: true})); return error(402, pro.blocked, 'billing_error'); }
 
   const kv = env.WAITLIST, day = now.toISOString().slice(0, 10), month = day.slice(0, 7), minute = now.toISOString().slice(0, 16);
   const keys = keysOf(access.who, day, month, minute);
@@ -101,9 +102,10 @@ async function answerCall(request, env, now, ctx, fetcher, trace) {
   // Why (13 Nov 2026, owner: "...another one, ciritical, when we reached it"): a refusal makes sure the 🔴 card of the line that refused went out, also when the line was crossed by spend
   // this route never counted (a hosted run's compute, shared/hosted-budget.js). Only that line, forced reached (Gitar on #622: one KV read, and a cached count cannot hide it).
   if (busy) { await later(ctx, capCheck(env, busy.line, busy.used, {now, fetcher, reached: true})); return error(busy.status, busy.message); }
-  if (perMinute >= (pro ? PRO_PER_MINUTE : lines.perMinute)) return error(429, 'Free AI: too many requests in a minute. Jobadabra will retry.', 'rate_limit_error');
+  // Why (13 Nov 2026, owner, "Grouped hourly (Recommended)"): a person stopped by a line of their own is counted for the hourly card (shared/install-caps.js).
+  if (perMinute >= (pro ? PRO_PER_MINUTE : lines.perMinute)) { if (!pro) await later(ctx, installHit(env, 'free-ai-minute', access.who, null, null, {now, reached: true})); return error(429, 'Free AI: too many requests in a minute. Jobadabra will retry.', 'rate_limit_error'); }
   const mine = pro ? null : installCap(lines, access, {life, installMonth, installDay, tokens});
-  if (mine) return error(mine.status, mine.message, 'rate_limit_error');
+  if (mine) { await later(ctx, installHit(env, mine.line, access.who, null, null, {now, reached: true})); return error(mine.status, mine.message, 'rate_limit_error'); }
 
   let body;
   try { body = await request.json(); } catch { return error(400, 'Bad request.', 'invalid_request_error'); }
@@ -145,6 +147,8 @@ async function answerCall(request, env, now, ctx, fetcher, trace) {
     recordCost(env, access.who, request.headers.get('x-jp-action'), model, message.usage, usd, now),
     chargeCall(env, pro, after, request.headers.get('x-jp-action'), now),
     spendLines(env, now, fetcher, {day: microUsd + freeAfter, month: globalMonth + freeAfter, neurons: seen + neuronsOf(freeUsd)}),
+    pro ? null : installLines(env, access, lines, now, {life: life + after, month: installMonth + freeAfter, day: installDay + freeAfter, minute: perMinute + 1}),
+    pro?.account ? installHit(env, 'pro-credit', access.who, pro.account.credit_added_micro - pro.account.credit_micro + after, pro.account.credit_added_micro, {now}) : null,   // 🟠 at 80% of the credit added
   ]);
   ctx?.waitUntil ? ctx.waitUntil(work) : await work;
   if (body.stream) return new Response(asStream(message), {headers: {'content-type': 'text/event-stream', 'cache-control': 'no-cache'}});
@@ -156,4 +160,11 @@ const isJson = text => { try { JSON.parse(text); return true; } catch { return f
 // The three Free AI lines that stop everyone, after a counted call (shared/cap-alerts.js: 🟠 approaching, 🔴 reached, each once per period). Never rejects.
 const spendLines = (env, now, fetcher, used) => Promise.all([capCheck(env, 'free-ai-day', used.day, {now, fetcher}), capCheck(env, 'free-ai-month', used.month, {now, fetcher}),
   capCheck(env, 'free-ai-neurons', used.neurons, {now, fetcher})]);
+// One install's own lines after a call (shared/install-caps.js): each is counted at 80% and at the line, once a day per level. The trial is a Free install's only.
+const installLines = (env, access, lines, now, {life, month, day, minute}) => Promise.all([
+  access.license ? null : installHit(env, 'free-ai-trial', access.who, life, lines.trialUsd * 1e6, {now}),
+  installHit(env, 'free-ai-install-month', access.who, month, lines.installMonthUsd * 1e6, {now}),
+  installHit(env, 'free-ai-install-day', access.who, day, lines.installDayUsd * 1e6, {now}),
+  installHit(env, 'free-ai-minute', access.who, minute, lines.perMinute, {now}),
+]);
 const later = (ctx, work) => (ctx?.waitUntil ? ctx.waitUntil(work) : work);
