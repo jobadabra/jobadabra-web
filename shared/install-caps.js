@@ -36,8 +36,8 @@ export async function installHit(env, name, install, used, line, {reached = fals
     if (!level) return null;
     const flag = `caph:${name}:${level}:${now.toISOString().slice(0, 10)}:${install}`;
     if (await env.WAITLIST.get(flag)) return null;
-    await env.WAITLIST.put(flag, '1', {expirationTtl: 2 * 86400});
     await env.STATS.prepare('INSERT INTO cap_hits (hour, line, level, n) VALUES (?, ?, ?, 1) ON CONFLICT (hour, line, level) DO UPDATE SET n = n + 1').bind(hourOf(now), name, level).run();
+    await env.WAITLIST.put(flag, '1', {expirationTtl: 2 * 86400});   // Why (#625, Gitar): after the count, so a failed D1 write leaves the install to be counted at its next call
     return level;
   } catch { return null; }
 }
@@ -45,11 +45,15 @@ export async function installHit(env, name, install, used, line, {reached = fals
 /** The :00 tick: one card per level for the hours before `now`, most installs first; a done card deletes its rows. -> the levels told, 'reached' first. */
 export async function sendHourly(env, now = new Date(), {fetcher = fetch} = {}) {
   const hour = hourOf(now), told = [];
-  const {results} = await env.STATS.prepare('SELECT line, level, SUM(n) AS n FROM cap_hits WHERE hour < ? GROUP BY line, level').bind(hour).all();
+  const {results} = await env.STATS.prepare('SELECT hour, line, level, n FROM cap_hits WHERE hour < ?').bind(hour).all();
   for (const level of ['reached', 'approaching']) {
-    const rows = results.filter(row => row.level === level && INSTALL_CAPS[row.line]).map(row => ({...INSTALL_CAPS[row.line], installs: Number(row.n)})).sort((a, b) => b.installs - a.installs);
+    const read = results.filter(row => row.level === level), installs = {};
+    for (const row of read) if (INSTALL_CAPS[row.line]) installs[row.line] = (installs[row.line] || 0) + Number(row.n);
+    const rows = Object.entries(installs).map(([line, n]) => ({...INSTALL_CAPS[line], installs: n})).sort((a, b) => b.installs - a.installs);
     if (rows.length && !(await send(env, 'install-caps', level, capGroupCard(level, rows).text, fetcher))) continue;
-    if (results.some(row => row.level === level)) await env.STATS.prepare('DELETE FROM cap_hits WHERE hour < ? AND level = ?').bind(hour, level).run();
+    // Why (#625, Gitar): take away only what was read and told; a count that came in while the card was sending stays for the next :00.
+    for (const row of read) await env.STATS.prepare('UPDATE cap_hits SET n = n - ? WHERE hour = ? AND line = ? AND level = ?').bind(Number(row.n), row.hour, row.line, row.level).run();
+    if (read.length) await env.STATS.prepare('DELETE FROM cap_hits WHERE hour < ? AND level = ? AND n <= 0').bind(hour, level).run();
     if (rows.length) told.push(level);
   }
   return told;

@@ -72,9 +72,9 @@ export async function reserve(env, row, given, now = new Date()) {
     if (!owned.meta?.changes) return end('already', 409, 'already');   // this queued item was pressed in another night
     const day = dayOf(now), max = ownSubmits(env);
     // Why (10 Nov 2026, owner "~500/day + alert"): one statement takes the slot, so two jobs cannot both slip under the ceiling; the attempt above stays used either way (a refused job is never tried again).
-    const counted = await env.STATS.prepare('INSERT INTO ready_read_days (install, day, submits) VALUES (?, ?, 1) ON CONFLICT (install, day) DO UPDATE SET submits = submits + 1 WHERE submits + 1 <= ?').bind(row.install, day, max).run();
-    if (counted.meta?.changes) { await submitsHit(env, row.install, day, max, now, false); return {status: 200, body: {ok: true, attempt}}; }
-    await submitsHit(env, row.install, day, max, now, true);
+    const counted = await env.STATS.prepare('INSERT INTO ready_read_days (install, day, submits) VALUES (?, ?, 1) ON CONFLICT (install, day) DO UPDATE SET submits = submits + 1 WHERE submits + 1 <= ? RETURNING submits').bind(row.install, day, max).first();
+    await submitsHit(env, row.install, counted?.submits ?? null, max, now);
+    if (counted) return {status: 200, body: {ok: true, attempt}};
     const told = await env.STATS.prepare('UPDATE ready_read_days SET submits_alerted = 1 WHERE install = ? AND day = ? AND submits_alerted = 0').bind(row.install, day).run().catch(() => null);
     if (told?.meta?.changes) await notify(env, {event: 'ready-submit-ceiling', text: `☁️ A cloud Full automation install reached its abuse ceiling today (${max} submits): ${row.install.slice(0, 8)}. Cloud submits stop until 00:00 UTC; a real user does not send this many applications.`}).catch(() => {});
     return end('ceiling', 429, 'ceiling');
@@ -136,9 +136,7 @@ export async function claimAttempt(env, row, job, checked) {
 
 // Why (13 Nov 2026, owner, "Grouped hourly (Recommended)"): an install near (80%) or at its ~500 submits is counted for the hourly card (shared/install-caps.js); the once-a-day note stays.
 // Never throws: a count must not refuse a submit.
-async function submitsHit(env, install, day, max, now, reached) {
-  try {
-    const row = reached ? null : await env.STATS.prepare('SELECT submits FROM ready_read_days WHERE install = ? AND day = ?').bind(install, day).first();
-    await installHit(env, 'cloud-submit-ceiling', install, reached ? max : row?.submits ?? 0, max, {now, reached});
-  } catch { /* an alert never refuses a submit */ }
+// `submits` = today's count after this one (from RETURNING, #625), or null when the ceiling refused it.
+async function submitsHit(env, install, submits, max, now) {
+  try { await installHit(env, 'cloud-submit-ceiling', install, submits, max, {now, reached: submits == null}); } catch { /* an alert never refuses a submit */ }
 }

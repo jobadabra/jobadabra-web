@@ -67,12 +67,13 @@ export async function creditRefusal(env, install, now = new Date()) {
 /** Takes `n` reads of today's cap in one statement (a second batch cannot slip in between a check and a write). -> null, or {status: 429, limit, used, error}. */
 export async function reserveReads(env, install, n, now = new Date()) {
   const day = dayOf(now), max = dayReads(env), usd = dayMicro(env);
-  const changed = n <= max && await env.STATS.prepare(`INSERT INTO ready_read_days (install, day, reads) VALUES (?, ?, ?) ON CONFLICT (install, day) DO UPDATE SET reads = reads + excluded.reads
-    WHERE reads + excluded.reads <= ? AND micro < ?`).bind(install, day, n, max, usd).run();
+  const taken = n <= max ? await env.STATS.prepare(`INSERT INTO ready_read_days (install, day, reads) VALUES (?, ?, ?) ON CONFLICT (install, day) DO UPDATE SET reads = reads + excluded.reads
+    WHERE reads + excluded.reads <= ? AND micro < ? RETURNING reads, micro`).bind(install, day, n, max, usd).first() : null;
+  // Why (13 Nov 2026, owner, "Grouped hourly (Recommended)"): the install's share of its day (reads or money, the fuller one) is counted for the hourly card (shared/install-caps.js);
+  // RETURNING gives it with no second read (#625, Gitar).
+  if (taken) return void await installHit(env, 'cloud-checks-day', install, Math.max(taken.reads / max, (taken.micro || 0) / usd), 1, {now});
+  await installHit(env, 'cloud-checks-day', install, null, null, {now, reached: true});
   const row = await env.STATS.prepare('SELECT reads, micro FROM ready_read_days WHERE install = ? AND day = ?').bind(install, day).first();
-  // Why (13 Nov 2026, owner, "Grouped hourly (Recommended)"): the install's share of its day (reads or money, the fuller one) is counted for the hourly card (shared/install-caps.js).
-  await installHit(env, 'cloud-checks-day', install, Math.max((row?.reads || 0) / max, (row?.micro || 0) / usd), 1, {now, reached: !changed?.meta?.changes});
-  if (changed?.meta?.changes) return null;
   const spent = (row?.micro || 0) >= usd;
   return {status: 429, limit: max, used: row?.reads || 0, error: spent ? "Today's cloud checks used their budget. They start again tomorrow (00:00 UTC)." : `Today's cloud checks are used up (${row?.reads || 0} of ${max} forms). They start again tomorrow (00:00 UTC).`};
 }
@@ -139,10 +140,9 @@ export async function claimedRefusal(env, install, key, now = new Date()) {
  */
 export async function reserveOwn(env, install, n, now = new Date()) {
   const day = dayOf(now), max = ownReads(env);
-  const changed = n <= max && await env.STATS.prepare(`INSERT INTO ready_read_days (install, day, own) VALUES (?, ?, ?) ON CONFLICT (install, day) DO UPDATE SET own = own + excluded.own WHERE own + excluded.own <= ?`).bind(install, day, n, max).run();
-  const own = changed?.meta?.changes ? await env.STATS.prepare('SELECT own FROM ready_read_days WHERE install = ? AND day = ?').bind(install, day).first() : null;
-  await installHit(env, 'cloud-read-ceiling', install, own?.own ?? max, max, {now, reached: !changed?.meta?.changes});   // the hourly card (shared/install-caps.js); the once-a-day note below stays
-  if (changed?.meta?.changes) return null;
+  const taken = n <= max ? await env.STATS.prepare(`INSERT INTO ready_read_days (install, day, own) VALUES (?, ?, ?) ON CONFLICT (install, day) DO UPDATE SET own = own + excluded.own WHERE own + excluded.own <= ? RETURNING own`).bind(install, day, n, max).first() : null;
+  await installHit(env, 'cloud-read-ceiling', install, taken ? taken.own : null, max, {now, reached: !taken});   // the hourly card (shared/install-caps.js), from RETURNING (#625); the once-a-day note below stays
+  if (taken) return null;
   const told = await env.STATS.prepare('UPDATE ready_read_days SET own_alerted = 1 WHERE install = ? AND day = ? AND own_alerted = 0').bind(install, day).run().catch(() => null);
   if (told?.meta?.changes) await notify(env, {event: 'ready-read-ceiling', text: `☁️ A cloud readiness install reached its abuse ceiling today (${max} reads on its own AI key): ${install.slice(0, 8)}. Reads stop until 00:00 UTC; a real user does not read this many forms.`}).catch(() => {});
   const row = await env.STATS.prepare('SELECT own FROM ready_read_days WHERE install = ? AND day = ?').bind(install, day).first();

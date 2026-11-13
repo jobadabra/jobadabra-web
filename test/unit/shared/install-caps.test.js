@@ -59,7 +59,32 @@ test('a failed send keeps the hour\'s counts for the next :00; an alert never th
   assert.equal(await installHit({...e, STATS: {prepare: () => { throw new Error('d1 down'); }}}, 'free-ai-install-day', 'i9', 100, 100, {now: H10}), null);
 });
 
-test('every registered line is wired: some product file calls installHit with its name', () => {
-  const files = ['shared/free-ai.js', 'shared/free-ai-web.js', 'shared/pro-ai.js', 'api/ready.js', 'api/ready-read-access.js', 'api/ready-auto.js'].map(path => readFileSync(new URL(path, ROOT), 'utf8')).join('\n');
-  for (const name of Object.keys(INSTALL_CAPS)) assert.match(files, new RegExp(`installHit\\([^)]*'${name}'`), `${name} is checked where its line refuses`);
+test('every registered line is wired in the file where its line refuses, by name', () => {
+  const read = path => readFileSync(new URL(path, ROOT), 'utf8');
+  const WHERE = {'free-ai-minute': 'shared/free-ai.js', 'pro-credit': 'shared/free-ai.js', 'web-search-day': 'shared/free-ai-web.js', 'cloud-checks-day': 'api/ready-read-access.js',
+    'cloud-read-ceiling': 'api/ready-read-access.js', 'cloud-submit-ceiling': 'api/ready-auto.js', 'night-cost': 'api/ready.js'};
+  const VIA_INSTALL_CAP = ['free-ai-trial', 'free-ai-install-day', 'free-ai-install-month'];   // installCap names the line; the refusal counts mine.line
+  assert.deepEqual([...Object.keys(WHERE), ...VIA_INSTALL_CAP].sort(), Object.keys(INSTALL_CAPS).sort(), 'every line has its place here');
+  for (const [name, path] of Object.entries(WHERE)) assert.match(read(path), new RegExp(`installHit\\(env, '${name}'`), `${name} is counted in ${path}`);
+  const free = read('shared/free-ai.js');
+  assert.match(free, /if \(mine\) \{ await later\(ctx, installHit\(env, mine\.line,/, 'the per-install refusal counts the line installCap named');
+  for (const name of VIA_INSTALL_CAP) assert.match(free, new RegExp(`return \\{capped: '\\w+', status: 429, message: \\w+, line: '${name}'\\}`), `installCap names ${name}`);
+});
+
+test('a count that arrives while the card is sending is kept for the next :00, not deleted unseen', async () => {
+  const e = env(), sent = [];
+  await installHit(e, 'free-ai-install-day', 'i1', 100, 100, {now: H10});
+  const late = async (url, init) => { await installHit(e, 'free-ai-install-day', 'i2', 100, 100, {now: H10}); return posting(sent)(url, init); };
+  assert.deepEqual(await sendHourly(e, H11, {fetcher: late}), ['reached']);
+  assert.match(sent[0], /1\s+Free AI per install today/);
+  assert.deepEqual(await sendHourly(e, H12, {fetcher: posting(sent)}), ['reached'], 'the late install is told at the next :00');
+  assert.match(sent[1], /1\s+Free AI per install today/);
+});
+
+test('a D1 write that fails leaves the install uncounted for the day, so its next call counts it', async () => {
+  const e = env(), real = e.STATS;
+  e.STATS = {prepare: () => { throw new Error('d1 down'); }};
+  assert.equal(await installHit(e, 'free-ai-install-day', 'i1', 100, 100, {now: H10}), null);
+  e.STATS = real;
+  assert.equal(await installHit(e, 'free-ai-install-day', 'i1', 100, 100, {now: H10}), 'reached');
 });
