@@ -1,22 +1,18 @@
-// The registry of every line that stops something for everyone, and its one owner alert: a 🟠 medium card when the count approaches the line, a 🔴 critical card when it reaches it,
-// each once per period (UTC day or month) through the switchboard (alertOwner), with a KV flag. Spec: the sketch https://claude.ai/artifact/PVB8Su2LfyX8uQc27duLhC.
+// The site's lines that stop something for everyone (Free AI, the board web search, the form reports' day total), on the one cap alert (shared/cap-check.js: 🟠 approaching, 🔴 reached,
+// once per period). Here the flags live in KV (WAITLIST) and a card goes through the switchboard (alertOwner). Sketch and inventory: https://claude.ai/artifact/PVB8Su2LfyX8uQc27duLhC.
 // Why (13 Nov 2026, owner: "Let's add Telegram alerts to all the caps/limits/stops.. One medium when we approaching the limit/cap and another one, ciritical, when we reached it"):
-// the Free AI $10 day stop was reached in silence (every Free install saw "Free AI is busy today" and the owner was not told), and the three alerts that existed were three functions
-// with three flags. One registry: a new cap declares its line, its approach line and its words, and gets both cards; a test loops over it (test/unit/shared/cap-alerts.test.js).
-// Invariants: never throws, so an alert cannot fail or slow a user's call (callers run it under ctx.waitUntil); a reached card is sent once even when no approach card came;
-// a failed send gives its flag back so the next crossing tries again; the text holds counts and var names only, never a person.
+// the Free AI $10 day stop was reached in silence. A new cap is one entry below; test/unit/shared/cap-alerts.test.js loops over every entry.
 import {alertOwner} from './notify-send.js';
-import {capCard} from './owner-cards.js';
+import {checkCap} from './cap-check.js';
 import {LIMITS, allowanceOf} from './free-ai.js';
 import {monthLine} from './free-ai-web.js';
+import {ALL_BYTES_PER_DAY, ALL_REPORTS_PER_DAY} from './report-form.js';
 
 const num = (value, fallback) => (Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback);
-// A cap's counter in the words and the bar of its card: 'usd' counts micro-USD, 'neurons' counts neurons.
-const UNITS = {usd: {amount: micro => Math.round(Number(micro) / 1e4) / 100, show: n => `$${n.toFixed(2)}`, word: 'USD'}, neurons: {amount: n => Math.round(Number(n)), show: n => `${n} neurons`, word: 'neurons'}};
 const BUSY_TODAY = 'every Free install sees "Free AI is busy today" until 00:00 UTC';
 
 /**
- * name -> {title, event (switchboard registry), period: 'day' | 'month', unit: 'usd' | 'neurons' (the counter's own unit), line(env), approach(env) (both in the counter's own unit), sees (what people get), fix (what the owner can do, as "To move the stop: <fix>." / "To reopen it: <fix>.")}.
+ * name -> {title, event (switchboard registry), period: 'day' | 'month', unit (shared/cap-check.js UNITS), line(env), approach(env) (both in the counter's own unit), sees (what people get), fix (what the owner can do, as "To move the stop: <fix>." / "To reopen it: <fix>.")}.
  * The Free AI lines keep the alert lines the owner set (FREE_AI_ALERT_USD, FREE_AI_MONTH_ALERT_USD); a line with none approaches at 80%.
  */
 export const CAPS = {
@@ -32,32 +28,23 @@ export const CAPS = {
   'free-ai-web-month': {title: 'The Free AI board web search this month', event: 'free-ai-spend', period: 'month', unit: 'usd',
     line: env => monthLine(env) * 1e6, approach: env => monthLine(env) * 1e6 * 0.8,
     sees: 'installs on Free AI get no board web search until the 1st', fix: 'raise FREE_AI_WEB_MONTH_USD in workers/www/wrangler.toml'},
+  'form-reports-day': {title: 'Form reports today', event: 'form-reports-full', period: 'day', unit: 'reports',
+    line: () => ALL_REPORTS_PER_DAY, approach: () => ALL_REPORTS_PER_DAY * 0.8,
+    sees: 'every Report press says "limit reached for today" until 00:00 UTC', fix: 'raise ALL_REPORTS_PER_DAY in shared/report-form.js'},
+  'form-report-bytes-day': {title: 'Form report uploads today', event: 'form-reports-full', period: 'day', unit: 'bytes',
+    line: () => ALL_BYTES_PER_DAY, approach: () => ALL_BYTES_PER_DAY * 0.8,
+    sees: 'every Report press says "limit reached for today" until 00:00 UTC', fix: 'raise ALL_BYTES_PER_DAY in shared/report-form.js'},
 };
-
-const periodOf = (period, now) => now.toISOString().slice(0, period === 'month' ? 7 : 10);
-const flagOf = (name, level, period) => `cap:${name}:${level}:${period}`;
+for (const [name, cap] of Object.entries(CAPS)) cap.name = name;
 
 /**
- * Tells the owner about one cap after a counted call or at a refusal: `used` in the cap's own unit (null with `reached`, when the platform refused with no count of ours).
+ * Tells the owner about one of the site's caps after a counted call or at a refusal: `used` in the cap's own unit (null with `reached`, when the platform refused with no count of ours).
  * -> resolves to 'reached' | 'approaching' | null (what was sent, or nothing). Never rejects.
  */
 export async function capCheck(env, name, used, {now = new Date(), fetcher = fetch, reached = false} = {}) {
-  try {
-    const cap = CAPS[name], kv = env?.WAITLIST;
-    if (!cap || !kv) return null;
-    const line = cap.line(env), near = cap.approach(env), period = periodOf(cap.period, now);
-    const level = reached || used >= line ? 'reached' : used >= near ? 'approaching' : null;
-    if (!level || await kv.get(flagOf(name, level, period))) return null;
-    const ttl = {expirationTtl: (cap.period === 'month' ? 40 : 2) * 86400};
-    // Both flags on a reached line: an approach card after the critical one would only confuse.
-    const flags = level === 'reached' ? [flagOf(name, 'reached', period), flagOf(name, 'approaching', period)] : [flagOf(name, level, period)];
-    const before = await Promise.all(flags.map(flag => kv.get(flag)));
-    await Promise.all(flags.map(flag => kv.put(flag, '1', ttl)));
-    const unit = UNITS[cap.unit], done = used == null ? null : unit.amount(used), total = Number.isFinite(line) ? unit.amount(line) : null;
-    const text = capCard(level, {title: cap.title, used: done == null ? null : unit.show(done), line: total == null ? null : unit.show(total), done, total, word: unit.word, sees: cap.sees, fix: cap.fix}).text;
-    if (!(await send(env, cap.event, level, text, fetcher))) await Promise.all(flags.filter((_, i) => !before[i]).map(flag => Promise.resolve(kv.delete?.(flag)).catch(() => {})));
-    return level;
-  } catch { return null; }
+  const kv = env?.WAITLIST;
+  if (!kv) return null;
+  return checkCap(env, CAPS[name], used, {now, reached, store: kv, send: (event, level, text) => send(env, event, level, text, fetcher)});
 }
 
 // The one send: the switchboard first, the Brain bot when it cannot deliver. -> true when the alert is done (sent, held on purpose by the switchboard, or nothing is configured at all).
