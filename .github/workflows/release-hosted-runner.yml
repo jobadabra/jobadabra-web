@@ -1,9 +1,10 @@
 name: Release · Always on runner
-# Deploys the hosted Always on runner Worker and its container image (workers/hosted-runner, hosted/Dockerfile: the engine as the app runs it). By hand only: pick `staging` or `production`.
+# Deploys the hosted Always on runner Worker and its container image (workers/hosted-runner, hosted/Dockerfile: the engine as the app runs it). Started by public-watch.yml (production, when the engine
+# or the runner's own files changed) or by hand (`staging` or `production`).
 # Why (5 Nov 2026, hr 2/6; owner: "why the Easiest not open yet?"): the Worker was written on 16 Oct and its header said site.yml deploys it; no workflow ever did, so the queue hosted-runs had
-# no consumer and Always on on our servers could not run. By hand, not on push: a production deploy waits for the owner's yes after the staging proof (owner, 5 Nov 2026: "You, at that step").
+# no consumer and Always on on our servers could not run. Not on push: the engine lives in the public repo, so public-watch.yml starts production when it changes (13 Nov 2026, owner:
+# "Deploy unattended (Recommended)", replacing 5 Nov's "You, at that step" wait for the owner's yes).
 # Secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID (the same as Release · Ready to send runner). The image carries no secret and no user data.
-# TODO(AI): redeploy when the engine files the image bundles change (src, config, templates, requirements), as public-watch.yml does for the Ready to send runner, once production is live (5 Nov 2026).
 on:
   workflow_dispatch:
     inputs:
@@ -21,9 +22,8 @@ jobs:
   deploy:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    # Why (5 Nov 2026, Gitar on #369; owner: "You, at that step"): a production deploy waits for the owner's approval. The job runs in the GitHub environment `production`, whose required reviewer is the owner;
-    # `staging` has none. Without that setting on the environment the gate is not real: see the PR.
-    environment: ${{ inputs.target == 'production' && 'production' || 'staging' }}
+    # Why (13 Nov 2026, owner, asked via AskUserQuestion: "Deploy unattended (Recommended)"; replaces the 5 Nov approval gate of #369): production deploys with no click, like the site and Ready to send,
+    # because the gate left hosted Always on on the 5 Nov engine for 8 days. The safety is the rollout wait below and each run's own check that it runs the deployed build (#387).
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
