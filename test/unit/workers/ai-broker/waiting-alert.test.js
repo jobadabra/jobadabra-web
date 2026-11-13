@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {body, success, harness, switchboard, PARALLEL} from './harness.mjs';
+import {waiting, served, left} from '../../../../workers/ai-broker/lib/waiting.mjs';
 import {alertOf} from '../../../../shared/notify-registry.js';
 import {windowOf} from '../../../../shared/streak.js';
 
@@ -85,4 +86,18 @@ test('a caller that gives up after waiting over 30 s is a starved call, counted 
   assert.deepEqual([window.ok, window.bad], [PARALLEL, 3], 'the 3 left calls add nothing when they get their slot; the late call that waited 80 s is the third');
   assert.deepEqual(window.whys, [['caller gave up', 2], ['waited', 1]]);
   assert.equal(w.waits().length, 1, 'still one note');
+});
+
+test('Gitar on #605: a call whose caller left counts nothing on its later engine turns (Claude busy, then Codex, then Claude again)', () => {
+  const asked = {...body};
+  waiting(asked, 'claude', T);
+  assert.equal(left(asked, T + 40_000)?.gaveUp, true, 'counted once, as given up');
+  assert.equal(served(asked, T + 41_000), null);
+  waiting(asked, 'codex', T + 41_000);
+  assert.equal(served(asked, T + 90_000), null, 'the Codex turn of the abandoned call is no wait');
+  const quick = {...body};
+  waiting(quick, 'codex', T); served(quick, T + 1000);   // running in the container when its caller leaves
+  assert.equal(left(quick, T + 5000), null);
+  waiting(quick, 'claude', T + 6000);
+  assert.equal(served(quick, T + 60_000), null, 'a later turn after the caller left counts nothing either');
 });

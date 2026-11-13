@@ -14,12 +14,13 @@ export const WAIT_SHARE = 0.1;
 
 const queued = new WeakMap();   // a call's body -> {engine, since, gaveUp}: where it waits for a slot now
 const callers = new WeakMap();  // a call's body -> its workflow (who is affected)
+const gone = new WeakSet();     // bodies whose caller left: none of their later engine turns is a wait anyone feels (Gitar on #605)
 
 /** The workflow a call came from, for the note's "CI jobs hit". */
 export const named = (body, workflow) => { if (body && typeof body === 'object') callers.set(body, short(workflow)); };
 
 /** The call starts waiting for an `engine` slot. */
-export const waiting = (body, engine, now = Date.now()) => { if (body && typeof body === 'object') queued.set(body, {engine, since: now}); };
+export const waiting = (body, engine, now = Date.now()) => { if (body && typeof body === 'object' && !gone.has(body)) queued.set(body, {engine, since: now}); };
 
 /** The call has its slot (or stopped waiting for it): {engine, waitMs, who}, or null when it was not waiting or its caller's give-up was already counted. */
 export function served(body, now = Date.now()) {
@@ -31,6 +32,7 @@ export function served(body, now = Date.now()) {
 
 /** The caller left while the call still waited: {engine, waitMs, who, gaveUp: true} once, when it had waited past the line; else null (a short wait is no starvation). Either way its slot, when it comes, counts no wait: nobody waits for it any more. */
 export function left(body, now = Date.now()) {
+  if (body && typeof body === 'object') gone.add(body);
   const at = body && typeof body === 'object' ? queued.get(body) : null;
   if (!at || at.gaveUp) return null;
   at.gaveUp = true;
