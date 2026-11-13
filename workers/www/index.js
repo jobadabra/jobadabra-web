@@ -103,7 +103,7 @@ import {view as feedbackView, file as feedbackFile, actRoute as feedbackAct} fro
 import {purgeFiles as purgeFeedbackFiles} from '../../shared/feedback.js';
 import {retryImpact} from '../../shared/feedback-impact.js';
 import {pingOverdue} from '../../shared/feedback-overdue.js';
-import {sendHourly as sendInstallCaps} from '../../shared/install-caps.js';
+import {isCardTime, sendCards as sendInstallCaps} from '../../shared/install-caps.js';
 import {pingWaitingReports} from '../../shared/report-waiting.js';
 import {reportForm} from '../../shared/report-form.js';
 import {view as reportsView} from '../../admin/report-view.js';
@@ -387,7 +387,7 @@ export default {
       // Why (5 Nov 2026, Gitar on #439): the promise is a reply within 24 hours, so the owner is warned within the hour; the daily block below would warn up to a day late. One tick an hour (minute 10); the once-per-report flag stops a double ping.
       const tickAt = new Date(event.scheduledTime || Date.now());
       if (isSearchNightTick(tickAt)) ctx.waitUntil(searchNightMissing(env, tickAt).then(done => { if (done.missing) console.log(`search night missing: alert ${done.alert}`); }).catch(error => console.error(`search night missing: ${error.message}`)));   // 06:30 UTC: no night filed for today = the owner is told once (admin/search-night-missing.js)
-      if (tickAt.getUTCMinutes() === 0) ctx.waitUntil(sendInstallCaps(env, tickAt).then(told => { if (told.length) console.log(`install caps told: ${told.join(', ')}`); }).catch(error => console.error(`install caps: ${error.message}`)));   // the past hour's per-install lines: one 🟠 and one 🔴 card at most (shared/install-caps.js)
+      if (isCardTime(tickAt)) ctx.waitUntil(sendInstallCaps(env, tickAt).then(told => { if (told.length) console.log(`install caps told: ${told.join(', ')}`); }).catch(error => console.error(`install caps: ${error.message}`)));   // every 6 hours, the per-install lines since the last card: one 🟠 and one 🔴 card at most (shared/install-caps.js)
       if (tickAt.getUTCMinutes() === 10) ctx.waitUntil(pingOverdue(env, tickAt).catch(error => console.error(`feedback overdue ping: ${error.message}`)));   // a report 24 h old with no reply: the owner is told once (shared/feedback-overdue.js)
       if (tickAt.getUTCMinutes() === 10) ctx.waitUntil(pingWaitingReports(env, tickAt).catch(error => console.error(`report waiting ping: ${error.message}`)));   // a report unfetched 2 days: the owner is told once (shared/report-waiting.js)
       if (isFeedTick(tickAt)) ctx.waitUntil(readNorway(env, {now: tickAt}).then(done => { if (done.status !== 'off') console.log(`national feed: ${JSON.stringify(done)}`); }).catch(error => console.error(`national feed: ${error.message}`)));   // Norway's NAV feed, once an hour (api/national-feed.js; nothing without NATIONAL_FEEDS and the key)

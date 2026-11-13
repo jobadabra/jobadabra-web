@@ -74,7 +74,7 @@ export const ALERTS = [
   a('feedback-received', '💬 Feedback received', 'users', 'every', 'users', {wired: true}),
   a('form-reported', '📝 A form was reported', 'users', 'every', 'users', {wired: true}),
   a('form-reports-full', '📝 Form reports near (🟠) or at (🔴) today\'s total for all installs', 'users', 'every', 'users', {wired: true}),   // shared/cap-alerts.js
-  a('install-caps', '🧍 Installs near (🟠) or at (🔴) a per-install line in the last hour (Free AI trial, day, month, minute; Pro credit; cloud checks; a night\'s cost; the ~500 ceilings; web search)', 'users', 'every', 'users', {wired: true}),
+  a('install-caps', '🧍 Installs near (🟠) or at (🔴) a per-install line, one card per level every 6 hours (Free AI trial, day, month, minute; Pro credit; cloud checks; a night\'s cost; the ~500 ceilings; web search)', 'users', 'every', 'users', {wired: true}),
   a('email-added', '✉️ An account added or changed its e-mail', 'users', 'every', 'users', {wired: true}),
   a('form-report-waiting', '⏳ A reported form waits 2 days, not fetched', 'users', 'every', 'users', {wired: true}),
   a('feedback-overdue', '⏰ A feedback is 24 h old with no reply', 'users', 'every', 'users', {wired: true}),
