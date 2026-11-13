@@ -103,7 +103,7 @@ test('search keeps every tier, lane, queue priority and meter identical to ordin
       const {broker, storage} = harness();
       const acquire = broker.gate.acquire.bind(broker.gate);
       broker.gate.acquire = async priority => {
-        assert.equal(priority, lane === 'drift' ? 'scheduled' : lane);
+        assert.equal(priority, lane === 'pr' ? 'pr' : 'scheduled');   // one line behind PR checks (13 Nov 2026)
         return acquire(priority);
       };
       broker.containerFetch = async (url, init) => {

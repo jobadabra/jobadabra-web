@@ -283,7 +283,7 @@ export class AiBroker extends doContainer(DurableObject) {
     const unlock = session ? await this.turns(session) : () => {};   // before the slot: a waiting turn of one conversation must not hold a slot others need
     try {
       waiting(body, 'codex');
-      const release = await this.gate.acquire(queueOf(lane));   // nightly drift and by-hand Search checks share scheduled queue priority
+      const release = await this.gate.acquire(queueOf(lane));   // every lane but PR checks shares one line in arrival order (lib/queue.mjs)
       this.waited(served(body));
       try {
         const delta = typeof body.delta === 'string' ? body.delta : '', now = Date.now();

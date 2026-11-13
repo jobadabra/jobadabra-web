@@ -82,6 +82,7 @@ test('a by-hand Search check runs to 100% of the Codex week, waits behind PR che
   assert.equal(queueOf('byhand'), 'scheduled');
   assert.equal(queueOf('drift'), 'scheduled');
   assert.equal(queueOf('pr'), 'pr');
+  assert.equal(queueOf('bench'), 'scheduled');
   const day = 1999990000;
   let m = newMeter(2000000000);
   for (let i = 0; i < DAILY.drift; i++) m = recordCall(m, 'drift', day);
@@ -212,16 +213,27 @@ test('a new week starts a fresh meter', () => {
   assert.equal(ownSharePct(m), 5);
 });
 
-test('4 calls run at once and a waiting PR check goes before scheduled and benchmark work', async () => {
+test('a waiting PR check goes before every other call', async () => {
   const q = slots(2), order = [];
   const [a, b] = [await q.acquire('scheduled'), await q.acquire('scheduled')];
-  const waiters = ['bench', 'scheduled', 'pr'].map(lane => q.acquire(lane).then(release => { order.push(lane); release(); }));
-  assert.deepEqual(q.stats(), {slots: 2, active: 2, waiting: {pr: 1, scheduled: 1, bench: 1}});
+  const waiters = [['bench', 'scheduled'], ['byhand', 'scheduled'], ['pr', 'pr']].map(([lane, queue]) => q.acquire(queue).then(release => { order.push(lane); release(); }));
+  assert.deepEqual(q.stats(), {slots: 2, active: 2, waiting: {pr: 1, scheduled: 2}});
   a(); a();   // a second release of the same slot frees nothing
   b();
   await Promise.all(waiters);
-  assert.deepEqual(order, ['pr', 'scheduled', 'bench']);
+  assert.deepEqual(order, ['pr', 'bench', 'byhand'], 'behind the PR check, arrival order');
   assert.equal(q.stats().active, 0);
+});
+
+// Why (13 Nov 2026, owner via sa: "First come, first serve"): at 03:24-03:27Z by-hand calls kept arriving while four benchmark calls waited 166 s behind them (a third, lower queue).
+test('a benchmark call waiting while by-hand calls keep arriving gets its slot in arrival order', async () => {
+  const q = slots(1), order = [];
+  const first = await q.acquire(queueOf('byhand'));
+  const all = [q.acquire(queueOf('bench')).then(release => { order.push('bench'); release(); })];
+  for (let i = 0; i < 5; i++) all.push(q.acquire(queueOf('byhand')).then(release => { order.push(`byhand${i}`); release(); }));
+  first();
+  await Promise.all(all);
+  assert.equal(order[0], 'bench', order.join(','));
 });
 
 test('a Claude tier keeps its Codex counterpart, and an unknown tier is refused', () => {
