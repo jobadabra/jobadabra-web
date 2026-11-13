@@ -17,7 +17,7 @@ export async function collect(request, env, now = new Date()) {
   const kv = env.WAITLIST, countKey = `telemetry:${events[0].install}:${today}`;
   const count = kv ? Number(await kv.get(countKey)) || 0 : 0;
   const full = count >= PER_INSTALL_PER_DAY;
-  await installHit(env, 'telemetry-day', events[0].install, count + 1, PER_INSTALL_PER_DAY, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+  await installHit(env, 'telemetry-day', events[0].install, count + events.length, PER_INSTALL_PER_DAY, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
   if (full) return Response.json({ok: false, error: 'limit reached for today'}, {status: 429});
   if (kv) await kv.put(countKey, String(count + events.length), {expirationTtl: 2 * 86400});
   for (const item of events) {
