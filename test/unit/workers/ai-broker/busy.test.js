@@ -61,6 +61,7 @@ test('a timed wait gives up after its time and leaves the line; an untimed one w
   got();
   (await untimed)();
   assert.equal(line.stats().active, 0);
+  assert.equal(line.stats().slots, 1, '/health shows the slot count (search-pair.yml admits a pair while active <= slots - 6)');
 });
 
 test('Claude busy for 10 s: a call without search is answered by Free AI, listed as busy, counted in /health, and never sent to the container', async t => {

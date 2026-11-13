@@ -66,8 +66,11 @@ test('a by-hand Search check (its by-hand environment) gets the by-hand lane; th
   const profiles = 'jobadabra/jobadabra/.github/workflows/search-profiles.yml@refs/heads/main';   // owner, 12 Nov 2026: "Move it to CI"
   assert.equal(laneOf({event_name: 'workflow_dispatch', job_workflow_ref: profiles, environment: 'search-check-by-hand'}), 'byhand');
   assert.equal(laneOf({event_name: 'workflow_dispatch', job_workflow_ref: profiles}), 'scheduled', 'without its by-hand environment it keeps the scheduled lane');
+  const pair = 'jobadabra/jobadabra/.github/workflows/search-pair.yml@refs/heads/main';   // 13 Nov 2026 (rs): same-minute before/after pairs of a Find jobs PR
+  assert.equal(laneOf({event_name: 'workflow_dispatch', job_workflow_ref: pair, environment: 'search-check-by-hand'}), 'byhand');
+  assert.equal(laneOf({event_name: 'workflow_dispatch', job_workflow_ref: pair}), 'scheduled');
   assert.equal(laneOf({event_name: 'workflow_dispatch', workflow_ref: search, environment: 'other'}), 'scheduled');
-  for (const other of ['central-scout.yml', 'search-personas-extra.yml', 'press-tapes-old.yml', 'search-profiles-extra.yml', 'job-search-benchmark.yml']) {
+  for (const other of ['central-scout.yml', 'search-personas-extra.yml', 'press-tapes-old.yml', 'search-profiles-extra.yml', 'search-pair-old.yml', 'job-search-benchmark.yml']) {
     assert.notEqual(laneOf({event_name: 'workflow_dispatch', workflow_ref: `GarryOne/jobadabra/.github/workflows/${other}@refs/heads/main`, environment: 'search-check-by-hand'}), 'byhand', other);
   }
   assert.ok(LANES.includes('byhand'));
@@ -214,7 +217,7 @@ test('4 calls run at once and a waiting PR check goes before scheduled and bench
   const q = slots(2), order = [];
   const [a, b] = [await q.acquire('scheduled'), await q.acquire('scheduled')];
   const waiters = ['bench', 'scheduled', 'pr'].map(lane => q.acquire(lane).then(release => { order.push(lane); release(); }));
-  assert.deepEqual(q.stats(), {active: 2, waiting: {pr: 1, scheduled: 1, bench: 1}});
+  assert.deepEqual(q.stats(), {slots: 2, active: 2, waiting: {pr: 1, scheduled: 1, bench: 1}});
   a(); a();   // a second release of the same slot frees nothing
   b();
   await Promise.all(waiters);

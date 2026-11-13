@@ -35,7 +35,9 @@ export {ContainerProxy} from '@cloudflare/containers';   // required by the outb
 // and memory at most 2.1 of 6 GiB; hours that peaked at 0.93-0.96 CPU had no waits (slots not full, so more slots add no load there). Read the waits and CPU per minute on
 // the first by-hand Search check after this deploy: back to 12 if the CPU passes ~0.9 in minutes that still wait.
 /** How many calls run in the container at once, every engine together (the one gate below). */
-export const PARALLEL = 16;
+export const PARALLEL = 24;
+// Why 24 (13 Nov 2026, owner, asked via AskUserQuestion by sa: "24 slots now, measure (Recommended)"): 16 slots fit ~2.5 parallel searches; 2 searches waited p90 11-16 s,
+// 4 searches + board discovery p90 ~110 s (all 16 busy, up to 27 waiting, 2 vCPU at 1.92-1.99). 24 runs on 4 vCPU (#606); 24 Claude calls at ~210 MB = ~5.2 GiB of 6 (no paid memory).
 // Design (13 Nov 2026, owner: "make the claude limit to be an unified slot cap which is 16" · "no isolate claude cap"): one gate of PARALLEL slots, owned by this class, for
 // every engine. A call holds one slot from its engine's turn to the reply, whatever the engine; nothing else limits how many calls of one engine run. Third change of the Claude
 // cap in a day (3 -> 6 #604 -> Worker variable 16 -> one gate), so the separate gate is gone rather than tuned: at 3 the Claude-only benchmark (639 calls, 12 Nov 23:20-23:55Z)
