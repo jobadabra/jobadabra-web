@@ -5,6 +5,7 @@ import {NOTIFICATION_LANGUAGES} from '../shared/notification-language.js';
 import {authorize, digestOf, equal} from '../shared/guard.js';
 import {addrOf, clean, send} from '../shared/mail.js';
 import {DEVICES_PER_ACCOUNT, accountOf, link, planOn} from '../shared/pro.js';
+import {installHit} from '../shared/install-caps.js';
 
 export const CODE_MINUTES = 10, MAX_TRIES = 5;
 const parseKey = key => { const [tag, install, token] = String(key || '').split('.'); return tag === 'JPF1' && install && token ? {install, token} : null; };
@@ -58,7 +59,9 @@ export async function verify(request, env, now = new Date()) {
   const email = clean(asked.body.email), code = String(asked.body.code || '').replace(/\s+/g, '');
   const hash = await addrOf(email), row = await env.STATS.prepare('SELECT * FROM pro_codes WHERE email_hash = ?').bind(hash).first();
   if (!row || row.install !== asked.install || Date.parse(row.expires_at) < now.getTime()) return json(400, {ok: false, error: 'expired'});
-  if (row.tries >= MAX_TRIES) return json(429, {ok: false, error: 'locked'});
+  const full = row.tries >= MAX_TRIES;
+  await installHit(env, 'signin-tries', asked.install, row.tries + 1, MAX_TRIES, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+  if (full) return json(429, {ok: false, error: 'locked'});
   if (!equal(await codeHash(env, hash, code), row.code_hash)) {
     await env.STATS.prepare('UPDATE pro_codes SET tries = tries + 1 WHERE email_hash = ?').bind(hash).run();
     return json(400, {ok: false, error: 'wrong', left: Math.max(0, MAX_TRIES - row.tries - 1)});

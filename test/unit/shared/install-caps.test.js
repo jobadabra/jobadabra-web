@@ -71,10 +71,17 @@ test('a failed send keeps the hour\'s counts for the next :00; an alert never th
 test('every registered line is wired in the file where its line refuses, by name', () => {
   const read = path => readFileSync(new URL(path, ROOT), 'utf8');
   const WHERE = {'free-ai-minute': 'shared/free-ai.js', 'pro-credit': 'shared/free-ai.js', 'web-search-day': 'shared/free-ai-web.js', 'cloud-checks-day': 'api/ready-read-access.js',
-    'cloud-read-ceiling': 'api/ready-read-access.js', 'cloud-submit-ceiling': 'api/ready-auto.js', 'night-cost': 'api/ready.js'};
+    'cloud-read-ceiling': 'api/ready-read-access.js', 'cloud-submit-ceiling': 'api/ready-auto.js', 'night-cost': 'api/ready.js',
+    'aliases-day': 'api/aliases.js', 'playbook-day': 'api/playbook.js', 'index-day': 'api/employers.js', 'national-day': 'api/national.js', 'recipe-lookups-day': 'api/recipes.js',
+    'recipe-samples-day': 'api/recipes.js', 'token-mints-day': 'api/recipes.js', 'reports-install-day': 'shared/report-form.js', 'feedback-day': 'api/feedback.js', 'telemetry-day': 'api/telemetry.js',
+    'pool-minute': 'api/pool.js', 'pay-attempts-hour': 'api/pro-pay.js', 'signin-tries': 'api/pro-signin.js', 'hosted-tests-day': 'api/hosted-test.js'};
   const VIA_INSTALL_CAP = ['free-ai-trial', 'free-ai-install-day', 'free-ai-install-month'];   // installCap names the line; the refusal counts mine.line
   assert.deepEqual([...Object.keys(WHERE), ...VIA_INSTALL_CAP].sort(), Object.keys(INSTALL_CAPS).sort(), 'every line has its place here');
   for (const [name, path] of Object.entries(WHERE)) assert.match(read(path), new RegExp(`installHit\\(env, '${name}'`), `${name} is counted in ${path}`);
+  // Why (13 Nov 2026, the drift card, #630): a request quota is 🔴 only when it refuses, so its installHit and its refusal read one `full`, never a count at the line.
+  const QUOTAS = ['aliases-day', 'playbook-day', 'index-day', 'national-day', 'recipe-lookups-day', 'recipe-samples-day', 'token-mints-day', 'reports-install-day', 'feedback-day', 'telemetry-day',
+    'pool-minute', 'pay-attempts-hour', 'signin-tries', 'hosted-tests-day'];
+  for (const name of QUOTAS) assert.match(read(WHERE[name]), new RegExp(`installHit\\(env, '${name}',[^\\n]*reached: full\\}\\);[^\\n]*\\n\\s*if \\(full\\)`), `${name}: reached is its own refusal`);
   const free = read('shared/free-ai.js');
   assert.match(free, /if \(mine\) \{ await later\(ctx, installHit\(env, mine\.line,/, 'the per-install refusal counts the line installCap named');
   for (const name of VIA_INSTALL_CAP) assert.match(free, new RegExp(`return \\{capped: '\\w+', status: 429, message: \\w+, line: '${name}'\\}`), `installCap names ${name}`);

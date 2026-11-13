@@ -24,6 +24,7 @@ import {store as storeKnowledge} from '../shared/knowledge.js';
 import {storeMoves} from '../shared/ladder-moves.js';
 import {storeRepairs} from '../shared/repair-evidence.js';
 import {failuresSince, storeOutcomes} from './control-outcomes.js';
+import {installHit} from '../shared/install-caps.js';
 
 const STATUSES = ['candidate', 'canary', 'verified', 'disabled'];
 const STEPS = [5, 25, 100];                  // a canary's rollout, in order
@@ -90,7 +91,9 @@ export async function installToken(request, env, now = new Date()) {
     const address = await digest(request.headers.get('CF-Connecting-IP') || 'unknown');
     const key = `${purpose}-mint:${address}:${day(now)}`;
     const used = Number(await kv.get(key)) || 0;
-    if (used >= MINTS_PER_ADDRESS_PER_DAY[purpose]) { await flag(env, 'mint', address, purpose, now); return Response.json({ok: false, error: 'limit reached for today'}, {status: 429}); }
+    const full = used >= MINTS_PER_ADDRESS_PER_DAY[purpose];
+    await installHit(env, 'token-mints-day', address, used + 1, MINTS_PER_ADDRESS_PER_DAY[purpose], {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+    if (full) { await flag(env, 'mint', address, purpose, now); return Response.json({ok: false, error: 'limit reached for today'}, {status: 429}); }
     await kv.put(key, String(used + 1), {expirationTtl: 2 * 86400});
   }
   return Response.json({ok: true, token: await tokenFor(install, env, purpose)});
@@ -111,7 +114,9 @@ export async function lookup(request, env, now = new Date()) {
   // A decoy fingerprint no real form produces: whoever asks is scanning the library. Answer as if nothing was found; revoke quietly.
   const decoy = await honeypotAmong(env, asked);
   if (decoy) { await flag(env, 'honeypot', access.who, decoy, now); await revoke(env, access.who, 'asked for a honeypot', now); return Response.json({ok: true, recipes: []}, {headers: {'Cache-Control': 'private, no-store'}}); }
-  if (used + asked.length > LOOKUPS_PER_INSTALL_PER_DAY) { await flag(env, 'quota', access.who, 'recipe lookups', now); return Response.json({ok: false, error: 'limit reached for today'}, {status: 429}); }
+  const full = used + asked.length > LOOKUPS_PER_INSTALL_PER_DAY;
+  await installHit(env, 'recipe-lookups-day', access.who, used + asked.length, LOOKUPS_PER_INSTALL_PER_DAY, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+  if (full) { await flag(env, 'quota', access.who, 'recipe lookups', now); return Response.json({ok: false, error: 'limit reached for today'}, {status: 429}); }
   if (kv && asked.length) await kv.put(key, String(used + asked.length), {expirationTtl: 2 * 86400});
   const out = [];
   for (const fingerprint of asked) {
@@ -164,7 +169,9 @@ export async function controls(request, env, now = new Date()) {
     + (body.intel && typeof body.intel === 'object' ? 1 + Math.min(5, (body.intel.terms || []).length) + Math.min(20, (body.intel.dismissals || []).length) + Math.min(60, (body.intel.snapshot || []).length) : 0);
   const kv = env.WAITLIST, countKey = `controls:${install}:${day(now)}`;
   const count = kv ? Number(await kv.get(countKey)) || 0 : 0;
-  if (count + samples.length + outcomes.length + extra > PER_INSTALL_PER_DAY) return Response.json({ok: false, error: 'limit reached for today'}, {status: 429});
+  const full = count + samples.length + outcomes.length + extra > PER_INSTALL_PER_DAY;
+  await installHit(env, 'recipe-samples-day', install, count + samples.length + outcomes.length + extra, PER_INSTALL_PER_DAY, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+  if (full) return Response.json({ok: false, error: 'limit reached for today'}, {status: 429});
   if (kv) await kv.put(countKey, String(count + samples.length + outcomes.length + extra), {expirationTtl: 2 * 86400});
   let storedSamples = 0, storedOutcomes = 0;
   // One row per fill (extension/fill-card.js, checked again here), then what Submit added to it: the learning digest's material.

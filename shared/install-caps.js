@@ -21,6 +21,21 @@ export const INSTALL_CAPS = {
   'cloud-read-ceiling': {title: 'Cloud reads ceiling (~500)', sees: 'their cloud reads stop until 00:00 UTC', fix: `raise READY_READ_OWN_MAX in ${WHERE}, if it is a real person`},
   'cloud-submit-ceiling': {title: 'Cloud submits ceiling (~500)', sees: 'their cloud submits stop until 00:00 UTC', fix: `raise READY_AUTO_MAX in ${WHERE}, if it is a real person`},
   'web-search-day': {title: 'Board web search per install today', sees: 'their web search runs again tomorrow', fix: 'raise WEB.installPerDay in shared/free-ai-web.js'},
+  // Request quotas (4/4): an install's requests a day (or a minute, an hour) to one route; the app retries tomorrow or later.
+  'aliases-day': {title: 'Alias lookups per install today', sees: 'the app reads no more aliases until 00:00 UTC', fix: 'raise PER_INSTALL_PER_DAY in api/aliases.js'},
+  'playbook-day': {title: 'Playbook reads per install today', sees: 'the app reads no more board playbooks until 00:00 UTC', fix: 'raise PER_INSTALL_PER_DAY in api/playbook.js'},
+  'index-day': {title: 'Employer index downloads per install today', sees: 'the app keeps the index it has until 00:00 UTC', fix: 'raise INDEX_PER_INSTALL_PER_DAY in api/employers.js'},
+  'national-day': {title: 'National job search reads per install today', sees: 'Find jobs skips the national boards until 00:00 UTC', fix: 'raise PER_INSTALL_PER_DAY in api/national.js'},
+  'recipe-lookups-day': {title: 'Form recipe lookups per install today', sees: 'forms fill without shared recipes until 00:00 UTC', fix: 'raise LOOKUPS_PER_INSTALL_PER_DAY in api/recipes.js'},
+  'recipe-samples-day': {title: 'Form samples sent per install today', sees: 'the app sends no more form samples until 00:00 UTC', fix: 'raise PER_INSTALL_PER_DAY in api/recipes.js'},
+  'token-mints-day': {title: 'Token mints per network address today', sees: 'new installs on that address cannot connect until 00:00 UTC', fix: 'raise MINTS_PER_ADDRESS_PER_DAY in api/recipes.js'},
+  'reports-install-day': {title: 'Form reports per install today', sees: 'the Report button is refused until 00:00 UTC', fix: 'raise PER_INSTALL_PER_DAY in shared/report-form.js'},
+  'feedback-day': {title: 'Feedback per install today', sees: 'Send feedback is refused until 00:00 UTC', fix: 'raise PER_INSTALL_PER_DAY in api/feedback.js'},
+  'telemetry-day': {title: 'Telemetry per install today', sees: 'the app\'s health reports are dropped until 00:00 UTC', fix: 'raise PER_INSTALL_PER_DAY in api/telemetry.js'},
+  'pool-minute': {title: 'Pool contributions a minute', sees: 'the app\'s shared finds wait a minute', fix: 'raise PER_MINUTE in api/pool.js'},
+  'pay-attempts-hour': {title: 'Checkout attempts per install an hour', sees: 'Buy is refused for the hour', fix: 'raise the 20 in api/pro-pay.js'},
+  'signin-tries': {title: 'Wrong Pro sign-in codes', sees: 'that code is locked; they ask for a new one', fix: 'raise MAX_TRIES in api/pro-signin.js'},
+  'hosted-tests-day': {title: 'Always on tests per account today', sees: 'Test Always on is refused until 00:00 UTC', fix: 'raise TESTS_PER_DAY in api/hosted-test.js'},
 };
 
 const hourOf = now => now.toISOString().slice(0, 13);

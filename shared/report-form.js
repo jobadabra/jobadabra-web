@@ -11,6 +11,7 @@ import {authorize, flag} from './guard.js';
 import {isOwner} from './auth.js';
 import {tellOwner} from './report-notify.js';
 import {capCheck} from './cap-alerts.js';
+import {installHit} from './install-caps.js';
 
 export const MAX_BYTES = 8 * 1024 * 1024, PER_INSTALL_PER_DAY = 3, KEEP_DAYS = 30, ALL_REPORTS_PER_DAY = 50, ALL_BYTES_PER_DAY = 200 * 1024 * 1024;
 const OWNER_STATUSES = ['fetched', 'fixed', 'unreplayable'];
@@ -59,7 +60,9 @@ async function upload(request, env, now, fetcher) {
   const requests = Math.max(0, Math.min(100000, Number(meta.requests) || 0)), cause = /^[a-z0-9_-]{1,40}$/.test(String(meta.cause || '')) ? String(meta.cause) : '';
   const day = dayOf(now);
   const {n} = await env.STATS.prepare('SELECT COUNT(*) AS n FROM form_reports WHERE day = ? AND who = ?').bind(day, access.who).first() || {n: 0};
-  if (n >= PER_INSTALL_PER_DAY) { await flag(env, 'report-limit', access.who, '', now); return bad(429, 'limit reached for today'); }
+  const full = n >= PER_INSTALL_PER_DAY;
+  await installHit(env, 'reports-install-day', access.who, n + 1, PER_INSTALL_PER_DAY, {now, reached: full});   // 🟠 at 80%, 🔴 when refused: the hourly card (shared/install-caps.js; owner 13 Nov 2026, "Grouped hourly (Recommended)")
+  if (full) { await flag(env, 'report-limit', access.who, '', now); return bad(429, 'limit reached for today'); }
   // The day's total: one row, bumped only while both caps hold (the WHERE makes the bump and the check one step). 429 with the same words as the per-install limit.
   const bumped = await env.STATS.prepare('INSERT INTO form_report_days (day, reports, bytes) VALUES (?, 1, ?) ON CONFLICT(day) DO UPDATE SET reports = reports + 1, bytes = bytes + excluded.bytes WHERE reports < ? AND bytes + excluded.bytes <= ?')
     .bind(day, body.byteLength, ALL_REPORTS_PER_DAY, ALL_BYTES_PER_DAY).run();
