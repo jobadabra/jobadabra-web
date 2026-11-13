@@ -137,8 +137,8 @@ test('the reported boards: one install is enough, the count of installs is serve
   const text = await answer.text();
   assert.ok(!/install-secret|"install"/.test(text), 'no install id, in any key');
   assert.deepEqual(JSON.parse(text), {ok: true, boards: [
-    {host: 'rabota.md', url: 'https://rabota.md/search?q={role}', countries: ['md'], installs: 2},
-    {host: 'jobeka.com', url: 'https://jobeka.com/search?q={role}', countries: ['es', 'pt'], installs: 1}]});
+    {host: 'rabota.md', url: 'https://rabota.md/search?q={role}', countries: ['md'], installs: 2, local: 0},
+    {host: 'jobeka.com', url: 'https://jobeka.com/search?q={role}', countries: ['es', 'pt'], installs: 1, local: 0}]});
 });
 
 test('the Scout\'s own rows, reports older than the window and malformed ones are not served; the key is the Scout\'s', async () => {

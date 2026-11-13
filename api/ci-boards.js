@@ -11,22 +11,32 @@ import {COUNTRIES} from '../shared/pool-tags.js';
 export const CI_INSTALL = /^ci-search-[\w-]{0,50}$/, MAX_CI_BOARDS = 150, MAX_COUNTRIES = 3, MAX_CI_ROWS = 6000, CI_DAYS = 90, PER_HOUR = 30, DAILY_ROWS = 1500;
 const HOST = /^[a-z0-9.-]+\.[a-z]{2,}$/;
 
-/** Handles a share from a CI run: {v, install: 'ci-search-…', ci_boards: [{host, countries}]}; stores each (host, country) once, today. */
+// Why (13 Nov 2026, owner via sa: "send that number with the host (a count, fixed shape, validator both ends, capped), the site keeps the highest seen"): `local` is how many jobs the search kept from the
+// board in the person's place, a count 0..MAX_LOCAL. Anything else (a string, a negative, a fraction, past the cap) is 0: not reported, never a rejected share. The Scout reads boards that gave jobs first.
+export const MAX_LOCAL = 999;
+/** The count a CI item reports: an integer 0..MAX_LOCAL, else 0. Also used by api/scout-memory.js on what it reads back. */
+export const localCount = value => Number.isInteger(value) && value >= 0 && value <= MAX_LOCAL ? value : 0;
+
+/** Handles a share from a CI run: {v, install: 'ci-search-…', ci_boards: [{host, countries, local?}]}; stores each (host, country) once, today, with the highest `local` seen. */
 export async function ciBoards(body, env, now = new Date()) {
-  const today = now.toISOString().slice(0, 10), rows = [], seen = new Set();
+  const today = now.toISOString().slice(0, 10), rows = [], seen = new Map();
   let dropped = 0;
   for (const item of (Array.isArray(body.ci_boards) ? body.ci_boards : []).slice(0, MAX_CI_BOARDS)) {
     const host = typeof item?.host === 'string' && HOST.test(item.host) && item.host.length <= 100 && !/^e2e/.test(item.host) ? item.host : null;
     const countries = [...new Set((Array.isArray(item?.countries) ? item.countries : []).filter(code => COUNTRIES.includes(code)))].sort().slice(0, MAX_COUNTRIES);
     if (!host || !countries.length) { dropped += 1; continue; }
-    for (const country of countries) if (!seen.has(`${host}|${country}`)) { seen.add(`${host}|${country}`); rows.push([host, country]); }
+    const local = localCount(item.local);
+    for (const country of countries) {
+      const known = seen.get(`${host}|${country}`);
+      if (known) known[2] = Math.max(known[2], local); else { const row = [host, country, local]; seen.set(`${host}|${country}`, row); rows.push(row); }
+    }
   }
   if (!rows.length) return Response.json({ok: false, error: 'no valid boards'}, {status: 400});
   const kv = env.WAITLIST, hour = `ci-boards:${Math.floor(now.getTime() / 3_600_000)}`, used = kv ? Number(await kv.get(hour)) || 0 : 0;
   const todays = Number((await env.STATS.prepare('SELECT COUNT(*) AS n FROM ci_boards WHERE day = ?').bind(today).first())?.n) || 0;
   if (used >= PER_HOUR || todays + rows.length > DAILY_ROWS) return Response.json({ok: false, error: 'too many CI shares'}, {status: 429});
   if (kv) await kv.put(hour, String(used + 1), {expirationTtl: 7200});
-  await env.STATS.batch(rows.map(([host, country]) => env.STATS.prepare('INSERT INTO ci_boards (host, country, day) VALUES (?, ?, ?) ON CONFLICT(host, country) DO UPDATE SET day = excluded.day').bind(host, country, today)));
+  await env.STATS.batch(rows.map(([host, country, local]) => env.STATS.prepare('INSERT INTO ci_boards (host, country, day, local) VALUES (?, ?, ?, ?) ON CONFLICT(host, country) DO UPDATE SET day = excluded.day, local = MAX(local, excluded.local)').bind(host, country, today, local)));
   const oldest = new Date(now.getTime() - CI_DAYS * 86_400_000).toISOString().slice(0, 10);
   await env.STATS.prepare('DELETE FROM ci_boards WHERE day < ? OR rowid IN (SELECT rowid FROM ci_boards ORDER BY day DESC, rowid DESC LIMIT -1 OFFSET ?)').bind(oldest, MAX_CI_ROWS).run();
   return Response.json({ok: true, stored: rows.length, ...(dropped ? {dropped: {ci_boards: dropped}} : {})});

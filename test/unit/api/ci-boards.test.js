@@ -5,7 +5,7 @@ import {existsSync, readFileSync, readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {agreedSites} from '../../../api/employers.js';
-import {CI_DAYS, DAILY_ROWS, MAX_CI_BOARDS, MAX_COUNTRIES, PER_HOUR} from '../../../api/ci-boards.js';
+import {CI_DAYS, DAILY_ROWS, MAX_CI_BOARDS, MAX_COUNTRIES, MAX_LOCAL, PER_HOUR} from '../../../api/ci-boards.js';
 import {contribute} from '../../../api/pool.js';
 import {reportedBoards} from '../../../api/scout-memory.js';
 
@@ -41,7 +41,7 @@ test('CI never raises an installs number or k: the Scout list counts real instal
   e.STATS.db.prepare("INSERT INTO sitefacts (install, day, host, kind, url, body) VALUES ('install-1', '2026-11-12', 'jobeka.es', 'board', 'https://jobeka.es/s?q={role}', ?)").run(JSON.stringify({countries: ['es']}));
   for (const run of ['a', 'b', 'c', 'd']) await share(e, {ci_boards: [{host: 'jobeka.es', countries: ['es']}, {host: 'trabajo.org', countries: ['es']}]}, `ci-search-run-${run}`);
   const list = await reportedBoards(e.STATS, NOW);
-  assert.deepEqual(list, [{host: 'jobeka.es', url: 'https://jobeka.es/s?q={role}', countries: ['es'], installs: 1, ci: true}, {host: 'trabajo.org', url: null, countries: ['es'], installs: 0, ci: true}]);
+  assert.deepEqual(list, [{host: 'jobeka.es', url: 'https://jobeka.es/s?q={role}', countries: ['es'], installs: 1, local: 0, ci: true}, {host: 'trabajo.org', url: null, countries: ['es'], installs: 0, local: 0, ci: true}]);
   assert.ok(!/ci-search|install-1|"install"/.test(JSON.stringify(list)), 'no id, real or CI');
   const served = JSON.stringify(await agreedSites({STATS: e.STATS, WAITLIST: e.WAITLIST}));
   assert.ok(!served.includes('trabajo.org'), 'a CI-only board reaches no app');
@@ -88,5 +88,40 @@ test('the Scout reads every CI row: the last host keeps all its countries past 1
   for (const country of ['es', 'pt', 'fr']) insert.run('zzz.example', country);   // rows 1499-1501: a row limit of 1500 would cut its third country
   const list = await reportedBoards(e.STATS, NOW);
   assert.equal(list.length, 1499);
-  assert.deepEqual(list.at(-1), {host: 'zzz.example', url: null, countries: ['es', 'fr', 'pt'], installs: 0, ci: true});
+  assert.deepEqual(list.at(-1), {host: 'zzz.example', url: null, countries: ['es', 'fr', 'pt'], installs: 0, local: 0, ci: true});
+});
+
+// Why (13 Nov 2026, owner via sa): ties between reported boards are ordered by the jobs the search kept from them (`local`), so the Scout reads Jobeka (19) before an alphabetical neighbour.
+const localsOf = e => Object.fromEntries(rows(e, 'ci_boards').map(row => [`${row.host}|${row.country}`, row.local]));
+test('local is a count: stored as sent, anything else is 0, over the cap is 0, never a rejected share', async () => {
+  const e = env();
+  const item = (host, local) => ({host, countries: ['es'], local});
+  const answer = await share(e, {ci_boards: [item('a.example', 19), item('b.example', '19'), item('c.example', -3), item('d.example', 4.5), item('e.example', MAX_LOCAL + 1), item('f.example', MAX_LOCAL),
+    item('g.example', null), {host: 'h.example', countries: ['es']}, item('i.example', {n: 5})]});
+  assert.equal(answer.status, 200);
+  assert.deepEqual(localsOf(e), {'a.example|es': 19, 'b.example|es': 0, 'c.example|es': 0, 'd.example|es': 0, 'e.example|es': 0, 'f.example|es': MAX_LOCAL, 'g.example|es': 0, 'h.example|es': 0, 'i.example|es': 0});
+});
+
+test('the highest local seen is kept: a higher one replaces a lower, a lower or missing one never does, also inside one share', async () => {
+  const e = env();
+  await share(e, {ci_boards: [{host: 'jobeka.es', countries: ['es'], local: 5}, {host: 'jobeka.es', countries: ['es'], local: 9}, {host: 'jobeka.es', countries: ['es'], local: 2}]});
+  assert.equal(localsOf(e)['jobeka.es|es'], 9, 'the highest of one share');
+  await share(e, {ci_boards: [{host: 'jobeka.es', countries: ['es'], local: 3}]}, 'ci-search-run-2');
+  await share(e, {ci_boards: [{host: 'jobeka.es', countries: ['es']}]}, 'ci-search-run-3');
+  await share(e, {ci_boards: [{host: 'jobeka.es', countries: ['es'], local: 'many'}]}, 'ci-search-run-4');
+  assert.equal(localsOf(e)['jobeka.es|es'], 9, 'a lower, missing or unreadable count never replaces it');
+  await share(e, {ci_boards: [{host: 'jobeka.es', countries: ['es'], local: 19}]}, 'ci-search-run-5');
+  assert.equal(localsOf(e)['jobeka.es|es'], 19, 'a higher one replaces it');
+  assert.equal(rows(e, 'ci_boards').length, 1);
+});
+
+test('the Scout list carries local: the most over the host\'s rows for a CI board, 0 for an installs-only board, and still no id', async () => {
+  const e = env();
+  e.STATS.db.prepare("INSERT INTO sitefacts (install, day, host, kind, url, body) VALUES ('install-1', '2026-11-12', 'plain.example', 'board', 'https://plain.example/s?q={role}', ?)").run(JSON.stringify({countries: ['es']}));
+  e.STATS.db.prepare("INSERT INTO sitefacts (install, day, host, kind, url, body) VALUES ('install-1', '2026-11-12', 'both.example', 'board', 'https://both.example/s?q={role}', ?)").run(JSON.stringify({countries: ['es']}));
+  await share(e, {ci_boards: [{host: 'jobeka.es', countries: ['es', 'pt'], local: 19}, {host: 'both.example', countries: ['es'], local: 7}]});
+  await share(e, {ci_boards: [{host: 'jobeka.es', countries: ['pt'], local: 4}, {host: 'trabajo.org', countries: ['es']}]}, 'ci-search-run-2');
+  const byHost = Object.fromEntries((await reportedBoards(e.STATS, NOW)).map(board => [board.host, board.local]));
+  assert.deepEqual(byHost, {'plain.example': 0, 'both.example': 7, 'jobeka.es': 19, 'trabajo.org': 0});
+  assert.ok(!/ci-search|install-1|"install"/.test(JSON.stringify(await reportedBoards(e.STATS, NOW))));
 });
