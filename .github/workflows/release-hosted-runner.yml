@@ -27,6 +27,9 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Why (13 Nov 2026, plan 2026-11-13-cloud-runners.md 3/3; owner: "prepare the CICD for staging... but let's keep it disabled until we have first real users"): with the repo variable
+      # STAGING_GATE = on, a production deploy goes to the staging runner first and stops there if its container does not come up; off (today) it costs nothing.
+      CONFIGS: ${{ inputs.target == 'staging' && 'wrangler.staging.jsonc' || vars.STAGING_GATE == 'on' && 'wrangler.staging.jsonc wrangler.jsonc' || 'wrangler.jsonc' }}
     steps:
       - name: Not set up yet
         if: env.CLOUDFLARE_API_TOKEN == ''
@@ -43,33 +46,29 @@ jobs:
         with:
           node-version: '22'
       - name: The staging copy of the config (own Worker name, own queue)
-        if: env.CLOUDFLARE_API_TOKEN != '' && inputs.target == 'staging'
-        run: node tools/runner-config.mjs staging
+        if: env.CLOUDFLARE_API_TOKEN != '' && contains(env.CONFIGS, 'staging')
+        run: node tools/runner-config.mjs staging find-jobs
       - name: The staging queue, made when missing (the deploy refuses a consumer queue that does not exist)
-        if: env.CLOUDFLARE_API_TOKEN != '' && inputs.target == 'staging'
+        if: env.CLOUDFLARE_API_TOKEN != '' && contains(env.CONFIGS, 'staging')
         working-directory: workers/hosted-runner
         run: npx --yes wrangler@4 queues info find-jobs-runs-staging >/dev/null 2>&1 || ../../tools/cf-retry.sh npx --yes wrangler@4 queues create find-jobs-runs-staging
       - name: The production queue, made when missing (site.yml makes it too, before the site sends to it)
         if: env.CLOUDFLARE_API_TOKEN != '' && inputs.target == 'production'
         working-directory: workers/hosted-runner
         run: npx --yes wrangler@4 queues info find-jobs-runs >/dev/null 2>&1 || ../../tools/cf-retry.sh npx --yes wrangler@4 queues create find-jobs-runs || npx --yes wrangler@4 queues info find-jobs-runs >/dev/null
-      - name: Deploy the runner and its image
+      - name: Deploy the runner and its image, then wait until the container application runs it (staging first when the gate is on)
         if: env.CLOUDFLARE_API_TOKEN != ''
         working-directory: workers/hosted-runner
-        env:
-          CONFIG: ${{ inputs.target == 'staging' && 'wrangler.staging.jsonc' || 'wrangler.jsonc' }}
-        # Why (5 Nov 2026, hr 6/6 try 5): the output names the image digest it pushed; the wait below waits for THAT digest (the newest listed version lagged and gave a false DONE).
+        # Why (5 Nov 2026, hr 6/6 try 5): the output names the image digest it pushed; the wait waits for THAT digest (the newest listed version lagged and gave a false DONE).
+        # Why (5 Nov 2026, hr 6/6, try 3 and 5): "deploy" succeeds before the application moves to the new image (try 3 tested the old code).
         run: |
           set -o pipefail
           # Why (5 Nov 2026, hr 6/6 try 6, owner: "Each run checks"): the stamp this tree builds; the runner compares it with each container's GET / before a run.
           HOSTED_BUILD=$(python3 -P ../../src/build_stamp.py ../../src)   # -P: no src/ module can shadow the standard library
           [ -n "$HOSTED_BUILD" ] || { echo "::error::no engine build stamp from src/build_stamp.py: the runs could not check their container" >&2; exit 1; }
-          echo "deploying engine build $HOSTED_BUILD"
-          npm install --no-audit --no-fund && ../../tools/cf-retry.sh npx --yes wrangler@4 deploy --config "$CONFIG" --var "HOSTED_BUILD:$HOSTED_BUILD" 2>&1 | tee "$RUNNER_TEMP/deploy.out"
-      - name: Wait until the container application runs the new image
-        if: env.CLOUDFLARE_API_TOKEN != ''
-        working-directory: workers/hosted-runner
-        env:
-          CONFIG: ${{ inputs.target == 'staging' && 'wrangler.staging.jsonc' || 'wrangler.jsonc' }}
-        # Why (5 Nov 2026, hr 6/6, try 3 and 5): "deploy" succeeds before the application moves to the new image (try 3 tested the old code); the target is the digest the deploy pushed, since the newest listed version can lag (try 5: a false DONE).
-        run: node ../../tools/wait-container-rollout.mjs "$CONFIG" --timeout-min=10 --deploy-output="$RUNNER_TEMP/deploy.out"
+          echo "deploying engine build $HOSTED_BUILD to: $CONFIGS"
+          npm install --no-audit --no-fund
+          for CONFIG in $CONFIGS; do
+            ../../tools/cf-retry.sh npx --yes wrangler@4 deploy --config "$CONFIG" --var "HOSTED_BUILD:$HOSTED_BUILD" 2>&1 | tee "$RUNNER_TEMP/deploy.out"
+            node ../../tools/wait-container-rollout.mjs "$CONFIG" --timeout-min=10 --deploy-output="$RUNNER_TEMP/deploy.out"
+          done

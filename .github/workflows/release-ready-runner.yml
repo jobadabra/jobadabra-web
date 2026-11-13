@@ -12,6 +12,12 @@ on:
       - 'ops/hosted/ready-fill/**'   # Why (5 Nov 2026, hr): the container's own files moved here in #280 without this line, so #403's fix never deployed
       - '.github/workflows/release-ready-runner.yml'
   workflow_dispatch:
+    inputs:
+      target:
+        description: 'Where to deploy the runner (a push deploys production)'
+        type: choice
+        options: [production, staging]
+        default: production
 permissions:
   contents: read
 concurrency:
@@ -24,6 +30,9 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Why (13 Nov 2026, plan 2026-11-13-cloud-runners.md 3/3; owner: "prepare the CICD for staging... but let's keep it disabled until we have first real users"): with the repo variable
+      # STAGING_GATE = on, a production deploy goes to the staging runner (apply-runner-staging, queue apply-runs-staging) first and stops there if its container does not come up.
+      CONFIGS: ${{ inputs.target == 'staging' && 'wrangler.staging.jsonc' || vars.STAGING_GATE == 'on' && 'wrangler.staging.jsonc wrangler.jsonc' || 'wrangler.jsonc' }}
     steps:
       - name: Not set up yet
         if: env.CLOUDFLARE_API_TOKEN == ''
@@ -42,11 +51,24 @@ jobs:
       - name: One night in the built image first
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: docker build -f hosted/ready-fill/Dockerfile -t ready-fill:check . && node hosted/ready-fill/image-check.mjs ready-fill:check
-      - name: The queue, made when missing (the deploy refuses a consumer queue that does not exist; site.yml may make it at the same moment)
+      - name: The staging copy of the config (own Worker name, own queue)
+        if: env.CLOUDFLARE_API_TOKEN != '' && contains(env.CONFIGS, 'staging')
+        run: node tools/runner-config.mjs staging apply
+      - name: The queues, made when missing (the deploy refuses a consumer queue that does not exist; site.yml may make it at the same moment)
         if: env.CLOUDFLARE_API_TOKEN != ''
         working-directory: workers/ready-runner
-        run: npx --yes wrangler@4 queues info apply-runs >/dev/null 2>&1 || ../../tools/cf-retry.sh npx --yes wrangler@4 queues create apply-runs || npx --yes wrangler@4 queues info apply-runs >/dev/null
-      - name: Deploy the runner and its image
+        run: |
+          for CONFIG in $CONFIGS; do
+            queue=apply-runs; [ "$CONFIG" = wrangler.staging.jsonc ] && queue=apply-runs-staging
+            npx --yes wrangler@4 queues info "$queue" >/dev/null 2>&1 || ../../tools/cf-retry.sh npx --yes wrangler@4 queues create "$queue" || npx --yes wrangler@4 queues info "$queue" >/dev/null
+          done
+      - name: Deploy the runner and its image (staging first when the gate is on, and wait until its container runs the new image)
         if: env.CLOUDFLARE_API_TOKEN != ''
         working-directory: workers/ready-runner
-        run: npm install --no-audit --no-fund && ../../tools/cf-retry.sh npx --yes wrangler@4 deploy
+        run: |
+          set -o pipefail
+          npm install --no-audit --no-fund
+          for CONFIG in $CONFIGS; do
+            ../../tools/cf-retry.sh npx --yes wrangler@4 deploy --config "$CONFIG" 2>&1 | tee "$RUNNER_TEMP/deploy.out"
+            [ "$CONFIG" = wrangler.jsonc ] || node ../../tools/wait-container-rollout.mjs "$CONFIG" --timeout-min=10 --deploy-output="$RUNNER_TEMP/deploy.out"
+          done

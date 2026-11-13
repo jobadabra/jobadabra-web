@@ -20,8 +20,8 @@ Why (13 Nov 2026, owner: "insead of 5 PRs? can't we make it in 2 or 3 ?" · "eac
 
 ## Progress
 - [x] 1/3 capacity + cloud alerts (#635)
-- [x] 2/3 rename + README graph, and the runner 🔴 from a refused start (Gitar on #635) (this PR)
-- [ ] 3/3 staging for all three (off)
+- [x] 2/3 rename + README graph, and the runner 🔴 from a refused start (Gitar on #635) (#638)
+- [x] 3/3 staging for all three behind `STAGING_GATE`, off (this PR)
 
 ## Not now (parked with a trigger)
 - Apply deploys wait while a night is held: trigger, the first Pro night.
@@ -33,3 +33,9 @@ Why (13 Nov 2026, owner: "insead of 5 PRs? can't we make it in 2 or 3 ?" · "eac
 1. `site.yml` and `release-ready-runner.yml` start on the merge: the queues `find-jobs-runs` and `apply-runs` are made, `apply-runner` deploys, then the site (it waits for `apply-runner`).
 2. `gh workflow run release-hosted-runner.yml -f target=production` right away: `find-jobs-runner` consumes `find-jobs-runs` (runs the site queues there wait for it, well inside their 30-minute life).
 3. Once both new apps show running instances: delete the Workers `www-hosted-runner`, `www-ready-runner` (and their container apps), then the queues `hosted-runs`, `ready-runs` once empty. The staging runner `www-hosted-runner-staging` and `hosted-runs-staging` go in 3/3.
+
+## 3/3: turning the gate on (when the first real users come; the owner's word)
+1. Once each: `gh workflow run release-ready-runner.yml -f target=staging`, `gh workflow run release-hosted-runner.yml -f target=staging`, then `gh workflow run site-staging.yml` (www-staging binds `apply-runner-staging`, so the Apply copy comes first).
+2. Ask which AI account pays for a staging search (parked line above).
+3. `gh variable set STAGING_GATE --body on -R jobadabra/jobadabra-web`. Off again: `gh variable delete STAGING_GATE`.
+- Cleanup after 3/3 merges: the old staging Worker `www-hosted-runner-staging` (container app `www-hosted-runner-staging-hostedrunner`) and queue `hosted-runs-staging` are deleted by hand.

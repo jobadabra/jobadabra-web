@@ -5,7 +5,7 @@ import {spawnSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
-import {STAGING, readConfig, stagingConfig} from '../../tools/runner-config.mjs';
+import {RUNNERS, STAGING, readConfig, stagingConfig} from '../../tools/runner-config.mjs';
 import {RUNNER_CEILING} from '../../shared/cap-alerts.js';
 
 const ROOT = new URL('../../', import.meta.url);
@@ -56,4 +56,19 @@ test('the runner Worker parses (its tests cannot import it: @cloudflare/containe
   // Why (5 Nov 2026, Gitar on #387): an edit moved the comma between queue() and fetch() into a comment; only regexes read the file, so CI stayed green on a Worker that would not load.
   const checked = spawnSync(process.execPath, ['--check', fileURLToPath(new URL('../../workers/hosted-runner/worker.js', import.meta.url))], {encoding: 'utf8'});
   assert.equal(checked.status, 0, checked.stderr);
+});
+
+// Guard: safety — a staging Apply runner reading the production queue apply-runs would take a person's night (Full automation may submit) and run it against staging (plan cloud-runners 3/3).
+test('the Apply runner\'s staging copy has its own name and queue, the same image, and few instances; off unless dispatched or the gate is on', () => {
+  const apply = readConfig(readFileSync(new URL('workers/ready-runner/wrangler.jsonc', ROOT), 'utf8')), staging = stagingConfig(apply, 'apply');
+  assert.deepEqual([apply.name, apply.queues.consumers.map(consumer => consumer.queue)], ['apply-runner', [RUNNERS.apply.queue]]);
+  assert.deepEqual([staging.name, staging.queues.consumers.map(consumer => consumer.queue)], [RUNNERS.apply.staging.name, [RUNNERS.apply.staging.queue]]);
+  assert.equal(staging.containers[0].image, apply.containers[0].image);
+  assert.equal(staging.containers[0].max_instances, RUNNERS.apply.staging.maxInstances);
+  assert.throws(() => stagingConfig({...apply, name: RUNNERS.apply.staging.name, queues: {consumers: []}}, 'apply'), /production name or queue/);
+  for (const file of ['release-ready-runner.yml', 'release-hosted-runner.yml']) {
+    const flow = readFileSync(new URL(`.github/workflows/${file}`, ROOT), 'utf8');
+    assert.match(flow, /vars\.STAGING_GATE == 'on' && 'wrangler\.staging\.jsonc wrangler\.jsonc' \|\| 'wrangler\.jsonc'/, `${file}: staging goes first only when the gate is on, else production alone`);
+    assert.match(flow, /for CONFIG in \$CONFIGS; do/, `${file}: each config in order, a failed staging stops production (set -o pipefail, bash -e)`);
+  }
 });

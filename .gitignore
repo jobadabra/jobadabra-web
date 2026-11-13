@@ -3,3 +3,5 @@ node_modules/
 .wrangler/
 workers/www/wrangler.staging.toml
 __pycache__/
+workers/hosted-runner/wrangler.staging.jsonc
+workers/ready-runner/wrangler.staging.jsonc
