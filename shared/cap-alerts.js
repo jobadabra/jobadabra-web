@@ -46,10 +46,10 @@ export const CAPS = {
   // both runners' wrangler.jsonc max_instances to it.
   'find-jobs-runner': {title: 'Find jobs runner (Always on searches running now)', event: 'runner-capacity', period: 'day', unit: 'containers',
     line: () => RUNNER_CEILING, approach: () => RUNNER_CEILING * 0.8,
-    sees: 'at the ceiling the next due person\'s Always on search does not start and waits for the next tick', fix: 'raise max_instances in workers/hosted-runner/wrangler.jsonc and RUNNER_CEILING'},
+    sees: 'at the ceiling the runner is full: Cloudflare refuses the next person\'s Always on search until a run ends', fix: 'raise max_instances in workers/hosted-runner/wrangler.jsonc and RUNNER_CEILING'},
   'apply-runner': {title: 'Apply runner (Ready to send nights and Full automation running now)', event: 'runner-capacity', period: 'day', unit: 'containers',
     line: () => RUNNER_CEILING, approach: () => RUNNER_CEILING * 0.8,
-    sees: 'at the ceiling the next person\'s night or Full automation batch does not start', fix: 'raise max_instances in workers/ready-runner/wrangler.jsonc and RUNNER_CEILING'},
+    sees: 'at the ceiling the runner is full: Cloudflare refuses the next person\'s night or Full automation batch until one ends', fix: 'raise max_instances in workers/ready-runner/wrangler.jsonc and RUNNER_CEILING'},
 };
 for (const [name, cap] of Object.entries(CAPS)) cap.name = name;
 
@@ -75,7 +75,7 @@ export async function send(env, event, level, text, fetcher) {
 
 /**
  * The 5-minute tick's look at the two cloud runners: counts the runs live now and tells the owner through the cap alert (🟠 at 80% of RUNNER_CEILING, 🔴 at the ceiling, each once a day).
- * A full runner counts as reached: the next start is refused by Cloudflare, not merely close. -> {name: live} for the log. Never rejects.
+ * A full runner counts as reached (owner, 13 Nov 2026: "80% warning and 100% critical"): unlike a spend line, a count at max_instances is itself the refusal, Cloudflare errors the next start. -> {name: live} for the log. Never rejects.
  */
 export async function runnerCheck(env, {now = new Date(), fetcher = fetch} = {}) {
   const live = {};

@@ -60,11 +60,14 @@ test('an unknown cap or a missing store is a no-op, never a throw', async () => 
 });
 
 // Why (13 Nov 2026, owner: "I should be alert if we're approaching the max_instnaces" · "80% warning and 100% critical"): the ceiling in the alert is the ceiling Cloudflare holds.
-test('both cloud runners: max_instances in wrangler.jsonc is RUNNER_CEILING, and the queue feeds that many at once', () => {
+test('both cloud runners: max_instances in wrangler.jsonc is RUNNER_CEILING, and the queue starts exactly that many at most', () => {
   for (const runner of ['hosted-runner', 'ready-runner']) {
     const text = readFileSync(new URL(`../../../workers/${runner}/wrangler.jsonc`, import.meta.url), 'utf8');
     assert.equal(Number(text.match(/"max_instances":\s*(\d+)/)[1]), RUNNER_CEILING, runner);
-    assert.equal(Number(text.match(/"max_concurrency":\s*(\d+)/)[1]), RUNNER_CEILING, `${runner}: the queue never starts more than the ceiling, nor fewer`);
+    const batch = Number(text.match(/"max_batch_size":\s*(\d+)/)[1]), concurrency = Number(text.match(/"max_concurrency":\s*(\d+)/)[1]);
+    // Why (Gitar on #635): each message of a batch starts its own container, so the queue can start batch x concurrency at once
+    assert.ok(batch * concurrency <= RUNNER_CEILING, `${runner}: the queue starts at most ${batch * concurrency} containers, never past the ceiling ${RUNNER_CEILING}`);
+    assert.equal(batch * concurrency, RUNNER_CEILING, `${runner}: and it can fill the ceiling`);
   }
 });
 

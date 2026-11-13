@@ -1,5 +1,5 @@
 {
-  // The hosted Always on runner (see worker.js), the PRODUCTION config; the staging copy is made by tools/runner-config.mjs. Deployed by .github/workflows/release-hosted-runner.yml. standard-1 (4 GiB): measured 0.8-1.2 GB per run. max_instances is the number of runs at once. 100 = shared/cap-alerts.js RUNNER_CEILING (owner, 13 Nov 2026: "100 each (Recommended)"); its alert warns at 80 and is critical at 100.
+  // The hosted Always on runner (see worker.js), the PRODUCTION config; the staging copy is made by tools/runner-config.mjs. Deployed by .github/workflows/release-hosted-runner.yml. standard-1 (4 GiB): measured 0.8-1.2 GB per run. max_instances is the number of runs at once. 100 = shared/cap-alerts.js RUNNER_CEILING (owner, 13 Nov 2026: "100 each (Recommended)"); its alert warns at 80 and is critical at 100. Why (Gitar on #635): one message per batch, so max_concurrency 100 starts at most 100 containers (5 a batch was up to 500 starts against the ceiling).
   "name": "www-hosted-runner",
   "main": "worker.js",
   "compatibility_date": "2026-09-01",
@@ -11,5 +11,5 @@
   ],
   "durable_objects": {"bindings": [{"name": "RUNNER", "class_name": "HostedRunner"}]},
   "migrations": [{"tag": "v1", "new_sqlite_classes": ["HostedRunner"]}],
-  "queues": {"consumers": [{"queue": "hosted-runs", "max_batch_size": 5, "max_batch_timeout": 5, "max_retries": 0, "max_concurrency": 100}]}
+  "queues": {"consumers": [{"queue": "hosted-runs", "max_batch_size": 1, "max_batch_timeout": 5, "max_retries": 0, "max_concurrency": 100}]}
 }
