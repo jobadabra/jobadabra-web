@@ -11,12 +11,16 @@ import {ALL_BYTES_PER_DAY, ALL_REPORTS_PER_DAY} from './report-form.js';
 /** Containers each cloud runner may run at once (workers/hosted-runner and workers/ready-runner wrangler.jsonc max_instances). */
 export const RUNNER_CEILING = 100;
 // Per runner: `live` = containers running now (an open run, a running night); `waiting` = ones opened 5+ minutes ago whose container never started (no first read of the run's
-// profile; no job of the night begun): the trace a start Cloudflare refused leaves. `?` = now, then now minus 5 minutes.
+// profile; no job of the night begun): the trace a start Cloudflare refused leaves. `?` = now, then `cutoff(now minus 5 minutes)`, the clock each table keeps of the start.
+// A night keeps no start time: ready.js start() sets expires_at = start + RUN_HOURS, so "started before t" is "expires_at before t + NIGHT_HOURS" (as api/ready-why.js reads it).
+// Why (Gitar on #638): fill_at / created_at are when the night was planned or queued, so a night started late by a busy tick counted as refused the minute it turned running.
+export const NIGHT_HOURS = 3;   // api/ready.js RUN_HOURS (shared/ may not import api/); test/unit/shared/cap-alerts.test.js holds the two equal
 export const RUNNER_LIVE = {
   'find-jobs-runner': {live: 'SELECT COUNT(*) AS n FROM hosted_runs WHERE finished_at IS NULL AND expires_at > ?',
-    waiting: 'SELECT COUNT(*) AS n FROM hosted_runs WHERE finished_at IS NULL AND expires_at > ? AND read_at IS NULL AND started_at < ?'},
+    waiting: 'SELECT COUNT(*) AS n FROM hosted_runs WHERE finished_at IS NULL AND expires_at > ? AND read_at IS NULL AND started_at < ?', cutoff: before => before},
   'apply-runner': {live: "SELECT COUNT(*) AS n FROM ready_batches WHERE state = 'running' AND expires_at > ?",
-    waiting: "SELECT COUNT(*) AS n FROM ready_batches b WHERE b.state = 'running' AND b.expires_at > ? AND COALESCE(b.fill_at, b.created_at) < ? AND NOT EXISTS (SELECT 1 FROM ready_jobs j WHERE j.batch = b.id AND j.started_at IS NOT NULL)"},
+    waiting: "SELECT COUNT(*) AS n FROM ready_batches b WHERE b.state = 'running' AND b.expires_at > ? AND b.expires_at < ? AND NOT EXISTS (SELECT 1 FROM ready_jobs j WHERE j.batch = b.id AND j.started_at IS NOT NULL)",
+    cutoff: before => new Date(before.getTime() + NIGHT_HOURS * 3600000)},
 };
 const num = (value, fallback) => (Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback);
 const BUSY_TODAY = 'every Free install sees "Free AI is busy today" until 00:00 UTC';
@@ -82,10 +86,10 @@ export async function send(env, event, level, text, fetcher) {
  * comes only when the runner is full AND a run opened 5+ minutes ago never started. -> {name: {live, waiting}} for the log (null where D1 failed). Never rejects.
  */
 export async function runnerCheck(env, {now = new Date(), fetcher = fetch} = {}) {
-  const out = {}, at = now.toISOString(), before = new Date(now - 5 * 60000).toISOString();
+  const out = {}, at = now.toISOString(), before = new Date(now - 5 * 60000);
   for (const [name, sql] of Object.entries(RUNNER_LIVE)) {
     try {
-      const live = Number((await env.STATS.prepare(sql.live).bind(at).first())?.n) || 0, waiting = Number((await env.STATS.prepare(sql.waiting).bind(at, before).first())?.n) || 0;
+      const live = Number((await env.STATS.prepare(sql.live).bind(at).first())?.n) || 0, waiting = Number((await env.STATS.prepare(sql.waiting).bind(at, sql.cutoff(before).toISOString()).first())?.n) || 0;
       out[name] = {live, waiting};
       await capCheck(env, name, live, {now, fetcher, reached: waiting > 0 && live >= CAPS[name].line(env)});
     } catch { out[name] = null; }
