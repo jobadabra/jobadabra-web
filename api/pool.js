@@ -7,6 +7,7 @@ import {familyOfInstall} from '../shared/engines.js';
 import {COUNTRIES, METROS, FAMILIES} from '../shared/pool-tags.js';
 import {REGIONS, ROLES} from '../shared/pool-labels.js';
 import {installHit} from '../shared/install-caps.js';
+import {CI_INSTALL, ciBoards} from './ci-boards.js';
 
 const SYSTEMS = ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'teamtailor', 'join', 'workday', 'umantis', 'successfactors', 'oracle', 'phenom', 'eightfold', 'careers', 'amazon', 'netflix', 'jobsch'];
 // A learned page layout, checked and in one canonical form (identical layouts from several installs are counted together): a CSS selector of
@@ -111,6 +112,7 @@ export async function contribute(request, env, now = new Date()) {
   if ((Number(request.headers.get('Content-Length')) || 0) > 600_000) return Response.json({ok: false, error: 'too large'}, {status: 413});
   const body = await request.json().catch(() => null);
   if (!body || ![1, 2].includes(body.v) || !/^[\w-]{8,64}$/.test(String(body.install || ''))) return Response.json({ok: false, error: 'invalid'}, {status: 400});
+  if (CI_INSTALL.test(String(body.install))) return ciBoards(body, env, now);   // our own CI's board names: their own table, never sitefacts (api/ci-boards.js)
   // What this endpoint drops is counted and said in the reply, so a naming drift between engine and site shows as a warning in the app's log
   // instead of looking like "no data yet" (7 Oct 2026). Counts only.
   const dropped = {};
