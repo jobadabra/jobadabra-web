@@ -6,15 +6,15 @@ import {test} from 'node:test';
 import {appNameOf, checkOnce, pushedDigest, rolledOut} from '../../tools/wait-container-rollout.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
-const image = digest => `registry.cloudflare.com/acct/www-hosted-runner-staging-hostedrunner@sha256:${digest}`;
+const image = digest => `registry.cloudflare.com/acct/find-jobs-runner-staging-engine@sha256:${digest}`;
 const version = (number, digest) => ({version: number, configuration: {image: image(digest)}});
 const instance = (digest, state = 'running') => ({image: image(digest), status: {state}});
 // A rollout as GET /containers/applications/{id}/rollouts answers it (5 Nov 2026, staging).
 const rollout = (target, status, step = 2, percent = 100, starting = 0) => ({target_version: target, status, progress: {current_step: step, total_steps: 2, version_distribution: {target_version_percentage: percent}}, health: {instances: {starting, scheduling: 0, failed: 0}}});
 
 test('the application name is the Worker name and the lower-cased container class', () => {
-  assert.equal(appNameOf({name: 'www-hosted-runner-staging', containers: [{class_name: 'HostedRunner'}]}), 'www-hosted-runner-staging-hostedrunner');
-  assert.equal(appNameOf({name: 'www-hosted-runner', containers: [{class_name: 'HostedRunner'}]}), 'www-hosted-runner-hostedrunner');
+  assert.equal(appNameOf({name: 'find-jobs-runner-staging', containers: [{class_name: 'Engine'}]}), 'find-jobs-runner-staging-engine');
+  assert.equal(appNameOf({name: 'find-jobs-runner', containers: [{class_name: 'Engine'}]}), 'find-jobs-runner-engine');
 });
 
 test('the 01:27 false DONE: the version with the pushed image is not listed yet, so it waits', () => {
@@ -64,15 +64,15 @@ test('no image pushed: the target is the latest rollout, with the same verdict',
 });
 
 test('images without a digest (a tag reference) are compared as whole strings, never as equal-because-empty', () => {
-  const tagged = (number, tag) => ({version: number, configuration: {image: `registry.cloudflare.com/acct/www-hosted-runner-hostedrunner:${tag}`}});
-  assert.equal(rolledOut([tagged(4, 'new')], [rollout(4, 'completed')], [{image: 'registry.cloudflare.com/acct/www-hosted-runner-hostedrunner:old'}]).done, false);   // Gitar on #380
+  const tagged = (number, tag) => ({version: number, configuration: {image: `registry.cloudflare.com/acct/find-jobs-runner-engine:${tag}`}});
+  assert.equal(rolledOut([tagged(4, 'new')], [rollout(4, 'completed')], [{image: 'registry.cloudflare.com/acct/find-jobs-runner-engine:old'}]).done, false);   // Gitar on #380
   assert.equal(rolledOut([tagged(4, 'new')], [rollout(4, 'completed')], [{image: tagged(4, 'new').configuration.image}]).done, true);
 });
 
 test('the pushed digest is read from the deploy output, the last one wins; none when no image was pushed', () => {
   const out = 'abc: digest: sha256:aaa size: 1\n3b871bcf: digest: sha256:f381f5c9d114 size: 2412\n SUCCESS  Modified application';
   assert.equal(pushedDigest(out), 'sha256:f381f5c9d114');
-  assert.equal(pushedDigest('Deployed www-hosted-runner-staging triggers'), '');
+  assert.equal(pushedDigest('Deployed find-jobs-runner-staging triggers'), '');
 });
 
 test('the deploy workflow waits for the rollout after wrangler deploy, with the same config and token', () => {
@@ -91,16 +91,16 @@ test('the workflow keeps the deploy output and hands its pushed digest to the wa
 
 test('one failed API call counts as "waiting" with its reason, it does not throw out of the wait (a green deploy must not turn red on a 502)', async () => {
   const flaky = async () => { throw new Error('/containers/applications: 502 Bad Gateway'); };
-  const answer = await checkOnce('www-hosted-runner-staging-hostedrunner', flaky);
+  const answer = await checkOnce('find-jobs-runner-staging-engine', flaky);
   assert.equal(answer.done, false);
   assert.match(answer.why, /API error: .*502/);
-  const none = await checkOnce('www-hosted-runner-staging-hostedrunner', async () => []);
-  assert.match(none.why, /no application www-hosted-runner-staging-hostedrunner yet/);
+  const none = await checkOnce('find-jobs-runner-staging-engine', async () => []);
+  assert.match(none.why, /no application find-jobs-runner-staging-engine yet/);
 });
 
 test('one look asks the versions, the rollouts and the instances of the named application', async () => {
   const asked = [];
-  const get = async path => { asked.push(path); return path === '/containers/applications' ? [{name: 'x-hostedrunner', id: 'A'}] : []; };
-  await checkOnce('x-hostedrunner', get, 'sha256:bbb');
+  const get = async path => { asked.push(path); return path === '/containers/applications' ? [{name: 'x-engine', id: 'A'}] : []; };
+  await checkOnce('x-engine', get, 'sha256:bbb');
   assert.deepEqual(asked, ['/containers/applications', '/containers/applications/A/versions', '/containers/applications/A/rollouts', '/containers/applications/A/instances-v2']);
 });

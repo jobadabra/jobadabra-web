@@ -148,24 +148,25 @@ binding = "SCOUT_MEMORY"
 bucket_name = "scout-memory"
 
 # Hosted Always on (api/hosted-state.js, hosted-tick.js): the person's encrypted state, and the Queue the cron tick fills; the runner Worker (hosted-runner/) consumes it and starts the container.
-# Secret: HOSTED_KEK (Worker secret; the key of every account's state is derived from it). Created 16 Oct 2026: bucket hosted-state, queue hosted-runs.
+# Secret: HOSTED_KEK (Worker secret; the key of every account's state is derived from it). Created 16 Oct 2026: bucket hosted-state, queue hosted-runs (renamed find-jobs-runs, 13 Nov 2026).
 [[r2_buckets]]
 binding = "HOSTED_STATE"
 bucket_name = "hosted-state"
 
 [[queues.producers]]
 binding = "HOSTED_QUEUE"
-queue = "hosted-runs"
+queue = "find-jobs-runs"
 
 # Ready to send (api/ready-tick.js, ready-morning.js; spec docs/superpowers/specs/2026-10-17-ready-to-send.md): the Queue the cron tick fills, and the service binding to the runner Worker (ready-runner/) that consumes it and holds
-# the night's container. Merge this only after the Queue `ready-runs` and the Worker `www-ready-runner` exist on the account (the owner's yes, 17 Oct 2026); everything stays off until READY_TO_SEND = "on" and READY_OWNER is set.
+# the night's container. The deploy refuses a queue or service that does not exist, so site.yml makes both queues when missing and waits for the Worker `apply-runner` (release-ready-runner.yml deploys it on the same merge).
+# Why (13 Nov 2026, owner: "basically this inventory", plan docs/superpowers/plans/2026-11-13-cloud-runners.md 2/3): the runners are named for what a person sees, Find jobs and Apply (were www-hosted-runner / www-ready-runner).
 [[queues.producers]]
 binding = "READY_QUEUE"
-queue = "ready-runs"
+queue = "apply-runs"
 
 [[services]]
 binding = "READY_RUNNER"
-service = "www-ready-runner"
+service = "apply-runner"
 
 # Read-only broker health for the guarded AI cost page and the synthetic probe (which engine answers); no provider credentials cross this binding. Renamed from CODEX_BROKER on 2 Nov 2026 (ai-broker 5/7).
 [[services]]

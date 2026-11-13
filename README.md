@@ -15,7 +15,7 @@ The website, `/admin`, and the CI jobs that feed them. Moved out of the public `
 | Folder | What |
 |---|---|
 | `website/` `admin/` `api/` `shared/` | the public pages, /admin, what the apps call, what both use (see `website/README.md`) |
-| `workers/` | `www` (the ONE Worker serving web + admin + api), `hosted-runner`, `ready-runner`, `bot` (the deploy shell of the Telegram bot Worker; its code is the public repo's `app-core/`) |
+| `workers/` | `www` (the ONE Worker serving web + admin + api), `hosted-runner` (Worker `find-jobs-runner`), `ready-runner` (Worker `apply-runner`), `ai-broker` (Worker `jobadabra-ai-broker`); the map is under "The cloud" below |
 | `ops/hosted/` | the two container images' own files: `Dockerfile` (Always on) and `ready-fill/` (Dockerfile, `main.mjs`, `image-check.mjs`); the code they run is the public repo's (`src/`, `desktop/ready-fill/`) |
 | `ops/db/migrations/` | D1 migrations |
 | `test/` | one folder per kind, then per area ([TESTS.md](TESTS.md)); `test/guards/boundary.test.js` guards the import directions. Run: `node --test "test/**/*.test.js"` |
@@ -23,6 +23,37 @@ The website, `/admin`, and the CI jobs that feed them. Moved out of the public `
 | `ops/jobs/` | scheduled jobs that feed /admin (digest, ops overview, changelog, e2e intel, hosted e2e, Lab uploads) |
 | `tools/` | the dev kit (overlay, tree, site-run, site-guards, staging) |
 | `test/python/`, `test/media/` | tests that run inside the public tree's own harness (python / desktop): the joined tree has them at `tests/` and `desktop/test/` (`tools/layout-map.txt`) |
+
+## The cloud (what runs on Cloudflare; 13 Nov 2026)
+Owner, 13 Nov 2026: "store in the readme a graph with the runners and workers… basically this inventory". Keep it true when a Worker, queue, container or store is added, renamed or deleted.
+
+```mermaid
+flowchart LR
+  app["Mac / Windows app<br/>and extension"] -->|HTTPS| www
+  subgraph site["Worker www (www.jobpilotto.top)"]
+    www["web + /admin + /api<br/>crons (UTC): daily 05:30, every 5 min, 21:47 23:47 01:47"]
+  end
+  www -->|HOSTED_QUEUE| q1[["queue find-jobs-runs"]]
+  q1 --> fjr["Worker find-jobs-runner"]
+  fjr --> fjc["container find-jobs-runner-engine<br/>standard-1, 4 GiB, max 100<br/>the engine: Always on Find jobs"]
+  www -->|READY_QUEUE| q2[["queue apply-runs"]]
+  q2 --> ar["Worker apply-runner"]
+  www -->|"READY_RUNNER (morning tabs)"| ar
+  ar --> ac["container apply-runner-browser<br/>standard-1, 4 GiB, max 100<br/>a browser: Ready to send, Full automation"]
+  fjc -. "state, results" .-> www
+  ac -. "fills, proofs" .-> www
+  www <-->|"AI_BROKER / SITE"| brk["Worker jobadabra-ai-broker"]
+  brk --> bc["container ai-broker-next<br/>4 vCPU, 6 GiB<br/>plan-path AI"]
+  www --- d1[("D1 www-stats")]
+  www --- kv[("KV waitlist")]
+  www --- r2[("R2 hosted-state, form-reports,<br/>lab-fills, feedback-files, scout-memory")]
+  subgraph staging["Staging (off until the first real users; plan 3/3)"]
+    wst["Worker www-staging"] --> q3[["queue find-jobs-runs-staging"]] --> fjs["Worker find-jobs-runner-staging<br/>max 2"]
+  end
+```
+
+- **Alerts** (the 5-minute tick, `shared/cap-alerts.js`, `shared/cloud-health.js`): each runner 🟠 at 80 live / 🔴 when full and a start was refused; each container's memory and disk 🟠 80% / 🔴 95%, CPU p95 80% / 100%; each Worker's errors; failed Always on runs and Apply fills.
+- **Deploys**: `site.yml` (www, on push; makes the queues and waits for `apply-runner`), `release-ready-runner.yml` (on push), `release-hosted-runner.yml` (public-watch or by hand), `release-ai-broker.yml` (the AI broker, on push).
 
 ## Contract with the public repo
 `docs/site-routes.json` (public) lists every route the app calls. Two tests keep it true: `test/unit/workers/www/site-routes.test.js` (here) and `desktop/test/site-routes.test.js` (public).

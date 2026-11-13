@@ -12,7 +12,7 @@ import {send} from './cap-alerts.js';
 const API = 'https://api.cloudflare.com/client/v4';
 const HOUR = 3600000, DAY = 24 * HOUR, WEEK = 7 * DAY;
 // Our Workers, by name: the site, its runners, the AI broker; the staging copies and the account's other Workers are left out.
-export const OURS = name => /^(www|jobadabra-)/.test(name) && !/-staging/.test(name);
+export const OURS = name => /^(www|jobadabra-|find-jobs-runner|apply-runner)/.test(name) && !/-staging/.test(name);
 // What the owner calls each container app (an app is named by its Worker and class).
 export const label = app => /hosted-runner|find-jobs/.test(app) ? 'Find jobs runner' : /ready-runner|apply-runner/.test(app) ? 'Apply runner' : /ai-broker/.test(app) ? 'AI broker' : app;
 // A status that is the Worker's own failure, not the caller's (a disconnect is the caller leaving).
@@ -100,8 +100,8 @@ export async function cloudHealth(env, {now = new Date(), fetcher = fetch} = {})
   await half('runs', async () => {
     const {runs, fills} = await runFailures(env, {now});
     const share = one => 100 * one.bad / one.n;
-    if (runs.n >= 3 && runs.bad) await check(cap('health-runs:always-on', `Always on: failed runs in the last day (${runs.bad} of ${runs.n})`, 'cloud-runs', 25, 50, 'those people got no new jobs from that run', 'the run\'s log in Workers → Observability (www-hosted-runner)'), share(runs), share(runs) >= 50);
-    if (fills.n >= 4 && fills.bad) await check(cap('health-runs:apply', `Apply: failed fills in the last day (${fills.bad} of ${fills.n})`, 'cloud-runs', 50, 100, 'those jobs were not prepared for the person', 'the night\'s log (www-ready-runner)'), share(fills), share(fills) >= 100);
+    if (runs.n >= 3 && runs.bad) await check(cap('health-runs:always-on', `Always on: failed runs in the last day (${runs.bad} of ${runs.n})`, 'cloud-runs', 25, 50, 'those people got no new jobs from that run', 'the run\'s log in Workers → Observability (find-jobs-runner)'), share(runs), share(runs) >= 50);
+    if (fills.n >= 4 && fills.bad) await check(cap('health-runs:apply', `Apply: failed fills in the last day (${fills.bad} of ${fills.n})`, 'cloud-runs', 50, 100, 'those jobs were not prepared for the person', 'the night\'s log (apply-runner)'), share(fills), share(fills) >= 100);
   });
   return {told, skipped};
 }

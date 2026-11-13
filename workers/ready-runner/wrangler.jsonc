@@ -1,15 +1,16 @@
 {
   // The Apply runner, Ready to send nights and Full automation (see worker.js). standard-1 (4 GiB): the fixture proof held three filled tabs in about 1.3 GB. max_instances is the number of nights at once, one per person.
   // Why (13 Nov 2026, owner, asked via AskUserQuestion: "100 each (Recommended)"): 100 = shared/cap-alerts.js RUNNER_CEILING, whose alert warns at 80 and is critical at 100 (a test holds the two equal).
-  "name": "www-ready-runner",
+  // Why (13 Nov 2026, plan 2026-11-13-cloud-runners.md 2/3; owner: "basically this inventory"): named for what a person sees; Cloudflare names the container app <name>-<class>, so it reads apply-runner-browser. A new name is a new Worker, queue and app: the old ones are deleted by hand once this one runs.
+  "name": "apply-runner",
   "main": "worker.js",
   "compatibility_date": "2026-09-01",
   "workers_dev": false,
   "observability": {"enabled": true},   // keeps the consumer's errors and the container's log lines (counts and words only): 18 Oct 2026, a failed night left no trace
   "containers": [
-    {"class_name": "ReadyRunner", "image": "../../hosted/ready-fill/Dockerfile", "image_build_context": "../..", "instance_type": "standard-1", "max_instances": 100}
+    {"class_name": "Browser", "image": "../../hosted/ready-fill/Dockerfile", "image_build_context": "../..", "instance_type": "standard-1", "max_instances": 100}
   ],
-  "durable_objects": {"bindings": [{"name": "READY", "class_name": "ReadyRunner"}]},
-  "migrations": [{"tag": "v1", "new_sqlite_classes": ["ReadyRunner"]}],
-  "queues": {"consumers": [{"queue": "ready-runs", "max_batch_size": 1, "max_batch_timeout": 5, "max_retries": 0, "max_concurrency": 100}]}
+  "durable_objects": {"bindings": [{"name": "READY", "class_name": "Browser"}]},
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["Browser"]}],
+  "queues": {"consumers": [{"queue": "apply-runs", "max_batch_size": 1, "max_batch_timeout": 5, "max_retries": 0, "max_concurrency": 100}]}
 }
