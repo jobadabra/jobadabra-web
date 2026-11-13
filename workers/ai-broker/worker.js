@@ -22,6 +22,7 @@ import {CLAUDE_MODELS} from './lib/tiers.mjs';
 import {demotedNow, recordPerf} from './lib/adapt.mjs';
 import {addCall, addJobCall, jobKey, recentDays, tokensOf, workflowKey, workflowOf} from './lib/tally.mjs';
 import {countedOf, keyedLock, markGap, planOf, sessionKey, sessionKeyOf, settle} from './lib/sessions.mjs';
+import {brokerLines} from './lib/cap-notes.mjs';
 
 // Why (11 Nov 2026, as; owner: "Let's increase the AI Broker's slot limit"): at 4 one Find jobs measure person already queued (after-1 run 43069240532: 55 of 303
 // calls waited over 5 s, p90 wait 7.9 s, all 4 busy 29% of the time). On the 1 vCPU / 3 GiB container (#554) 4 at once peaked at 1.27 GiB and 0.52 CPU per minute
@@ -211,6 +212,7 @@ export class AiBroker extends doContainer(DurableObject) {
       if (check.ok) await storage.put('meter', recordCall(meter, lane, now));
       return check;
     });
+    const lines = brokerLines(this.ctx.storage, env, this.limits); this.ctx.waitUntil?.(lines);   // 🟠/🔴 on the week lines and the drift lane (lib/cap-notes.mjs); never delays the call
     if (!verdict.ok && !verdict.ranOut) return {refusal: json(429, {why: claudeShut && verdict.quota ? claudeCheck.why : verdict.why})};   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
     return {model, chain, first: asked[0], env, verdict, claudeCheck, claudeShut, freeAiCannot, hasLater};
   }

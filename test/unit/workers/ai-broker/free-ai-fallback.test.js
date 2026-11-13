@@ -69,14 +69,15 @@ test('Free AI at its day cap refuses with the cap as the reason, alerts once per
     const reply = await owner.call('pr', body);
     assert.equal(reply.status, 429); assert.equal((await reply.json()).why, 'budget:fallback-day $2 Free AI (UTC)');
   }
-  assert.equal(notes.length, 1); assert.match(notes[0].text, /Free AI daily cap \$2 reached/); assert.ok(!/Claude/.test(notes[0].text));
-  assert.deepEqual([notes[0].event, notes[0].url, notes[0].auth, notes[0].link], ['ai-broker-free-cap', 'https://www/ops/notify', 'Bearer fixture-publish-key', 'https://www.jobpilotto.top/admin/ai/costs'], 'through the switchboard, Engineering by its registry row');
+  const caps = () => notes.filter(note => note.event === 'ai-broker-free-cap');   // the Codex week's own 🔴 card (lib/cap-notes.mjs) goes out beside it: the week is used up here
+  assert.equal(caps().length, 1); assert.match(caps()[0].text, /^🔴.*CI's Free AI fallback today reached its stop/); assert.match(caps()[0].text, /FALLBACK_FREE_AI_DAY_USD/); assert.ok(!/Claude/.test(caps()[0].text));
+  assert.deepEqual([caps()[0].url, caps()[0].auth], ['https://www/ops/notify', 'Bearer fixture-publish-key'], 'through the switchboard, Engineering by its registry'); assert.match(caps()[0].text, /admin\/ai\/costs/);
   now += 86400000;
   assert.equal((await (await restart().health()).json()).fallback.freeAi, 0);
   assert.equal((await (await restart().call('pr', body)).json()).engine, 'free-ai');
   await storage.put('fallback:2026-10-31', ledger(2_000_000));
   await restart().call('pr', body);
-  assert.equal(notes.length, 2, 'the cap can alert again on a new UTC day');
+  assert.equal(caps().length, 2, 'the cap can alert again on a new UTC day');
 });
 
 test('both subscriptions out and Free AI off: the call fails with Codex\'s own reason, nothing paid is tried', async t => {

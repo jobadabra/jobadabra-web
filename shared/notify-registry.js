@@ -57,7 +57,9 @@ export const ALERTS = [
   a('ai-credit', '🪫 AI credit ran out / AI refused a job / AI step skipped', 'ai', 'daily', 'engineering', {wired: true, modes: ['every', 'daily']}),
   // Why (12 Nov 2026, owner, on two Telegram notes from the AI broker: "this one I think should be on engineering"): the broker's three notes posted straight to the owner's personal Brain bot, so no switch in Admin could route or mute them. They come through /ops/notify now (workers/ai-broker/lib/fallback.mjs noteOnce); the broker itself sends each marker once a UTC day.
   a('ai-broker-engine', '🔀 AI broker: an engine failed half of its last calls and moved behind the other', 'ai', 'every', 'engineering', {wired: true}),
-  a('ai-broker-free-cap', '💸 AI broker: Free AI reached its day cap', 'ai', 'daily', 'engineering', {wired: true, modes: ['every', 'daily']}),
+  // Why (13 Nov 2026, owner: "One medium when we approaching the limit/cap and another one, ciritical, when we reached it"): a 🟠 and a 🔴 on one day are two cards, so "every" (each is once a day by its own flag, shared/cap-check.js).
+  a('ai-broker-free-cap', '💸 AI broker: Free AI near (🟠) or at (🔴) its day cap', 'ai', 'every', 'engineering', {wired: true, modes: ['every', 'daily']}),
+  a('ai-broker-cap', '📈 AI broker: the Codex week, the Claude week or the drift lane near (🟠) or at (🔴) its line', 'ai', 'every', 'engineering', {wired: true}),
   a('ai-broker-claude-token', '🔑 AI broker: the Claude subscription token is invalid or expired', 'ai', 'daily', 'engineering', {wired: true, modes: ['every', 'daily']}),
   // Why (12 Nov 2026, owner: "Do I get alerts if the ai-broker starts to refuse AI calls?" · "I should get alerts (medium/high criticalitiy)" · "For now let's keep it like Telegram"): a refused or failed broker call is a CI job that goes grey or red (every broker caller is a GitHub Actions job, never a person).
   // Over 5 minutes, 5 or more calls with half refused or failed (shared/streak.js: a normal day fails 0.0-0.1%, a bad one 2-7%): one 🔴 naming why and which workflows, one 🟢 when it answers again. A deploy's container cut and a caller's 400 never count. The broker being down is the `site-probe` alert (shared/synthetic.js `broker`).
@@ -70,6 +72,7 @@ export const ALERTS = [
   a('broker-fallback', '↩️ Broker fell back to Free AI', 'ai', 'daily', 'users', {modes: ['every', 'daily'], parked: 'a once-a-day note from the broker Worker; it moves with the old bots (4/4)'}),   // Why (5 Nov 2026, coordinator): parked, not built: the note still arrives once a day at most and a new production secret on the broker is not worth it now; trigger: when the old bots retire (4/4). Listed so the page does not count it as waiting
   a('feedback-received', '💬 Feedback received', 'users', 'every', 'users', {wired: true}),
   a('form-reported', '📝 A form was reported', 'users', 'every', 'users', {wired: true}),
+  a('form-reports-full', '📝 Form reports near (🟠) or at (🔴) today\'s total for all installs', 'users', 'every', 'users', {wired: true}),   // shared/cap-alerts.js
   a('email-added', '✉️ An account added or changed its e-mail', 'users', 'every', 'users', {wired: true}),
   a('form-report-waiting', '⏳ A reported form waits 2 days, not fetched', 'users', 'every', 'users', {wired: true}),
   a('feedback-overdue', '⏰ A feedback is 24 h old with no reply', 'users', 'every', 'users', {wired: true}),

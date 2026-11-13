@@ -107,3 +107,17 @@ test('a failing or missing Telegram never fails the upload; the 11th report of a
   assert.equal(fake.calls.length, 11);
   assert.match(fake.calls[10].body.text, /More forms were reported today/);
 });
+
+// Why (13 Nov 2026, owner: "One medium when we approaching the limit/cap and another one, ciritical, when we reached it"): the day's total stopped every Report press in silence (shared/cap-alerts.js).
+test('the day\'s total tells the owner: 🟠 at 80% of the 50 reports, 🔴 at the 50th, nothing more when the 51st is refused', async () => {
+  const kv = new Map(), calls = [], fake = {calls, fetcher: async (url, init) => { calls.push({url, body: JSON.parse(init.body)}); return Response.json({ok: true, result: {message_id: 1}}); }}, e = env({BRAIN_BOT_TOKEN: 'bot-token', BRAIN_CHAT_ID: '42', WAITLIST: {get: async k => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); }, delete: async k => { kv.delete(k); }}});
+  const cards = () => fake.calls.map(call => call.body.text).filter(text => /Form reports today/.test(text)).map(text => text.slice(0, 2));
+  for (let i = 0; i < ALL_REPORTS_PER_DAY; i++) {
+    assert.equal((await upload(e, {fetcher: fake.fetcher, install: `install-${String(i).padStart(4, '0')}-abcd`, size: 10})).status, 200);
+    if (i + 1 === ALL_REPORTS_PER_DAY * 0.8) assert.deepEqual(cards(), ['🟠'], `report ${i + 1}`);
+  }
+  assert.deepEqual(cards(), ['🟠', '🔴']);
+  assert.equal((await upload(e, {fetcher: fake.fetcher, install: 'install-9999-abcd', size: 10})).status, 429);
+  assert.deepEqual(cards(), ['🟠', '🔴'], 'once a day');
+  assert.match(fake.calls.map(call => call.body.text).find(text => /^🔴.*Form reports today/.test(text)), /ALL_REPORTS_PER_DAY/);
+});

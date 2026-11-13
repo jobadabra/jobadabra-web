@@ -4,11 +4,12 @@ import {toWorkersAi, fromWorkersAi} from '../../../shared/free-ai-translate.js';
 import {refuseReply} from './guard.mjs';
 import {codexMessage} from '../container/kinds.mjs';
 import {FREE_MODEL, FREE_WINDOW, FREE_EXTRAS, costOf, promptWithSchema, stripFence} from './free-model.mjs';
+import {brokerCap} from './cap-notes.mjs';
 
 const usd = micro => micro / 1e6;
 const dayOf = () => new Date(Date.now()).toISOString().slice(0, 10);
 const fresh = () => ({spent: {'free-ai': 0}, held: {'free-ai': 0}, notified: {}});   // days stored before 3 Nov 2026 also carry a `claude` ledger: never read, it ages out
-const freeCap = env => Number.isFinite(Number(env.FALLBACK_FREE_AI_DAY_USD)) && Number(env.FALLBACK_FREE_AI_DAY_USD) > 0 ? Math.floor(Number(env.FALLBACK_FREE_AI_DAY_USD) * 1e6) : 0;
+export const freeCap = env => Number.isFinite(Number(env.FALLBACK_FREE_AI_DAY_USD)) && Number(env.FALLBACK_FREE_AI_DAY_USD) > 0 ? Math.floor(Number(env.FALLBACK_FREE_AI_DAY_USD) * 1e6) : 0;
 const json = (status, body) => Response.json(body, {status});
 const validUsage = usage => usage && ['input_tokens', 'output_tokens'].every(k => Number.isSafeInteger(usage[k]) && usage[k] >= 0);
 
@@ -63,8 +64,9 @@ export async function forgetNote(storage, day, marker) {
 }
 
 export const ADMIN_COSTS = 'https://www.jobpilotto.top/admin/ai/costs';
-const notifyCap = (storage, env, day) => noteOnce(storage, env, day, 'free-ai', 'ai-broker-free-cap',
-  `CI fallback: Free AI daily cap $${usd(freeCap(env))} reached (${day} UTC). Further judgments go grey.`, ADMIN_COSTS);
+// The fallback's day line on the one cap alert (lib/cap-notes.mjs): 🔴 at the line, 🟠 at 80% (owner, 13 Nov 2026: "Telegram alerts to all the caps/limits/stops").
+const notifyCap = (storage, env) => brokerCap(storage, env, 'broker-free-ai-day', null, {reached: true});
+const tellSpent = (storage, env, state) => brokerCap(storage, env, 'broker-free-ai-day', state.spent['free-ai'] + state.held['free-ai']);
 
 function messageBody(body, maxTokens) {
   const content = [{type: 'text', text: body.schema ? promptWithSchema(body.prompt, body.schema) : body.prompt}];   // Why (8 Nov 2026, fr): the schema rides in the prompt, never as response_format (lib/free-model.mjs)
@@ -145,7 +147,7 @@ export async function freeAiStep({storage, env, body, lane, weekUsedPercent, not
   const day = dayOf(), cap = freeCap(env);
   if (!cap) return null;
   const state = await storage.get(`fallback:${day}`) || fresh();
-  if (state.spent['free-ai'] + state.held['free-ai'] >= cap) { await notifyCap(storage, env, day); return null; }
+  if (state.spent['free-ai'] + state.held['free-ai'] >= cap) { await notifyCap(storage, env); return null; }
   if (!env.AI) { note.unavailable = true; return null; }
   const model = FREE_MODEL;
   let request;
@@ -154,7 +156,7 @@ export async function freeAiStep({storage, env, body, lane, weekUsedPercent, not
   const room = outputRoom(request);
   if (room < FREE_AI_MIN_OUTPUT) return refusal('fallback:prompt-too-large', `prompt ${JSON.stringify(request).length} bytes leaves ${room} tokens in the ${FREE_WINDOW}-token window`);   // not the day cap: no note, nothing held, nothing sent
   const hold = await reserve(storage, env, day, request, room);
-  if (!hold) { await notifyCap(storage, env, day); return null; }
+  if (!hold) { await notifyCap(storage, env); return null; }
   Object.assign(request, FREE_EXTRAS);
   request.max_tokens = hold.output;
   let message, choiceFinish;
@@ -177,7 +179,7 @@ export async function freeAiStep({storage, env, body, lane, weekUsedPercent, not
   const actual = Math.ceil(1e6 * costOf({...usage, input_tokens: usage.input_tokens + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0)}));
   await settle(storage, day, hold.amount, actual);
   const latest = await storage.get(`fallback:${day}`);
-  if (latest.spent['free-ai'] + latest.held['free-ai'] >= cap) await notifyCap(storage, env, day);
+  await tellSpent(storage, env, latest);
   const outcome = `model=${model} max=${hold.output} output=${usage.output_tokens} prompt=${usage.input_tokens} lane=${lane} ms=${Date.now() - started}`;
   if (actual > hold.amount || usage.output_tokens > hold.output) return refusal('fallback:usage-exceeded-reservation', outcome);
   const said = Array.isArray(message.content) ? message.content.filter(part => part.type === 'text').map(part => part.text).join('\n') : '';
