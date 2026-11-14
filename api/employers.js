@@ -355,7 +355,7 @@ const brainBot = env => (env.BRAIN_BOT_TOKEN && env.BRAIN_CHAT_ID ? {token: env.
 
 /**
  * Keeps this publish's body as the UTC day's copy for COPY_DAYS (a later publish that day replaces it). Returns 'kept' or 'failed'; never throws, a copy is never a reason to refuse the index. A failure tells the owner.
- * To go back to a day, from workers/www: `wrangler kv key get --remote --binding WAITLIST index:copy:<day>`, then PUT that body to /api/index with INDEX_PUBLISH_KEY; it passes the same checks as any publish, and replays that day's board facts and stats under today's date.
+ * To go back to a day, from workers/www: `wrangler kv key get --remote --binding WAITLIST index:copy:<day>`, then PUT that body to /api/index with INDEX_PUBLISH_KEY; it passes the same checks as any publish. Board facts keep the `day` they were read (a fact older than SCOUT_BOARD_DAYS before today is refused, so a copy over ~30 days old restores none), a fact with no `day` is dated today; stats are replayed under today's date.
  * A copy over about 7 days old comes back in steps: the next scout run keeps only feeds read in the last 7 days (public src/scout_carry.py CARRY_DAYS) and re-reads the rest, oldest first.
  */
 // Why (5 Nov 2026, owner: "Find root cause, and preven this happening again"): on 2 Nov the scout lost its cache and published 3,871 of 6,833 feeds, and no old copy existed. The raw body, so a restore is one more publish. KV: 25 MiB a value, above the 20 MB publish limit for the scout's plain ASCII; about 3.6 MB a day today, 600 MB at worst, in the 1 GB the plan includes.
