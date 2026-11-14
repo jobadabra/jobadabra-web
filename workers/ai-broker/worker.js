@@ -6,6 +6,7 @@ import {DurableObject, WorkerEntrypoint} from 'cloudflare:workers';
 import {doContainer, allowHosts} from './lib/do-container.mjs';
 import {verifyRunToken, githubJwks} from './lib/oidc.mjs';
 import {claimFetch, view, whoOf} from './lib/claims.mjs';
+import {boardFetch, boardView} from './lib/board-reads.mjs';
 import {claudeOnly, laneOf, queueOf, LANES} from './lib/lanes.mjs';
 import {allow, linesOf, claudeAllow, claudeWeekPercent, newMeter, record, recordCall, callsToday} from './lib/budget.mjs';
 import {refuseReply, loginValues} from './lib/guard.mjs';
@@ -99,6 +100,7 @@ export class AiBroker extends doContainer(DurableObject) {
     if (url.pathname === '/health') return this.health();
     if (url.pathname === '/call' && request.method === 'POST') return this.call(request.headers.get('x-lane'), await request.json(), workflowKey(request.headers.get('x-workflow')), jobKey(request.headers.get('x-job')), sessionKey(request.headers.get('x-session')), request.signal);
     if (url.pathname === '/claim' && ['POST', 'DELETE'].includes(request.method)) return claimFetch(this.ctx.storage, request, request.headers.get('x-who'));   // who: set by the Worker below from a verified token only
+    if (url.pathname === '/board-read' && request.method === 'POST') return boardFetch(this.ctx.storage, request, request.headers.get('x-who'));   // lib/board-reads.mjs; who: a verified token only
     if (url.pathname === '/stop' && request.method === 'POST') { await this.stop(); return json(200, {stopped: true}); }   // the owner's kill test (admin route in front)
     return json(404, {error: 'not found'});
   }
@@ -130,7 +132,7 @@ export class AiBroker extends doContainer(DurableObject) {
     // `ready` = a login is stored AND the container has answered since its last start (a sleeping container keeps its last proof; its next wake starts over); `starting` = login stored, nothing answered yet (readers: the release gate accepts it, nobody else reads this field). `startError` = the last Codex failure passed on while starting.
     const state = !(await this.ctx.storage.get('login')) ? 'no-login' : (await this.ctx.storage.get('lost')) ? 'login-lost' : (await this.ctx.storage.get('answered')) ? 'ready' : 'starting';
     const startError = state === 'starting' ? await this.ctx.storage.get('startError') : null;
-    return json(200, {state, ...(startError ? {startError} : {}), limits: this.limits, lines: linesOf(LANES, ((await this.ctx.storage.get('claude:state')) || {}).limits), own: meter.tokens, daily: {drift: callsToday(meter, 'drift'), byhand: callsToday(meter, 'byhand')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), claims: view(await this.ctx.storage.get('claims'), Date.now()), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), paid: await paidHealth(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
+    return json(200, {state, ...(startError ? {startError} : {}), limits: this.limits, lines: linesOf(LANES, ((await this.ctx.storage.get('claude:state')) || {}).limits), own: meter.tokens, daily: {drift: callsToday(meter, 'drift'), byhand: callsToday(meter, 'byhand')}, tally: recentDays(await this.ctx.storage.get('tally')), jobs: recentDays(await this.ctx.storage.get('jobs')), queue: this.gate.stats(), claims: view(await this.ctx.storage.get('claims'), Date.now()), boards: await boardView(this.ctx.storage, Date.now()), fallback: await fallbackToday(this.ctx.storage, this.brokerEnv), paid: await paidHealth(this.ctx.storage, this.brokerEnv), ...(await engineHealth(this.ctx.storage, this.brokerEnv, new Date(Date.now()).toISOString().slice(0, 10)))});
   }
 
   // The owner-visible refusals of the Codex login: they stand when Codex is reached, another engine does not hide them.
@@ -437,6 +439,10 @@ export default {
     if (path === '/claim' && ['POST', 'DELETE'].includes(request.method)) {
       let claims; try { claims = await verified(); } catch (e) { return json(401, {why: String(e.message)}); }
       return broker.fetch(new Request('http://c/claim', {method: request.method, body: request.method === 'POST' ? await request.text() : null, headers: {'x-who': whoOf(claims)}}));   // lib/claims.mjs; who comes from the verified claims, never from the caller
+    }
+    if (path === '/board-read' && request.method === 'POST') {   // lib/board-reads.mjs: CI's one read per refusing board page a day; the run is named from its verified token
+      let claims; try { claims = await verified(); } catch (e) { return json(401, {why: String(e.message)}); }
+      return broker.fetch(new Request('http://c/board-read', {method: 'POST', body: await request.text(), headers: {'x-who': whoOf(claims)}}));
     }
     if (path === '/call' && request.method === 'POST') {
       let claims;
