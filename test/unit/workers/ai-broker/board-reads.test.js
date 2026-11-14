@@ -97,3 +97,21 @@ test('the Durable Object route: reserve and report through one POST, a bad op or
   assert.equal((await post({op: 'reserve', page: 'file:///etc/passwd'})).status, 400);
   assert.equal(hostOf('https://WWW.Jobs.BG/a'), 'jobs.bg');
 });
+
+test('one page, many spellings (Gitar on #656): case, www., the default port and a fragment are one page and spend one read', async () => {
+  const s = storage(), base = 'https://trans.bg/search?q=driver';
+  assert.equal((await reserve(s, 'a#1', base, t0)).reply.go, true);
+  for (const spelling of ['https://TRANS.bg/search?q=driver', 'https://www.trans.bg/search?q=driver', 'https://trans.bg:443/search?q=driver', 'https://trans.bg/search?q=driver#top']) {
+    assert.deepEqual((await reserve(s, 'b#2', spelling, t0)).reply, {go: false, state: 'reading'}, spelling);
+  }
+  assert.equal((await report(s, 'a#1', 'https://www.Trans.bg/search?q=driver#x', 'opened', {jobs: [job]}, t0)).status, 200, 'the reserving run reports under any spelling');
+});
+
+test('a reported count outside the jobs kept and 10 000 (Gitar on #656) is the number of jobs kept', async () => {
+  for (const [count, shown] of [[-5, 1], [1e15, 1], [23, 23]]) {
+    const s = storage();
+    await reserve(s, 'a#1', page, t0);
+    await report(s, 'a#1', page, 'opened', {jobs: [job], count}, t0);
+    assert.equal((await reserve(s, 'b#2', page, t0)).reply.count, shown, String(count));
+  }
+});

@@ -10,6 +10,7 @@
 //   that day"): the app's own limit is 5 boards a day, each once (src/sources/refused_reads.py DAY_SITES); CI must not be more persistent than a person's app.
 export const HOST_PAGES_A_DAY = 5;
 export const MAX_JOBS = 200;       // a listing page's jobs kept for reuse; more are dropped (a board page lists 20-50)
+const MAX_COUNT = 10_000;           // a page's job count echoed to later searches; outside kept.length..MAX_COUNT it is the jobs kept (Gitar on #656)
 const FIELD = 300;                  // characters kept per job field
 const OUTCOMES = ['opened', 'stopped', 'waiting'];
 
@@ -19,6 +20,17 @@ export const dayOf = now => new Date(now).toISOString().slice(0, 10);
 /** The host of a search page address, lower case without "www.", or '' for an address that is not http(s). */
 export function hostOf(page) {
   try { const u = new URL(String(page)); return /^https?:$/.test(u.protocol) ? u.hostname.toLowerCase().replace(/^www\./, '') : ''; } catch { return ''; }
+}
+
+/**
+ * One spelling per search page (Gitar on #656): http(s) only, the host as hostOf, no default port, no fragment, the path and query kept as sent. '' for any other address.
+ * Invariant: every key and every host count is built from this form, so "A.com/x", "www.a.com/x#f" and "a.com:443/x" are one page and spend one read.
+ */
+export function pageOf(page) {
+  try {
+    const u = new URL(String(page)), host = hostOf(page);
+    return host ? `${u.protocol}//${host}${u.port ? `:${u.port}` : ''}${u.pathname}${u.search}` : '';
+  } catch { return ''; }
 }
 
 /** One job's public listing fields, each a trimmed string of at most FIELD characters; null without an http(s) link or a title. */
@@ -38,9 +50,9 @@ const stopKey = host => `board-stop:${host}`;
  * stopped, waiting nor at HOST_PAGES_A_DAY today. Otherwise go false with state: 'opened' (+ jobs, read_by, read_at: reuse them, send nothing), 'reading',
  * 'stopped', 'waiting' or 'host-full'. Pure over `get`/`put`/`del` (the Durable Object's storage, or a Map in tests).
  */
-export async function reserve(store, who, page, now) {
-  const host = hostOf(page);
-  if (!host) return {status: 400, reply: {error: 'page: an http(s) address'}};
+export async function reserve(store, who, address, now) {
+  const page = pageOf(address), host = hostOf(page);
+  if (!page) return {status: 400, reply: {error: 'page: an http(s) address'}};
   const day = dayOf(now);
   const stop = await store.get(stopKey(host));
   if (stop) return {status: 200, reply: {go: false, state: 'stopped', why: stop.why, since: stop.at}};
@@ -60,9 +72,9 @@ export async function reserve(store, who, page, now) {
  * report: the reserving run says how its read ended. outcome 'opened' keeps `jobs` (public fields only, at most MAX_JOBS) and `count`; 'stopped' stops the host
  * for good for all CI; 'waiting' (a 429) stops the host until the next UTC day. Only the run that reserved `page` today, while it still reads, may report. -> {status, reply}.
  */
-export async function report(store, who, page, outcome, {jobs = [], count = null, why = ''} = {}, now) {
-  const host = hostOf(page);
-  if (!host || !OUTCOMES.includes(outcome)) return {status: 400, reply: {error: `page: an http(s) address; outcome: one of ${OUTCOMES.join(', ')}`}};
+export async function report(store, who, address, outcome, {jobs = [], count = null, why = ''} = {}, now) {
+  const page = pageOf(address), host = hostOf(page);
+  if (!page || !OUTCOMES.includes(outcome)) return {status: 400, reply: {error: `page: an http(s) address; outcome: one of ${OUTCOMES.join(', ')}`}};
   const day = dayOf(now), at = new Date(now).toISOString();
   const entry = await store.get(pageKey(day, page));
   if (!entry || entry.state !== 'reading' || entry.who !== who) return {status: 409, reply: {error: 'not your read: reserve this page first, today, from this run'}};
@@ -70,7 +82,7 @@ export async function report(store, who, page, outcome, {jobs = [], count = null
   const reason = String(why || '').slice(0, 80);
   if (outcome === 'stopped') await store.put(stopKey(host), {at, why: reason, page, who});
   if (outcome === 'waiting') await store.put(hostKey(day, host), {...((await store.get(hostKey(day, host))) || {pages: 1}), waiting: true});
-  await store.put(pageKey(day, page), outcome === 'opened' ? {state: 'opened', who, at, jobs: kept, count: Number.isInteger(count) ? count : kept.length} : {state: outcome, who, at, why: reason});
+  await store.put(pageKey(day, page), outcome === 'opened' ? {state: 'opened', who, at, jobs: kept, count: Number.isInteger(count) && count >= kept.length && count <= MAX_COUNT ? count : kept.length} : {state: outcome, who, at, why: reason});
   return {status: 200, reply: {kept: outcome === 'opened' ? kept.length : 0, state: outcome}};
 }
 

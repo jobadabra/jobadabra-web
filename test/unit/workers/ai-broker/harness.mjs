@@ -29,7 +29,8 @@ export function harness(meter, env = {}) {
   const storage = {
     get: async key => structuredClone(values.get(key)),
     put: async (key, value) => { values.set(key, structuredClone(value)); },
-    delete: async key => values.delete(key),
+    delete: async key => { for (const one of [].concat(key)) values.delete(one); },   // one key or a list, as in DO storage
+    list: async ({prefix = ''} = {}) => new Map([...values].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => [key, structuredClone(value)])),   // the board marks' /health view (lib/board-reads.mjs)
     // Serialize admission and completion transactions; snapshots are independent, as in DO storage.
     transaction(fn) {
       const next = pending.then(() => fn(storage));
