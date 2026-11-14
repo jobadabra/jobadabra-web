@@ -178,3 +178,68 @@ test('the Codex week used up turns Codex away even when Claude then answers: its
   assert.deepEqual(weekCards(w.sent, 'Codex week'), ['reached']);
   assert.equal(w.claude.length, 1, 'Claude answered the call');
 });
+
+// Why (14 Nov 2026, owner via the coordinator: "first try claude plan, then try codex plan. then try to Claude API Key"): a Claude-first `subs` call ends on the key only after BOTH plans did not answer.
+const subsClaude = {...body, engine: 'claude', subs: true, tier: 'mid'};
+const codexOut = async w => { await w.storage.put('limits', {usedPercent: 100, resetsAt: T / 1000 + 3600}); w.broker.limits = null; };
+const keyCalls = w => w.claude.filter(sent => sent.paid).length;
+
+test('subs claude, both plans out, key set: answered on the key as the last step, marked paid, and the reply says what fell back', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}});
+  await planOut(w.storage); await codexOut(w);
+  const reply = await w.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(reply.status, 200);
+  const answer = await reply.json();
+  assert.equal(answer.paid, true); assert.equal(answer.engine, 'claude'); assert.equal(keyCalls(w), 1);
+  assert.deepEqual(answer.fellBack.map(entry => `${entry.engine}:${entry.why}`), ['claude:ran-out', 'codex:ran-out']);
+  assert.ok(!JSON.stringify(answer).includes(KEY));
+  const health = await (await w.broker.health()).json();
+  assert.equal(health.paid.day.calls, 1, '/health counts the call'); assert.equal(health.paid.day.usd, 3);
+});
+
+test('subs claude, Claude\'s plan out but Codex up: Codex answers and the key is not touched ($0)', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}});
+  await planOut(w.storage);
+  const answer = await (await w.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml')).json();
+  assert.equal(answer.engine, 'codex'); assert.notEqual(answer.paid, true);
+  assert.equal(keyCalls(w), 0); assert.equal((await paidDay(w.storage, new Date(T))).usd, 0);
+});
+
+test('subs claude, Claude\'s plan up (Codex out): the plan answers and the key is not touched', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}, reply: () => Response.json({reply: 'plan ok', tokens: {input: 1, output: 1}, ms: 1})});
+  await codexOut(w);
+  const answer = await (await w.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml')).json();
+  assert.equal(answer.engine, 'claude'); assert.notEqual(answer.paid, true);
+  assert.equal(keyCalls(w), 0);
+});
+
+test('subs claude, both plans out, the day cap reached: a refusal naming the cap, nothing sent to the key', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY, CLAUDE_API_DAY_USD: '0.01'}});
+  await planOut(w.storage); await codexOut(w);
+  const reply = await w.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(reply.status, 503); assert.match((await reply.json()).why, /paid lane at its day cap/);
+  assert.equal(keyCalls(w), 0);
+});
+
+test('subs claude, both plans out, the month cap reached: a refusal naming the cap, nothing sent to the key', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY, CLAUDE_API_MONTH_USD: '0.01'}});
+  await planOut(w.storage); await codexOut(w);
+  const reply = await w.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(reply.status, 503); assert.match((await reply.json()).why, /paid lane at its month cap/);
+  assert.equal(keyCalls(w), 0);
+});
+
+test('subs with Codex first never spends the key (the owner\'s order names Claude\'s plan first): refused as today', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}});
+  await planOut(w.storage); await codexOut(w);
+  const reply = await w.broker.call('bench', {...subsClaude, engine: 'codex'}, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(reply.status, 503); assert.equal(keyCalls(w), 0);
+});
+
+test('subs claude, both plans out, no CLAUDE_API_KEY: refused as today, nothing reaches the key', async t => {
+  const w = world(t);
+  await planOut(w.storage); await codexOut(w);
+  const reply = await w.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(reply.status, 503); assert.doesNotMatch((await reply.json()).why, /paid/);
+  assert.equal(keyCalls(w), 0);
+});
