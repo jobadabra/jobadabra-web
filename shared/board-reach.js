@@ -6,11 +6,11 @@
 // name, host, per-country count or which countries one board spans; Admin's cut adds counts, the multi-country dots and each board's name. Guard: test/unit/shared/board-reach.test.js.
 import {EUROPE} from './pool-tags.js';
 import {countryName} from './scoutingvisual.js';
+import {SECOND_LEVEL} from './company-domain.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"]/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[ch]));
 // Why (12 Nov 2026, Gitar on web#588): jobs.ch and jobs.de are unrelated boards; a generic word before the ending is no brand, so such a host stays its own board.
 const GENERIC = new Set(['jobs', 'job', 'careers', 'career', 'emploi', 'empleo', 'emprego', 'lavoro', 'stellen', 'work', 'vacatures', 'jobb', 'job-board', 'jobboard', 'praca', 'prace', 'munka', 'posao', 'tyopaikat']);
-const SECOND_LEVEL = new Set(['co', 'com', 'org', 'net', 'ac', 'gov']);   // co.uk, com.mt, org.cy: the brand is the label before them
 
 /** The brand of a host (a generic word like jobs.ch stays the whole host): the label before its ending ("acme-jobs.at" -> "acme-jobs", "search.example-jobs.fr" -> "example-jobs", "jobs.acme.co.uk" -> "acme"). */
 export function brandOf(host) {

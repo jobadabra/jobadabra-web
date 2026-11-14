@@ -4,7 +4,7 @@
 // so no new secret. Never served to installs, never on a page: private learned data. Brief: ~/.claude/coordinator-briefs/brief-gi-scout-memory-r2.md. Guard: test/unit/api/scout-memory.test.js.
 import {equal} from '../shared/guard.js';
 import {COUNTRIES} from '../shared/pool-tags.js';
-import {MAX_CI_ROWS, localCount, searchAddress} from './ci-boards.js';
+import {MAX_CI_ROWS, localCount, searchAddress, validHost} from './ci-boards.js';
 
 // Why (6 Nov 2026, brief): the tar is about 3 MB today; 50 MB leaves room to grow and stays well under the Worker's 100 MB request body and 128 MB memory.
 export const MAX_BYTES = 50 * 1024 * 1024;
@@ -90,7 +90,7 @@ export async function reportedBoards(db, now = new Date()) {
   // Why (13 Nov 2026, owner via sa: "Any install + our CI searches (Recommended)"): CI-read boards are candidates too, marked `ci`, never counted as installs; CI-only ones come last.
   const ci = new Map(), best = new Map(), addresses = new Map();
   for (const row of (await db.prepare('SELECT host, country, local, url FROM ci_boards WHERE day >= ? ORDER BY host, country LIMIT ?').bind(since, MAX_CI_ROWS).all()).results || []) {
-    if (HOST.test(String(row.host)) && COUNTRIES.includes(row.country)) {
+    if (validHost(row.host) && COUNTRIES.includes(row.country)) {   // Why (14 Nov 2026, sa for the owner): a stored row whose host is no company's own domain (co.uk) is not served, whatever the door let in before
       ci.set(row.host, [...(ci.get(row.host) || []), row.country]);
       best.set(row.host, Math.max(best.get(row.host) || 0, localCount(row.local)));
       const address = searchAddress(row.url, row.host);

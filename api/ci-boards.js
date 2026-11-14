@@ -3,13 +3,16 @@
 // electrician 19 and 16 right jobs in CI searches and no source ever told the Scout. Design: a report is marked by its install id `ci-search-<run>` (the raw id; pool.js hashes real installs,
 // so this prefix is told before hashing) and goes to its own table `ci_boards` (host, country, day): never into sitefacts, so no install count, no k >= 3 fact and no yield number an app
 // is served can ever include CI. Only names, one count (`local`) and one address template with blanks (`url`, searchAddress): no person, no job, no title, no filled search. Faking the mark gains nothing: it can only add a candidate name for the Scout, which counts it itself.
+import {isCompanyDomain} from '../shared/company-domain.js';
 import {COUNTRIES} from '../shared/pool-tags.js';
 
 // Why (13 Nov 2026, Gitar on web #643: the door is public, so every limit is on one fixed bucket and none on the id, which anyone can rotate): a share holds at most MAX_CI_BOARDS hosts with
 // MAX_COUNTRIES countries each; at most PER_HOUR shares an hour; at most DAILY_ROWS rows touched a day. A genuine CI run sends tens of names a day; a flood stops at the daily cap, and the
 // table keeps the newest MAX_CI_ROWS (oldest day first out, never one day's rows evicting another's by name).
 export const CI_INSTALL = /^ci-search-[\w-]{0,50}$/, MAX_CI_BOARDS = 150, MAX_COUNTRIES = 3, MAX_CI_ROWS = 6000, CI_DAYS = 90, PER_HOUR = 30, DAILY_ROWS = 1500;
-const HOST = /^[a-z0-9.-]+\.[a-z]{2,}$/;
+const HOST_SHAPE = /^[a-z0-9.-]+\.[a-z]{2,}$/;
+/** A host that has the shape of one and is a company's own domain: `co.uk` alone is no board (shared/company-domain.js). Also used by api/scout-memory.js on what it reads back. */
+export const validHost = host => typeof host === 'string' && HOST_SHAPE.test(host) && isCompanyDomain(host);
 
 // Why (13 Nov 2026, owner via sa: "send that number with the host (a count, fixed shape, validator both ends, capped), the site keeps the highest seen"): `local` is how many jobs the search kept from the
 // board in the person's place, a count 0..MAX_LOCAL. Anything else (a string, a negative, a fraction, past the cap) is 0: not reported, never a rejected share. The Scout reads boards that gave jobs first.
@@ -26,7 +29,7 @@ export const MAX_ADDRESS = 200;
 const ADDRESS = /^https:\/\/([a-z0-9.-]+)([/?][^#]*)$/, FIXED = /^[A-Za-z0-9._~\-/=&?:,]*$/;
 /** The address when it is a valid search template of the board `host` (the reported, registrable host), else null. */
 export function searchAddress(url, host) {
-  if (typeof url !== 'string' || typeof host !== 'string' || !HOST.test(host) || url.length > MAX_ADDRESS) return null;
+  if (typeof url !== 'string' || typeof host !== 'string' || !validHost(host) || url.length > MAX_ADDRESS) return null;
   const found = ADDRESS.exec(url);
   if (!found || !(found[1] === host || found[1].endsWith(`.${host}`)) || !url.includes('{role}')) return null;
   return FIXED.test(found[2].replaceAll('{role}', 'x').replaceAll('{place}', 'x')) ? url : null;
@@ -37,7 +40,7 @@ export async function ciBoards(body, env, now = new Date()) {
   const today = now.toISOString().slice(0, 10), rows = [], seen = new Map();
   let dropped = 0;
   for (const item of (Array.isArray(body.ci_boards) ? body.ci_boards : []).slice(0, MAX_CI_BOARDS)) {
-    const host = typeof item?.host === 'string' && HOST.test(item.host) && item.host.length <= 100 && !/^e2e/.test(item.host) ? item.host : null;
+    const host = validHost(item?.host) && item.host.length <= 100 && !/^e2e/.test(item.host) ? item.host : null;
     const countries = [...new Set((Array.isArray(item?.countries) ? item.countries : []).filter(code => COUNTRIES.includes(code)))].sort().slice(0, MAX_COUNTRIES);
     if (!host || !countries.length) { dropped += 1; continue; }
     const local = localCount(item.local), url = searchAddress(item.url, host);
