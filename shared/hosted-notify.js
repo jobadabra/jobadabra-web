@@ -1,5 +1,6 @@
 // Hosted Always on, the daily digest e-mail (spec docs/superpowers/specs/2026-10-16-hosted-always-on.md §4c): one mail per run, only when it found new matches, at most one every 4 hours,
 // through the mail module's send() (limits, unsubscribe and footer are its job). A bounce or complaint turns the email channel off for the schedule. Guard: test/unit/shared/hosted/hosted-notify.test.js.
+import {scoreOf} from './hosted.js';
 import {addrOf, mailAllowed, send} from './mail.js';
 
 export const DIGEST_GAP_MS = 4 * 60 * 60 * 1000, TOP = 5;
@@ -15,7 +16,8 @@ export async function digest(env, account, matches, now = new Date()) {
     if (last && now.getTime() - Date.parse(last.at) < DIGEST_GAP_MS) return {sent: false, why: 'gap'};
     const allowed = await mailAllowed(env, row.email, 'service');
     if (!allowed.ok) return stop(env, account, allowed.reason);
-    const top = [...matches].sort((a, b) => (b.fit || 0) - (a.fit || 0)).slice(0, TOP).map(({title, company, fit, url}) => ({title, company, fit, url}));
+    // Why (#4375): best score first, a job not scored yet after every scored one, and its row with no score (no chip, shared/mail-frame.js jobRows)
+    const top = [...matches].sort((a, b) => (scoreOf(b.fit) ?? -1) - (scoreOf(a.fit) ?? -1)).slice(0, TOP).map(({title, company, fit, url}) => ({title, company, fit: scoreOf(fit), url}));
     const done = await send(env, 'digest', row.email, {matches: top, total: matches.length}, {now});
     return done.ok ? {sent: true} : stop(env, account, done.reason);
   } catch (error) {

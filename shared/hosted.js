@@ -97,6 +97,10 @@ function posting(m) {
   return out;
 }
 
+// A match's score, or null when it has none (not scored yet): never 0 in its place.
+// Why (#4375, the owner's screenshot): `Number(m.fit) || 0` kept every unscored match as fit 0, and the Mac's merge showed it as a score of 0.
+export const scoreOf = fit => (fit == null || fit === '' || !Number.isFinite(Number(fit)) ? null : Number(fit));
+
 export async function result(request, env, now = new Date()) {
   if (!hostedOn(env)) return notFound();
   if (request.method !== 'POST') return Response.json({ok: false, error: 'Use POST'}, {status: 405});
@@ -111,7 +115,7 @@ export async function result(request, env, now = new Date()) {
     .bind(now.toISOString(), failed ? 'failed' : 'ok', matches.length, run.id).run();
   if ((closed.meta?.changes ?? closed.changes) === 0) return deny();
   for (const m of matches) {
-    const payload = JSON.stringify({title: String(m.title).slice(0, 200), company: String(m.company || '').slice(0, 120), url: String(m.url || '').slice(0, 500), fit: Number(m.fit) || 0, line: String(m.line || '').slice(0, 300), ...posting(m)});
+    const payload = JSON.stringify({title: String(m.title).slice(0, 200), company: String(m.company || '').slice(0, 120), url: String(m.url || '').slice(0, 500), fit: scoreOf(m.fit), line: String(m.line || '').slice(0, 300), ...posting(m)});
     await env.STATS.prepare('INSERT OR IGNORE INTO hosted_inbox (account, run, job, payload, at) VALUES (?, ?, ?, ?, ?)').bind(run.account, run.id, String(m.job).slice(0, 120), payload, now.toISOString()).run();
   }
   if (!failed) await chargeCompute(env, run, now);   // the run's compute comes out of the trial budget (a run that failed before the crawl costs the person nothing)
