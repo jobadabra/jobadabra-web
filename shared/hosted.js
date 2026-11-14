@@ -85,6 +85,18 @@ export async function schedule(request, env, now = new Date()) {
 }
 
 // POST /api/hosted/result (Bearer run token) {status, matches: [{job, title, company, url, fit, line}], computeSeconds?}: the container's one post. The token stops working with it.
+// Why (14 Nov 2026, owner, asked via AskUserQuestion: "Yes, both PRs (Recommended)"): a cloud-found job reached the app with title, company and fit only, so its
+// drawer said "no saved description" and every fact "Not stated"; the posting the run read now travels with it. Named fields only, each capped; the
+// description cap is the engine's own (src/sources/ats.py DESCRIPTION_LIMIT).
+const POSTING_MAX = {location: 200, work_mode: 40, posted: 40, salary: 120, contract: 60, seniority: 60, languages: 120, apply_route: 40, source: 80, source_kind: 40, description: 12000};
+
+/** The posting facts of one match the inbox keeps: the named string fields that are not empty, each cut to its cap; anything else is dropped. */
+function posting(m) {
+  const out = {};
+  for (const [k, max] of Object.entries(POSTING_MAX)) if (typeof m[k] === 'string' && m[k].trim()) out[k] = m[k].slice(0, max);
+  return out;
+}
+
 export async function result(request, env, now = new Date()) {
   if (!hostedOn(env)) return notFound();
   if (request.method !== 'POST') return Response.json({ok: false, error: 'Use POST'}, {status: 405});
@@ -99,7 +111,7 @@ export async function result(request, env, now = new Date()) {
     .bind(now.toISOString(), failed ? 'failed' : 'ok', matches.length, run.id).run();
   if ((closed.meta?.changes ?? closed.changes) === 0) return deny();
   for (const m of matches) {
-    const payload = JSON.stringify({title: String(m.title).slice(0, 200), company: String(m.company || '').slice(0, 120), url: String(m.url || '').slice(0, 500), fit: Number(m.fit) || 0, line: String(m.line || '').slice(0, 300)});
+    const payload = JSON.stringify({title: String(m.title).slice(0, 200), company: String(m.company || '').slice(0, 120), url: String(m.url || '').slice(0, 500), fit: Number(m.fit) || 0, line: String(m.line || '').slice(0, 300), ...posting(m)});
     await env.STATS.prepare('INSERT OR IGNORE INTO hosted_inbox (account, run, job, payload, at) VALUES (?, ?, ?, ?, ?)').bind(run.account, run.id, String(m.job).slice(0, 120), payload, now.toISOString()).run();
   }
   if (!failed) await chargeCompute(env, run, now);   // the run's compute comes out of the trial budget (a run that failed before the crawl costs the person nothing)
