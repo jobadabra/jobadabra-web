@@ -67,3 +67,17 @@ test('with the mail switch off the run still succeeds and nothing is sent', asyn
   assert.deepEqual([done.ok, done.mailed], [true, false]);
   assert.equal(e.sent.length, 0);
 });
+
+test('an unscored match shows no score chip and keeps no score; a scored one shows its number first (#4375)', async () => {
+  // #4375 (the owner's screenshot): every job of the "new matches" mail showed a green 0: an unscored match was posted and stored as fit 0
+  const e = await setup();
+  const done = await finish(e, [{job: 'j-un', title: 'Unscored role', company: 'Acme', url: 'https://a/un', fit: null}, {job: 'j-sc', title: 'Scored role', company: 'Acme', url: 'https://a/sc', fit: 72}], later(1));
+  assert.equal(done.mailed, true);
+  const {html, text} = e.sent[0];
+  assert.equal((html.match(/class="jp-fit"/g) || []).length, 1, 'one chip: the scored job\'s');
+  assert.match(html, /class="jp-fit"[^>]*>72</);
+  assert.ok(text.indexOf('Scored role') < text.indexOf('Unscored role'), 'the scored job first');
+  assert.doesNotMatch(text.split('\n').find(line => line.includes('Unscored role')), /\b0\b/, 'no 0 beside the unscored job in the text twin');
+  const stored = Object.fromEntries(e.STATS.db.prepare('SELECT job, payload FROM hosted_inbox').all().map(r => [r.job, JSON.parse(r.payload).fit]));
+  assert.deepEqual(stored, {'j-un': null, 'j-sc': 72}, 'the Mac gets no score for it, never 0 (jobadabra src/hosted_run.py merge)');
+});
