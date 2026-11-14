@@ -115,3 +115,12 @@ test('a reported count outside the jobs kept and 10 000 (Gitar on #656) is the n
     assert.equal((await reserve(s, 'b#2', page, t0)).reply.count, shown, String(count));
   }
 });
+
+test('a page its own run is reading says so (own: a pair\'s other side may wait for it); another run\'s read does not', async () => {
+  const s = storage();
+  await reserve(s, 'pair#1', page, t0);
+  assert.deepEqual((await reserve(s, 'pair#1', page, t0 + 1000)).reply, {go: false, state: 'reading', own: true});
+  assert.deepEqual((await reserve(s, 'round#2', page, t0 + 1000)).reply, {go: false, state: 'reading'});
+  await report(s, 'pair#1', page, 'opened', {jobs: [job]}, t0 + 15_000);
+  assert.equal((await reserve(s, 'pair#1', page, t0 + 16_000)).reply.state, 'opened', 'then both sides reuse the same jobs');
+});

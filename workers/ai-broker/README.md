@@ -131,7 +131,7 @@ Room for searches, first come first served (owner, 13 Nov 2026: "each workflow s
 
 CI's one honest-browser read of a job board page that refused the plain reader, per search page per UTC day, across every CI search of both repos (owner, 14 Nov 2026: "Once per search page (Recommended)", stop "For good (Recommended)"; `lib/board-reads.mjs`). Same run token; the run is named from it.
 
-- `{"op": "reserve", "page": "<address>"}`: `go: true` only for the first run of a free page. Otherwise `go: false` with `state`: `opened` (+ `jobs`, `count`, `read_by`, `read_at`: use them, send nothing), `reading`, `stopped`, `waiting` or `host-full`.
+- `{"op": "reserve", "page": "<address>"}`: `go: true` only for the first run of a free page. Otherwise `go: false` with `state`: `opened` (+ `jobs`, `count`, `read_by`, `read_at`: use them, send nothing), `reading` (+ `own: true` when the asking run itself reads it: a pair's other side may wait for that read), `stopped`, `waiting` or `host-full`.
 - `{"op": "report", "page", "outcome": "opened"|"stopped"|"waiting", "jobs"?, "count"?, "why"?}`: only the run that reserved the page today. `stopped` (a check, captcha, sign-in page, 401/403) closes the whole host to CI for good; `waiting` (a 429) until the next UTC day.
 - At most 5 pages per host a day (`HOST_PAGES_A_DAY`), as the app's own 5 a day. A reservation never reported stays `reading` for the day. Kept: public listing fields of the jobs only (title, link, company, place, date), never a page, cookie or session.
 

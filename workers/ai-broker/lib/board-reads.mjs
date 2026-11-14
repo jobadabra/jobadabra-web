@@ -47,7 +47,7 @@ const stopKey = host => `board-stop:${host}`;
 
 /**
  * reserve: may run `who` load `page` in its browser now? -> {status, reply}. reply.go true only for the first caller of a free page on a host that is neither
- * stopped, waiting nor at HOST_PAGES_A_DAY today. Otherwise go false with state: 'opened' (+ jobs, read_by, read_at: reuse them, send nothing), 'reading',
+ * stopped, waiting nor at HOST_PAGES_A_DAY today. Otherwise go false with state: 'opened' (+ jobs, read_by, read_at: reuse them, send nothing), 'reading' (+ own: true when `who` itself reads it),
  * 'stopped', 'waiting' or 'host-full'. Pure over `get`/`put`/`del` (the Durable Object's storage, or a Map in tests).
  */
 export async function reserve(store, who, address, now) {
@@ -58,7 +58,8 @@ export async function reserve(store, who, address, now) {
   if (stop) return {status: 200, reply: {go: false, state: 'stopped', why: stop.why, since: stop.at}};
   const entry = await store.get(pageKey(day, page));
   if (entry?.state === 'opened') return {status: 200, reply: {go: false, state: 'opened', jobs: entry.jobs, count: entry.count, read_by: entry.who, read_at: entry.at}};
-  if (entry) return {status: 200, reply: {go: false, state: entry.state}};
+  // Why (14 Nov 2026, sa for the owner's pairs: "both sides of one pair get the same cards"): a pair's two sides are one GitHub run; `own` lets the other side wait for that read
+  if (entry) return {status: 200, reply: {go: false, state: entry.state, ...(entry.state === 'reading' && entry.who === who ? {own: true} : {})}};
   const today = (await store.get(hostKey(day, host))) || {pages: 0, waiting: false};
   if (today.waiting) return {status: 200, reply: {go: false, state: 'waiting'}};
   if (today.pages >= HOST_PAGES_A_DAY) return {status: 200, reply: {go: false, state: 'host-full', limit: HOST_PAGES_A_DAY}};
