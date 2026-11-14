@@ -231,10 +231,10 @@ export class AiBroker extends doContainer(DurableObject) {
     const done = await walk(chain, (engine, left, last) => this.turn(engine, {door, ctx, lane, body, session, left, waitMs: last ? undefined : waitMs}), (engine, v, ms) => this.record(day, engine, v, ms));
     // Why (14 Nov 2026, owner via the coordinator: "first try claude plan, then try codex plan. then try to Claude API Key"): a Claude-first `subs` call that neither plan answered goes on to the key, the last step of its chain, under the same day and month caps. A cap or a failure leaves the refusal as it was, naming the paid lane as one more engine that did not answer.
     if (!done.reply && paidAfterSubs(env, body)) {
-      const started = Date.now(), v = await paidClaude(this, lane, body, undefined, 'subs-out');
-      await this.record(day, 'claude', v, Date.now() - started);
+      const v = await paidClaude(this, lane, body, undefined, 'subs-out');   // not this.record(): the key's spend is booked in paid:*, and a failure of the key must never count as the Claude plan failing (lib/adapt.mjs demotion)
       if (v.verdict === 'answered') return v.reply.ok && done.left.length ? json(200, {...(await v.reply.json()), fellBack: done.left}) : v.reply;
       done.left.push({engine: 'paid', why: v.why, ...(v.detail ? {detail: v.detail} : {})});
+      done.held ||= v.reply;   // as walk(): the first engine's own words win, so a guard refusal on the paid answer stays the call's end
     }
     if (!done.reply) { const reply = this.ending(done, door, body, note); ended.set(reply, {left: done.left}); return reply; }   // the engines' reasons ride along for the refusal streak (lib/refusing.mjs: a platform cut is not a refusal)
     // Why (1 Nov 2026, owner: CI jobs "need to be aware" which model answers, models behave differently): a reply names its engine and model, and `fellBack` lists the engines that were tried first and did not answer, with the reason. Claude answering after its busy turn did answer.

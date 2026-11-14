@@ -243,3 +243,16 @@ test('subs claude, both plans out, no CLAUDE_API_KEY: refused as today, nothing 
   assert.equal(reply.status, 503); assert.doesNotMatch((await reply.json()).why, /paid/);
   assert.equal(keyCalls(w), 0);
 });
+
+test('subs claude, both plans out, the key\'s call fails or its answer is guard-refused: refused naming the paid lane, the guard\'s own 422 kept, and the Claude plan\'s demotion record untouched (Gitar on #652)', async t => {
+  const failing = world(t, {env: {CLAUDE_API_KEY: KEY}, reply: () => new Response(JSON.stringify({error: 'boom', kind: 'failed'}), {status: 500})});
+  await planOut(failing.storage); await codexOut(failing);
+  const failed = await failing.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(failed.status, 503); assert.match((await failed.json()).why, /, paid failed$/);
+  const refusing = world(t, {env: {CLAUDE_API_KEY: KEY}, reply: () => Response.json({reply: `here: ${KEY}`, tokens: {input: 1, output: 1}, ms: 1})});
+  await planOut(refusing.storage); await codexOut(refusing);
+  const refused = await refusing.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(refused.status, 422, 'the guard\'s own refusal is the call\'s end, as for any engine');
+  assert.ok(!JSON.stringify(await refused.json()).includes(KEY));
+  for (const w of [failing, refusing]) assert.equal(((await w.storage.get('adapt'))?.rings?.claude ?? []).length, 0, 'the key never feeds the Claude plan\'s record');
+});
