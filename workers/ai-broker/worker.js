@@ -23,7 +23,7 @@ import {demotedNow, recordPerf} from './lib/adapt.mjs';
 import {addCall, addJobCall, jobKey, recentDays, tokensOf, workflowKey, workflowOf} from './lib/tally.mjs';
 import {countedOf, keyedLock, markGap, planOf, sessionKey, sessionKeyOf, settle} from './lib/sessions.mjs';
 import {brokerLines} from './lib/cap-notes.mjs';
-import {paidAllowed, paidClaude, paidHealth} from './lib/paid-claude.mjs';
+import {paidAfterSubs, paidAllowed, paidClaude, paidHealth} from './lib/paid-claude.mjs';
 
 // Why (11 Nov 2026, as; owner: "Let's increase the AI Broker's slot limit"): at 4 one Find jobs measure person already queued (after-1 run 43069240532: 55 of 303
 // calls waited over 5 s, p90 wait 7.9 s, all 4 busy 29% of the time). On the 1 vCPU / 3 GiB container (#554) 4 at once peaked at 1.27 GiB and 0.52 CPU per minute
@@ -206,7 +206,7 @@ export class AiBroker extends doContainer(DurableObject) {
       const now = Date.now() / 1000;
       if (meter.resetsAt && meter.resetsAt <= now) meter = {...newMeter(0), daily: meter.daily};
       const check = allow(lane, meter, this.limits?.usedPercent ?? null, undefined, now);
-      if (!check.ok && check.quota && others.length) {
+      if (!check.ok && check.quota && (others.length || paidAfterSubs(env, body))) {   // the key is a last step too: with the Claude week shut and Codex's week out a Claude-first subs call is not refused at the door (Gitar on #654)
         await storage.put('meter', recordCall(meter, lane, now));
         return {...check, ranOut: true};   // the Codex week is used up: Codex's step passes, the others may answer
       }
@@ -215,7 +215,8 @@ export class AiBroker extends doContainer(DurableObject) {
     });
     // 🔴 only for a line that turned its engine (or the lane) away for this call. Codex's week at its line turns Codex away even when Claude then answers (its card says calls pass to
     // Claude). The Claude week counts only when it shut Claude for this call (claudeShut), not when the paid key answers in its place (Gitar on #630).
-    const refused = {codex: !!verdict.quota, claude: claudeShut, drift: lane === 'drift' && !verdict.ok && /^budget:daily/.test(verdict.why || '')};
+    const refused = {codex: !!verdict.quota, claude: claudeShut && !paidAfterSubs(env, body),   // a Claude-first subs call may still end on the key: no 🔴 for a line that did not refuse it (Gitar on #654)
+       drift: lane === 'drift' && !verdict.ok && /^budget:daily/.test(verdict.why || '')};
     const lines = brokerLines(this.ctx.storage, env, this.limits, refused); this.ctx.waitUntil?.(lines);   // 🟠/🔴 on the week lines and the drift lane (lib/cap-notes.mjs); never delays the call
     if (!verdict.ok && !verdict.ranOut) return {refusal: json(429, {why: claudeShut && verdict.quota ? claudeCheck.why : verdict.why})};   // the daily cap, or an exhausted week with nobody else configured: a control no other engine bypasses
     return {model, chain, first: asked[0], env, verdict, claudeCheck, claudeShut, freeAiCannot, hasLater};
@@ -229,6 +230,14 @@ export class AiBroker extends doContainer(DurableObject) {
     const ctx = {storage: this.ctx.storage, env, body, lane, weekUsedPercent: this.limits?.usedPercent ?? null, note};
     const waitMs = chain.includes('claude') && configured('claude', env) && await mayPassOn({chain, body, env, storage: this.ctx.storage, verdict: door.verdict}) ? this.busyMs : undefined;   // undefined = wait for a Claude slot as long as it takes
     const done = await walk(chain, (engine, left, last) => this.turn(engine, {door, ctx, lane, body, session, left, waitMs: last ? undefined : waitMs}), (engine, v, ms) => this.record(day, engine, v, ms));
+    // Why (14 Nov 2026, owner via the coordinator: "first try claude plan, then try codex plan. then try to Claude API Key"): a Claude-first `subs` call that neither plan answered goes on to the key, the last step of its chain, under the same day and month caps. A cap or a failure leaves the refusal as it was, naming the paid lane as one more engine that did not answer.
+    if (!done.reply && paidAfterSubs(env, body)) {
+      if (door.claudeShut) done.left.unshift({engine: 'claude', why: 'budget', detail: door.claudeCheck.why});   // the week line kept Claude out of the walk: fellBack and the refusal still name both plans
+      const v = await paidClaude(this, lane, body, undefined, 'subs-out');   // not this.record(): the key's spend is booked in paid:*, and a failure of the key must never count as the Claude plan failing (lib/adapt.mjs demotion)
+      if (v.verdict === 'answered') return v.reply.ok && done.left.length ? json(200, {...(await v.reply.json()), fellBack: done.left}) : v.reply;
+      done.left.push({engine: 'paid', why: v.why, ...(v.detail ? {detail: v.detail} : {})});
+      done.held ||= v.reply;   // as walk(): the first engine's own words win, so a guard refusal on the paid answer stays the call's end
+    }
     if (!done.reply) { const reply = this.ending(done, door, body, note); ended.set(reply, {left: done.left}); return reply; }   // the engines' reasons ride along for the refusal streak (lib/refusing.mjs: a platform cut is not a refusal)
     // Why (1 Nov 2026, owner: CI jobs "need to be aware" which model answers, models behave differently): a reply names its engine and model, and `fellBack` lists the engines that were tried first and did not answer, with the reason. Claude answering after its busy turn did answer.
     const fell = done.left.filter(entry => !(entry.engine === done.engine && entry.why === 'busy'));
@@ -275,7 +284,8 @@ export class AiBroker extends doContainer(DurableObject) {
     }
     if (body.subs === true) {   // neither subscription answered: each one's reason, never Free AI's, whose `budget:` CI reads as a grey skip
       const why = SUBS.map(engine => `${engine} ${left.find(entry => entry.engine === engine)?.why ?? (engine === 'claude' && shut ? shut : configured(engine, door.env) ? 'unavailable' : 'not-configured')}`);
-      return json(503, {why: `subs: ${why.join(', ')}`, engine: door.first, tried: left});
+      const paid = left.find(entry => entry.engine === 'paid');   // the key was the last step of a Claude-first call: its reason rides along (a cap names itself)
+      return json(503, {why: `subs: ${[...why, ...(paid ? [`paid ${paid.detail || paid.why}`] : [])].join(', ')}`, engine: door.first, tried: left});
     }
     if (shut && door.freeAiCannot) return json(429, {why: shut});   // Claude did not answer, its line is shut and Free AI takes neither a search nor an image
     return apiFinish(door.env, note);

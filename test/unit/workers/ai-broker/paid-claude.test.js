@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {body, success, harness, switchboard} from './harness.mjs';
 import {claudeEnv} from '../../../../workers/ai-broker/container/claude.mjs';
+import {onlyCut} from '../../../../workers/ai-broker/lib/refusing.mjs';
 import {paidCap, paidDay, paidMonthCap} from '../../../../workers/ai-broker/lib/paid-claude.mjs';
 
 const config = JSON.parse(readFileSync(new URL('../../../../workers/ai-broker/wrangler.jsonc', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
@@ -177,4 +178,98 @@ test('the Codex week used up turns Codex away even when Claude then answers: its
   await settle();
   assert.deepEqual(weekCards(w.sent, 'Codex week'), ['reached']);
   assert.equal(w.claude.length, 1, 'Claude answered the call');
+});
+
+// Why (14 Nov 2026, owner via the coordinator: "first try claude plan, then try codex plan. then try to Claude API Key"): a Claude-first `subs` call ends on the key only after BOTH plans did not answer.
+const subsClaude = {...body, engine: 'claude', subs: true, tier: 'mid'};
+const codexOut = async w => { await w.storage.put('limits', {usedPercent: 100, resetsAt: T / 1000 + 3600}); w.broker.limits = null; };
+const keyCalls = w => w.claude.filter(sent => sent.paid).length;
+
+test('subs claude, both plans out, key set: answered on the key as the last step, marked paid, and the reply says what fell back', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}});
+  await planOut(w.storage); await codexOut(w);
+  const reply = await w.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(reply.status, 200);
+  const answer = await reply.json();
+  assert.equal(answer.paid, true); assert.equal(answer.engine, 'claude'); assert.equal(keyCalls(w), 1);
+  assert.deepEqual(answer.fellBack.map(entry => `${entry.engine}:${entry.why}`), ['claude:ran-out', 'codex:ran-out']);
+  assert.ok(!JSON.stringify(answer).includes(KEY));
+  const health = await (await w.broker.health()).json();
+  assert.equal(health.paid.day.calls, 1, '/health counts the call'); assert.equal(health.paid.day.usd, 3);
+});
+
+test('subs claude, Claude\'s plan out but Codex up: Codex answers and the key is not touched ($0)', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}});
+  await planOut(w.storage);
+  const answer = await (await w.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml')).json();
+  assert.equal(answer.engine, 'codex'); assert.notEqual(answer.paid, true);
+  assert.equal(keyCalls(w), 0); assert.equal((await paidDay(w.storage, new Date(T))).usd, 0);
+});
+
+test('subs claude, Claude\'s plan up (Codex out): the plan answers and the key is not touched', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}, reply: () => Response.json({reply: 'plan ok', tokens: {input: 1, output: 1}, ms: 1})});
+  await codexOut(w);
+  const answer = await (await w.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml')).json();
+  assert.equal(answer.engine, 'claude'); assert.notEqual(answer.paid, true);
+  assert.equal(keyCalls(w), 0);
+});
+
+test('subs claude, both plans out, the day cap reached: a refusal naming the cap, nothing sent to the key', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY, CLAUDE_API_DAY_USD: '0.01'}});
+  await planOut(w.storage); await codexOut(w);
+  const reply = await w.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(reply.status, 503); assert.match((await reply.json()).why, /paid lane at its day cap/);
+  assert.equal(keyCalls(w), 0);
+});
+
+test('subs claude, both plans out, the month cap reached: a refusal naming the cap, nothing sent to the key', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY, CLAUDE_API_MONTH_USD: '0.01'}});
+  await planOut(w.storage); await codexOut(w);
+  const reply = await w.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(reply.status, 503); assert.match((await reply.json()).why, /paid lane at its month cap/);
+  assert.equal(keyCalls(w), 0);
+});
+
+test('subs with Codex first never spends the key (the owner\'s order names Claude\'s plan first): refused as today', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}});
+  await planOut(w.storage); await codexOut(w);
+  const reply = await w.broker.call('bench', {...subsClaude, engine: 'codex'}, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(reply.status, 503); assert.equal(keyCalls(w), 0);
+});
+
+test('subs claude, both plans out, no CLAUDE_API_KEY: refused as today, nothing reaches the key', async t => {
+  const w = world(t);
+  await planOut(w.storage); await codexOut(w);
+  const reply = await w.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(reply.status, 503); assert.doesNotMatch((await reply.json()).why, /paid/);
+  assert.equal(keyCalls(w), 0);
+});
+
+test('subs claude, both plans out, the key\'s call fails or its answer is guard-refused: refused naming the paid lane, the guard\'s own 422 kept, and the Claude plan\'s demotion record untouched (Gitar on #652)', async t => {
+  const failing = world(t, {env: {CLAUDE_API_KEY: KEY}, reply: () => new Response(JSON.stringify({error: 'boom', kind: 'failed'}), {status: 500})});
+  await planOut(failing.storage); await codexOut(failing);
+  const failed = await failing.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(failed.status, 503); assert.match((await failed.json()).why, /, paid failed$/);
+  const refusing = world(t, {env: {CLAUDE_API_KEY: KEY}, reply: () => Response.json({reply: `here: ${KEY}`, tokens: {input: 1, output: 1}, ms: 1})});
+  await planOut(refusing.storage); await codexOut(refusing);
+  const refused = await refusing.broker.call('bench', subsClaude, 'jobadabra-benchmarks/search-ours.yml');
+  assert.equal(refused.status, 422, 'the guard\'s own refusal is the call\'s end, as for any engine');
+  assert.ok(!JSON.stringify(await refused.json()).includes(KEY));
+  for (const w of [failing, refusing]) assert.equal(((await w.storage.get('adapt'))?.rings?.claude ?? []).length, 0, 'the key never feeds the Claude plan\'s record');
+});
+
+test('a deploy cut that also takes the key\'s step down is still a platform cut, not a refusal for the streak; a real paid refusal after plain ran-outs is not (Gitar on #653)', () => {
+  assert.equal(onlyCut([{engine: 'claude', why: 'cut'}, {engine: 'codex', why: 'cut'}, {engine: 'paid', why: 'subs-out', detail: 'paid lane at its day cap'}]), true);
+  assert.equal(onlyCut([{engine: 'claude', why: 'cut'}, {engine: 'codex', why: 'cut'}, {engine: 'paid', why: 'paid-failed'}]), true);
+  assert.equal(onlyCut([{engine: 'claude', why: 'ran-out'}, {engine: 'codex', why: 'ran-out'}, {engine: 'paid', why: 'paid-failed'}]), false, 'no cut anywhere: a real refusal');
+});
+
+test('subs claude with the Claude week past its line, Codex out, key set: the key answers, fellBack names both plans, and the Claude week sends no 🔴 (Gitar on #654)', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}});
+  await w.storage.put('claude:state', {limits: {sevenDay: {utilization: 0.95, resetsAt: T / 1000 + 86400}}});
+  await codexOut(w);
+  const answer = await (await w.broker.call('bench', subsClaude, 'jobadabra/search-profiles.yml')).json();
+  assert.equal(answer.paid, true); assert.deepEqual(answer.fellBack.map(entry => `${entry.engine}:${entry.why}`), ['claude:budget', 'codex:ran-out']);
+  await settle();
+  assert.ok(!weekCards(w.sent, 'Claude week').includes('reached'), JSON.stringify(weekCards(w.sent, 'Claude week')));
 });

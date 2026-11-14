@@ -1,5 +1,5 @@
 // The broker's own Anthropic API key (Worker secret CLAUDE_API_KEY): the paid fallback of a call that asks for Claude specifically (engine claude, only: true) when the Claude plan is out
-// (its own limit, or the broker's week line). The same models and arguments run in the container, with the key in place of the plan's token; the reply says paid: true.
+// (its own limit, or the broker's week line), and, since 14 Nov 2026, the last step of a Claude-first `subs` call after both plans (paidAfterSubs). The same models and arguments run in the container, with the key in place of the plan's token; the reply says paid: true.
 // Why (13 Nov 2026, owner via the coordinator: "let's create a new API Key, specifically for AI broker. It would be a fallback, when somebody requests specifically Claude and we're out of the
 // plan/subscription limits"; "let's do the code change"; caps: "it should be capped to 10$ a day and 100$ a month"): this reverses, for that one case, the 3 Nov 2026 "We should not use API Keys at all anymore" (lib/fallback.mjs).
 // Invariants: no secret = never runs (today's behaviour); a call that may pass on never spends the key; a day and a month cap in dollars (CLAUDE_API_DAY_USD $10, CLAUDE_API_MONTH_USD $100) close it again, with 🟠/🔴 on
@@ -17,6 +17,13 @@ const dayOf = now => now.toISOString().slice(0, 10);
 
 /** True when this call may spend the key: the secret is set and the call asks for Claude only. */
 export const paidAllowed = (env, body) => Boolean(env?.CLAUDE_API_KEY) && body?.engine === 'claude' && body?.only === true;
+/**
+ * True when a call that asks for the two subscriptions with Claude first (`subs`, engine claude) may go on to the key AFTER both subscriptions failed to answer it (worker.js answer()).
+ * Why (14 Nov 2026, owner via the coordinator, after the benchmark went to the paid key: "It should use broker. first try claude plan, then try codex plan. then try to Claude API Key."): the chain
+ * `claude,codex` (tools/persona-search/codex.mjs) was refused with both plans out, never answered on the key. The key stays behind the WHOLE chain, never between its engines; with Codex first
+ * (engine codex, subs) nothing changes: the owner's order names Claude's plan first, so a call that starts on Codex is not one of these.
+ */
+export const paidAfterSubs = (env, body) => Boolean(env?.CLAUDE_API_KEY) && body?.subs === true && body?.engine === 'claude';
 /** The day's and the month's lines in USD (CLAUDE_API_DAY_USD, CLAUDE_API_MONTH_USD; the owner's $10 and $100). */
 export const paidCap = env => (Number(env?.CLAUDE_API_DAY_USD) > 0 ? Number(env.CLAUDE_API_DAY_USD) : 10);
 export const paidMonthCap = env => (Number(env?.CLAUDE_API_MONTH_USD) > 0 ? Number(env.CLAUDE_API_MONTH_USD) : 100);
@@ -81,7 +88,7 @@ export async function paidClaude(broker, lane, body, waitMs, why, {held = false}
     if (!reply.ok) return fail(String(answer?.kind || 'failed').slice(0, 40), failed('paid-failed', String(answer?.kind || 'failed').slice(0, 40)));   // the kind only: an error tail is never passed on from this lane
     const bad = refuseReply(answer.reply, await broker.login());
     if (bad) return fail('bad-answer', failed('bad-answer', '', json(422, {why: bad})));
-    await noteOnce(storage, env, dayOf(now), 'claude-api-paid', 'ai-broker-claude-api', `💳 AI broker: the Claude plan is out, and a Claude-only call was answered on the broker's API key (paid; up to $${cap} a day and $${paidMonthCap(env)} a month). This is the first today.`).catch(() => {});
+    await noteOnce(storage, env, dayOf(now), 'claude-api-paid', 'ai-broker-claude-api', `💳 AI broker: the Claude plan is out (and, for a call that tried both plans, Codex too), and a Claude call was answered on the broker's API key (paid; up to $${cap} a day and $${paidMonthCap(env)} a month). This is the first today.`).catch(() => {});
     return answered(json(200, {reply: answer.reply, tokens: answer.tokens, ms: answer.ms, lane, tier: body.tier ?? 'mid', model, engine: 'claude', paid: true, usd: Math.round(usd * 1e4) / 1e4}));
   } finally {
     release?.();

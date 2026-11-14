@@ -11,7 +11,8 @@ export const ended = new WeakMap();
  * Whether the engines' failures were only the platform cutting the container under the call (a deploy or restart; lib/walk.mjs platformCut) plus engines that simply could not take it.
  * Why (12 Nov 2026, ba #579 + bx; owner's brief: "A deploy or container restart cut is not a refusal"): a release takes the container down for a few minutes and every call in flight fails together; that says nothing about the broker's health.
  */
-export const onlyCut = left => Array.isArray(left) && left.some(entry => entry.why === 'cut') && left.every(entry => ['cut', 'unavailable', 'ran-out', 'busy', 'budget'].includes(entry.why));
+// Why (14 Nov 2026, Gitar on #653): the key's own turn after both plans (worker.js answer(), engine 'paid') is not a plan refusing: a cap, a busy slot or a container that was cut under it say nothing more than the plans' own cuts did.
+export const onlyCut = left => Array.isArray(left) && left.some(entry => entry.why === 'cut') && left.filter(entry => !(entry.engine === 'paid' && ['subs-out', 'paid-failed', 'busy'].includes(entry.why))).every(entry => ['cut', 'unavailable', 'ran-out', 'busy', 'budget'].includes(entry.why));
 
 /** How a finished call counts: null (not at all: a caller's 400, a platform cut), {bad: false} (answered), or {bad: true, why} (refused or failed in a way the job feels: 429, 5xx, anything else that is not an answer). */
 export async function outcomeOf(reply, left) {
