@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {body, success, harness, switchboard} from './harness.mjs';
 import {claudeEnv} from '../../../../workers/ai-broker/container/claude.mjs';
+import {onlyCut} from '../../../../workers/ai-broker/lib/refusing.mjs';
 import {paidCap, paidDay, paidMonthCap} from '../../../../workers/ai-broker/lib/paid-claude.mjs';
 
 const config = JSON.parse(readFileSync(new URL('../../../../workers/ai-broker/wrangler.jsonc', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
@@ -255,4 +256,10 @@ test('subs claude, both plans out, the key\'s call fails or its answer is guard-
   assert.equal(refused.status, 422, 'the guard\'s own refusal is the call\'s end, as for any engine');
   assert.ok(!JSON.stringify(await refused.json()).includes(KEY));
   for (const w of [failing, refusing]) assert.equal(((await w.storage.get('adapt'))?.rings?.claude ?? []).length, 0, 'the key never feeds the Claude plan\'s record');
+});
+
+test('a deploy cut that also takes the key\'s step down is still a platform cut, not a refusal for the streak; a real paid refusal after plain ran-outs is not (Gitar on #653)', () => {
+  assert.equal(onlyCut([{engine: 'claude', why: 'cut'}, {engine: 'codex', why: 'cut'}, {engine: 'paid', why: 'subs-out', detail: 'paid lane at its day cap'}]), true);
+  assert.equal(onlyCut([{engine: 'claude', why: 'cut'}, {engine: 'codex', why: 'cut'}, {engine: 'paid', why: 'paid-failed'}]), true);
+  assert.equal(onlyCut([{engine: 'claude', why: 'ran-out'}, {engine: 'codex', why: 'ran-out'}, {engine: 'paid', why: 'paid-failed'}]), false, 'no cut anywhere: a real refusal');
 });
