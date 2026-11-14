@@ -127,6 +127,14 @@ Room for searches, first come first served (owner, 13 Nov 2026: "each workflow s
 - A held claim with no ask for 10 min, or a waiting place with none for 60 s, is dropped, so a cancelled run frees its room by itself.
 - Strict order: the head of the line is never passed by a smaller claim behind it. No lanes, no share kept back.
 
+### `POST /board-read`
+
+CI's one honest-browser read of a job board page that refused the plain reader, per search page per UTC day, across every CI search of both repos (owner, 14 Nov 2026: "Once per search page (Recommended)", stop "For good (Recommended)"; `lib/board-reads.mjs`). Same run token; the run is named from it.
+
+- `{"op": "reserve", "page": "<address>"}`: `go: true` only for the first run of a free page. Otherwise `go: false` with `state`: `opened` (+ `jobs`, `count`, `read_by`, `read_at`: use them, send nothing), `reading`, `stopped`, `waiting` or `host-full`.
+- `{"op": "report", "page", "outcome": "opened"|"stopped"|"waiting", "jobs"?, "count"?, "why"?}`: only the run that reserved the page today. `stopped` (a check, captcha, sign-in page, 401/403) closes the whole host to CI for good; `waiting` (a 429) until the next UTC day.
+- At most 5 pages per host a day (`HOST_PAGES_A_DAY`), as the app's own 5 a day. A reservation never reported stays `reading` for the day. Kept: public listing fields of the jobs only (title, link, company, place, date), never a page, cookie or session.
+
 ### `GET /health`
 
 Public; counts and states only. Read it before a big run to see the room left.
