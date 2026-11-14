@@ -17,9 +17,9 @@ const OUTCOMES = ['opened', 'stopped', 'waiting'];
 /** The UTC day of `now`: "2026-11-14". */
 export const dayOf = now => new Date(now).toISOString().slice(0, 10);
 
-/** The host of a search page address, lower case without "www.", or '' for an address that is not http(s). */
+/** The host of a search page address, lower case without a trailing dot or "www.", or '' for an address that is not http(s). "trans.bg." is trans.bg (Gitar on #657). */
 export function hostOf(page) {
-  try { const u = new URL(String(page)); return /^https?:$/.test(u.protocol) ? u.hostname.toLowerCase().replace(/^www\./, '') : ''; } catch { return ''; }
+  try { const u = new URL(String(page)); return /^https?:$/.test(u.protocol) ? u.hostname.toLowerCase().replace(/\.+$/, '').replace(/^www\./, '') : ''; } catch { return ''; }
 }
 
 /**

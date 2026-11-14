@@ -28,7 +28,7 @@ test('a stop is per host and for good: no page of that host is ever reserved aga
   const s = storage();
   await reserve(s, 'night#1', page, t0);
   await report(s, 'night#1', page, 'stopped', {why: 'HTTP 403'}, t0 + 5000);
-  for (const [who, at, where] of [['round#2', t0 + 60_000, other], ['bench#3', nextDay, page], ['pair#4', nextDay + 30 * 86400_000, other]]) {
+  for (const [who, at, where] of [['round#2', t0 + 60_000, other], ['bench#3', nextDay, page], ['pair#4', nextDay + 30 * 86400_000, other], ['dot#5', t0 + 1, 'https://trans.bg./x']]) {
     const r = (await reserve(s, who, where, at)).reply;
     assert.deepEqual([r.go, r.state], [false, 'stopped'], `${who} on ${new Date(at).toISOString()}`);
   }
@@ -101,7 +101,7 @@ test('the Durable Object route: reserve and report through one POST, a bad op or
 test('one page, many spellings (Gitar on #656): case, www., the default port and a fragment are one page and spend one read', async () => {
   const s = storage(), base = 'https://trans.bg/search?q=driver';
   assert.equal((await reserve(s, 'a#1', base, t0)).reply.go, true);
-  for (const spelling of ['https://TRANS.bg/search?q=driver', 'https://www.trans.bg/search?q=driver', 'https://trans.bg:443/search?q=driver', 'https://trans.bg/search?q=driver#top']) {
+  for (const spelling of ['https://TRANS.bg/search?q=driver', 'https://www.trans.bg/search?q=driver', 'https://trans.bg:443/search?q=driver', 'https://trans.bg/search?q=driver#top', 'https://trans.bg./search?q=driver', 'https://www.trans.bg../search?q=driver']) {
     assert.deepEqual((await reserve(s, 'b#2', spelling, t0)).reply, {go: false, state: 'reading'}, spelling);
   }
   assert.equal((await report(s, 'a#1', 'https://www.Trans.bg/search?q=driver#x', 'opened', {jobs: [job]}, t0)).status, 200, 'the reserving run reports under any spelling');
