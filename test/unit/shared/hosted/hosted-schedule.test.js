@@ -81,6 +81,27 @@ test('the inbox gives the app its matches after an id, per account, newest 200 k
   assert.deepEqual(await getInbox(e, 'install-cccc3'), []);
 });
 
+test('a match keeps the posting the run read (place, posted date, facts, apply route, description), each capped; any other field is dropped', async () => {
+  // Why (owner, 14 Nov 2026, asked via AskUserQuestion: "Yes, both PRs (Recommended)"): a cloud-found LinkedIn job reached the app with title, company and fit only,
+  // so its drawer said "This job has no saved description" and every fact "Not stated", though the run had read them.
+  const e = env();
+  await put(e, 'install-aaaa1', {on: true, email: 'a@example.com'});
+  const [s] = rows(e, 'SELECT * FROM hosted_schedules');
+  const run = await startRun(e, s, now);
+  const job = {job: 'https://www.linkedin.com/jobs/view/4487459339/', title: 'First Officer', company: 'ACM', url: 'https://www.linkedin.com/jobs/view/4487459339/', fit: 40, line: 'why',
+    location: 'Rheinmünster, Germany', work_mode: 'On-site', posted: '2026-11-12', salary: '', contract: 'Full-time', seniority: 'Mid', languages: 'German, English',
+    apply_route: 'linkedin', source: 'LinkedIn', source_kind: 'job board', description: 'x'.repeat(13000), cookie: 'li_at=secret'};
+  await post(e, run.token, {matches: [job]});
+  const [got] = await getInbox(e, 'install-aaaa1');
+  assert.equal(got.location, 'Rheinmünster, Germany');
+  assert.equal(got.posted, '2026-11-12');
+  assert.equal(got.apply_route, 'linkedin');
+  assert.equal(got.source, 'LinkedIn');
+  assert.equal(got.description.length, 12000, 'the engine\'s own cap (src/sources/ats.py DESCRIPTION_LIMIT)');
+  assert.equal(got.cookie, undefined, 'only the named fields are kept');
+  assert.equal(got.salary, undefined, 'an empty field is not kept');
+});
+
 test('opening the app resumes a schedule the 14-day pause stopped, and only that pause', async () => {
   const e = env();
   await put(e, 'install-aaaa1', {on: true, email: 'a@example.com'});
