@@ -263,3 +263,13 @@ test('a deploy cut that also takes the key\'s step down is still a platform cut,
   assert.equal(onlyCut([{engine: 'claude', why: 'cut'}, {engine: 'codex', why: 'cut'}, {engine: 'paid', why: 'paid-failed'}]), true);
   assert.equal(onlyCut([{engine: 'claude', why: 'ran-out'}, {engine: 'codex', why: 'ran-out'}, {engine: 'paid', why: 'paid-failed'}]), false, 'no cut anywhere: a real refusal');
 });
+
+test('subs claude with the Claude week past its line, Codex out, key set: the key answers, fellBack names both plans, and the Claude week sends no 🔴 (Gitar on #654)', async t => {
+  const w = world(t, {env: {CLAUDE_API_KEY: KEY}});
+  await w.storage.put('claude:state', {limits: {sevenDay: {utilization: 0.95, resetsAt: T / 1000 + 86400}}});
+  await codexOut(w);
+  const answer = await (await w.broker.call('bench', subsClaude, 'jobadabra/search-profiles.yml')).json();
+  assert.equal(answer.paid, true); assert.deepEqual(answer.fellBack.map(entry => `${entry.engine}:${entry.why}`), ['claude:budget', 'codex:ran-out']);
+  await settle();
+  assert.ok(!weekCards(w.sent, 'Claude week').includes('reached'), JSON.stringify(weekCards(w.sent, 'Claude week')));
+});
