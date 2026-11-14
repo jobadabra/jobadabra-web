@@ -6,6 +6,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
 import {agreedSites} from '../../../api/employers.js';
 import {CI_DAYS, DAILY_ROWS, MAX_CI_BOARDS, MAX_COUNTRIES, MAX_LOCAL, PER_HOUR, searchAddress} from '../../../api/ci-boards.js';
+import {isCompanyDomain} from '../../../shared/company-domain.js';
 import {contribute} from '../../../api/pool.js';
 import {reportedBoards} from '../../../api/scout-memory.js';
 
@@ -176,4 +177,22 @@ test('a served address is checked again on the way out: a bad value in the table
   e.STATS.db.prepare("INSERT INTO ci_boards (host, country, day, url) VALUES ('jobeka.example', 'es', '2026-11-12', 'https://evil.example/s/{role}'), ('jobeka.example', 'pt', '2026-11-12', 'https://pt.jobeka.example/s/{role}')").run();
   const [board] = await reportedBoards(e.STATS, NOW);
   assert.deepEqual(board.ci_urls, {pt: 'https://pt.jobeka.example/s/{role}'});
+});
+
+// Why (14 Nov 2026, sa for the owner; Gitar on jobadabra #4127): the owner approved "same board" as the check on a CI address; a reported host `co.uk` made any https://x.co.uk/... address "the same board".
+// Only CI shares (`ci-search-<run>`) can write ci_boards, so the exposure was small; the rule now has one owner (shared/company-domain.js) on the door and on the serve side.
+test('a host that is only a country suffix is no board: a co.uk share is refused, x.co.uk with its own address passes, a stored bad row is not served', async () => {
+  for (const bare of ['co.uk', 'com.br', 'org.cy', 'com.au', 'www.co.uk']) assert.equal(isCompanyDomain(bare), false, bare);
+  for (const company of ['indeed.co.uk', 'infojobs.com.br', 'jobeka.es', 'es.jobeka.com', 'acme.org']) assert.equal(isCompanyDomain(company), true, company);
+  assert.equal(searchAddress('https://x.co.uk/s/{role}', 'co.uk'), null, 'a bare suffix is no reported board');
+  assert.equal(searchAddress('https://es.indeed.co.uk/s/{role}', 'indeed.co.uk'), 'https://es.indeed.co.uk/s/{role}');
+  const e = env();
+  const answer = await share(e, {ci_boards: [{host: 'co.uk', countries: ['es'], local: 9, url: 'https://x.co.uk/s/{role}'}]});
+  assert.equal(answer.status, 400, 'no valid board in the share');
+  assert.equal(rows(e, 'ci_boards').length, 0);
+  assert.equal((await share(e, {ci_boards: [{host: 'indeed.co.uk', countries: ['es'], local: 4, url: 'https://es.indeed.co.uk/s/{role}'}]})).status, 200);
+  e.STATS.db.prepare("INSERT INTO ci_boards (host, country, day, local, url) VALUES ('co.uk', 'es', '2026-11-12', 7, 'https://x.co.uk/s/{role}')").run();   // a row an earlier door let in
+  const list = await reportedBoards(e.STATS, NOW);
+  assert.deepEqual(list.map(board => board.host), ['indeed.co.uk'], 'the stored co.uk row is not served');
+  assert.deepEqual(list[0].ci_urls, {es: 'https://es.indeed.co.uk/s/{role}'});
 });
