@@ -14,6 +14,7 @@ import {snapshot, storeSnapshot} from '../shared/scouting-snapshot.js';
 import {storeBoardCounts} from '../shared/board-counts.js';
 import {installHit} from '../shared/install-caps.js';
 import {listedFamiliesOf} from './board-listed.js';
+import {readDayOf} from './board-day.js';
 const KEY = 'index:employers';
 const NOFEED_KEY = 'index:nofeed';
 const SUMMARY_KEY = 'index:summary';   // the website's two counts, written at every publish (the old single-value copy stops once the list outgrows it)
@@ -311,7 +312,7 @@ export function familyJobsOf(raw) {
   return Object.fromEntries(Object.entries(raw).filter(([family, jobs]) => FAMILIES.includes(family) && Number.isInteger(jobs) && jobs >= 0).map(([family, jobs]) => [family, Math.min(jobs, 5000)]));
 }
 
-export function boardFactsOf(list) {
+export function boardFactsOf(list, date = new Date().toISOString().slice(0, 10)) {
   const out = new Map();
   for (const item of (Array.isArray(list) ? list : []).slice(0, MAX_SCOUT_BOARDS * 3)) {
     const url = String(item?.url || '').trim();
@@ -324,10 +325,12 @@ export function boardFactsOf(list) {
     if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host) || !url.startsWith('https://') || url.length > 300 || urlHost !== host.replace(/^www\./, '')
       || (url.match(/\{(\w*)\}/g) || []).some(token => !['{role}', '{place}'].includes(token)) || !COUNTRIES.includes(country) || !families.length
       || !(jobs >= MIN_LOCAL_JOBS)) continue;
+    const day = readDayOf(item.day, date, SCOUT_BOARD_DAYS);
+    if (day === null) continue;   // a wrong day refuses this fact: the row it would replace stays as it was
     const layout = recipeOf(item.layout);   // how the board's job cards are laid out, learned by board discovery; a bad one is dropped, never the board
     const familyJobs = familyJobsOf(item.family_jobs);
     const listed = listedFamiliesOf(item.listed_families, familyJobs);
-    out.set(`${host}\n${country}`, {host, url, country, families, local_jobs: Math.min(jobs, 5000), ...(familyJobs ? {family_jobs: familyJobs} : {}), ...(listed ? {listed_families: listed} : {}), ...(item.browser === true ? {browser: true} : {}), ...(layout ? {layout} : {})});
+    out.set(`${host}\n${country}`, {host, url, country, families, local_jobs: Math.min(jobs, 5000), ...(familyJobs ? {family_jobs: familyJobs} : {}), ...(listed ? {listed_families: listed} : {}), ...(item.browser === true ? {browser: true} : {}), ...(layout ? {layout} : {}), ...(day ? {day} : {})});
   }
   return [...out.values()].slice(0, MAX_SCOUT_BOARDS);
 }
@@ -336,7 +339,7 @@ async function storeBoardFacts(db, facts, date) {
   const statements = facts.map(fact => db.prepare(`INSERT INTO sitefacts (install, day, host, kind, url, body, in_places, fit70, countries, families) VALUES (?, ?, ?, 'board', ?, ?, ?, 0, ?, ?)
     ON CONFLICT(install, host, kind) DO UPDATE SET day = excluded.day, url = excluded.url, body = excluded.body, in_places = excluded.in_places, fit70 = 0,
     countries = excluded.countries, families = excluded.families`)
-    .bind(`${SCOUT_BOARD_PREFIX}${fact.country}`, date, fact.host, fact.url, JSON.stringify({countries: [fact.country], ...(fact.family_jobs ? {family_jobs: fact.family_jobs} : {}), ...(fact.listed_families ? {listed_families: fact.listed_families} : {}), ...(fact.browser ? {browser: true} : {}), ...(fact.layout ? {layout: fact.layout} : {})}), fact.local_jobs, fact.country, fact.families.join(',')));
+    .bind(`${SCOUT_BOARD_PREFIX}${fact.country}`, fact.day || date, fact.host, fact.url, JSON.stringify({countries: [fact.country], ...(fact.family_jobs ? {family_jobs: fact.family_jobs} : {}), ...(fact.listed_families ? {listed_families: fact.listed_families} : {}), ...(fact.browser ? {browser: true} : {}), ...(fact.layout ? {layout: fact.layout} : {})}), fact.local_jobs, fact.country, fact.families.join(',')));
   if (db.batch) await db.batch(statements); else for (const statement of statements) await statement.run();
 }
 
@@ -408,7 +411,7 @@ async function publish(request, env) {
   if (env.WAITLIST) await env.WAITLIST.put(NOFEED_KEY, JSON.stringify(nofeed));
   if (env.WAITLIST && Array.isArray(body.boards)) await env.WAITLIST.put(BOARDS_KEY, JSON.stringify(boardsOf(body.boards)));
   // The scout's measured boards, only when it sent some (an absent field keeps what is there); never a reason to refuse the index.
-  const boardFacts = boardFactsOf(body.board_facts);
+  const boardFacts = boardFactsOf(body.board_facts, generated.slice(0, 10));
   if (env.STATS && boardFacts.length) await storeBoardFacts(env.STATS, boardFacts, generated.slice(0, 10)).catch(() => false);
   if (env.STATS) await expireBoardFacts(env.STATS, generated.slice(0, 10)).catch(() => false);
   // The day's snapshot for /admin/job-search/scouting's growth: counts only; never a reason to refuse the index.
